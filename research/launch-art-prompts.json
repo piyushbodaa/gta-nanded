@@ -1,0 +1,31 @@
+{
+  "created": "2026-10-16",
+  "mode": "Built-in image generation",
+  "purpose": "Original comic artwork for GTA Nanded landing page and animated launch",
+  "assets": [
+    {
+      "asset": "gta-nanded-driver",
+      "prompt": "Use case: stylized-concept. Asset: character cover panel for GTA NANDED, a Nanded India browser driving game.\nCreate a portrait 4:5 illustration in the bold 2D comic poster aesthetic of Grand Theft Auto loading screens: extremely confident THICK BLACK INK OUTLINES, flat cel-shaded color blocks, hard-edged graphic shadows, simplified angular facial planes, vector-like editorial illustration. It must visibly be DRAWN, NOT a photo, NOT photorealistic, NOT painterly, NOT 3D.\nFictional adult Marathi man in his late twenties, self-assured pose, dark wavy hair, short neat beard, black sunglasses, open burnt-orange shirt over cream tee, a modest silver chain. Waist-up heroic low-angle composition, holding a black motorcycle helmet by his side, looking toward the viewer. Green and yellow Nanded auto-rickshaw parked behind him. Background utility wires, flat concrete Maharashtrian homes, tall black rooftop water tanks, small trees, orange sunset disk. Strong subject silhouette with angular black shadows. Palette vivid turmeric orange, cream, bottle green, dark teal, jet black. Subject fills frame. No text, no borders, no logos, no guns. Entirely original fictional character and composition.",
+      "original": "assets/art/gta-nanded-driver-original.png",
+      "web": "public/media/gta-nanded-driver.webp"
+    },
+    {
+      "asset": "gta-nanded-chase",
+      "prompt": "Use case: stylized-concept. WIDE 16:9 cover panel for GTA NANDED. An energetic illustrated street-driving action scene in Nanded, Maharashtra. Iconic Grand Theft Auto loading-screen comic-art aesthetic: THICK JET-BLACK INK OUTLINES, flat saturated CEL SHADING, hard-edged graphic highlights, hand-drawn vector-like forms, limited colors, absolutely NOT photographic, NOT 3D, NOT painterly.\nVery low camera on an orange compact Indian hatchback taking a sharp corner, wheels turned, cream-colored dust and black graphic tire marks; a green and yellow auto-rickshaw swerving behind it. Fictional adult drivers. Diagonal dynamic composition, cars large in foreground and center. Narrow concrete road approaching a bridge over Godavari, everyday Maharashtrian shopfronts and rooftop water tanks, utility wires, abstract unreadable shop signs. Far in background a small white police SUV with stylized blue/red roof lights adds arcade game action, no weapons, no collisions, no injured people. Deep teal shadows, warm orange sunset, dirty cream highlights and dark pine green. Strong graphic speed lines at edges, comic energy, believable Indian vehicles. NO text, NO logo, NO border. Original composition.",
+      "original": "assets/art/gta-nanded-chase-original.png",
+      "web": "public/media/gta-nanded-chase.webp"
+    },
+    {
+      "asset": "gta-nanded-crew",
+      "prompt": "Use case: stylized-concept. WIDE 16:9 comic cover panel for GTA NANDED, original fictional adult Nanded college friends at their evening chai stop.\nStyle must be bold drawn Grand Theft Auto loading-screen illustration: thick black ink outlines, sharp angular facial shadow planes, flat cel-shaded saturated colors, 2D screenprinted graphic quality, no photographic rendering, no soft oil painting, no 3D.\nForeground: confident adult Marathi woman about 24 in dark-teal kurta and cream jacket, ponytail, small nose stud, backpack over one shoulder, holding a small glass of chai, looking toward viewer. Beside her an adult male college friend in a cream tee with bag and a scooter helmet. A silver scooter, kettle, steel tea glasses and tiny chai stall. Background vibrant Nanded coaching lane with modest blue/red educational-shop facades, electric cables and concrete rooftops. No legible shop names/text. Orange late afternoon light, deep teal/black shadows, mustard accents. Tight dramatic waist-up framing with subjects on right two thirds and chai stall on left, strong silhouettes and expressive faces. Original fictional characters, no logos, no borders, no guns, no text.",
+      "original": "assets/art/gta-nanded-crew-original.png",
+      "web": "public/media/gta-nanded-crew.webp"
+    },
+    {
+      "asset": "gta-nanded-city",
+      "prompt": "Use case: stylized-concept. WIDE 16:9 illustrated panorama of Nanded Maharashtra for a GTA-style game cover and loading animation.\nStyle: bold Grand Theft Auto comic-book loading-screen art, unmistakably hand-drawn 2D with THICK PURE BLACK OUTLINES, large FLAT CEL-SHADED COLOR SHAPES, graphic cream highlights, confident architectural linework. NO photographs, NO photorealism, NO soft painterly shading, NO 3D.\nHazur Sahib-inspired white marble and golden domes on right half, the broad Godavari river and concrete bridge on left, everyday Nanded low-rise town and ghats below. A couple of green-yellow auto-rickshaws and small adult silhouettes in foreground, leafy neem branches framing one edge, overhead urban wires. Respectful architecture. A gigantic flat orange sun near horizon, dramatic dark-teal and black shadows, vivid tangerine sky, warm cream buildings and mustard gold domes. Cinematic low horizon with diagonal riverfront leading lines, crisp cutout-like shapes that read well as a panel in a video-game collage. No text, no logos, no borders. Original artistic interpretation of the real city, no extra unrelated monumental buildings.",
+      "original": "assets/art/gta-nanded-city-original.png",
+      "web": "public/media/gta-nanded-city.webp"
+    }
+  ]
+}

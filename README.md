@@ -2,7 +2,7 @@
 
 An original, single-player 3D browser driving game built for **gta.nanded.fun**, set in Nanded, Maharashtra. Explore **129 researched places** along compressed OpenStreetMap streets, take **12 repeatable jobs**, or find familiar coaching lanes, campuses, cafés and riverfront stops at your own pace.
 
-The playable vehicles, characters, building illustrations, signage and synthesized audio are made in code. The opening film uses original illustrated artwork and a newly composed soundtrack. The street network comes from real map data; the game buildings are original illustrations.
+The playable vehicles, characters, building illustrations, signage and synthesized audio are made in code. The opening animates original comic artwork in the browser with a newly composed soundtrack. The street network comes from real map data; the game buildings are original illustrations.
 
 ## Play
 
@@ -18,9 +18,9 @@ The playable vehicles, characters, building illustrations, signage and synthesiz
 
 Touch devices have direction, brake, boost, enter/exit and map buttons. The mobile minimap starts hidden behind **Mini map**, and street-job details start collapsed; tap the job's chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
 
-Start with **Hit the streets** to drive or **Explore on foot** to walk. The original **18-second opening film** can be skipped immediately or replayed with **Watch opening**. Its sound starts off and can be enabled separately. Reduced-motion preferences and unavailable video use a still opening with a continue button.
+Start with **Hit the streets** to drive or **Explore on foot** to walk. The original **12-second animated comic opening** can be skipped immediately or replayed with **Watch opening**. Sound starts off; the opening's sound button keeps your choice for later replays on the same page. If the browser blocks sound, the sequence continues silently. Reduced-motion preferences, unavailable animation or failed artwork loading use a still opening with a continue button. Switching to another tab pauses the sequence and its music until you return.
 
-The entrance and film feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local dialogue in coaching, chai, station and reunion jobs.
+The entrance and opening feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local dialogue in coaching, chai, station and reunion jobs.
 
 Your run begins beside the public **Zenda Chowk (झेंडा चौक)** in **Taroda Khurd**, near Chhatrapati Chowk. The starting lane includes a grey-blue home with yellow accents, a striped metal gate and greenery inspired by supplied visual references. It is an illustrative setting, not a claim to identify or locate a private residence.
 
@@ -62,15 +62,16 @@ Use `npm run preview` to inspect the production build. Vite prints the actual pr
 - `src/guide.js`: place search, filters, source details and travel actions
 - `src/navigation.js`: street-graph navigation and routes
 - `src/mobile.js`: compact layout, minimap/job toggles and best-effort landscape controls
-- `src/intro.js`: skippable opening film, replay, opt-in sound and reduced-motion/video fallback
+- `src/intro.js`: animated comic opening, replay, opt-in sound, tab visibility handling and static fallback
+- `src/launch.css`: opening panels, typography, transitions and responsive presentation
 - `src/world.js` and `src/world-labels.js`: illustrated city geometry, signs and collision data
 - `src/vehicles.js`, `src/mechanics.js`, `src/audio.js`: original vehicles, physics, jobs, saves and synthesized sound
 - `src/data/network.json` and `src/data/city.json`: generated street graph and placed city catalog
 - `scripts/build-city-data.py`: reproducible data conversion and road-clear frontage placement
-- `scripts/render-opening.py`: original 18-second illustrated film and synthesized soundtrack; rebuild using `--key-art assets/art/nanded-key-art-original.png --lanes assets/art/nanded-lanes-original.png`
-- `research/art-prompts.json`: prompts used with built-in image generation; original PNGs are preserved in `assets/art/`, optimized artwork and video in `public/media/`
+- `scripts/render-opening.py`: historical 18-second MP4 export and synthesized soundtrack; rebuild using `--key-art assets/art/nanded-key-art-original.png --lanes assets/art/nanded-lanes-original.png`. The current opening does not play this MP4.
+- `research/art-prompts.json`: artwork generation provenance; original PNGs are preserved in `assets/art/`, with optimized comic artwork and audio in `public/media/`
 - `scripts/verify-live.py`: compare the public domain's build, map data and media byte for byte with `dist/`
-- `tests/` and `scripts/verify-world.mjs`: mechanics, navigation and world checks
+- `tests/` and `scripts/verify-world.mjs`: mechanics, navigation, opening lifecycle and world checks. The opening's Node DOM fixture checks timing, controls and cleanup; it does not replace browser rendering or real audio checks.
 - `research/`: source snapshots, addresses, coordinate overrides, evidence notes and exclusions
 
 Key sources include the [Nanded district administration](https://nanded.gov.in/en/public-utility-category/colleges/), [Hazur Sahib Board](https://hazursahib.com/web/gurudwara_nagina_ghat), [SRTM University map](https://srtmun.ac.in/srtmun-on-google-map/), [IIB Nanded branch](https://www.iibedu.com/iib-neetcoaching/nanded-branch/), [AAI aerodrome information](https://aim-india.aai.aero/eAIP_Archive/06-08-2026/eAIP/IN-AD%202.1VOND-en-GB.html), and first-party institution and venue pages linked in each catalog record. [Coverage notes](research/COVERAGE.md) explain directory evidence, contradictory addresses and unresolved branches.

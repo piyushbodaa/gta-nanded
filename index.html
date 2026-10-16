@@ -27,29 +27,26 @@
       </nav>
     </header>
 
-    <main id="welcome" class="welcome">
-      <img class="welcome-art" src="/media/nanded-key-art.webp" alt="" fetchpriority="high" decoding="async" />
-      <div class="welcome-shade" aria-hidden="true"></div>
-      <div class="welcome-content">
-        <div class="coordinates"><span class="live-dot" aria-hidden="true"></span>19°09′N 77°19′E <span class="coordinate-divider">/</span> MAHARASHTRA</div>
-        <p class="eyebrow"><span></span>YOUR CITY. YOUR RULES.</p>
-        <h1 aria-label="GTA Nanded"><span>GTA</span><span class="title-second"><em>Nanded</em></span></h1>
-        <p class="nanded-tagline" lang="mr">उगं नव्हं मय, नांदेड हाय नांदेड!</p>
-        <p class="hero-description"><span class="welcome-marathi" lang="mr">क्लासची धावपळ. कॉलेजचा कट्टा. संध्याकाळचा चहा.</span>Real Nanded streets, <span data-place-total>129</span> familiar places, and a ride home.</p>
-        <div class="start-actions">
-          <button id="start-drive" class="button button-primary" type="button" disabled>Hit the streets<span aria-hidden="true">↗</span></button>
-          <button id="start-explore" class="button button-secondary" type="button" disabled>Explore on foot<span aria-hidden="true">→</span></button>
-        </div>
-        <div class="welcome-secondary-actions"><button id="start-guide" class="welcome-guide-link" type="button" disabled>Explore <span data-place-total>129</span> places <span aria-hidden="true">↗</span></button><button id="intro-replay" class="intro-replay" type="button" disabled><span aria-hidden="true">▷</span> Watch opening</button></div>
-        <p id="loading-status" class="loading-status" role="status"><span class="loading-spinner" aria-hidden="true"></span>Warming up the city…</p>
-        <div class="intro-features" aria-label="Game features">
-          <div><span class="feature-number">01 /</span><strong>Find your ride</strong><span>Cars &amp; auto-rickshaws</span></div>
-          <div><span class="feature-number">02 /</span><strong>Own the streets</strong><span>Street jobs &amp; open roads</span></div>
-          <div><span class="feature-number">03 /</span><strong>Find your Nanded</strong><span>Landmarks, classes &amp; favourite stops</span></div>
-        </div>
+    <main id="welcome" class="welcome front-cover">
+      <div class="front-art" aria-hidden="true">
+        <div class="front-panel front-panel-city"><img src="/media/gta-nanded-city.webp" alt="" decoding="async" /></div>
+        <div class="front-panel front-panel-chase"><img src="/media/gta-nanded-chase.webp" alt="" decoding="async" fetchpriority="high" /></div>
+        <div class="front-panel front-panel-crew"><img src="/media/gta-nanded-crew.webp" alt="" decoding="async" /></div>
+        <div class="front-panel front-panel-driver"><img src="/media/gta-nanded-driver.webp" alt="" decoding="async" fetchpriority="high" /></div>
       </div>
-      <aside class="scene-caption" aria-label="Setting"><div class="scene-caption-mark" aria-hidden="true">↙</div><span>ON THE BANKS OF THE GODAVARI</span><strong>Somewhere between<br />a shortcut &amp; a story.</strong><div class="scene-caption-line"></div><small>BUILT FOR THE BROWSER<br /><b>NO DOWNLOADS. JUST DRIVE.</b></small></aside>
-      <footer class="welcome-footer"><span>An original open-world playground <i>·</i> Inspired by Nanded</span><span class="footer-tag">FREE TO ROAM <span aria-hidden="true">↗</span></span></footer>
+      <div class="front-ink" aria-hidden="true"></div>
+      <div class="front-content">
+        <h1 class="front-title" aria-label="GTA Nanded"><span class="front-title-gta">GTA</span><span class="front-title-city">NANDED</span></h1>
+        <p class="front-tagline" lang="mr">उगं नव्हं मय, नांदेड हाय नांदेड!</p>
+        <div class="front-menu" role="group" aria-label="Choose how to play">
+          <button id="start-drive" class="front-option front-option-primary" type="button" disabled><span class="front-option-copy"><small>PLAY</small><strong>STORY DRIVE</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
+          <button id="start-explore" class="front-option" type="button" disabled><span class="front-option-copy"><small>NO TIMER</small><strong>FREE ROAM</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
+          <button id="start-guide" class="front-option" type="button" disabled><span class="front-option-copy"><small><span data-place-total>129</span> PLACES</small><strong>CITY GUIDE</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
+          <button id="intro-replay" class="front-option" type="button" disabled><span class="front-option-copy"><small>WATCH AGAIN</small><strong>REPLAY INTRO</strong></span><span class="front-option-arrow" aria-hidden="true">▷</span></button>
+        </div>
+        <p id="loading-status" class="front-loading" role="status">LOADING THE STREETS…</p>
+      </div>
+      <footer class="front-footer"><span>START · ZENDA CHOWK, TARODA KHURD</span><span class="front-footer-controls"><kbd>WASD</kbd> DRIVE <i>·</i> <kbd>E</kbd> ENTER / EXIT <i>·</i> <kbd>M</kbd> MAP</span></footer>
     </main>
 
     <main id="hud" class="hud" hidden aria-label="Game heads-up display">
@@ -109,15 +106,7 @@
 
     <div id="touch-controls" class="touch-controls" hidden aria-label="Touch game controls"><div class="touch-direction"><button type="button" data-control="up" aria-label="Accelerate or move forward">↑</button><button type="button" data-control="left" aria-label="Steer or move left">←</button><button type="button" data-control="down" aria-label="Brake or move backward">↓</button><button type="button" data-control="right" aria-label="Steer or move right">→</button></div><div class="touch-actions"><button id="touch-map" class="touch-small" type="button" aria-label="Open map">MAP</button><button id="touch-interact" type="button" aria-label="Enter or exit vehicle">E</button><button type="button" data-control="brake" aria-label="Handbrake">BRAKE</button><button type="button" data-control="boost" aria-label="Boost or sprint">BOOST</button></div></div>
 
-    <section id="cinematic-intro" class="cinematic-intro" role="dialog" aria-modal="true" aria-labelledby="intro-title" hidden>
-      <h2 id="intro-title" class="visually-hidden">GTA Nanded — opening film</h2>
-      <div class="intro-backdrop" aria-hidden="true"></div>
-      <video id="intro-video" class="intro-video" poster="/media/nanded-key-art.webp" preload="none" playsinline muted aria-label="An illustrated opening film of Nanded, its streets, people and landmarks"></video>
-      <div class="intro-film-shade" aria-hidden="true"></div>
-      <div class="intro-topline"><span class="intro-kicker"><i aria-hidden="true"></i>GTA NANDED</span><div class="intro-controls"><button id="intro-sound" type="button" aria-pressed="false" aria-label="Turn opening film sound on"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m16 9 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span id="intro-sound-label">Sound off</span></button><button id="intro-skip" type="button">Skip opening <span aria-hidden="true">↗</span></button></div></div>
-      <div id="intro-fallback" class="intro-fallback" hidden><p class="eyebrow">YOUR CITY. YOUR STORY.</p><h3>GTA<span>Nanded</span></h3><p class="nanded-tagline" lang="mr">उगं नव्हं मय, नांदेड हाय नांदेड!</p><p id="intro-fallback-message">Start your story in the streets you know.</p><button id="intro-continue" class="button button-primary" type="button">Start game <span aria-hidden="true">↗</span></button></div>
-      <footer class="intro-bottomline"><div class="intro-chapter"><span>START YOUR STORY</span><strong>Zenda Chowk <i>/</i> Taroda Khurd</strong></div><div class="intro-playback"><div class="intro-playback-label"><span id="intro-status" role="status">Opening film</span><span id="intro-time">0:00 / 0:18</span></div><div id="intro-progress" class="intro-progress" role="progressbar" aria-label="Opening film progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="intro-progress-fill"></span></div></div></footer>
-    </section>
+    <section id="cinematic-intro" class="cinematic-intro" hidden></section>
 
     <section id="fatal-error" class="fatal-error" role="alert" hidden><div><span class="eyebrow">A SMALL ROADBLOCK</span><h2>We couldn't start<br />the city.</h2><p id="fatal-error-message">This game needs WebGL. Try a recent browser with hardware acceleration enabled, then reload.</p><button class="button button-primary" type="button" onclick="location.reload()">Try again <span aria-hidden="true">↻</span></button></div></section>
     <script type="module" src="/src/main.js"></script>

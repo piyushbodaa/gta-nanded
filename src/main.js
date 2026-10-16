@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import './style.css';
+import './launch.css';
 import { createWorld } from './world.js';
 import { NETWORK, PLACES, DISTRICTS, BOUNDS, SPAWN, PLACE_BY_ID } from './city-data.js';
 import { createNavigator, pathLength, indexColliders } from './navigation.js';

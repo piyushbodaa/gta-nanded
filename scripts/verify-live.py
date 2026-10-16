@@ -18,9 +18,12 @@ for path in paths:
         assert response.status == 200, path
     assert hashlib.sha256(remote).digest() == hashlib.sha256(local).digest(), f'Build mismatch: {path}'
     verified.append({'path': path.as_posix(), 'bytes': len(remote), 'sha256': hashlib.sha256(remote).hexdigest()})
-request = urllib.request.Request(BASE + '/media/nanded-opening.mp4', headers={'Range': 'bytes=0-1023'})
-with urllib.request.urlopen(request, timeout=30) as response:
-    assert response.status == 206, 'Video range requests must work'
-    assert response.headers.get_content_type() == 'video/mp4'
-    assert len(response.read()) == 1024
-print(json.dumps({'url': BASE, 'result': 'PASS', 'videoRangeRequests': 'PASS', 'verifiedFiles': verified}, indent=2))
+range_results = []
+for media, content_types in [('nanded-opening.mp4', {'video/mp4'}), ('launch-theme.m4a', {'audio/mp4', 'audio/x-m4a'})]:
+    request = urllib.request.Request(BASE + '/media/' + media, headers={'Range': 'bytes=0-1023'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        assert response.status == 206, f'Media range requests must work: {media}'
+        assert response.headers.get_content_type() in content_types, media
+        assert len(response.read()) == 1024
+    range_results.append({'path': 'media/' + media, 'status': 206})
+print(json.dumps({'url': BASE, 'result': 'PASS', 'mediaRangeRequests': range_results, 'verifiedFiles': verified}, indent=2))
