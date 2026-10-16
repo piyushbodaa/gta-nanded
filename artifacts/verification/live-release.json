@@ -5,18 +5,18 @@
   "verifiedFiles": [
     {
       "path": "index.html",
-      "bytes": 18642,
-      "sha256": "b3548d98b5f45e983faa2a9a90334cdca51ce75f7b368bd2cd65a462182604a9"
+      "bytes": 18995,
+      "sha256": "1ac2b1176ba01042a1fc5ce6ec2617fdb7639ea282d41d4b884962763cb0a3e1"
     },
     {
-      "path": "assets/index-7WOlUU9H.js",
-      "bytes": 83075,
-      "sha256": "0a181ccb4c276550504eb198ec3c0b2c6fc9e74bcf695421a8b2d0d420dee9d9"
+      "path": "assets/index-CDPXsaZD.js",
+      "bytes": 83539,
+      "sha256": "17f03372fbeb53d2f393c2e5e6c913a044782687f85e7e753c2fb5ad54748157"
     },
     {
-      "path": "assets/index-BfFphLMR.css",
-      "bytes": 63330,
-      "sha256": "a354ed9f8a681da941891a96ca82e4a7b0606972592725e9269976120a5cda71"
+      "path": "assets/index-D-ZQHjsJ.css",
+      "bytes": 65219,
+      "sha256": "92a19024032c5621a0dfe2cb433632a011e860cb57ea2d8cc7f9f7fbb094c4a8"
     },
     {
       "path": "assets/places-C_gPfxtd.js",
@@ -55,13 +55,13 @@
     },
     {
       "path": "media/nanded-opening-provenance.json",
-      "bytes": 2190,
-      "sha256": "271f79c6d38301d6631f2b222dc7f47866bc1bd1ce994e53ad9919a0f7273a4e"
+      "bytes": 2616,
+      "sha256": "2fd025d1c8144a8d30f117029051c80347c472df8e50994d5bf371647af82d27"
     },
     {
       "path": "media/nanded-opening.mp4",
-      "bytes": 4304203,
-      "sha256": "81308e5fdbf1cce6594ed010e01e1ed684e95a73d9359f338607bbf052722885"
+      "bytes": 4295984,
+      "sha256": "bfea2119a39c5b052f95a728713e4014f2e691ae5ce4511c067df34226648c77"
     }
   ]
 }

@@ -39,37 +39,41 @@ to `.env.local`; it must never enter source control or a shared archive.
 After deployment, verify the real game page and JavaScript assets at
 `https://gta.nanded.fun`, then perform a gameplay check on that domain.
 
-## Published release — 16 October 2026, 16:51 UTC
+## Published release — 16 October 2026, 17:02 UTC
 
-- Production deployment: `dpl_AqGxGLJVM325Yv42vTQnjg5GZmfB` (READY)
-- Deployed source commit: `34e0f16`
+- Public branding: **GTA NANDED**.
+- Production deployment: `dpl_8PK9pxG4KX2WAgVdKyxh8QLLLTvb` (READY).
+- Deployed source commit: `6447dda`.
 - Primary URL: https://gta.nanded.fun
-- Deployment URL: https://nanded-street-stories-cjlv5zus9-piyushbodaa.vercel.app
-- The custom hostname resolves normally, with valid HTTPS and no sign-in required.
-- All 12 production files checked against the local build match byte for byte:
-  HTML, five JS/CSS bundles, two map datasets and four media/provenance files
-  (11,184,227 bytes). Video byte-range requests return HTTP 206.
-- Evidence and file hashes: [live-release.json](artifacts/verification/live-release.json).
-- 129 places, 64 mapped locations and 65 area anchors; 53 locality labels.
-- Starts on the street beside the public Zenda Chowk pin in Taroda Khurd.
-- Original illustrated entrance and an 18-second opening film, with skip,
-  replay, optional sound and a reduced-motion/video-error fallback.
-- Mobile minimap and job detail toggles, touch controls, portrait and landscape
-  layouts, and best-effort fullscreen/orientation support.
-- Fourteen mechanics, data, spawn, routing and collision tests passed.
-  The geometry smoke checked all 129 approaches and 409,253 samples along
-  26,252 road edges without a road obstruction.
-- Chrome checks on the production build covered 390×844 portrait and 844×390
-  landscape, film playback/replay/skip/sound, entering a car, touch acceleration,
-  map toggling, searchable places and setting a GPS route. Desktop entrance and
-  the opening were also checked directly on the custom production hostname.
-  A final keyboard guard fix was verified with W acceleration in preview,
-  arrow-key acceleration on production, M map search and Escape close/pause.
-  No new console errors appeared after that fix.
-  These are browser viewport checks, not physical iOS/Android device testing.
-- Film verification: 540 frames, 18.00 seconds, 1280×720, H.264 yuv420p,
-  AAC 48 kHz, faststart, 4,304,203 bytes; full audio/video decode passed.
+- Deployment URL: https://nanded-street-stories-9j83j3jsx-piyushbodaa.vercel.app
+- Custom hostname resolves normally with valid HTTPS and no sign-in required.
+- All 12 production files match the local build byte for byte: HTML, five JS/CSS
+  bundles, two map datasets and four media/provenance files (11,179,140 bytes).
+  Video byte-range requests return HTTP 206.
+- Evidence: [release hashes](artifacts/verification/live-release.json),
+  [live entrance](artifacts/verification/gta-marathi-entrance.png),
+  [Marathi film frame](artifacts/verification/gta-marathi-film.jpg).
+- Entrance and opening film display **“उगं नव्हं मय, नांदेड हाय नांदेड!”**.
+  Marathi greeting and fictional coaching, chai, station and college dialogue
+  accompany English controls and mission directions.
+- Browser checks covered desktop, 390×844 portrait and 844×390 landscape:
+  title/branding, Marathi layout, film completion, spawn greeting and expanded
+  mission dialogue. A shorter laptop layout keeps the footer clear. The custom
+  production hostname rendered correctly with no console errors.
+- Updated film: 18.00 seconds, 540 frames, 1280×720 H.264 yuv420p,
+  AAC 48 kHz, faststart, 4,295,984 bytes. Full decode passed; Devanagari
+  conjuncts and vowel marks were visually checked using Noto Sans Devanagari
+  Bold with HarfBuzz shaping.
 
-The earlier 16 October release (`dpl_4uUyJLjHhHTNydxf3ARdzkggoFkB`, source
-`2e274eb`) was the initial smaller city. Its temporary local DNS cache issue is
-resolved and does not apply to this release.
+The city still contains 129 researched places (64 mapped locations, 65 area
+anchors), 53 locality labels and the public Zenda Chowk starting point in
+Taroda Khurd. The previous mechanics verification covered 14 tests, all 129
+approaches and 409,253 samples along 26,252 road edges with no obstruction.
+Keyboard driving, touch driving, GPS, guide search and map toggles were
+verified in the preceding city release; this update changes branding, copy,
+typography and film titles. Responsive checks use browser viewports, not
+physical iOS/Android devices.
+
+Previous city release: `dpl_AqGxGLJVM325Yv42vTQnjg5GZmfB`, source `34e0f16`.
+The original smaller-city release was `dpl_4uUyJLjHhHTNydxf3ARdzkggoFkB`,
+source `2e274eb`; its temporary local DNS cache issue is resolved.
