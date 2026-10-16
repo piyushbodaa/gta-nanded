@@ -54,7 +54,7 @@ export function driveStep(car, input, dt) {
 function stop(id,label){const place=PLACE_BY_ID.get(id);if(!place)throw Error(`Unknown mission place: ${id}`);return {...place.approach,label:label||place.shortName,placeId:id};}
 
 export const MISSIONS = [
-  { title:'Before the next batch',label:'01 / COACHING BELT',description:'Pick up your friend outside RCC, then head to IIB Parnakuti. Slow down in each amber ring.',reward:450,seconds:180,
+  { title:'Before the next batch',label:'01 / COACHING BELT',description:'“चल, बॅचची वेळ झाली!” Pick up your friend outside RCC, then head to IIB Parnakuti. Slow down in each amber ring.',reward:450,seconds:180,
     stops:[stop('rcc-nanded','Meet outside RCC'),stop('iib-parnakuti','Drop off at IIB Parnakuti')] },
   { title:'The station parcel',label:'02 / AUTO DIARIES',description:'A parcel from Sarafa has to reach the railway station. Find your way through the old city.',reward:650,seconds:150,
     stops:[stop('sarafa-bazar','Collect at Sarafa Bazar'),stop('nanded-station','Deliver at Hazur Sahib Nanded station')] },
@@ -63,9 +63,9 @@ export const MISSIONS = [
   { title:'Lose the tail',label:'04 / THE GETAWAY',description:'A fictional arcade chase. Keep moving for 50 seconds and stay out of the patrol’s reach.',reward:1500,seconds:80,chase:true,survive:50,stops:[] },
   { title:'Vishnupuri express',label:'05 / CAMPUS CONNECTION',description:'Meet at Yeshwant, collect a friend near SGGS, and finish at SRTM University. It is a proper cross-city run.',reward:1400,seconds:360,
     stops:[stop('yeshwant-college'),stop('sggs-engineering'),stop('srtm-university')] },
-  { title:'The evening food plan',label:'06 / FRIENDS & FOOD',description:'Meet your friends near Madhur Bhoj, Amrut Cafe and Frespresso. The next stop is always somebody’s idea.',reward:850,seconds:240,
+  { title:'The evening food plan',label:'06 / FRIENDS & FOOD',description:'“आधी चहा, मग पुढचं बघू!” Meet your friends near Madhur Bhoj, Amrut Cafe and Frespresso. The next stop is always somebody’s idea.',reward:850,seconds:240,
     stops:[stop('madhur-bhoj'),stop('amrut-cafe'),stop('frespresso')] },
-  { title:'Welcome to Nanded',label:'07 / STATION PICKUP',description:'Welcome a visitor at the station, drive to Hazur Sahib, and finish near Nagina Ghat.',reward:900,seconds:240,
+  { title:'Welcome to Nanded',label:'07 / STATION PICKUP',description:'“नांदेडला पहिल्यांदाच आलात?” Welcome a visitor at the station, drive to Hazur Sahib, and finish near Nagina Ghat.',reward:900,seconds:240,
     stops:[stop('nanded-station'),stop('hazur-sahib'),stop('nagina-ghat')] },
   { title:'Along the Godavari',label:'08 / RIVERSIDE JOURNEY',description:'Take the eastern road to Hira Ghat, Mata Sahib and Shikar Ghat. Use the city guide to explore more after the job.',reward:1800,seconds:480,
     stops:[stop('hira-ghat'),stop('mata-sahib'),stop('shikar-ghat')] },
@@ -75,7 +75,7 @@ export const MISSIONS = [
     stops:[stop('pvr-treasure'),stop('aakruti-hotel')] },
   { title:'Something sweet',label:'11 / MONDHA TO VAZIRABAD',description:'Pick up your friends near Prasad Sweet House and Khandelwal Sweets, then meet by the bus stand.',reward:750,seconds:240,
     stops:[stop('prasad-sweet-house'),stop('khandelwal-sweets'),stop('nanded-bus-stand')] },
-  { title:'College reunion',label:'12 / OLD FRIENDS',description:'MGM, Science College and ITM. Three campuses, one reunion, and a lot of familiar roads.',reward:1100,seconds:300,
+  { title:'College reunion',label:'12 / OLD FRIENDS',description:'“आज पुन्हा कॉलेजच्या कट्ट्यावर!” MGM, Science College and ITM. Three campuses, one reunion, and a lot of familiar roads.',reward:1100,seconds:300,
     stops:[stop('mgm-engineering'),stop('nes-science-college'),stop('itm-nanded')] },
 ];
 

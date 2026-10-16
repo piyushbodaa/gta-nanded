@@ -107,7 +107,7 @@ export function createIntro() {
   listen(video, 'playing', () => {
     if (!active || overlay.classList.contains('is-static')) return;
     clearTimeout(loadingTimer);
-    $('intro-status').textContent = 'An original Nanded opening';
+    $('intro-status').textContent = 'आपलं शहर. आपली गोष्ट.';
   });
   listen(video, 'waiting', () => {
     if (!active || overlay.classList.contains('is-static')) return;

@@ -1,8 +1,8 @@
-# Nanded: Street Stories
+# GTA NANDED
 
 An original, single-player 3D browser driving game built for **gta.nanded.fun**, set in Nanded, Maharashtra. Explore **129 researched places** along compressed OpenStreetMap streets, take **12 repeatable jobs**, or find familiar coaching lanes, campuses, cafés and riverfront stops at your own pace.
 
-The playable vehicles, characters, building illustrations, signage and synthesized audio are made in code. The opening film uses original illustrated artwork. No GTA assets, music or branding are included. The street network comes from real map data; the game buildings are original illustrations.
+The playable vehicles, characters, building illustrations, signage and synthesized audio are made in code. The opening film uses original illustrated artwork and a newly composed soundtrack. The street network comes from real map data; the game buildings are original illustrations.
 
 ## Play
 
@@ -19,6 +19,8 @@ The playable vehicles, characters, building illustrations, signage and synthesiz
 Touch devices have direction, brake, boost, enter/exit and map buttons. The mobile minimap starts hidden behind **Mini map**, and street-job details start collapsed; tap the job's chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
 
 Start with **Hit the streets** to drive or **Explore on foot** to walk. The original **18-second opening film** can be skipped immediately or replayed with **Watch opening**. Its sound starts off and can be enabled separately. Reduced-motion preferences and unavailable video use a still opening with a continue button.
+
+The entrance and film feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local dialogue in coaching, chai, station and reunion jobs.
 
 Your run begins beside the public **Zenda Chowk (झेंडा चौक)** in **Taroda Khurd**, near Chhatrapati Chowk. The starting lane includes a grey-blue home with yellow accents, a striped metal gate and greenery inspired by supplied visual references. It is an illustrative setting, not a claim to identify or locate a private residence.
 

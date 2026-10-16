@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Render the original Nanded opening from two supplied illustrations.
+"""Render the original GTA NANDED opening from two supplied illustrations.
 
-Requires Python 3, ImageMagick 7, ffmpeg and ffprobe. No Python packages,
+Requires Python 3, ImageMagick 7, ffmpeg with HarfBuzz, ffprobe and Noto Sans
+Devanagari Bold. No Python packages,
 downloaded music, stock footage or network access are used by this renderer.
 
 Usage:
@@ -44,6 +45,10 @@ BODY_CANDIDATES = (
     "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 )
+DEVANAGARI_CANDIDATES = (
+    "/usr/share/fonts/noto/NotoSansDevanagari-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
+)
 
 
 def run(command: list[str], *, capture: bool = False) -> str:
@@ -61,7 +66,7 @@ def font_path(candidates: tuple[str, ...]) -> str:
     for candidate in candidates:
         if Path(candidate).is_file():
             return candidate
-    raise SystemExit("Install a Liberation Sans or DejaVu Sans font to render titles.")
+    raise SystemExit(f"A title font is missing; install one of: {', '.join(candidates)}")
 
 
 def gradient_png(path: Path) -> None:
@@ -182,15 +187,20 @@ def fade_alpha(start: float, end: float, fade: float = .55) -> str:
             f"if(lt(t,{end - fade}),1,if(lt(t,{end}),({end}-t)/{fade},0))))")
 
 
-def render(key_art: Path, lanes: Path, output_dir: Path) -> dict:
+def render(key_art: Path, lanes: Path, output_dir: Path, *, skip_artwork: bool = False) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     video = output_dir / "nanded-opening.mp4"
     headline_font = font_path(FONT_CANDIDATES)
     body_font = font_path(BODY_CANDIDATES)
+    devanagari_font = font_path(DEVANAGARI_CANDIDATES)
     inputs = ((key_art, "nanded-key-art.webp"), (lanes, "nanded-lanes.webp"))
     for source, target in inputs:
-        run(["magick", str(source), "-auto-orient", "-strip", "-resize", "1920x1920>",
-             "-define", "webp:method=6", "-quality", "83", str(output_dir / target)])
+        if skip_artwork:
+            if not (output_dir / target).is_file():
+                raise SystemExit(f"--skip-artwork requires the existing asset: {target}")
+        else:
+            run(["magick", str(source), "-auto-orient", "-strip", "-resize", "1920x1920>",
+                 "-define", "webp:method=6", "-quality", "83", str(output_dir / target)])
 
     with tempfile.TemporaryDirectory(prefix="nanded-opening-") as temporary:
         work = Path(temporary)
@@ -202,17 +212,18 @@ def render(key_art: Path, lanes: Path, output_dir: Path) -> dict:
         synthesize_theme(work / "theme.wav")
 
         captions = [
-            ("NANDED", headline_font, 124, 80, 421, "0xfff6df", 1.0, 7.8),
-            ("STREET STORIES", body_font, 34, 85, 551, "0xf5bb5b", 2.1, 7.8),
-            ("YOUR CITY. YOUR STREETS.", headline_font, 67, 82, 448, "0xfff6df", 9.8, 14.0),
-            ("Zenda Chowk / Taroda Khurd", body_font, 31, 85, 559, "0xf5bb5b", 12.8, 17.6),
+            ("GTA", headline_font, 142, 80, 404, "0xfff6df", 1.0, 7.8),
+            ("NANDED", headline_font, 62, 85, 551, "0xf5bb5b", 2.1, 7.8),
+            ("उगं नव्हं मय,", devanagari_font, 62, 82, 397, "0xfff6df", 9.8, 15.9),
+            ("नांदेड हाय नांदेड!", devanagari_font, 72, 80, 475, "0xfff6df", 10.6, 15.9),
+            ("Zenda Chowk / Taroda Khurd", body_font, 31, 85, 592, "0xf5bb5b", 12.8, 17.6),
         ]
         text_filters = []
         for index, (caption, font, size, x, y, color, start, end) in enumerate(captions):
             textfile = work / f"title{index}.txt"
             textfile.write_text(caption, encoding="utf-8")
             text_filters.append(
-                f"drawtext=fontfile='{font}':textfile='{textfile}':fontsize={size}:"
+                f"drawtext=fontfile='{font}':textfile='{textfile}':fontsize={size}:text_shaping=1:"
                 f"fontcolor={color}:x={x}:y={y}:shadowcolor=black@0.45:"
                 f"shadowx=1:shadowy=3:alpha='{fade_alpha(start, end)}'"
             )
@@ -245,7 +256,7 @@ def render(key_art: Path, lanes: Path, output_dir: Path) -> dict:
              "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p",
              "-profile:v", "high", "-level:v", "3.1", "-g", "60",
              "-c:a", "aac", "-b:a", "112k", "-ar", str(AUDIO_RATE), "-ac", "2",
-             "-movflags", "+faststart", "-metadata", "title=Nanded: Street Stories",
+             "-movflags", "+faststart", "-metadata", "title=GTA NANDED",
              "-metadata", "comment=Original illustrated opening and synthesized instrumental",
              str(video)])
 
@@ -281,7 +292,7 @@ def render(key_art: Path, lanes: Path, output_dir: Path) -> dict:
     assert float(loudness["input_tp"]) <= -1, "Music peak exceeds delivery headroom."
 
     report = {
-        "title": "Nanded: Street Stories — original illustrated opening",
+        "title": "GTA NANDED — original illustrated opening",
         "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
         "durationSeconds": DURATION, "width": WIDTH, "height": HEIGHT, "fps": FPS,
         "videoCodec": "H.264", "pixelFormat": "yuv420p", "faststart": True,
@@ -289,7 +300,12 @@ def render(key_art: Path, lanes: Path, output_dir: Path) -> dict:
         "artworkProvenance": "Two original image-generation artworks supplied for this game; illustrated scenes, not photographs or exact architectural surveys.",
         "musicProvenance": "Original 96 BPM instrumental composed and synthesized in scripts/render-opening.py; no external recordings or audio samples.",
         "motion": "Two original illustrations with slow pan/zoom and a 1.5-second crossfade; not live gameplay footage.",
-        "titles": ["NANDED", "STREET STORIES", "YOUR CITY. YOUR STREETS.", "Zenda Chowk / Taroda Khurd"],
+        "titles": [caption[0] for caption in captions],
+        "marathiTypography": {
+            "font": "Noto Sans Devanagari Bold",
+            "shaping": "FFmpeg drawtext with HarfBuzz and text_shaping=1",
+            "cardLines": ["उगं नव्हं मय,", "नांदेड हाय नांदेड!"],
+        },
         "sources": [{"file": source.name, "sha256": sha256(source)} for source, _ in inputs],
         "outputs": [{"file": name, "bytes": (output_dir / name).stat().st_size,
                      "sha256": sha256(output_dir / name)}
@@ -311,6 +327,8 @@ def main() -> None:
     parser.add_argument("--key-art", type=Path, required=True, help="Original riverfront/auto artwork")
     parser.add_argument("--lanes", type=Path, required=True, help="Original Taroda starting-lanes artwork")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "public" / "media")
+    parser.add_argument("--skip-artwork", action="store_true",
+                        help="Reuse existing WebPs when only the cinematic is changing")
     args = parser.parse_args()
     for executable in ("ffmpeg", "ffprobe", "magick"):
         if not shutil.which(executable):
@@ -318,7 +336,12 @@ def main() -> None:
     for source in (args.key_art, args.lanes):
         if not source.is_file():
             parser.error(f"Input illustration does not exist: {source}")
-    report = render(args.key_art.resolve(), args.lanes.resolve(), args.output_dir.resolve())
+    build = subprocess.run(["ffmpeg", "-hide_banner", "-buildconf"], check=True, text=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+    if "--enable-libharfbuzz" not in build:
+        parser.error("The Marathi title requires an ffmpeg build with HarfBuzz enabled.")
+    report = render(args.key_art.resolve(), args.lanes.resolve(), args.output_dir.resolve(),
+                    skip_artwork=args.skip_artwork)
     print(json.dumps({"outputs": report["outputs"], "validation": report["validation"]}, indent=2))
 
 

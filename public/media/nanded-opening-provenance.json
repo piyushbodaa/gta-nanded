@@ -1,6 +1,6 @@
 {
-  "title": "Nanded: Street Stories — original illustrated opening",
-  "generatedAt": "2026-10-16T16:41:29.035277+00:00",
+  "title": "GTA NANDED — original illustrated opening",
+  "generatedAt": "2026-10-16T16:56:36.418913+00:00",
   "durationSeconds": 18,
   "width": 1280,
   "height": 720,
@@ -14,11 +14,20 @@
   "musicProvenance": "Original 96 BPM instrumental composed and synthesized in scripts/render-opening.py; no external recordings or audio samples.",
   "motion": "Two original illustrations with slow pan/zoom and a 1.5-second crossfade; not live gameplay footage.",
   "titles": [
+    "GTA",
     "NANDED",
-    "STREET STORIES",
-    "YOUR CITY. YOUR STREETS.",
+    "उगं नव्हं मय,",
+    "नांदेड हाय नांदेड!",
     "Zenda Chowk / Taroda Khurd"
   ],
+  "marathiTypography": {
+    "font": "Noto Sans Devanagari Bold",
+    "shaping": "FFmpeg drawtext with HarfBuzz and text_shaping=1",
+    "cardLines": [
+      "उगं नव्हं मय,",
+      "नांदेड हाय नांदेड!"
+    ]
+  },
   "sources": [
     {
       "file": "nanded-key-art-original.png",
@@ -32,8 +41,8 @@
   "outputs": [
     {
       "file": "nanded-opening.mp4",
-      "bytes": 4304203,
-      "sha256": "81308e5fdbf1cce6594ed010e01e1ed684e95a73d9359f338607bbf052722885"
+      "bytes": 4295984,
+      "sha256": "bfea2119a39c5b052f95a728713e4014f2e691ae5ce4511c067df34226648c77"
     },
     {
       "file": "nanded-key-art.webp",
@@ -54,15 +63,12 @@
     "faststartAtomOrder": "verified",
     "audioIntegratedLufs": -18.19,
     "audioTruePeakDbtp": -6.45,
-    "visualReview": "passed: title placement, readability, scene transition and closing location card",
+    "visualReview": "passed: GTA NANDED title, both Marathi lines including conjuncts and vowel marks, location card spacing",
     "reviewedFramesSeconds": [
-      3,
-      7,
-      9,
-      11,
-      13.3,
-      16
-    ]
+      4,
+      13.7
+    ],
+    "marathiShaping": "Noto Sans Devanagari Bold rendered with HarfBuzz; no missing glyphs, clipping or detached vowel marks observed"
   },
   "rebuild": "python scripts/render-opening.py --key-art /path/key-art.png --lanes /path/taroda-lanes.png"
 }

@@ -97,7 +97,7 @@ function start(onFoot=false){
   avatar.visible=onFoot;show('welcome',false);show('hud',true);show('touch-controls',true);show('pause-menu',false);
   document.body.classList.add('is-playing');keys.clear();
   const p=playerPosition();camera.position.set(p.x+14,12,p.z+20);
-  beginMission();toast(onFoot?`Free roam. Explore ${PLACES.length} places in the city guide.`:'Welcome to Zenda Chowk, Taroda Khurd. Your Nanded story starts here.',6);
+  beginMission();toast(onFoot?`चला, आपलं नांदेड फिरूया! Explore ${PLACES.length} places in the city guide.`:'झेंडा चौकात स्वागत! चला, आपलं नांदेड फिरूया.',6);
   $('game-canvas').focus();
 }
 
@@ -226,7 +226,7 @@ function hookUI(){
   $('start-drive').addEventListener('click',()=>intro.play(()=>start(false),{mode:'drive'}));
   $('start-explore').addEventListener('click',()=>intro.play(()=>start(true),{mode:'foot'}));
   $('start-guide')?.addEventListener('click',()=>intro.play(()=>{start(false);setRoam(true);toggleMap();},{mode:'guide'}));
-  $('roam-toggle')?.addEventListener('click',()=>{setRoam(!game.roam);toast(game.roam?'Free roam. Jobs wait while you explore.':'Job resumed. Follow the amber route.');});
+  $('roam-toggle')?.addEventListener('click',()=>{setRoam(!game.roam);toast(game.roam?'घाई कसली? आपलं शहर फिरूया. Jobs wait while you explore.':'Job resumed. Follow the amber route.');});
   $('gps-clear')?.addEventListener('click',()=>{game.gps=null;routeAge=10;updateHUD();});
   $('resume')?.addEventListener('click',()=>pause(false));
   $('help-toggle')?.addEventListener('click',()=>pause(!game.paused,true));
@@ -370,7 +370,7 @@ function updateMission(dt){
   if(result==='complete'){
     game.cash+=def.reward;game.completed++;persist();audio.success();
     if(def.chase){game.wanted=0;game.heat=0;}
-    toast(`Job complete. +₹${def.reward.toLocaleString('en-IN')} · Press N for the next job.`,7);
+    toast(`झकास! +₹${def.reward.toLocaleString('en-IN')} · Press N for the next job.`,7);
   }else if(result==='checkpoint'){audio.tone(660,0.2);toast(def.stops[game.mission.stage].label,3);}
   else if(result==='failed'){toast('Time’s up. Retry the job when you’re ready.',6);audio.tone(150,0.4);}
   const target=destination();
