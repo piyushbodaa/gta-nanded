@@ -1,6 +1,6 @@
 # GTA NANDED
 
-An original, single-player 3D browser driving game built for **gta.nanded.fun**, set in Nanded, Maharashtra. Explore **129 researched places** along compressed OpenStreetMap streets, take **12 repeatable jobs**, or find familiar coaching lanes, campuses, cafés and riverfront stops at your own pace.
+An original, single-player 3D browser adventure built for **gta.nanded.fun**, set in Nanded, Maharashtra. Start on foot at **Zenda Chowk, Taroda Khurd**, meet a friend, explore your lane and choose from **nine optional activities**. Walk, sprint, jump, talk and take landmark photos; pick up a vehicle when you want to drive. The city contains **133 researched places** along compressed OpenStreetMap streets and a **17-landmark passport**.
 
 The playable vehicles, characters, building illustrations, signage and synthesized audio are made in code. The opening animates original comic artwork in the browser with a newly composed soundtrack. The street network comes from real map data; the game buildings are original illustrations.
 
@@ -10,36 +10,42 @@ The playable vehicles, characters, building illustrations, signage and synthesiz
 - **Drag the street / swipe the screen:** look around and tilt the camera
 - **C / Center camera button:** return the camera behind your character or vehicle
 - **E:** enter or exit a nearby vehicle; slow down before exiting
-- **Space:** handbrake
+- **Space:** jump on foot / handbrake in a vehicle
 - **Shift:** boost or sprint
+- **Q / Talk or Photo button:** interact at the current activity marker or photograph a nearby landmark
+- **B / Activities button:** choose an activity or open the landmark passport
 - **H:** horn; enable sound first
 - **M:** open the city guide and map; clicking the minimap also opens it
 - **Escape:** pause or resume
 - **R:** recover and repair your vehicle, costing up to ₹100 of in-game earnings
-- **N:** accept the next job or retry after completion/failure
+- **N:** open the activity picker after completion or in free roam; retry a failed activity
 
-Touch devices have direction, brake, boost, enter/exit and map buttons. Hold a driving button with one finger and drag the open street with another to look around. Looking around holds its angle while stopped; driving recenters the view after two seconds without a drag. The camera moves closer when a wall or roof would block the character. Both maps stay north-up, and their player arrows show character/vehicle facing. The GPS-card arrow points toward the destination relative to your camera. The mobile minimap starts hidden behind **Mini map**, and street-job details start collapsed; tap the job's chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
+Touch devices have direction, **Jump**, **Run**, enter/exit and map buttons, plus contextual **Talk / Photo** actions. Jump and Run become brake and boost controls in a vehicle. Hold a movement button with one finger and drag the open street with another to look around. Looking around holds its angle while stopped; driving recenters the view after two seconds without a drag. The camera moves closer when a wall, roof or sign would block the character. Both maps stay north-up, and their player arrows show character/vehicle facing. The GPS-card arrow points toward the destination relative to your camera. The mobile minimap starts hidden behind **Mini map**, and activity details start collapsed; tap the chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
 
-Start with **Story Drive** to drive or **Free Roam** to walk. The original **12-second animated comic opening** can be skipped immediately or replayed with **Replay Intro**. Sound starts off; the opening's sound button keeps your choice for later replays on the same page. If the browser blocks sound, the sequence continues silently. Reduced-motion preferences, unavailable animation or failed artwork loading use a still opening with a continue button. Switching to another tab pauses the sequence and its music until you return.
+Choose **Start Your Story** for an untimed on-foot homecoming: talk to your friend at Zenda Chowk, walk around the lane, then take your first photo. **Free Roam** starts on foot without an active challenge. The original **12-second animated comic opening** can be skipped immediately or replayed with **Replay Intro**. Sound starts off; the opening's sound button keeps your choice for later replays on the same page. If the browser blocks sound, the sequence continues silently. Reduced-motion preferences, unavailable animation or failed artwork loading use a still opening with a continue button. Switching to another tab pauses the sequence and its music until you return.
 
-The entrance and opening feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local dialogue in coaching, chai, station and reunion jobs.
+The entrance and opening feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local conversations in the lane, coaching and college activities.
 
 Your run begins beside the public **Zenda Chowk (झेंडा चौक)** in **Taroda Khurd**, near Chhatrapati Chowk. The starting lane includes a grey-blue home with yellow accents, a striped metal gate and greenery inspired by supplied visual references. It is an illustrative setting, not a claim to identify or locate a private residence.
 
-Open the city guide to search names, aliases and neighborhoods, filter categories, or find places still to discover. Select **Set destination** for a street-following GPS route, or **Go there · free** for instant travel. Both actions switch to free roam without a job timer. Choose **Take a street job** when ready to resume jobs.
+Open **Activities** to choose the Zenda homecoming, Taroda foot sprint, Hazur postcards, Godavari frames, college reunion, coaching break, Visava evening, street circuit or arcade getaway. Each card takes you to its starting point. The sprint, race and getaway have timers; the other six activities let you explore at your own pace. **Just roam** leaves the current challenge and returns to free exploration.
 
-For delivery jobs, enter the amber ring in a vehicle and slow below 36 km/h. Race checkpoints can be taken at speed. Collisions and taking occupied traffic vehicles attract police; evade patrols to lose your wanted level. Jobs and fines use fictional in-game rupees, never real money.
+The **Landmark passport** lists 17 places, including Hazur Sahib, Nandgiri Fort, Kaleshwar, Vishnupuri Dam, Mal Tekdi, the riverfront ghats and Old Mondha Clock Tower. Choose **Visit on foot** for free instant travel, or reach a mint photo ring yourself. Press **Q** or tap **Photo** on foot to collect a stamp and a one-time **₹150** reward for that landmark. Stamps persist in browser storage, so returning to an already collected place does not award the stamp again. A brief in-game photo preview accompanies the action; the image itself is not a saved photo album. Activity photos elsewhere, such as the Zenda lane or a college, advance their activity without adding an extra passport landmark.
+
+Open the city guide to search names, aliases and neighborhoods, filter categories, or find places still to discover. Select **Set destination** for a street-following GPS route, or **Go there · free** for instant travel. Both actions switch to free roam without an activity timer.
+
+Amber rings mark activity objectives. Talk and photo objectives require an explicit action on foot; race checkpoints require a vehicle and can be taken at speed. Collisions and taking occupied traffic vehicles attract police; evade patrols to lose your wanted level. Rewards and fines use fictional in-game rupees, never real money.
 
 ## Included
 
-- 129 places across 53 locality labels: coaching institutes, colleges, schools, landmarks, junctions, transport stops, hospitals, civic buildings, a park, hotels, restaurants, cafés, cinemas and shopping places.
-- Hazur Sahib and the riverfront gurdwaras; Bhagya Nagar, Workshop and ITI; the station and airport; Vishnupuri campuses; and the eastern Hira Ghat, Mata Sahib and Shikar Ghat route.
-- Twelve jobs involving coaching runs, campus visits, food stops, station/airport trips, an arcade chase, a circuit and riverfront journeys. All job stories are fictional; inclusion does not imply an institution or business commissioned or endorses them.
+- 133 places across 53 locality labels: coaching institutes, colleges, schools, landmarks, junctions, transport stops, hospitals, civic buildings, a park, hotels, restaurants, cafés, cinemas and shopping places.
+- Seventeen passport landmarks, including newly added Urvashi Ghat, Ram Ghat, Govardhan Ghat and Old Mondha Clock Tower; familiar junctions, the station, airport and Vishnupuri campuses remain in the city guide.
+- Nine repeatable activities covering local conversations, photo walks, a foot sprint, a street circuit and a getaway. All stories are fictional; inclusion does not imply an institution or business commissioned or endorses them.
 - Hatchbacks, Ambassador-inspired sedans and auto-rickshaws; pedestrians, road traffic, police pursuit, vehicle damage, boost and recovery.
 - A searchable city guide, category and neighborhood filters, a north-up map, GPS routes, free quick travel and discovery tracking.
-- Earnings, completed-job count and discovered places saved in browser local storage.
+- Earnings, completed-activity count, discovered places and landmark passport stamps saved in browser local storage.
 
-This is a **researched city interpretation**, not an exhaustive list of everything in Nanded or a surveyed replica. Research dated **16 October 2026** provides **64 mapped locations and 65 neighborhood/area anchors**. All building models and entrances are illustrative, and frontages can move beside nearby roads to preserve navigation. The guide labels this distinction. See [coverage and known gaps](research/COVERAGE.md) and the [complete place catalog](public/data/places.json).
+This is a **researched city interpretation**, not an exhaustive list of everything in Nanded or a surveyed replica. Research dated **16 October 2026** provides **64 mapped locations and 69 neighborhood/area anchors**. The added ghats and Clock Tower all retain approximate area placement. Landmark architecture uses illustrated silhouettes and details; no model or entrance is a measured reconstruction. Frontages can move beside nearby roads to preserve navigation, and the guide labels the coordinate distinction. See [coverage and known gaps](research/COVERAGE.md) and the [complete place catalog](public/data/places.json).
 
 Street distances are compressed to **0.5 scale**. North is up on the map; in world coordinates, `+x` points east and `+z` points south. The game has no multiplayer backend, accounts, purchases, gun combat or building interiors. Saves are local to the device/browser and may be unavailable when storage is blocked.
 
@@ -62,6 +68,7 @@ Use `npm run preview` to inspect the production build. Vite prints the actual pr
 
 - `src/main.js`: game loop, input, traffic, police, camera, discovery and UI
 - `src/guide.js`: place search, filters, source details and travel actions
+- `src/adventures.js` and `src/adventures.css`: activity picker, landmark passport, photo-spot eligibility and stamp storage
 - `src/navigation.js`: street-graph navigation and routes
 - `src/mobile.js`: compact layout, minimap/job toggles and best-effort landscape controls
 - `src/camera-controls.js`: touch/mouse orbit, pitch limits, recentering and camera-relative walking
@@ -70,7 +77,7 @@ Use `npm run preview` to inspect the production build. Vite prints the actual pr
 - `src/intro.js`: animated comic opening, replay, opt-in sound, tab visibility handling and static fallback
 - `src/launch.css`: opening panels, typography, transitions and responsive presentation
 - `src/world.js` and `src/world-labels.js`: illustrated city geometry, signs and collision data
-- `src/vehicles.js`, `src/mechanics.js`, `src/audio.js`: original vehicles, physics, jobs, saves and synthesized sound
+- `src/vehicles.js`, `src/mechanics.js`, `src/audio.js`: original characters and vehicles, physics, activity objectives, saves and synthesized sound
 - `src/data/network.json` and `src/data/city.json`: generated street graph and placed city catalog
 - `scripts/build-city-data.py`: reproducible data conversion and road-clear frontage placement
 - `scripts/render-opening.py`: historical 18-second MP4 export and synthesized soundtrack; rebuild using `--key-art assets/art/nanded-key-art-original.png --lanes assets/art/nanded-lanes-original.png`. The current opening does not play this MP4.

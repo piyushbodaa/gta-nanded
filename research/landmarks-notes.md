@@ -50,3 +50,22 @@ From this task's `research/osm-places.json`, exact location matches were adopted
 Mahur, Kandhar, Sahastrakund, Hottal, Unkeshwar and other distant district attractions are excluded from this city map. Maharashtra Tourism district pages intermingle those destinations with Nanded city; their prose should not determine placement. No private residential names, addresses, phone numbers, electoral details or identity documents found in noisy searches were copied into the game dataset. Place names and location facts only are used; source photographs were not redistributed.
 
 Landmarks can be exterior visit destinations. Architectural detail still needs actual photo references before claiming a recognisable reconstruction. Directory names alone do not establish a building's shape. Vishnupuri, the airport and Hira/Mata Sahib are meaningful outskirts trips, so a compressed city map should clearly disclose its changed travel distances.
+
+## Landmark expansion — 16 October 2026
+
+Added four city destinations, bringing this source group to **48 records** and the game's landmark category to **17** (133 total catalog records). The expansion does not rank fame or claim complete city coverage.
+
+| New ID | Identity evidence | Placement status |
+| --- | --- | --- |
+| `urvashi-ghat` | [Ministry of Tourism, Incredible India — Nanded](https://www.prod.incredibleindia.gov.in/content/incredible-india-v2/en/destinations/nanded.html) explicitly names Urvashi among the city's river ghats. | Riverfront area anchor from public-site photograph 02, NGT report page 95; no surveyed entrance. |
+| `ram-ghat` | [IWAI Godavari River Final Feasibility Report](https://iwai.nic.in/sites/default/files/7825944126NW-04%20Extn%20Godavari%20River%20Final%20FSR_0.pdf), page 244, locates Ram Ghat/Shani Mandir near the Vikas Nagar–Old Mondha bridge. Incredible India independently names Ram Ghat. | Old Mondha bridge-end area anchor from the retained OSM network. Exact bridge-name match and ghat entrance unresolved. |
+| `govardhan-ghat` | Incredible India names Govardhan Ghat; the IWAI report uses the spelling Gowerdhan. | Upstream riverfront area anchor from public-site photograph 10, NGT report page 99; not the exact ghat entrance. |
+| `old-mondha-clock-tower` | [BPCL's Maharashtra retail-outlet location notice](https://www.petrolpumpdealerchayan.in/uploads/advertisementpdfs/H2_ENGLISH_MAHARSTRA.pdf?5f64=), PDF page 51, row 1116, explicitly identifies Clock Tower (Old Mondha) in Nanded city. | Named adjacent garden point from a directory, kept as an area anchor. |
+
+The [NGT report](https://www.greentribunal.gov.in/sites/default/files/news_updates/Report%20of%20the%20Joint%20Committee%20in%20OA%20No.92-2025%20%28page%20nos.53-118%29.pdf) was available through indexed page text, while direct fetching returned 403; this evidence status is retained in the coordinate notes. Only the two coherent Nanded riverfront photo geotags were used. No environmental-condition claim from that report is added to the game. Direct reads of the older Incredible India and IWAI pages timed out; their indexed primary-source text supplied the named-place confirmation.
+
+[Shubham Takode's original Old Mondha Clock Tower photograph](https://commons.wikimedia.org/wiki/File:Old_Mondha_Clock_Tower,Nanded.jpg) is dated 2 October 2012 and provides a historical visual reference. It does not establish the present condition or construction date. The source image is not redistributed in the game.
+
+Recommended landmark passport IDs are `hazur-sahib`, `nagina-ghat`, `banda-ghat`, `langar-sahib`, `hira-ghat`, `mata-sahib`, `shikar-ghat`, `mal-tekdi`, `sangat-sahib`, `nandgiri-fort`, `kaleshwar-temple`, `vishnupuri-dam`, `godavari-river`, `urvashi-ghat`, `ram-ghat`, `govardhan-ghat`, and `old-mondha-clock-tower`. Existing broader city icons `bhagya-nagar-kaman`, `shivaji-putla`, `sggs-stadium`, and `nanded-station` can be featured separately without recategorizing them as additional landmark records.
+
+The [district administration's Bavari Nagar Dabhad Mahavihar page](https://nanded.gov.in/en/tourist-place/bavari-nagar-dabhad-mahavihar/) identifies a major outlying Buddhist site but gives conflicting road distances. Its exact coordinate and relationship to the current northern map bound remain unresolved, so it is not fabricated inside the city. Mahur, Kandhar, Sahastrakund, Hottal and Unkeshwar remain excluded district trips.

@@ -827,5 +827,95 @@
       "लातूर फाटा",
       "आंबेडकर चौक"
     ]
+  },
+  {
+    "id": "urvashi-ghat",
+    "name": "Urvashi Ghat",
+    "shortName": "Urvashi Ghat",
+    "category": "landmark",
+    "area": "Godavari riverfront",
+    "address": "Godavari riverfront, Dulleshah Raheman Nagar, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.prod.incredibleindia.gov.in/content/incredible-india-v2/en/destinations/nanded.html",
+    "sourceTitle": "Ministry of Tourism — Incredible India: Nanded",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "One of the Godavari ghats named in the Ministry of Tourism’s Nanded guide. The game represents a riverfront visiting spot.",
+    "confidence": "official",
+    "aliases": [
+      "Urvasi Ghat",
+      "उर्वशी घाट"
+    ],
+    "additionalSourceUrls": [
+      "https://www.greentribunal.gov.in/sites/default/files/news_updates/Report%20of%20the%20Joint%20Committee%20in%20OA%20No.92-2025%20%28page%20nos.53-118%29.pdf"
+    ]
+  },
+  {
+    "id": "ram-ghat",
+    "name": "Ram Ghat",
+    "shortName": "Ram Ghat",
+    "category": "landmark",
+    "area": "Godavari riverfront",
+    "address": "Old Mondha riverfront, near Shani Mandir and the Vikas Nagar–Old Mondha bridge, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://iwai.nic.in/sites/default/files/7825944126NW-04%20Extn%20Godavari%20River%20Final%20FSR_0.pdf",
+    "sourceTitle": "IWAI — Godavari River Final Feasibility Report, page 244",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The official river survey identifies Ram Ghat and Shani Mandir by the Vikas Nagar–Old Mondha bridge.",
+    "confidence": "official",
+    "aliases": [
+      "Ramghat",
+      "राम घाट"
+    ],
+    "additionalSourceUrls": [
+      "https://www.prod.incredibleindia.gov.in/content/incredible-india-v2/en/destinations/nanded.html"
+    ]
+  },
+  {
+    "id": "govardhan-ghat",
+    "name": "Govardhan Ghat",
+    "shortName": "Govardhan Ghat",
+    "category": "landmark",
+    "area": "Godavari riverfront",
+    "address": "Godavari riverfront, Govardhan Ghat Bridge Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.prod.incredibleindia.gov.in/content/incredible-india-v2/en/destinations/nanded.html",
+    "sourceTitle": "Ministry of Tourism — Incredible India: Nanded",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "A named Godavari riverfront landmark, also recorded as Gowerdhan Ghat in the government river survey.",
+    "confidence": "official",
+    "aliases": [
+      "Gowardhan Ghat",
+      "Goverdhan Ghat",
+      "Gowerdhan Ghat",
+      "गोवर्धन घाट"
+    ],
+    "additionalSourceUrls": [
+      "https://iwai.nic.in/sites/default/files/7825944126NW-04%20Extn%20Godavari%20River%20Final%20FSR_0.pdf",
+      "https://www.greentribunal.gov.in/sites/default/files/news_updates/Report%20of%20the%20Joint%20Committee%20in%20OA%20No.92-2025%20%28page%20nos.53-118%29.pdf"
+    ]
+  },
+  {
+    "id": "old-mondha-clock-tower",
+    "name": "Old Mondha Clock Tower",
+    "shortName": "Clock Tower",
+    "category": "landmark",
+    "area": "Old City",
+    "address": "Old Mondha, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.petrolpumpdealerchayan.in/uploads/advertisementpdfs/H2_ENGLISH_MAHARSTRA.pdf?5f64=",
+    "sourceTitle": "BPCL — Maharashtra retail outlet location notice, page 51, row 1116",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The clock tower is an Old Mondha market landmark. Its multi-level tower is also documented in a publicly archived 2012 photograph.",
+    "confidence": "official",
+    "aliases": [
+      "Mondha Clock Tower",
+      "Ghanta Ghar",
+      "जुना मोंढा घड्याळ मनोरा"
+    ],
+    "visualReferenceUrl": "https://commons.wikimedia.org/wiki/File:Old_Mondha_Clock_Tower,Nanded.jpg"
   }
 ]

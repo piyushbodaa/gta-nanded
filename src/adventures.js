@@ -1,0 +1,100 @@
+import { PLACES } from './city-data.js';
+
+const landmarkOrder = ['hazur-sahib','nagina-ghat','godavari-river','nandgiri-fort','kaleshwar-temple','vishnupuri-dam','mal-tekdi','old-mondha-clock-tower','langar-sahib','urvashi-ghat','ram-ghat','govardhan-ghat','banda-ghat','sangat-sahib','hira-ghat','mata-sahib','shikar-ghat'];
+export const LANDMARKS = landmarkOrder.map(id => PLACES.find(p => p.id === id)).filter(Boolean);
+export const STAMP_REWARD = 150;
+const validIds = new Set(LANDMARKS.map(p => p.id));
+export function loadStamps(storage) {
+  try {
+    const progress = JSON.parse(storage.getItem('nanded-stories-v1'));
+    // An explicit empty or invalid field is authoritative: never resurrect an
+    // old passport after a reset or split newly saved cash from its stamp state.
+    const value = progress && typeof progress === 'object' && Object.hasOwn(progress, 'stamps')
+      ? progress.stamps
+      : JSON.parse(storage.getItem('gta-nanded-passport-v1'));
+    return new Set(Array.isArray(value) ? value.filter(id => validIds.has(id)) : []);
+  } catch { return new Set(); }
+}
+export function nearestPhotoSpot(position, onFoot, radius = 24) {
+  if (!onFoot) return null;
+  return LANDMARKS.filter(p => Math.hypot(p.approach.x-position.x,p.approach.z-position.z) <= radius)
+    .sort((a,b) => Math.hypot(a.approach.x-position.x,a.approach.z-position.z)-Math.hypot(b.approach.x-position.x,b.approach.z-position.z))[0] || null;
+}
+export function collectStamp(stamps, placeId) {
+  if (!validIds.has(placeId) || stamps.has(placeId)) return 0;
+  stamps.add(placeId); return STAMP_REWARD;
+}
+
+const el = (tag, className, text) => { const node=document.createElement(tag); if(className)node.className=className;if(text!==undefined)node.textContent=text;return node; };
+const photoPrompts = {
+  'hazur-sahib':'Golden dome, white courtyard, your Nanded memory. Find a view you like and collect the stamp.',
+  'nagina-ghat':'Leave the busy streets for a moment. Find the shrine beside the Godavari and take your postcard.',
+  'godavari-river':'Every Nanded story comes back to the Godavari. Add a riverfront frame to your passport.',
+  'nandgiri-fort':'Head into old Nanded and find the stone gateway. The fort is your next photo stop.',
+  'kaleshwar-temple':'A Vishnupuri detour for the temple silhouette and a fresh view of the city.',
+  'vishnupuri-dam':'Find the barrage gates, the water and the skyline. Complete your Vishnupuri pair of stamps.',
+  'mal-tekdi':'Look for the white dome and the entrance arch. Another familiar Nanded silhouette for your collection.',
+  'old-mondha-clock-tower':'Old Mondha, one tower and four clock faces. Look up before you take your photo.',
+  'langar-sahib':'Make a stop in the riverfront shrine district. Collect a quiet moment before your next adventure.',
+  'urvashi-ghat':'Follow the steps down toward the river. Your Godavari collection starts with a new angle.',
+  'ram-ghat':'Another ghat, another familiar view. Find its mint ring and add Ram Ghat to the passport.',
+  'govardhan-ghat':'Find a riverfront frame around Govardhan Ghat. Three ghats make a good evening plan.',
+  'banda-ghat':'Keep exploring the riverfront. A small detour earns another Nanded memory.',
+  'sangat-sahib':'Find the riverside shrine and collect its photo stamp. Take your time looking around.',
+  'hira-ghat':'An eastern river detour. Visit on foot here, or make a longer ride out of it.',
+  'mata-sahib':'Continue your eastern Nanded trail with another shrine beside the river.',
+  'shikar-ghat':'Finish your outer-river collection here. One more memory for the Nanded passport.',
+};
+const kindLabel = {story:'YOUR FIRST CHAPTER',sprint:'ON FOOT / TIME TRIAL',photo:'PHOTO ADVENTURE',social:'LOCAL STORIES',race:'STREET CIRCUIT',chase:'ARCADE GETAWAY'};
+const kindIcon = {story:'01',sprint:'↗',photo:'◎',social:'✦',race:'⚑',chase:'★'};
+
+/** A paused activity picker: every card starts a real playable activity. */
+export function createAdventureMenu({missions,onMission,onVisit,onRoam,onClose,getStamps}) {
+  const panel=document.getElementById('adventure-menu'), grid=document.getElementById('adventure-grid');
+  const tabs=[...panel.querySelectorAll('[data-adventure-tab]')];
+  let view='activities', returnFocus=null, inert=[];
+  function render(){
+    const stamps=getStamps();
+    document.getElementById('passport-count').textContent=`${stamps.size} / ${LANDMARKS.length} stamps`;
+    document.getElementById('adventure-description').textContent=view==='activities'
+      ? 'A quick gully sprint, a landmark photo walk, or a proper getaway. Pick your next story. Each activity takes you to its starting point.'
+      : 'Collect the places that make Nanded, Nanded. Arrive on foot and take a photo with Q or the Photo button. Each new stamp earns ₹150.';
+    grid.replaceChildren();
+    tabs.forEach(tab=>tab.setAttribute('aria-pressed',String(tab.dataset.adventureTab===view)));
+    (view==='activities'?missions:LANDMARKS).forEach((item,index)=>{
+      const card=el('article',`adventure-card ${view==='landmarks'?'landmark-card':''}`);
+      const collected=stamps.has(item.id);
+      const top=el('div','adventure-card-top');
+      top.append(el('span','adventure-symbol',view==='landmarks'?(collected?'✓':'◇'):(kindIcon[item.kind]||'↗')),
+        el('span','adventure-type',view==='landmarks'?(collected?'STAMP COLLECTED':item.area):(kindLabel[item.kind]||item.kind.toUpperCase())));
+      card.append(top,el('h3','',view==='landmarks'?item.shortName:item.title));
+      card.append(el('p','',view==='landmarks'?(photoPrompts[item.id]||'Step into a familiar part of Nanded and collect its photo stamp.'):item.shortDescription));
+      const bottom=el('div','adventure-card-bottom');
+      bottom.append(el('span','',view==='landmarks'?(collected?'In your passport':'+₹150 · PHOTO STAMP'):(item.seconds?`${Math.ceil(item.seconds)}s · ₹${item.reward}`:`NO TIMER · ₹${item.reward}`)));
+      const button=el('button','',view==='landmarks'?'Visit on foot →':'Play activity →');button.type='button';
+      button.setAttribute('aria-label',`${view==='landmarks'?'Visit':'Play'} ${view==='landmarks'?item.shortName:item.title}`);
+      button.addEventListener('click',()=>view==='landmarks'?onVisit(item):onMission(index));bottom.append(button);card.append(bottom);grid.append(card);
+    });
+  }
+  tabs.forEach(tab=>tab.addEventListener('click',()=>{view=tab.dataset.adventureTab;render();}));
+  document.getElementById('adventure-close').addEventListener('click',onClose);
+  document.getElementById('adventure-roam').addEventListener('click',onRoam);
+  panel.addEventListener('keydown',event=>{
+    event.stopPropagation();
+    if(event.key==='Escape'){event.preventDefault();onClose();}
+    if(event.key==='Tab'){
+      const controls=[...panel.querySelectorAll('button')].filter(n=>!n.disabled&&n.getClientRects().length);
+      const first=controls[0],last=controls.at(-1);
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+    }
+  });
+  return {
+    open(tab='activities'){
+      view=tab;returnFocus=document.activeElement;render();panel.hidden=false;
+      inert=[...document.querySelectorAll('.site-header,#hud,#touch-controls')].map(n=>[n,n.inert]);inert.forEach(([n])=>{n.inert=true;});
+      document.getElementById('adventure-close').focus();
+    },
+    close(){panel.hidden=true;inert.forEach(([n,previous])=>{n.inert=previous;});inert=[];returnFocus?.focus?.({preventScroll:true});},
+  };
+}

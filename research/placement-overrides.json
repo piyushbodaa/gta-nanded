@@ -901,5 +901,33 @@
     "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424714",
     "locationPrecision": "area",
     "note": "Placed in Latur Phata from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "urvashi-ghat": {
+    "lat": 19.148419,
+    "lon": 77.303009,
+    "coordinateSourceUrl": "https://www.greentribunal.gov.in/sites/default/files/news_updates/Report%20of%20the%20Joint%20Committee%20in%20OA%20No.92-2025%20%28page%20nos.53-118%29.pdf",
+    "locationPrecision": "area",
+    "note": "Public-site photograph no. 02 on printed page 95 identifies the Urvashi Ghat vicinity with this geotag. Retained only as an area anchor; photograph position is not a surveyed ghat entrance. Source PDF indexed text was available but its direct document fetch returned 403 during this pass."
+  },
+  "ram-ghat": {
+    "lat": 19.1465972,
+    "lon": 77.3188469,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/102662423",
+    "locationPrecision": "area",
+    "note": "Old Mondha riverfront area anchor at the northern end of the existing OSM bridge geometry. IWAI page 244 identifies Ram Ghat/Shani Mandir near the Vikas Nagar–Old Mondha bridge; the OSM way has no local bridge name. Exact ghat frontage and bridge-name match remain unverified."
+  },
+  "govardhan-ghat": {
+    "lat": 19.148593,
+    "lon": 77.308444,
+    "coordinateSourceUrl": "https://www.greentribunal.gov.in/sites/default/files/news_updates/Report%20of%20the%20Joint%20Committee%20in%20OA%20No.92-2025%20%28page%20nos.53-118%29.pdf",
+    "locationPrecision": "area",
+    "note": "Public-site photograph no. 10 on printed page 99 identifies the river upstream of Govardhan Ghat with this geotag. It is an upstream riverfront area anchor, not the surveyed ghat entrance; other photographs in the same report have inconsistent geotags and were not adopted. Direct PDF fetch returned 403; indexed page text supplied this evidence."
+  },
+  "old-mondha-clock-tower": {
+    "lat": 19.1484185,
+    "lon": 77.3194321,
+    "coordinateSourceUrl": "https://datagemba.com/b/v/in/nanded/parks",
+    "locationPrecision": "area",
+    "note": "Named Clock Tower/Sw. Venugopal Biyani Udyan listing supplies the adjacent garden coordinate. BPCL independently identifies Clock Tower (Old Mondha), Nanded city. Used as a precinct anchor, not an exact tower footprint or entrance."
   }
 }

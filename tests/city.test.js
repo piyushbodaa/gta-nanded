@@ -8,7 +8,7 @@ const nav=createNavigator(NETWORK);
 const colliders=indexColliders(PLACES.map(p=>({...p})));
 
 test('all places have unique identities, provenance, honest precision and finite geometry',()=>{
-  assert.equal(PLACES.length,129);assert.equal(new Set(PLACES.map(p=>p.id)).size,PLACES.length);
+  assert.equal(PLACES.length,133);assert.equal(new Set(PLACES.map(p=>p.id)).size,PLACES.length);
   for(const p of PLACES){
     assert.ok(p.name&&p.area&&p.address&&p.sourceUrl.startsWith('https://'),p.id);
     assert.ok(['mapped','area'].includes(p.locationPrecision),p.id);
@@ -42,16 +42,34 @@ test('every researched place has a connected street route from the starting poin
   }
 });
 
-test('route arrivals are driveable and all local jobs can complete in order',()=>{
+test('all adventure starts and checkpoints are clear and complete using their required modes/actions',()=>{
+  assert.equal(new Set(MISSIONS.map(def=>def.id)).size,MISSIONS.length);
   for(const [index,def] of MISSIONS.entries()){
+    assert.ok(def.id&&def.kind&&def.shortDescription,def.title);
+    assert.ok(['foot','vehicle'].includes(def.startMode),def.id);
+    assert.ok(Number.isFinite(def.start.x)&&Number.isFinite(def.start.z)&&Number.isFinite(def.start.heading),def.id);
+    assert.equal(blocked(def.start.x,def.start.z,1.6,colliders,BOUNDS),false,`${def.id}: start`);
     const mission=newMission(index);
     if(def.chase){assert.equal(advanceMission(mission,SPAWN,20,true,def.survive),'complete');continue;}
     for(const [i,stop] of def.stops.entries()){
       assert.equal(blocked(stop.x,stop.z,1.6,colliders,BOUNDS),false,stop.placeId);
-      assert.equal(advanceMission(mission,stop,def.race?38:0,true,0.5),i===def.stops.length-1?'complete':'checkpoint');
+      assert.equal(advanceMission(mission,stop,def.race?38:0,stop.mode==='vehicle',0.5,stop.action),i===def.stops.length-1?'complete':'checkpoint');
     }
     assert.equal(mission.status,'complete',def.title);
   }
+});
+
+test('the first on-foot adventure stays in the Zenda lane and uses connected mapped streets',()=>{
+  const first=MISSIONS[0];
+  assert.equal(first.id,'zenda-homecoming');assert.equal(first.startMode,'foot');assert.equal(first.seconds,null);
+  let previous=SPAWN,totalLength=0;
+  for(const stop of first.stops){
+    assert.equal(stop.mode,'foot');assert.equal(stop.placeId,'zenda-chowk');
+    assert.ok(Math.hypot(stop.x-SPAWN.x,stop.z-SPAWN.z)<30,'first minute must not become a city commute');
+    assert.ok(nav.nearest(stop).distance<0.02,'lane checkpoint must be on a mapped street');
+    totalLength+=pathLength(nav.route(previous,stop));previous=stop;
+  }
+  assert.ok(totalLength<45,`${totalLength} world units of walking`);
 });
 
 test('rotated building collision and spatial index agree with full geometry',()=>{

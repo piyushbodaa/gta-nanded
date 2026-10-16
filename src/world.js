@@ -8,7 +8,7 @@ const CHUNK = 200;
 /** Mapped streets and researched places, with original illustrative architecture. */
 export function createWorld(scene) {
   const group = new THREE.Group(); group.name = 'Nanded mapped city'; scene.add(group);
-  const colliders = [], batches = new Map(), dummy = new THREE.Object3D();
+  const colliders = [], cameraStructures = [], batches = new Map(), dummy = new THREE.Object3D();
   let seed = 48271;
   const random = () => { seed = seed * 16807 % 2147483647; return (seed - 1) / 2147483646; };
   const between = (a, b) => a + random() * (b - a);
@@ -39,6 +39,7 @@ export function createWorld(scene) {
     box: new THREE.BoxGeometry(1, 1, 1), cylinder: new THREE.CylinderGeometry(1, 1, 1, 10),
     cone: new THREE.ConeGeometry(1, 1, 8), sphere: new THREE.SphereGeometry(1, 8, 6),
     dome: new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    arch: new THREE.TorusGeometry(1, 0.12, 4, 16, Math.PI),
   };
   const labels = createCityLabels(PLACES, group, CHUNK);
   function shape(geometry, material, x, y, z, sx, sy, sz, rotation = 0, tilt = 0) {
@@ -60,6 +61,9 @@ export function createWorld(scene) {
   function psign(p, x, y, z, width, height) { const q = local(p, x, z); labels.sign(p.id, q.x, y, q.z, width, height, p.rotation || 0); }
   function collider(p, x = 0, z = 0, w = p.w, d = p.d, h = p.h) {
     const q = local(p, x, z); colliders.push({ x: q.x, z: q.z, w, d, h, rotation: p.rotation || 0 });
+  }
+  function overhead(p, x, z, w, d, minY, h) {
+    const q = local(p, x, z); cameraStructures.push({ x: q.x, z: q.z, w, d, minY, h, rotation: p.rotation || 0 });
   }
   function strip(m, a, b, width, y, height = 0.06, maxLength = 150) {
     const dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
@@ -296,6 +300,159 @@ export function createWorld(scene) {
     const pole = local(p, -w * 0.43, d * 0.28);
     cylinder('gold', pole.x, 7, pole.z, 0.09, 14); pbox(p, 'saffron', -w * 0.43 + 0.9, 12.5, d * 0.28, 1.8, 1.2, 0.06);
   }
+  function shrineKiosk(p, x, z, base, radius, gold = false) {
+    const paint = gold ? 'gold' : 'white';
+    pshape(p, 'cylinder', 'white', x, base + 0.2, z, radius * 1.2, 0.4, radius * 1.2);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) pbox(p, 'white', x + sx * radius * 0.56, base + 1.1, z + sz * radius * 0.56, 0.2, 1.8, 0.2);
+    pshape(p, 'cylinder', 'white', x, base + 2.1, z, radius * 1.2, 0.3, radius * 1.2);
+    pshape(p, 'dome', paint, x, base + 2.25, z, radius, radius * 1.1, radius);
+    pshape(p, 'cone', 'gold', x, base + 2.7 + radius, z, 0.16, 0.9, 0.16);
+  }
+  function hazurSahib(p) {
+    // Board architecture reference: high plinth, two storeys, gilded central
+    // ribbed dome and four octagonal roof kiosks. A compact original model.
+    // https://hazursahib.com/web/history
+    const { w, d } = p, bw = w * 0.69, bd = d * 0.58, z = -d * 0.12, h = 8.5;
+    pbox(p, 'white', 0, 0.15, 0, w, 0.3, d);
+    for (let n = -3; n <= 3; n++) pbox(p, 'stone', n * w * 0.13, 0.31, d * 0.32, 0.035, 0.02, d * 0.27);
+    pbox(p, 'cream', 0, 0.7, z, bw + 1.2, 1.3, bd + 1.2);
+    pbox(p, 'white', 0, h / 2 + 1, z, bw, h, bd);
+    collider(p, 0, z, bw + 1.2, bd + 1.2, 20.8);
+    for (const y of [1.5, 5.5, h + 1.3]) pbox(p, 'cream', 0, y, z, bw + 0.4, 0.24, bd + 0.4);
+    const front = z + bd / 2 + 0.05;
+    for (let n = -3; n <= 3; n++) {
+      const x = n * bw * 0.135;
+      for (const y of [2.7, 6.9]) {
+        pbox(p, 'window', x, y, front, 1.55, 2.2, 0.08);
+        pshape(p, 'dome', 'window', x, y + 1.1, front, 0.775, 0.7, 0.08);
+        pshape(p, 'arch', 'cream', x, y + 1.1, front + 0.04, 0.87, 0.78, 0.65);
+      }
+    }
+    const upper = Math.min(bw, bd) * 0.47;
+    pbox(p, 'white', 0, 11.1, z, upper, 3.4, upper);
+    pbox(p, 'gold', 0, 12.9, z, upper + 0.7, 0.35, upper + 0.7);
+    const r = upper * 0.52;
+    pshape(p, 'cylinder', 'gold', 0, 13.3, z, r * 0.83, 0.65, r * 0.83);
+    pshape(p, 'dome', 'gold', 0, 13.6, z, r, r * 1.1, r);
+    for (let n = 0; n < 12; n++) {
+      const a = n * Math.PI / 6;
+      pshape(p, 'sphere', 'gold', Math.sin(a) * r * 0.71, 14.5, z + Math.cos(a) * r * 0.71, 0.14, r * 0.65, 0.14);
+    }
+    pshape(p, 'cylinder', 'gold', 0, 14.6 + r, z, 0.12, 2.1, 0.12);
+    pshape(p, 'dome', 'gold', 0, 15.3 + r, z, 0.65, 0.25, 0.65);
+    pshape(p, 'cone', 'gold', 0, 16 + r, z, 0.24, 1.3, 0.24);
+    for (const x of [-1, 1]) for (const end of [-1, 1]) shrineKiosk(p, x * bw * 0.4, z + end * bd * 0.4, h + 1.4, 1.2, true);
+    for (let n = -6; n <= 6; n++) pbox(p, 'white', n * bw / 13, h + 1.9, front, 0.18, 1, 0.18);
+    for (const side of [-1, 1]) {
+      const pole = local(p, side * w * 0.43, d * 0.2);
+      cylinder('gold', pole.x, 9, pole.z, 0.1, 18);
+      pbox(p, 'saffron', side * w * 0.43 + 0.8, 16.3, d * 0.2, 1.6, 1.35, 0.07);
+    }
+    for (let n = 0; n < 5; n++) pbox(p, 'white', 0, 0.15 + n * 0.13, front + 2.5 - n * 0.45, bw * 0.4, 0.25 + n * 0.22, 0.65);
+    psign(p, -w * 0.25, 1.4, d * 0.46, w * 0.46, 1.2);
+  }
+  function malTekdi(p) {
+    // Central dome, flanking open kiosks and an arched entrance are visible in
+    // the shrine board's photograph: https://hazursahib.com/web/mal_tekdi_sahib
+    const { w, d } = p, bw = w * 0.86, bd = d * 0.61, z = -d * 0.13, h = 7.3, front = z + bd / 2;
+    pbox(p, 'white', 0, 0.2, 0, w, 0.4, d);
+    pbox(p, 'white', 0, h / 2 + 0.5, z, bw, h, bd); collider(p, 0, z, bw, bd, h + 6);
+    pbox(p, 'terracotta', 0, 4.3, front + 0.06, bw, 0.23, 0.1);
+    for (const x of [-bw * 0.27, 0, bw * 0.27]) pbox(p, 'window', x, 2.5, front + 0.09, 1.8, 3.7, 0.1);
+    pshape(p, 'cylinder', 'white', 0, h + 1, z, 2.7, 1.2, 2.7);
+    pshape(p, 'dome', 'white', 0, h + 1.6, z, 3.3, 3.6, 3.3);
+    pshape(p, 'cone', 'gold', 0, h + 5.8, z, 0.23, 1.2, 0.23);
+    for (const side of [-1, 1]) shrineKiosk(p, side * bw * 0.36, front - 1.4, h + 0.7, 1.2);
+    const entryZ = d * 0.37;
+    for (const side of [-1, 1]) {
+      pbox(p, 'white', side * 3.3, 2, entryZ, 0.55, 4, 0.6);
+      collider(p, side * 3.3, entryZ, 0.55, 0.6, 5.5);
+      pshape(p, 'dome', 'white', side * 3.3, 4.1, entryZ, 0.6, 0.8, 0.6);
+    }
+    pshape(p, 'arch', 'white', 0, 3.8, entryZ, 3.3, 3.3, 1.7);
+    overhead(p, 0, entryZ, 7.4, 0.5, 3.4, 7.5);
+    psign(p, 0, h + 0.55, front + 0.18, bw * 0.55, 1.7);
+  }
+  function kaleshwar(p) {
+    // Red stepped shikhara and river-facing steps: district administration's
+    // Kaleshwar photographs, not the unrelated Hottal temple in Degloor.
+    const { w, d } = p, z = -d * 0.16, bw = w * 0.68, bd = d * 0.56;
+    pbox(p, 'stone', 0, 0.15, 0, w, 0.3, d);
+    pbox(p, 'cream', 0, 2.65, z, bw, 4.8, bd); collider(p, 0, z, bw, bd, 17);
+    pbox(p, 'terracotta', 0, 5.2, z, bw + 0.4, 0.45, bd + 0.4);
+    for (let tier = 0; tier < 7; tier++) {
+      const size = 3.9 * (1 - tier * 0.115);
+      pshape(p, 'cone', tier % 2 ? 'terracotta' : 'coral', 0, 6 + tier * 1.15, z - bd * 0.16, size, 2.4, size);
+    }
+    pshape(p, 'sphere', 'gold', 0, 14.1, z - bd * 0.16, 0.3, 0.4, 0.3);
+    pbox(p, 'gold', 0, 15.1, z - bd * 0.16, 0.07, 1.9, 0.07);
+    pbox(p, 'saffron', 0.6, 15.5, z - bd * 0.16, 1.2, 0.7, 0.04);
+    for (let n = -2; n <= 2; n++) pbox(p, 'window', n * bw * 0.17, 2.2, z + bd / 2 + 0.04, bw * 0.1, 3.3, 0.1);
+    for (let n = 0; n < 6; n++) pbox(p, 'stone', 0, 0.08 + n * 0.07, d * 0.45 - n * 0.37, w * 0.82, 0.16 + n * 0.12, 0.45);
+    psign(p, 0, 4.5, z + bd / 2 + 0.15, bw * 0.9, 1.3);
+  }
+  function riverGhat(p) {
+    const { w, d } = p;
+    pbox(p, 'sidewalk', 0, 0.12, d * 0.23, w, 0.24, d * 0.54);
+    pbox(p, 'water', 0, 0.06, -d * 0.36, w, 0.1, d * 0.28);
+    for (let n = 0; n < 7; n++) {
+      const z = -d * 0.19 + n * d * 0.045;
+      pbox(p, n % 2 ? 'cream' : 'stone', 0, 0.08 + n * 0.045, z, w * 0.98, 0.16 + n * 0.08, d * 0.05);
+    }
+    for (const side of [-1, 1]) {
+      const x = side * w * 0.43;
+      pbox(p, 'stone', x, 1, -d * 0.1, 0.45, 2, d * 0.5);
+      collider(p, x, -d * 0.1, 0.45, d * 0.5, 2);
+      const q = local(p, x, d * 0.34); lamp(q.x, q.z, p.rotation);
+      bench(p, side * w * 0.29, d * 0.25, Math.min(3, w * 0.19));
+    }
+    psign(p, -w * 0.26, 1.6, d * 0.46, w * 0.46, 1.3);
+  }
+  function vishnupuriDam(p) {
+    const { w, d } = p, gates = 5, spacing = w * 0.88 / gates;
+    pbox(p, 'water', 0, 0.1, -d * 0.12, w, 0.18, d * 0.76);
+    pbox(p, 'stone', 0, 0.2, d * 0.37, w, 0.4, d * 0.25);
+    for (let n = 0; n <= gates; n++) {
+      const x = (n - gates / 2) * spacing;
+      pbox(p, 'cream', x, 4, -d * 0.12, 0.8, 8, d * 0.28);
+      collider(p, x, -d * 0.12, 0.8, d * 0.28, 8.8);
+    }
+    for (let n = 0; n < gates; n++) {
+      const x = (n - (gates - 1) / 2) * spacing;
+      pbox(p, 'blueGlass', x, 3.8, -d * 0.13, spacing - 0.8, 6.5, 0.3);
+      collider(p, x, -d * 0.13, spacing - 0.8, 0.3, 7.2);
+      pbox(p, 'water', x, 1.05, d * 0.02, spacing - 0.95, 1.9, 0.12);
+      for (let bar = 0; bar < 4; bar++) pbox(p, 'metal', x, 1.4 + bar * 1.55, -d * 0.13 + 0.18, spacing - 0.8, 0.15, 0.16);
+      pbox(p, 'metal', x, 8.55, -d * 0.12, 1.3, 0.8, 0.9);
+    }
+    pbox(p, 'cream', 0, 7.7, -d * 0.12, w * 0.95, 0.55, d * 0.31);
+    overhead(p, 0, -d * 0.12, w * 0.95, d * 0.31, 7.4, 8.7);
+    for (let n = -6; n <= 6; n++) pbox(p, 'metal', n * w * 0.072, 8.2, d * 0.04, 0.08, 0.8, 0.08);
+    pbox(p, 'metal', 0, 8.6, d * 0.04, w * 0.92, 0.08, 0.08);
+    psign(p, -w * 0.23, 1.6, d * 0.48, w * 0.5, 1.3);
+  }
+  function clockTower(p) {
+    // White three-tier square shaft and gold cap from Shubham Takode's own
+    // photograph: commons.wikimedia.org/wiki/File:Old_Mondha_Clock_Tower,Nanded.jpg
+    const size = Math.min(p.w, p.d) * 0.34, h = 17;
+    pbox(p, 'grass', 0, 0.08, 0, p.w, 0.16, p.d);
+    pbox(p, 'white', 0, h / 2, 0, size, h, size); collider(p, 0, 0, size + 0.6, size + 0.6, h + 3);
+    for (const y of [0.4, 5.7, 11.3, 16.8]) pbox(p, 'cream', 0, y, 0, size + 0.65, 0.35, size + 0.65);
+    pshape(p, 'dome', 'gold', 0, 17.2, 0, size * 0.38, 1.7, size * 0.38);
+    pshape(p, 'cone', 'gold', 0, 19.3, 0, 0.2, 1, 0.2);
+    for (let side = 0; side < 4; side++) {
+      const face = { ...p, rotation: p.rotation + side * Math.PI / 2 };
+      pshape(face, 'sphere', 'dark', 0, 14, size / 2 + 0.06, 1.02, 1.02, 0.07);
+      pshape(face, 'sphere', 'cream', 0, 14, size / 2 + 0.13, 0.87, 0.87, 0.04);
+      pbox(face, 'dark', 0, 14.32, size / 2 + 0.19, 0.09, 0.65, 0.07);
+      pbox(face, 'dark', 0.26, 14, size / 2 + 0.2, 0.55, 0.09, 0.07);
+      pbox(face, 'window', 0, 1.8, size / 2 + 0.03, 1.5, 2.8, 0.08);
+      pshape(face, 'dome', 'window', 0, 3.2, size / 2 + 0.03, 0.75, 0.9, 0.07);
+      for (const y of [6.1, 11.7]) for (let n = -3; n <= 3; n++) pbox(face, 'metal', n * size * 0.14, y, size / 2 + 0.18, 0.06, 0.6, 0.06);
+    }
+    bench(p, -p.w * 0.32, p.d * 0.25, 2.5); bench(p, p.w * 0.32, p.d * 0.25, 2.5);
+    psign(p, -p.w * 0.25, 1.5, p.d * 0.46, p.w * 0.48, 1.2);
+  }
   function kaman(p) {
     const w = p.w, d = Math.min(2, p.d), h = Math.min(8, p.h);
     pbox(p, 'stone', 0, h * 0.43, 0, w * 0.18, h * 0.86, d); collider(p, 0, 0, w * 0.18, d, h);
@@ -327,8 +484,21 @@ export function createWorld(scene) {
       pbox(p, 'stone', side * w * 0.32, h / 2, d * 0.43, w * 0.36, h, d * 0.14); collider(p, side * w * 0.32, d * 0.43, w * 0.36, d * 0.14, h);
       for (const end of [-1, 1]) pshape(p, 'cylinder', 'stone', side * w * 0.42, h * 0.58, end * d * 0.42, Math.min(w, d) * 0.1, h * 1.16, Math.min(w, d) * 0.1);
     }
-    for (let n = 0; n < 9; n++) { const x = (n / 8 - 0.5) * w * 0.95; pbox(p, 'stone', x, h + 0.6, -d * 0.43, w * 0.06, 1.3, d * 0.16); }
-    psign(p, 0, h + 1.4, d * 0.44, w * 0.7, 2.8);
+    for (let n = 0; n < 9; n++) {
+      const x = (n / 8 - 0.5) * w * 0.95;
+      pbox(p, 'stone', x, h + 0.45, -d * 0.43, w * 0.06, n % 3 === 0 ? 0.7 : 1.3, d * 0.16);
+    }
+    // An open arch preserves the entrance; staggered masonry and interrupted
+    // parapets give the riverside fort a stone silhouette instead of a box.
+    pshape(p, 'arch', 'stone', 0, h * 0.48, d * 0.43, w * 0.14, h * 0.42, 4);
+    overhead(p, 0, d * 0.43, w * 0.32, 1, h * 0.42, h);
+    for (let row = 0; row < 7; row++) {
+      for (const side of [-1, 1]) {
+        pbox(p, 'roof', side * w * 0.32, 0.6 + row * 1.3, d * 0.501, w * 0.35, 0.055, 0.025);
+        for (let n = 0; n < 3; n++) pbox(p, 'roof', side * (w * 0.18 + n * w * 0.11 + (row % 2) * w * 0.04), 1.1 + row * 1.3, d * 0.501, 0.05, 0.9, 0.025);
+      }
+    }
+    psign(p, -w * 0.32, 3, d * 0.51, w * 0.35, 1.3);
     ptree(p, -w * 0.22, 0, false, 0.85); ptree(p, w * 0.22, -d * 0.15, false, 0.85);
   }
   function park(p, stadium = false) {
@@ -440,10 +610,16 @@ export function createWorld(scene) {
     const p = { ...input, w: input.w || 16, d: input.d || 12, h: input.h || 12, rotation: input.rotation || 0 };
     const name = `${p.id} ${p.name}`.toLowerCase(), category = p.category;
     if (p.id === 'zenda-chowk') startingHome(p);
+    else if (p.id === 'hazur-sahib') hazurSahib(p);
+    else if (p.id === 'mal-tekdi') malTekdi(p);
+    else if (p.id === 'kaleshwar-temple') kaleshwar(p);
+    else if (p.id === 'vishnupuri-dam') vishnupuriDam(p);
+    else if (['godavari-river', 'urvashi-ghat', 'ram-ghat', 'govardhan-ghat'].includes(p.id)) riverGhat(p);
+    else if (p.id === 'old-mondha-clock-tower') clockTower(p);
     else if (/bhagya.*kaman/.test(name)) kaman(p);
     else if (/nandgiri|nandagiri|nanded fort/.test(name)) fort(p);
     else if (/airport/.test(name)) airport(p);
-    else if (/stadium/.test(name)) park(p, true);
+    else if (p.id === 'sggs-stadium') park(p, true);
     else if (category === 'park') park(p);
     else if (/hazur.sahib/.test(name) && !/station|rail|yatri|niwas|blood|hospital|iti/.test(name)) shrine(p, true);
     else if (/gurudwara|gurdwara|ghat sahib|langar sahib|mal tekdi|sangat sahib|mata sahib/.test(name)) shrine(p);
@@ -543,7 +719,7 @@ export function createWorld(scene) {
     instanceCount += b.matrices.length;
   }
   const labelStats = labels.finish();
-  const cameraColliders = [...colliders, ...labelStats.cameraOccluders];
+  const cameraColliders = [...colliders, ...cameraStructures, ...labelStats.cameraOccluders];
   chunkMeshes.push(...labelStats.meshes);
   let lastFocus = { x: Infinity, z: Infinity }, lastCull = 0;
   function setFocus(focus) {

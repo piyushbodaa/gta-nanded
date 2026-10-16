@@ -22,7 +22,7 @@ export function initMobileUI({ onLayout } = {}) {
     mapToggle?.setAttribute('aria-expanded', String(!compact || minimapOpen));
     mapToggle?.setAttribute('aria-label', minimapOpen ? 'Hide mini map' : 'Show mini map');
     jobToggle?.setAttribute('aria-expanded', String(!compact || jobExpanded));
-    jobToggle?.setAttribute('aria-label', jobExpanded ? 'Hide street job details' : 'Show street job details');
+    jobToggle?.setAttribute('aria-label', jobExpanded ? 'Hide adventure details' : 'Show adventure details');
     if (hint) hint.hidden = !compact || !portraitQuery.matches || dismissed;
   }
   function refresh() {

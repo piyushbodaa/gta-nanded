@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import './style.css';
 import './launch.css';
+import './adventures.css';
 import { createWorld } from './world.js';
 import { NETWORK, PLACES, DISTRICTS, BOUNDS, SPAWN, PLACE_BY_ID } from './city-data.js';
 import { createNavigator, pathLength, indexColliders } from './navigation.js';
@@ -10,6 +11,7 @@ import { createIntro } from './intro.js';
 import { createCameraControls, movementForCamera } from './camera-controls.js';
 import { resolveCameraPosition } from './camera-obstruction.js';
 import { mapHeading, destinationBearing } from './map-direction.js';
+import { LANDMARKS, loadStamps, nearestPhotoSpot, collectStamp, createAdventureMenu } from './adventures.js';
 import { createVehicle, createPerson } from './vehicles.js';
 import { GameAudio } from './audio.js';
 import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, loadProgress, saveProgress } from './mechanics.js';
@@ -23,10 +25,12 @@ const intro = createIntro();
 let storage;
 try { storage=window.localStorage; } catch { storage={getItem:()=>null,setItem:()=>{throw Error('unavailable');}}; }
 const progress=loadProgress(storage);
-const game={started:false,paused:false,mapOpen:false,helpOnly:false,onFoot:false,roam:false,cash:progress.cash,completed:progress.completed,mission:newMission(progress.completed),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0,gps:null};
+const game={started:false,paused:false,mapOpen:false,activityOpen:false,helpOnly:false,onFoot:true,roam:false,cash:progress.cash,completed:progress.completed,mission:newMission(0),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0,gps:null,landmarkView:null,jumpHeight:0,jumpSpeed:0,jumpHeld:false};
+const stamps=loadStamps(storage);
 const player={...SPAWN};
 let renderer,scene,camera,cameraControls,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0;
-let guide,routeLine,routePoints=[],routeAge=10,routeKey='',mapCenter={...SPAWN},mapSpan=3600,lastTrafficFocus={...SPAWN};
+let guide,adventureMenu,friend,routeLine,routePoints=[],routeAge=10,routeKey='',mapCenter={...SPAWN},mapSpan=3600,lastTrafficFocus={...SPAWN},photoTimer;
+const photoMarkers=[];
 const navigator=createNavigator(NETWORK),visited=new Set();
 try{for(const id of JSON.parse(storage.getItem('nanded-discoveries-v1')||'[]'))if(PLACE_BY_ID.has(id))visited.add(id);}catch{/* Storage is optional. */}
 const cars=[],police=[],pedestrians=[];
@@ -35,7 +39,7 @@ let introTime=0;
 const tmp=new THREE.Vector3(),camTarget=new THREE.Vector3(),sunTarget=new THREE.Object3D();
 
 function toast(message,seconds=4) {text('toast',message);show('toast',true);game.toastTime=seconds;}
-function persist(){if(!saveProgress(storage,{cash:game.cash,completed:game.completed}))toast('Progress could not be saved in this browser. You can keep playing.');}
+function persist(){const saved=saveProgress(storage,{cash:game.cash,completed:game.completed,stamps:[...stamps]});if(!saved)toast('Progress could not be saved in this browser. You can keep playing.');return saved;}
 function playerPosition(){return game.onFoot?player:car;}
 function addCar(kind,color,x,z,heading=0,route=null){
   const mesh=createVehicle(kind,color);scene.add(mesh);mesh.position.set(x,0.12,z);mesh.rotation.y=heading;
@@ -57,7 +61,8 @@ function setup(){
   game.sun=sun;
   world=createWorld(scene);
   indexColliders(world.colliders);indexColliders(world.cameraColliders);world.setFocus?.(SPAWN);
-  car=addCar('hatchback','#ec9b3d',SPAWN.x,SPAWN.z,SPAWN.heading);car.occupied=true;
+  const parkedStart=navigator.nearest({x:SPAWN.x+Math.sin(MISSIONS[0].start.heading)*12,z:SPAWN.z+Math.cos(MISSIONS[0].start.heading)*12});
+  car=addCar('hatchback','#568c8a',parkedStart.x,parkedStart.z,SPAWN.heading);
   const parked=['iib-parnakuti','rcc-nanded','yeshwant-college','hazur-sahib','sggs-engineering'];
   parked.forEach((id,i)=>{const p=PLACE_BY_ID.get(id).approach;addCar(i%2?'sedan':'auto',i%2?'#eee1bd':'#196e56',p.x,p.z);});
   const palette=['#dfb94e','#568c8a','#d5d5b9','#b45e4b','#597d53','#637b97'];
@@ -73,6 +78,9 @@ function setup(){
     const v=addCar('police','#eee9d7',SPAWN.x,SPAWN.z);v.mesh.visible=false;v.active=false;police.push(v);
   }
   avatar=createPerson('#e37747');scene.add(avatar);avatar.visible=false;
+  friend=createPerson('#618eac');scene.add(friend);friend.visible=false;
+  const photoGeometry=new THREE.TorusGeometry(2.1,.1,5,24),photoMaterial=new THREE.MeshBasicMaterial({color:'#7edac8',transparent:true,opacity:.8});
+  for(const place of LANDMARKS){const mesh=new THREE.Mesh(photoGeometry,photoMaterial);mesh.rotation.x=Math.PI/2;mesh.position.set(place.approach.x,.3,place.approach.z);scene.add(mesh);photoMarkers.push({place,mesh});}
   for(let i=0;i<60;i++){
     const place=nearPlaces[i%nearPlaces.length],axis=i%2;
     const angle=place.rotation,x=place.approach.x-Math.sin(angle)*3+(i%3-1)*2,z=place.approach.z-Math.cos(angle)*3;
@@ -86,6 +94,7 @@ function setup(){
   arrow=new THREE.Mesh(new THREE.ConeGeometry(1.3,2.4,4),new THREE.MeshBasicMaterial({color:'#ffd269'}));arrow.rotation.z=Math.PI;arrow.position.y=8;marker.add(arrow);
   routeLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:'#ffd269',transparent:true,opacity:0.9,depthTest:false}));routeLine.renderOrder=3;scene.add(routeLine);
   guide=createGuide({places:PLACES,onNavigate:setDestination,onTravel:travelTo,onSelect:place=>{mapCenter={...place};mapSpan=1000;drawMap($('full-map'),true);},onClose:()=>{if(game.mapOpen)toggleMap();},getVisited:()=>visited,getPosition:()=>({...playerPosition(),metersPerUnit:1/NETWORK.scale})});
+  adventureMenu=createAdventureMenu({missions:MISSIONS,onMission:playActivity,onVisit:visitLandmark,onRoam:()=>{closeAdventures();setRoam(true);},onClose:closeAdventures,getStamps:()=>stamps});
   clock=new THREE.Clock();
   text('loading-status','THE CITY IS YOURS');$('start-drive').disabled=false;$('start-explore').disabled=false;
   hookUI();updateHUD();requestAnimationFrame(frame);
@@ -94,15 +103,16 @@ function setup(){
   window.nandedDiagnostics=()=>({started:game.started,paused:game.paused,onFoot:game.onFoot,position:{x:playerPosition().x,z:playerPosition().z},speed:car.speed,mission:{...game.mission},cash:game.cash,wanted:game.wanted,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,carCount:cars.length,landmarks:world.landmarks.map(l=>l.name)});
 }
 
-function start(onFoot=false){
+function start(roam=false){
   if(!renderer)return;
-  game.started=true;game.paused=false;game.onFoot=onFoot;game.roam=onFoot;car.occupied=!onFoot;
-  player.x=car.x-4;player.z=car.z;player.heading=car.heading;
-  avatar.visible=onFoot;show('welcome',false);show('hud',true);show('touch-controls',true);show('pause-menu',false);
+  game.started=true;game.paused=false;game.onFoot=true;game.roam=roam;game.gps=null;game.mission=newMission(0);car.occupied=false;car.speed=0;
+  player.x=SPAWN.x;player.z=SPAWN.z;player.heading=MISSIONS[0].start.heading;game.jumpHeight=game.jumpSpeed=0;game.landmarkView=null;
+  avatar.position.set(player.x,.15,player.z);avatar.visible=true;show('welcome',false);show('hud',true);show('touch-controls',true);show('pause-menu',false);
   document.body.classList.add('is-playing');keys.clear();
   show('camera-reset',true);cameraControls.reset(playerPosition().heading);
-  const p=playerPosition();camera.position.set(p.x+14,12,p.z+20);
-  beginMission();toast(onFoot?`चला, आपलं नांदेड फिरूया! Explore ${PLACES.length} places in the city guide.`:'झेंडा चौकात स्वागत! चला, आपलं नांदेड फिरूया.',6);
+  const p=playerPosition(),initial=resolveCameraPosition({x:p.x,y:1.6,z:p.z},{x:p.x+Math.sin(p.heading)*9,y:1.6+Math.tan(.44)*9,z:p.z+Math.cos(p.heading)*9},world.cameraColliders,world.bounds);
+  camera.position.set(initial.x,initial.y,initial.z);
+  beginMission();toast(roam?'आपली गल्ली. आपलं शहर. Walk, jump, explore — choose Activities whenever you like.':'अरे, परत आलास! Meet your friend in the amber ring. Tap Talk or press Q.',7);
   $('game-canvas').focus();
 }
 
@@ -113,7 +123,81 @@ function beginMission(){
   updateHUD();
 }
 
+function openAdventures(view='activities'){
+  if(!game.started||intro.active)return;
+  if(game.mapOpen)toggleMap();show('pause-menu',false);game.activityOpen=true;game.paused=true;keys.clear();cameraControls.cancel();adventureMenu.open(view);
+}
+function closeAdventures(){
+  if(!game.activityOpen)return;
+  adventureMenu.close();game.activityOpen=false;game.paused=false;keys.clear();$('game-canvas').focus();
+}
+function placePlayer(position,onFoot=true){
+  const heading=position.heading??SPAWN.heading;
+  game.onFoot=onFoot;game.landmarkView=null;game.jumpHeight=game.jumpSpeed=0;game.jumpHeld=false;game.capture=0;game.wanted=0;game.heat=0;
+  police.forEach(p=>{p.active=false;p.mesh.visible=false;});
+  player.x=position.x;player.z=position.z;player.heading=heading;
+  if(!onFoot){car.x=position.x;car.z=position.z;car.heading=heading;car.route=null;}
+  car.speed=0;car.occupied=!onFoot;car.health=100;car.nitro=100;
+  clearArrival(position,onFoot?null:car);
+  avatar.visible=onFoot;avatar.position.set(player.x,.15,player.z);
+  cameraControls.reset(heading);const dist=onFoot?9:19;
+  const initial=resolveCameraPosition({x:position.x,y:1.6,z:position.z},{x:position.x+Math.sin(heading)*dist,y:1.6+Math.tan(.44)*dist,z:position.z+Math.cos(heading)*dist},world.cameraColliders,world.bounds);
+  camera.position.set(initial.x,initial.y,initial.z);
+  world.setFocus?.(position);refreshTraffic(position,true);routeAge=10;
+}
+function clearArrival(position,exclude=null){
+  const paths=[...navigator.walk(position,17,24),...navigator.walk(position,18,24)];
+  for(const vehicle of cars){
+    if(vehicle===exclude||police.includes(vehicle)||distance(vehicle,position)>8)continue;
+    const spot=paths.find(p=>distance(p,position)>16&&distance(p,position)<160&&!blocked(p.x,p.z,VEHICLES[vehicle.kind].radius,world.colliders,world.bounds)&&cars.every(other=>other===vehicle||distance(other,p)>6));
+    if(spot){vehicle.x=spot.x;vehicle.z=spot.z;vehicle.speed=0;vehicle.route=null;vehicle.mesh.position.set(spot.x,.12,spot.z);}
+  }
+}
+function playActivity(index){
+  closeAdventures();game.mission=newMission(index);game.roam=false;game.gps=null;
+  const def=MISSIONS[index];placePlayer(def.start,def.startMode!=='vehicle');beginMission();refreshRoute(2);updateHUD();
+  toast(`${def.title} · ${def.stops[0]?.label||'Keep moving. Lose the patrol.'}`,6);
+}
+function visitLandmark(place){
+  closeAdventures();setRoam(true);placePlayer({...place.approach,heading:Math.atan2(-(place.x-place.approach.x),-(place.z-place.approach.z))},true);game.landmarkView=place;
+  game.gps=place;refreshRoute(2);discoverPlaces();updateHUD();toast(`${place.shortName} · Look around, then tap Photo or press Q for your passport.`,6);
+}
+function missionActionTarget(){
+  if(game.roam||game.mission.status!=='active')return null;
+  const target=MISSIONS[game.mission.index].stops[game.mission.stage];
+  return target?.action&&distance(playerPosition(),target)<=(target.radius||13)?target:null;
+}
+function currentPhotoSpot(){
+  if(!game.onFoot)return null;
+  const objective=!game.roam?MISSIONS[game.mission.index].stops[game.mission.stage]:null;
+  const preferred=LANDMARKS.find(p=>p.id===(objective?.action==='photo'?objective.placeId:game.gps?.id));
+  return preferred&&distance(player,preferred.approach)<=24?preferred:nearestPhotoSpot(player,true);
+}
+function takeAction(){
+  if(!game.started||game.paused||intro.active)return;
+  const target=missionActionTarget(),photoSpot=currentPhotoSpot();
+  if(!game.onFoot){toast('Step out of your vehicle first.');return;}
+  if(target){
+    const result=advanceMission(game.mission,player,0,false,0,target.action);
+    if(result){handleMissionResult(result);if(target.dialogue)toast(target.dialogue,6);}
+    if(target.action==='photo')showPhoto(target.placeId?PLACE_BY_ID.get(target.placeId)?.shortName:'Zenda Chowk');
+  }
+  if(photoSpot&&(!target||target.action==='photo')){
+    const reward=collectStamp(stamps,photoSpot.id);
+    if(reward){game.cash+=reward;if(!persist())toast('Photo collected for this session. Browser storage is unavailable.');else toast(`नांदेडची आठवण! ${photoSpot.shortName} · +₹${reward} · ${stamps.size}/${LANDMARKS.length} stamps`,5);audio.success();}
+    else toast(`${photoSpot.shortName} is already in your passport.`,3);
+    showPhoto(photoSpot.shortName);
+  }else if(!target)toast('Find a mint photo ring at a landmark, or follow your activity marker.');
+  updateHUD();
+}
+function showPhoto(title){
+  renderer.render(scene,camera);
+  try{$('photo-preview').src=renderer.domElement.toDataURL('image/jpeg',.75);}catch{/* A stamp still works if capture is unavailable. */}
+  text('photo-title',title||'Nanded memory');show('photo-memory',true);clearTimeout(photoTimer);photoTimer=setTimeout(()=>show('photo-memory',false),3000);
+}
+
 function pause(force,helpOnly=false){
+  if(game.activityOpen){closeAdventures();return;}
   if(!game.started&&!helpOnly&&!game.paused)return;
   game.paused=force??!game.paused;game.helpOnly=helpOnly;
   show('pause-menu',game.paused);guide.close();game.mapOpen=false;keys.clear();
@@ -125,6 +209,7 @@ function pause(force,helpOnly=false){
 
 function toggleMap(){
   if(!game.started)return;
+  if(game.activityOpen)closeAdventures();
   game.mapOpen=!game.mapOpen;game.paused=game.mapOpen;
   show('map-overlay',game.mapOpen);show('pause-menu',false);keys.clear();
   cameraControls?.cancel();
@@ -136,6 +221,7 @@ function recover(message='Back on the road. Your ride is repaired.'){
   car.x=spot.x;car.z=spot.z;car.heading=SPAWN.heading;car.speed=0;car.health=100;car.nitro=100;
   if(game.onFoot){player.x=spot.x;player.z=spot.z;}
   cameraControls?.reset(playerPosition().heading);
+  game.jumpHeight=game.jumpSpeed=0;
   game.wanted=0;game.heat=0;game.capture=0;
   police.forEach(p=>{p.active=false;p.mesh.visible=false;});
   toast(message);audio.tone(260,0.3);
@@ -158,15 +244,8 @@ function setDestination(place){
 function travelTo(place){
   setRoam(true);
   const p=place.approach;
-  if(game.onFoot){
-    player.x=p.x;player.z=p.z;player.heading=place.rotation+Math.PI;
-    const parking=navigator.nearest({x:p.x+Math.cos(place.rotation)*6,z:p.z-Math.sin(place.rotation)*6});
-    car.x=parking.x;car.z=parking.z;car.speed=0;car.route=null;car.occupied=false;
-  }
-  else{car.x=p.x;car.z=p.z;car.heading=place.rotation+Math.PI;car.speed=0;}
   if(game.mapOpen)toggleMap();
-  cameraControls?.reset(playerPosition().heading);
-  camera.position.set(p.x+18,15,p.z+18);world.setFocus?.(p);refreshTraffic(p,true);refreshRoute(2);
+  placePlayer({...p,heading:Math.atan2(-(place.x-p.x),-(place.z-p.z))},game.onFoot);if(game.onFoot&&place.category==='landmark')game.landmarkView=place;refreshRoute(2);
   discoverPlaces();toast(`${place.shortName} · ${place.area}`,5);updateHUD();
 }
 
@@ -208,6 +287,7 @@ function refreshTraffic(p,force=false){
 
 function interact(){
   if(!game.started||game.paused)return;
+  game.landmarkView=null;
   if(!game.onFoot){
     if(Math.abs(car.speed)>6){toast('Slow down before stepping out.');return;}
     let spot=null;
@@ -233,20 +313,22 @@ function hookUI(){
     camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
     if(game.mapOpen)drawMap($('full-map'),true);
   }});
-  $('start-drive').addEventListener('click',()=>intro.play(()=>start(false),{mode:'drive'}));
+  $('start-drive').addEventListener('click',()=>intro.play(()=>start(false),{mode:'foot'}));
   $('start-explore').addEventListener('click',()=>intro.play(()=>start(true),{mode:'foot'}));
-  $('start-guide')?.addEventListener('click',()=>intro.play(()=>{start(false);setRoam(true);toggleMap();},{mode:'guide'}));
-  $('roam-toggle')?.addEventListener('click',()=>{setRoam(!game.roam);toast(game.roam?'घाई कसली? आपलं शहर फिरूया. Jobs wait while you explore.':'Job resumed. Follow the amber route.');});
+  $('start-guide')?.addEventListener('click',()=>intro.play(()=>{start(true);toggleMap();},{mode:'guide'}));
+  $('roam-toggle')?.addEventListener('click',()=>openAdventures());
+  $('passport-open')?.addEventListener('click',()=>openAdventures('landmarks'));
+  $('world-action')?.addEventListener('click',()=>{takeAction();$('game-canvas').focus();});
   $('gps-clear')?.addEventListener('click',()=>{game.gps=null;routeAge=10;updateHUD();});
   $('resume')?.addEventListener('click',()=>pause(false));
   $('help-toggle')?.addEventListener('click',()=>pause(!game.paused,true));
-  $('restart')?.addEventListener('click',()=>{game.mission=newMission(game.mission.index);recover();pause(false);setRoam(false);if(!game.started)intro.play(()=>start(false),{mode:'drive'});});
-  $('mission-next')?.addEventListener('click',()=>{const retry=game.mission.status==='failed';game.mission=newMission(retry?game.mission.index:game.completed);setRoam(false);beginMission();toast(retry?'Job restarted. You’ve got this.':'New job. Follow the amber marker.');});
-  $('reset-save')?.addEventListener('click',()=>{game.cash=0;game.completed=0;game.mission=newMission(0);visited.clear();try{storage.setItem('nanded-discoveries-v1','[]');}catch{}persist();recover('Fresh start. Welcome back to Nanded.');pause(false);setRoam(false);if(!game.started)intro.play(()=>start(false),{mode:'drive'});});
+  $('restart')?.addEventListener('click',()=>{pause(false);if(!game.started)intro.play(()=>start(false),{mode:'foot'});else playActivity(game.mission.index);});
+  $('mission-next')?.addEventListener('click',()=>game.mission.status==='failed'&&!game.roam?playActivity(game.mission.index):openAdventures());
+  $('reset-save')?.addEventListener('click',()=>{game.cash=0;game.completed=0;game.mission=newMission(0);visited.clear();stamps.clear();try{storage.setItem('nanded-discoveries-v1','[]');}catch{}persist();pause(false);if(!game.started)intro.play(()=>start(false),{mode:'foot'});else playActivity(0);});
   $('sound-toggle')?.addEventListener('click',async()=>{try{const enabled=await audio.toggle();text('sound-label',enabled?'Sound on':'Sound off');$('sound-toggle').setAttribute('aria-pressed',String(enabled));}catch{toast('Audio is unavailable in this browser.');}});
   $('fullscreen-toggle')?.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{toast('Fullscreen is unavailable in this browser.');}});
   $('touch-map')?.addEventListener('click',toggleMap);$('touch-interact')?.addEventListener('click',interact);
-  $('camera-reset')?.addEventListener('click',()=>{if(game.started&&!game.paused&&!intro.active){cameraControls.reset(playerPosition().heading);$('game-canvas').focus();}});
+  $('camera-reset')?.addEventListener('click',()=>{if(game.started&&!game.paused&&!intro.active){game.landmarkView=null;cameraControls.reset(playerPosition().heading);$('game-canvas').focus();}});
   $('map-zoom-in')?.addEventListener('click',()=>{mapSpan=Math.max(300,mapSpan/1.7);drawMap($('full-map'),true);});
   $('map-zoom-out')?.addEventListener('click',()=>{mapSpan=Math.min(11000,mapSpan*1.7);drawMap($('full-map'),true);});
   $('map-overview')?.addEventListener('click',()=>{mapCenter={x:(BOUNDS.minX+BOUNDS.maxX)/2,z:(BOUNDS.minZ+BOUNDS.maxZ)/2};mapSpan=Math.max(BOUNDS.maxX-BOUNDS.minX,BOUNDS.maxZ-BOUNDS.minZ)+100;drawMap($('full-map'),true);});
@@ -254,6 +336,7 @@ function hookUI(){
   $('minimap')?.addEventListener('click',toggleMap);$('minimap')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();toggleMap();}});
   window.addEventListener('keydown',e=>{
     if(intro.active)return;
+    if(game.activityOpen)return;
     if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextAreaElement){if(e.code==='Escape'&&game.mapOpen)toggleMap();return;}
     if(e.target instanceof HTMLButtonElement&&['Space','Enter'].includes(e.code))return;
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)&&game.started&&!game.paused)e.preventDefault();
@@ -262,10 +345,13 @@ function hookUI(){
     if(e.code==='KeyM')toggleMap();
     if(e.code==='KeyE')interact();
     if(game.started&&!game.paused){
-      if(e.code==='KeyC')cameraControls.reset(playerPosition().heading);
+      if(e.code==='Space'&&game.onFoot&&game.jumpHeight<=0){game.jumpSpeed=7.3;game.jumpHeld=true;}
+      if(e.code==='KeyB'){openAdventures();return;}
+      if(e.code==='KeyQ')takeAction();
+      if(e.code==='KeyC'){game.landmarkView=null;cameraControls.reset(playerPosition().heading);}
       if(e.code==='KeyH')audio.horn();
       if(e.code==='KeyR'){game.cash=Math.max(0,game.cash-100);persist();recover('Ride recovered. Repair cost: up to ₹100.');if(MISSIONS[game.mission.index].chase&&game.mission.status==='active')game.mission.status='failed';}
-      if(e.code==='KeyN'&&game.mission.status!=='active')$('mission-next').click();
+      if(e.code==='KeyN'&&(game.roam||game.mission.status!=='active'))$('mission-next').click();
     }
     keys.add(e.code);
   });
@@ -275,7 +361,7 @@ function hookUI(){
   const controls={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',boost:'ShiftLeft',brake:'Space'};
   document.querySelectorAll('[data-control]').forEach(button=>{
     const key=controls[button.dataset.control];
-    button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);keys.add(key);});
+    button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);keys.add(key);if(key==='Space'&&game.onFoot&&game.jumpHeight<=0&&!game.paused){game.jumpSpeed=7.3;game.jumpHeld=true;}});
     ['pointerup','pointercancel','lostpointercapture'].forEach(type=>button.addEventListener(type,()=>keys.delete(key)));
   });
   $('game-canvas').addEventListener('webglcontextlost',e=>{e.preventDefault();pause(true);show('fatal-error',true);text('fatal-error-message','The graphics connection was interrupted. Reload this page to return to Nanded.');});
@@ -329,14 +415,18 @@ function updateTraffic(dt){
 function updatePlayer(dt){
   const input=inputState();
   if(game.onFoot){
+    if(input.brake&&!game.jumpHeld&&game.jumpHeight<=0)game.jumpSpeed=7.3;
+    game.jumpHeld=input.brake;
+    if(game.jumpHeight>0||game.jumpSpeed>0){game.jumpSpeed-=18*dt;game.jumpHeight=Math.max(0,game.jumpHeight+game.jumpSpeed*dt);if(!game.jumpHeight)game.jumpSpeed=0;}
     const x=(input.right?1:0)-(input.left?1:0),z=(input.down?1:0)-(input.up?1:0),len=Math.hypot(x,z);
     if(len){
+      game.landmarkView=null;
       // Forward follows the view after looking around, without turning the view with the avatar.
       const direction=movementForCamera(x,-z,cameraControls.heading),speed=input.boost?9:5;
       player.heading=Math.atan2(-direction.x,-direction.z);
       moveBody(player,direction.x*speed*dt,direction.z*speed*dt,0.6,world.colliders,world.bounds);
     }
-    avatar.position.set(player.x,0.15,player.z);avatar.rotation.y=player.heading;
+    avatar.position.set(player.x,0.15+game.jumpHeight,player.z);avatar.rotation.y=player.heading;
     avatar.userData.limbs.forEach((limb,i)=>limb.rotation.x=len?Math.sin(game.time*12+i*Math.PI)*0.45:0);
     lastNearby=cars.filter(v=>v.mesh.visible&&!police.includes(v)&&distance(v,player)<8).sort((a,b)=>distance(a,player)-distance(b,player))[0];
   }else{
@@ -374,27 +464,40 @@ function updateMission(dt){
     const nearest=Math.min(...police.filter(p=>p.active).map(p=>distance(p,pos)));
     if(nearest<7&&(game.onFoot||Math.abs(car.speed)<5))game.capture+=dt;else game.capture=Math.max(0,game.capture-dt*2);
     if(game.capture>3){game.cash=Math.max(0,game.cash-200);persist();game.mission.status='failed';recover('Busted. ₹200 fine. Back at the garage.');return;}
-    if(game.time-game.trouble>15&&nearest>42&&!(def.chase&&game.mission.status==='active')){
+    if(game.time-game.trouble>15&&nearest>42&&!(!game.roam&&def.chase&&game.mission.status==='active')){
       game.heat=Math.max(0,game.heat-dt*2.8);game.wanted=Math.ceil(game.heat/30);
       if(!game.wanted)toast('The heat is off. You lost the patrol.');
     }
   }
   const result=game.roam?null:advanceMission(game.mission,pos,game.onFoot?0:car.speed,!game.onFoot,dt);
+  handleMissionResult(result);
+  const target=destination();
+  marker.visible=Boolean(target)&&(!game.gps||distance(pos,target)>8);
+  if(target){arrow.visible=distance(pos,target)>10;arrow.scale.setScalar(game.onFoot ? .6 : 1);marker.position.set(target.x,0,target.z);arrow.position.y=6+Math.sin(game.time*3)*0.8;arrow.rotation.y=game.time;markerRing.scale.setScalar((game.onFoot ? .45 : 1)*(1+Math.sin(game.time*2)*0.025));markerRing.material.color.set(game.gps?'#7edac8':'#ffd269');arrow.material.color.copy(markerRing.material.color);}
+  const friendStop=MISSIONS[0].stops[0];friend.visible=!game.roam&&game.mission.index===0&&game.mission.stage===0&&game.mission.status==='active';
+  const friendHeading=MISSIONS[0].start.heading;
+  friend.position.set(friendStop.x-Math.sin(friendHeading)*2+Math.cos(friendHeading)*.9,0.15,friendStop.z-Math.cos(friendHeading)*2-Math.sin(friendHeading)*.9);friend.rotation.y=Math.atan2(-(pos.x-friend.position.x),-(pos.z-friend.position.z));
+  for(const {place,mesh} of photoMarkers){mesh.visible=distance(pos,place.approach)<130&&!stamps.has(place.id);mesh.scale.setScalar(1+Math.sin(game.time*2)*.06);}
+}
+
+function handleMissionResult(result){
+  if(!result)return;
+  const def=MISSIONS[game.mission.index];
   if(result==='complete'){
     game.cash+=def.reward;game.completed++;persist();audio.success();
     if(def.chase){game.wanted=0;game.heat=0;}
-    toast(`झकास! +₹${def.reward.toLocaleString('en-IN')} · Press N for the next job.`,7);
+    toast(`झकास! ${def.title} complete · +₹${def.reward.toLocaleString('en-IN')} · Choose your next adventure in Activities.`,7);
   }else if(result==='checkpoint'){audio.tone(660,0.2);toast(def.stops[game.mission.stage].label,3);}
-  else if(result==='failed'){toast('Time’s up. Retry the job when you’re ready.',6);audio.tone(150,0.4);}
-  const target=destination();
-  marker.visible=Boolean(target);
-  if(target){marker.position.set(target.x,0,target.z);arrow.position.y=9+Math.sin(game.time*3)*0.8;arrow.rotation.y=game.time;markerRing.scale.setScalar(1+Math.sin(game.time*2)*0.025);markerRing.material.color.set(game.gps?'#7edac8':'#ffd269');arrow.material.color.copy(markerRing.material.color);}
+  else if(result==='failed'){toast('Time’s up. Retry the challenge when you’re ready.',6);audio.tone(150,0.4);}
+  routeAge=10;refreshRoute(2);updateHUD();
 }
 
 function updateCamera(dt){
   const p=playerPosition();
   const view=cameraControls.update(dt,{heading:p.heading,speed:game.onFoot?0:car.speed,onFoot:game.onFoot}),heading=view.heading;
-  const dist=game.onFoot?15:19+Math.min(Math.abs(car.speed)*0.12,5);
+  if(view.dragging)game.landmarkView=null;
+  const landmark=game.landmarkView;
+  const dist=landmark?Math.max(20,Math.min(42,landmark.h*1.3)):game.onFoot?9:19+Math.min(Math.abs(car.speed)*0.12,5);
   tmp.set(p.x+Math.sin(heading)*dist,1.6+Math.tan(view.pitch)*dist,p.z+Math.cos(heading)*dist);
   // Shorten the view before a wall or roof, including obstacles between the actor and camera.
   const focus={x:p.x,y:1.6,z:p.z},clear=resolveCameraPosition(focus,tmp,world.cameraColliders,world.bounds);
@@ -402,7 +505,10 @@ function updateCamera(dt){
   camera.position.lerp(tmp,1-Math.exp(-dt*(view.dragging?12:4.5)));
   const safe=resolveCameraPosition(focus,camera.position,world.cameraColliders,world.bounds);
   camera.position.set(safe.x,safe.y,safe.z);
-  camTarget.set(p.x-Math.sin(heading)*5,1.6,p.z-Math.cos(heading)*5);camera.lookAt(camTarget);
+  const lookAhead=game.onFoot?1.5:5;
+  if(landmark)camTarget.set(landmark.x,Math.min(landmark.h*.55,12),landmark.z);
+  else camTarget.set(p.x-Math.sin(heading)*lookAhead,1.6,p.z-Math.cos(heading)*lookAhead);
+  camera.lookAt(camTarget);
   if(game.gps)$('gps-bearing').style.transform=`rotate(${destinationBearing(p,game.gps.approach,heading)}rad)`;
   const fov=52+(!game.onFoot&&inputState().boost&&car.speed>25?6:0);camera.fov=THREE.MathUtils.lerp(camera.fov,fov,dt*3);camera.updateProjectionMatrix();
   game.sun.position.set(p.x-100,150,p.z+90);sunTarget.position.set(p.x,0,p.z);sunTarget.updateMatrixWorld();
@@ -420,23 +526,29 @@ function updateHUD(){
   text('vehicle-name',game.onFoot?'ON FOOT':VEHICLES[car.kind].name.toUpperCase());
   if($('health-fill'))$('health-fill').style.width=`${clamp(car.health,0,100)}%`;
   if($('nitro-fill'))$('nitro-fill').style.width=`${car.nitro}%`;
-  text('mission-label',m.status==='complete'?'JOB COMPLETE':m.status==='failed'?'TRY AGAIN':def.label);
+  text('mission-label',m.status==='complete'?'ACTIVITY COMPLETE':m.status==='failed'?'TRY AGAIN':def.label);
   text('mission-title',def.title);
-  text('mission-description',m.status==='complete'?`Nice driving. ₹${def.reward.toLocaleString('en-IN')} earned. Your progress is saved.`:m.status==='failed'?'Every great driver has a bad day. Take another run.':def.description);
-  text('mission-progress',m.status==='active'?(def.chase?`Stay ahead · ${Math.max(0,Math.ceil(def.survive-m.elapsed))}s`:target?.label||''):m.status==='complete'?'READY FOR ANOTHER?':'YOUR RIDE IS READY');
+  text('mission-description',m.status==='complete'?`झकास! ₹${def.reward.toLocaleString('en-IN')} earned. Your progress is saved.`:m.status==='failed'?'Take another run, or choose a different adventure.':def.description);
+  text('mission-progress',m.status==='active'?(def.chase?`Stay ahead · ${Math.max(0,Math.ceil(def.survive-m.elapsed))}s`:target?.label||''):m.status==='complete'?'READY FOR ANOTHER?':'READY WHEN YOU ARE');
   text('mission-distance',m.status==='active'&&target?`${Math.round(distance(p,target))} m`:'');
-  const remaining=Math.max(0,Math.ceil(def.seconds-m.elapsed));text('mission-time',m.status==='active'?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'');
-  show('mission-next',m.status!=='active');text('mission-next',m.status==='failed'?'Retry job ↗':'Next job ↗');
+  const remaining=Math.max(0,Math.ceil((def.seconds||0)-m.elapsed));text('mission-time',m.status==='active'?(def.seconds?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'NO TIMER'):'');
+  show('mission-next',m.status!=='active');text('mission-next',m.status==='failed'?'Retry challenge ↗':'Choose next adventure ↗');
   if(game.roam){
-    text('mission-label','YOUR CITY / FREE ROAM');text('mission-title','Find your Nanded');text('mission-description','No timer. Open the city guide to find your classes, college, favourite food stop or a place you have never visited.');text('mission-progress',`${visited.size} of ${PLACES.length} places discovered`);text('mission-distance','');text('mission-time','');show('mission-next',true);text('mission-next','Take a street job ↗');
+    text('mission-label','YOUR CITY / FREE ROAM');text('mission-title',game.landmarkView?.shortName||'Find your Nanded');text('mission-description',game.landmarkView?'Find a view you like and take a photo for your landmark passport. Walk or drag the view to explore on foot.':'Walk, sprint, jump or borrow a ride. Find mint photo rings at landmarks, or choose a challenge in Activities.');text('mission-progress',`${visited.size} of ${PLACES.length} places discovered`);text('mission-distance','');text('mission-time','');show('mission-next',true);text('mission-next','Choose an adventure ↗');
   }else if(target&&m.status==='active')text('mission-distance',`${Math.round((pathLength(routePoints)||distance(p,target))/NETWORK.scale)} m route`);
-  $('roam-toggle')?.setAttribute('aria-pressed',String(game.roam));text('roam-toggle',game.roam?'Free roam ✓':'Free roam');
-  show('gps-panel',Boolean(game.gps));text('gps-title',game.gps?.shortName||'');text('gps-distance',game.gps?`${Math.round((pathLength(routePoints)||distance(p,game.gps.approach))/NETWORK.scale)} m route`:'');
+  text('roam-toggle','Activities');
+  document.body.classList.toggle('on-foot',game.onFoot);
+  text('touch-jump',game.onFoot?'JUMP':'BRAKE');$('touch-jump')?.setAttribute('aria-label',game.onFoot?'Jump':'Handbrake');text('touch-sprint',game.onFoot?'RUN':'BOOST');
+  text('passport-summary',`${stamps.size}/${LANDMARKS.length} landmark stamps`);
+  text('objective-short',game.roam?(game.landmarkView?`Photo spot · ${stamps.has(game.landmarkView.id)?'Stamp collected':'₹150 for a new stamp'}`:'Your city. Your pace.'):m.status==='complete'?'Chapter complete. Choose your next adventure.':m.status==='failed'?'Try again in Activities.':target?.label||'Stay ahead of the patrol');
+  const actionTarget=missionActionTarget(),photoSpot=currentPhotoSpot();
+  show('world-action',game.onFoot&&Boolean(actionTarget||photoSpot));text('world-action-label',actionTarget?.action==='interact'?'Talk':photoSpot&&stamps.has(photoSpot.id)?'Photo again':'Take photo');
+  show('gps-panel',Boolean(game.gps)&&distance(p,game.gps.approach)>24);text('gps-title',game.gps?.shortName||'');text('gps-distance',game.gps?`${Math.round((pathLength(routePoints)||distance(p,game.gps.approach))/NETWORK.scale)} m route`:'');
   text('discovered-count',`${visited.size}/${PLACES.length} discovered`);
-  const nearest=PLACES.reduce((a,b)=>distance(a.approach,p)<distance(b.approach,p)?a:b,PLACES[0]);
+  const nearest=game.gps&&distance(game.gps.approach,p)<24?game.gps:PLACES.reduce((a,b)=>distance(a.approach,p)<distance(b.approach,p)?a:b,PLACES[0]);
   text('nearby-place',distance(nearest.approach,p)<100?`NEAR ${nearest.shortName.toUpperCase()}`:'M · FIND A PLACE IN NANDED');
   const nearTarget=!game.roam&&target&&distance(p,target)<18&&m.status==='active'&&!def.race;
-  const hint=game.capture>0?'PATROL NEARBY · KEEP MOVING':game.onFoot?(lastNearby?`E · Drive ${VEHICLES[lastNearby.kind].name}`:'WASD · Walk   SHIFT · Run'):nearTarget?'SLOW DOWN INSIDE THE AMBER RING':'E · Step out   H · Horn   R · Recover';
+  const hint=game.capture>0?'PATROL NEARBY · KEEP MOVING':game.onFoot?(actionTarget?`Q · ${actionTarget.action==='interact'?'Talk to your friend':'Take the photo'}`:photoSpot?'Q · Take a landmark photo':lastNearby?`E · Take ${VEHICLES[lastNearby.kind].name}`:'WASD · Walk   SHIFT · Run   SPACE · Jump'):nearTarget?(target?.mode==='foot'?'E · STEP OUT TO EXPLORE':'SLOW DOWN INSIDE THE AMBER RING'):'E · Step out   H · Horn   R · Recover';
   text('interaction',hint);text('map-label',district(p));drawMap($('minimap'),false);
 }
 

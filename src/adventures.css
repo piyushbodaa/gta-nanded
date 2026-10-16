@@ -1,0 +1,86 @@
+/* Adventures live inside the game, with a compact HUD and a paused picker. */
+.adventure-overlay{position:fixed;inset:0;z-index:65;display:grid;place-items:center;padding:24px;background:#081313d9;backdrop-filter:blur(12px)}
+.adventure-sheet{width:min(1080px,100%);height:min(850px,92dvh);display:flex;flex-direction:column;background:#122422;border:1px solid #dae2c633;box-shadow:0 24px 100px #0008;overflow:hidden}
+.adventure-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:28px 32px 18px;background:linear-gradient(115deg,#263932,#142623)}
+.adventure-heading .eyebrow{font-size:9px;letter-spacing:2px;color:#ff956e}
+.adventure-heading h2{font-family:var(--display);font-size:clamp(27px,3.3vw,45px);line-height:1.1;text-transform:uppercase;margin:10px 0 0}
+.adventure-heading em{color:#ff956e;font-style:normal}
+.adventure-heading>button{width:44px;height:44px;border:1px solid #fff3;background:#172a26;flex-shrink:0}
+.adventure-tabs{display:flex;gap:8px;padding:16px 32px 0}
+.adventure-tabs button{padding:12px 18px;background:#0d1c1b;border:1px solid #eff1d62b;font-size:12px;font-weight:700;min-height:44px}
+.adventure-tabs button[aria-pressed=true]{background:#ff8251;color:#13221c;border-color:#ff8251}
+.adventure-tabs span{margin-left:8px;font-size:10px;opacity:.75}
+.adventure-description{padding:0 32px;margin:15px 0 18px;color:#bacbbd;font-size:12px;line-height:1.6;max-width:800px}
+.adventure-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:max-content;gap:14px;overflow-y:auto;overscroll-behavior:contain;padding:0 32px 24px;align-content:start;flex:1;min-height:0}
+.adventure-card{padding:18px;border:1px solid #dce1c52b;background:linear-gradient(155deg,#293d34,#172a25);display:flex;flex-direction:column;min-height:230px}
+.adventure-card>*{flex-shrink:0}
+.adventure-card-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.adventure-symbol{display:grid;place-items:center;width:35px;height:35px;background:#ff835126;color:#ff9b6e;font-size:22px;font-family:var(--display);border:1px solid #ff9b6e66;flex-shrink:0}
+.adventure-type{font-size:8px;letter-spacing:1px;line-height:1.5;color:#d6d5b5}
+.adventure-card h3{font-family:var(--display);font-size:25px;line-height:1.08;text-transform:uppercase;margin:0 0 10px;color:#fff0d0}
+.adventure-card p{font-size:11px;line-height:1.65;color:#c0cbb8;margin:0 0 18px}
+.adventure-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;flex-wrap:wrap}
+.adventure-card-bottom>span{font-size:8px;letter-spacing:.3px;color:#d5dfc8}
+.adventure-card-bottom button{background:#ff8957;border:0;color:#172722;min-height:44px;padding:10px 13px;font-size:10px;font-weight:750}
+.landmark-card .adventure-symbol{color:#95e1c8;border-color:#95e1c866;background:#95e1c815}
+.landmark-card .adventure-card-bottom button{background:#9cdbc3}
+.adventure-footer{display:flex;align-items:center;justify-content:space-between;padding:14px 32px;gap:15px;background:#0f201c;border-top:1px solid #fff2}
+.adventure-footer>span{font-size:10px;color:#b2c1af}
+.adventure-footer button{background:none;border:1px solid #c7d6be55;min-height:44px;padding:10px 18px;font-size:11px;white-space:nowrap}
+.world-action{position:absolute;bottom:155px;left:50%;transform:translateX(-50%);pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:15px;min-height:48px;padding:12px 22px;background:#ffd378;color:#172823;border:2px solid #fff0be;box-shadow:0 6px 25px #0005;font-size:13px;font-weight:800;border-radius:4px;z-index:4}
+.world-action kbd{border:1px solid #1a36294d;color:#254332;background:#fff3;padding:3px 6px;font-size:10px}
+.passport-open{pointer-events:auto;position:absolute;left:var(--edge);bottom:310px;border:1px solid #b2dbbf55;background:#162b26d9;min-height:36px;padding:8px 12px;color:#b6dec6;font-size:10px;letter-spacing:.2px}
+.objective-short{display:none}
+.on-foot .vehicle-panel .speed-readout,.on-foot .vehicle-panel .resource-bar{display:none}
+.on-foot .vehicle-panel{width:auto}
+.on-foot .vehicle-topline{font-size:11px}
+.photo-memory{position:fixed;z-index:62;right:32px;top:110px;width:260px;padding:9px 9px 16px;background:#f1e7ce;box-shadow:0 12px 50px #0007;transform:rotate(3deg);pointer-events:none;color:#20332c}
+.photo-memory img{width:100%;height:145px;object-fit:cover;background:#213d31;display:block}
+.photo-memory span{font-size:7px;letter-spacing:1.5px;display:block;margin:12px 4px 5px}
+.photo-memory strong{font-family:var(--display);font-size:24px;text-transform:uppercase;display:block;margin:0 4px}
+.is-touch-device .world-action{bottom:calc(150px + var(--safe-bottom));padding:9px 16px;min-height:44px;font-size:11px;max-width:165px;gap:8px}
+.is-touch-device .world-action kbd{display:none}
+.is-touch-device.on-foot .vehicle-panel{display:none}
+.is-touch-device .passport-open{left:var(--mobile-left);bottom:calc(242px + var(--safe-bottom));min-height:32px;padding:6px 9px;font-size:8px;max-width:calc(100vw - 140px)}
+.is-touch-device .objective-short{display:block;font-size:9px;line-height:1.4;margin:6px 0 0;color:#f8dfad;max-width:200px}
+.is-touch-device .interaction{bottom:calc(284px + var(--safe-bottom))}
+.is-touch-device .rotate-hint{top:calc(205px + var(--safe-top))}
+.is-touch-device .photo-memory{width:190px;right:18px;top:245px}
+.is-touch-device .photo-memory img{height:100px}
+.is-touch-device .photo-memory strong{font-size:21px}
+@media(max-width:760px){
+  .adventure-overlay{padding:8px}
+  .adventure-sheet{height:calc(100dvh - 16px)}
+  .adventure-heading{padding:20px 17px 14px}
+  .adventure-heading .eyebrow{font-size:7px;letter-spacing:1.3px}
+  .adventure-heading h2{font-size:30px;max-width:230px}
+  .adventure-tabs{padding:13px 14px 0;gap:5px}
+  .adventure-tabs button{padding:10px;font-size:10px;flex:1}
+  .adventure-tabs span{display:block;margin:4px 0 0;font-size:8px}
+  .adventure-description{padding:0 17px;font-size:10px;margin:12px 0}
+  .adventure-grid{grid-template-columns:1fr;padding:0 14px 14px;gap:10px}
+  .adventure-card{min-height:195px;padding:16px}
+  .adventure-footer{padding:10px 14px}
+  .adventure-footer>span{font-size:9px;max-width:160px;line-height:1.4}
+}
+@media(orientation:landscape) and (max-height:600px){
+  .adventure-overlay{padding:8px}
+  .adventure-sheet{height:calc(100dvh - 16px)}
+  .adventure-heading{padding:10px 20px}
+  .adventure-heading h2{font-size:26px;margin:3px 0 0}
+  .adventure-heading .eyebrow{font-size:7px}
+  .adventure-tabs{padding:8px 20px 0}
+  .adventure-tabs button{padding:8px 14px;min-height:36px}
+  .adventure-description{font-size:10px;padding:0 20px;margin:8px 0}
+  .adventure-grid{grid-template-columns:repeat(3,minmax(0,1fr));padding:0 20px 12px}
+  .adventure-card{min-height:200px;padding:13px}
+  .adventure-footer{padding:6px 20px}
+  .adventure-footer>span{font-size:9px}
+  .adventure-footer button{min-height:32px;padding:7px 15px}
+  .is-touch-device .world-action{bottom:85px}
+  .is-touch-device .passport-open{bottom:165px;left:var(--mobile-left)}
+  .is-touch-device .interaction{bottom:18px;left:50%;transform:translateX(-50%);max-width:350px;font-size:8px}
+  .is-touch-device:has(#world-action:not([hidden])) .nearby-place{display:none}
+  .is-touch-device .photo-memory{top:85px;right:28px;width:180px}
+}
+@media(prefers-reduced-motion:reduce){.photo-memory{transform:none}}

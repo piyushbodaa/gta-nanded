@@ -1,6 +1,6 @@
 # Nanded city coverage — 16 October 2026
 
-The playable catalog contains **129 researched records** across Nanded-Waghala and adjoining urban/outskirts destinations. It is a verified candidate set based on available public sources, not a census of every business, class, college or landmark, and not a ranking of fame. `verifiedAt` records the research date; it does not establish that a venue is open today or that an older source was published that day.
+The playable catalog contains **133 researched records** across Nanded-Waghala and adjoining urban/outskirts destinations. It is a verified candidate set based on available public sources, not a census of every business, class, college or landmark, and not a ranking of fame. `verifiedAt` records the research date; it does not establish that a venue is open today or that an older source was published that day.
 
 The complete generated records are in [public/data/places.json](../public/data/places.json). Category counts below match [src/data/city.json](../src/data/city.json).
 
@@ -9,7 +9,7 @@ The complete generated records are in [public/data/places.json](../public/data/p
 | Coaching institutes/branches | 13 |
 | Colleges, university and technical institutions | 24 |
 | Schools | 8 |
-| Landmarks and riverfront destinations | 13 |
+| Landmarks and riverfront destinations | 17 |
 | Junctions | 14 |
 | Transport places | 6 |
 | Civic and cultural places | 6 |
@@ -20,13 +20,15 @@ The complete generated records are in [public/data/places.json](../public/data/p
 | Cafés | 6 |
 | Cinemas | 2 |
 | Shopping/market places | 3 |
-| **Total** | **129** |
+| **Total** | **133** |
 
-The source groups are **45 education**, **44 landmarks/civic/transport/health**, **39 food/hotel/cinema/shopping**, and **one separately researched starting junction**, Zenda Chowk. The catalog has **53 address-area labels** after normalizing Vasarani/Vasarni; these are convenient locality, street and sector groupings, not 53 official administrative wards. A charitable yatri niwas uses the game's lodging category without implying it is a commercial hotel. The medical college and hospital remain two catalog records at a shared campus, and PVR is separately discoverable within the Treasure Bazaar complex; 129 records does not mean 129 distinct real buildings.
+The source groups are **45 education**, **48 landmarks/civic/transport/health**, **39 food/hotel/cinema/shopping**, and **one separately researched starting junction**, Zenda Chowk. The catalog has **53 address-area labels** after normalizing Vasarani/Vasarni; these are convenient locality, street and sector groupings, not 53 official administrative wards. A charitable yatri niwas uses the game's lodging category without implying it is a commercial hotel. The medical college and hospital remain two catalog records at a shared campus, and PVR is separately discoverable within the Treasure Bazaar complex; 133 records does not mean 133 distinct real buildings.
+
+Four additions in the landmark expansion are **Urvashi Ghat, Ram Ghat, Govardhan Ghat and Old Mondha Clock Tower**. Government tourism, river-survey and BPCL location records establish their identities; all four retain **area** coordinate precision. The geotagged riverfront photographs and Clock Tower garden point do not establish surveyed entrances. See [landmark expansion evidence](landmarks-notes.md#landmark-expansion--16-october-2026).
 
 ## Geographic fidelity
 
-**64 records use mapped locations; 65 use area anchors.** `confidence` describes the venue/address source (`official`, `mapped` or `directory`); `locationPrecision` independently describes coordinate evidence (`mapped` or `area`). An official address can still have only an approximate game placement.
+**64 records use mapped locations; 69 use area anchors.** `confidence` describes the venue/address source (`official`, `mapped` or `directory`); `locationPrecision` independently describes coordinate evidence (`mapped` or `area`). An official address can still have only an approximate game placement.
 
 - **Mapped:** a named map point, institution-published coordinate, location code or campus/footprint centre reconciled with the address. This is not necessarily a surveyed entrance.
 - **Area:** a known neighborhood, nearby feature, campus precinct, street or village centre consistent with the address. The actual frontage is unverified.

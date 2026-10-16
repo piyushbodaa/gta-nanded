@@ -1,6 +1,6 @@
 # Placement reconciliation — 2026-10-16
 
-All 128 source records have a placement override: **63 mapped points and 65 area anchors**. This file reconciles `education.json`, `food-hotels.json` and `landmarks.json`; it does not assert every venue has a surveyed entrance or exact facade model.
+All 132 source records have a placement override: **63 mapped points and 69 area anchors**. This file reconciles `education.json`, `food-hotels.json` and `landmarks.json`; it does not assert every venue has a surveyed entrance or exact facade model.
 
 ## Meaning of precision
 
@@ -47,4 +47,15 @@ The coarsest remaining placements are the MHADA/Latur Phata hotel/chowk pair, th
 
 ## Validation
 
-Checked exactly 128 unique keys, equality with all three source ID sets, finite numeric coordinates, HTTPS provenance, allowed precision values, and bounds. Existing non-null coordinates from source research are retained. The data contains no invented opening hours, ratings, rankings or claims of exhaustive coverage.
+Checked exactly 132 unique keys, equality with all three source ID sets, finite numeric coordinates, HTTPS provenance, allowed precision values, and bounds. Existing non-null coordinates from source research are retained. The data contains no invented opening hours, ratings, rankings or claims of exhaustive coverage.
+
+## Landmark expansion — 16 October 2026
+
+Four additions use deliberately conservative `area` precision:
+
+- `urvashi-ghat`: **19.148419, 77.303009**, the public-site photo geotag in the [NGT joint-committee report](https://www.greentribunal.gov.in/sites/default/files/news_updates/Report%20of%20the%20Joint%20Committee%20in%20OA%20No.92-2025%20%28page%20nos.53-118%29.pdf), printed page 95, photograph 02. This locates the vicinity, not a surveyed visitor entrance.
+- `govardhan-ghat`: **19.148593, 77.308444**, the same report's printed page 99, photograph 10, explicitly upstream of Govardhan Ghat. This is an upstream precinct anchor. Other photos contain inconsistent geotags and were not adopted. The indexed page text supplied these two references; direct PDF fetch returned 403 during this pass.
+- `ram-ghat`: **19.1465972, 77.3188469**, the north end of [OSM bridge way 102662423](https://www.openstreetmap.org/way/102662423), retained in the existing network snapshot. The [IWAI river survey](https://iwai.nic.in/sites/default/files/7825944126NW-04%20Extn%20Godavari%20River%20Final%20FSR_0.pdf), page 244, places Ram Ghat/Shani Mandir near the Vikas Nagar–Old Mondha bridge. The OSM bridge is unnamed, so its name match and the exact ghat frontage remain unresolved.
+- `old-mondha-clock-tower`: **19.1484185, 77.3194321**, the named adjacent Clock Tower/Sw. Venugopal Biyani Udyan listing in [DataGemba's park directory](https://datagemba.com/b/v/in/nanded/parks). BPCL independently identifies the tower in Old Mondha. The park point is a precinct anchor, not a measured tower footprint.
+
+The unchanged builder placed the four illustrations beside connected streets. The street-network files and Zenda spawn remained unchanged. Sources establish place identity and vicinity; this expansion does not imply verified present-day opening hours, precise entrances, or exhaustive landmark coverage.
