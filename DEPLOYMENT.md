@@ -38,3 +38,20 @@ to `.env.local`; it must never enter source control or a shared archive.
 
 After deployment, verify the real game page and JavaScript assets at
 `https://gta.nanded.fun`, then perform a gameplay check on that domain.
+
+## Published release — 16 October 2026
+
+- Production deployment: `dpl_4uUyJLjHhHTNydxf3ARdzkggoFkB` (READY)
+- Deployed source commit: `2e274eb`
+- Primary URL: https://gta.nanded.fun
+- Public alternate URL: https://nanded-street-stories.vercel.app
+- The `gta` CNAME was created in Hostinger; the record is visible in hPanel.
+- Google (8.8.8.8) and Cloudflare (1.1.1.1) DNS resolve the new subdomain.
+- TLS-validated requests to the DNS-resolved Vercel address returned the game
+  HTML and every bundled JS/CSS asset; all three assets matched the local build
+  byte for byte.
+- Browser render and controls checked locally and on the public Vercel URL.
+  Desktop and 390-pixel layout checked. Eight mechanics tests pass.
+- At release time this laptop's resolver still cached an earlier NXDOMAIN for
+  `gta.nanded.fun`; direct browser verification on the custom hostname must be
+  repeated after that cache refreshes. The alternate URL works immediately.
