@@ -7,6 +7,9 @@ import { createNavigator, pathLength, indexColliders } from './navigation.js';
 import { createGuide } from './guide.js';
 import { initMobileUI } from './mobile.js';
 import { createIntro } from './intro.js';
+import { createCameraControls, movementForCamera } from './camera-controls.js';
+import { resolveCameraPosition } from './camera-obstruction.js';
+import { mapHeading, destinationBearing } from './map-direction.js';
 import { createVehicle, createPerson } from './vehicles.js';
 import { GameAudio } from './audio.js';
 import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, loadProgress, saveProgress } from './mechanics.js';
@@ -22,7 +25,7 @@ try { storage=window.localStorage; } catch { storage={getItem:()=>null,setItem:(
 const progress=loadProgress(storage);
 const game={started:false,paused:false,mapOpen:false,helpOnly:false,onFoot:false,roam:false,cash:progress.cash,completed:progress.completed,mission:newMission(progress.completed),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0,gps:null};
 const player={...SPAWN};
-let renderer,scene,camera,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0;
+let renderer,scene,camera,cameraControls,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0;
 let guide,routeLine,routePoints=[],routeAge=10,routeKey='',mapCenter={...SPAWN},mapSpan=3600,lastTrafficFocus={...SPAWN};
 const navigator=createNavigator(NETWORK),visited=new Set();
 try{for(const id of JSON.parse(storage.getItem('nanded-discoveries-v1')||'[]'))if(PLACE_BY_ID.has(id))visited.add(id);}catch{/* Storage is optional. */}
@@ -53,7 +56,7 @@ function setup(){
   const shadowSize=mobileGraphics?1024:2048;sun.shadow.mapSize.set(shadowSize,shadowSize);sun.shadow.camera.left=-110;sun.shadow.camera.right=110;sun.shadow.camera.top=110;sun.shadow.camera.bottom=-110;sun.shadow.camera.near=1;sun.shadow.camera.far=420;sun.shadow.bias=-0.0005;sun.shadow.normalBias=0.04;sun.target=sunTarget;scene.add(sun,sunTarget);
   game.sun=sun;
   world=createWorld(scene);
-  indexColliders(world.colliders);world.setFocus?.(SPAWN);
+  indexColliders(world.colliders);indexColliders(world.cameraColliders);world.setFocus?.(SPAWN);
   car=addCar('hatchback','#ec9b3d',SPAWN.x,SPAWN.z,SPAWN.heading);car.occupied=true;
   const parked=['iib-parnakuti','rcc-nanded','yeshwant-college','hazur-sahib','sggs-engineering'];
   parked.forEach((id,i)=>{const p=PLACE_BY_ID.get(id).approach;addCar(i%2?'sedan':'auto',i%2?'#eee1bd':'#196e56',p.x,p.z);});
@@ -97,6 +100,7 @@ function start(onFoot=false){
   player.x=car.x-4;player.z=car.z;player.heading=car.heading;
   avatar.visible=onFoot;show('welcome',false);show('hud',true);show('touch-controls',true);show('pause-menu',false);
   document.body.classList.add('is-playing');keys.clear();
+  show('camera-reset',true);cameraControls.reset(playerPosition().heading);
   const p=playerPosition();camera.position.set(p.x+14,12,p.z+20);
   beginMission();toast(onFoot?`चला, आपलं नांदेड फिरूया! Explore ${PLACES.length} places in the city guide.`:'झेंडा चौकात स्वागत! चला, आपलं नांदेड फिरूया.',6);
   $('game-canvas').focus();
@@ -113,6 +117,7 @@ function pause(force,helpOnly=false){
   if(!game.started&&!helpOnly&&!game.paused)return;
   game.paused=force??!game.paused;game.helpOnly=helpOnly;
   show('pause-menu',game.paused);guide.close();game.mapOpen=false;keys.clear();
+  cameraControls?.cancel();
   if(game.paused){text('resume',game.started?'Back to the streets':'Back');$('resume')?.focus();}
   else $('game-canvas')?.focus();
   audio.update(car.speed,game.started&&!game.onFoot,game.paused);
@@ -122,6 +127,7 @@ function toggleMap(){
   if(!game.started)return;
   game.mapOpen=!game.mapOpen;game.paused=game.mapOpen;
   show('map-overlay',game.mapOpen);show('pause-menu',false);keys.clear();
+  cameraControls?.cancel();
   if(game.mapOpen){mapCenter={...playerPosition()};mapSpan=3000;guide.open();drawMap($('full-map'),true);}else{guide.close();$('game-canvas').focus();}
 }
 
@@ -129,6 +135,7 @@ function recover(message='Back on the road. Your ride is repaired.'){
   const spot=navigator.nearest(playerPosition())||SPAWN;
   car.x=spot.x;car.z=spot.z;car.heading=SPAWN.heading;car.speed=0;car.health=100;car.nitro=100;
   if(game.onFoot){player.x=spot.x;player.z=spot.z;}
+  cameraControls?.reset(playerPosition().heading);
   game.wanted=0;game.heat=0;game.capture=0;
   police.forEach(p=>{p.active=false;p.mesh.visible=false;});
   toast(message);audio.tone(260,0.3);
@@ -158,6 +165,7 @@ function travelTo(place){
   }
   else{car.x=p.x;car.z=p.z;car.heading=place.rotation+Math.PI;car.speed=0;}
   if(game.mapOpen)toggleMap();
+  cameraControls?.reset(playerPosition().heading);
   camera.position.set(p.x+18,15,p.z+18);world.setFocus?.(p);refreshTraffic(p,true);refreshRoute(2);
   discoverPlaces();toast(`${place.shortName} · ${place.area}`,5);updateHUD();
 }
@@ -220,6 +228,7 @@ function interact(){
 }
 
 function hookUI(){
+  cameraControls=createCameraControls($('game-canvas'),{canInteract:()=>game.started&&!intro.active&&!game.paused&&!game.mapOpen});
   initMobileUI({onLayout:()=>{
     camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
     if(game.mapOpen)drawMap($('full-map'),true);
@@ -237,6 +246,7 @@ function hookUI(){
   $('sound-toggle')?.addEventListener('click',async()=>{try{const enabled=await audio.toggle();text('sound-label',enabled?'Sound on':'Sound off');$('sound-toggle').setAttribute('aria-pressed',String(enabled));}catch{toast('Audio is unavailable in this browser.');}});
   $('fullscreen-toggle')?.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{toast('Fullscreen is unavailable in this browser.');}});
   $('touch-map')?.addEventListener('click',toggleMap);$('touch-interact')?.addEventListener('click',interact);
+  $('camera-reset')?.addEventListener('click',()=>{if(game.started&&!game.paused&&!intro.active){cameraControls.reset(playerPosition().heading);$('game-canvas').focus();}});
   $('map-zoom-in')?.addEventListener('click',()=>{mapSpan=Math.max(300,mapSpan/1.7);drawMap($('full-map'),true);});
   $('map-zoom-out')?.addEventListener('click',()=>{mapSpan=Math.min(11000,mapSpan*1.7);drawMap($('full-map'),true);});
   $('map-overview')?.addEventListener('click',()=>{mapCenter={x:(BOUNDS.minX+BOUNDS.maxX)/2,z:(BOUNDS.minZ+BOUNDS.maxZ)/2};mapSpan=Math.max(BOUNDS.maxX-BOUNDS.minX,BOUNDS.maxZ-BOUNDS.minZ)+100;drawMap($('full-map'),true);});
@@ -252,6 +262,7 @@ function hookUI(){
     if(e.code==='KeyM')toggleMap();
     if(e.code==='KeyE')interact();
     if(game.started&&!game.paused){
+      if(e.code==='KeyC')cameraControls.reset(playerPosition().heading);
       if(e.code==='KeyH')audio.horn();
       if(e.code==='KeyR'){game.cash=Math.max(0,game.cash-100);persist();recover('Ride recovered. Repair cost: up to ₹100.');if(MISSIONS[game.mission.index].chase&&game.mission.status==='active')game.mission.status='failed';}
       if(e.code==='KeyN'&&game.mission.status!=='active')$('mission-next').click();
@@ -320,9 +331,10 @@ function updatePlayer(dt){
   if(game.onFoot){
     const x=(input.right?1:0)-(input.left?1:0),z=(input.down?1:0)-(input.up?1:0),len=Math.hypot(x,z);
     if(len){
-      // Walking uses screen-independent world directions, matching the north-up map.
-      const speed=input.boost?9:5;player.heading=Math.atan2(-x,-z);
-      moveBody(player,x/len*speed*dt,z/len*speed*dt,0.6,world.colliders,world.bounds);
+      // Forward follows the view after looking around, without turning the view with the avatar.
+      const direction=movementForCamera(x,-z,cameraControls.heading),speed=input.boost?9:5;
+      player.heading=Math.atan2(-direction.x,-direction.z);
+      moveBody(player,direction.x*speed*dt,direction.z*speed*dt,0.6,world.colliders,world.bounds);
     }
     avatar.position.set(player.x,0.15,player.z);avatar.rotation.y=player.heading;
     avatar.userData.limbs.forEach((limb,i)=>limb.rotation.x=len?Math.sin(game.time*12+i*Math.PI)*0.45:0);
@@ -381,13 +393,17 @@ function updateMission(dt){
 
 function updateCamera(dt){
   const p=playerPosition();
-  const heading=game.onFoot?0:car.heading;
+  const view=cameraControls.update(dt,{heading:p.heading,speed:game.onFoot?0:car.speed,onFoot:game.onFoot}),heading=view.heading;
   const dist=game.onFoot?15:19+Math.min(Math.abs(car.speed)*0.12,5);
-  tmp.set(p.x+Math.sin(heading)*dist,game.onFoot?13:10.5,p.z+Math.cos(heading)*dist);
-  // Lift the camera above nearby buildings instead of clipping through them.
-  for(const b of world.colliders.query(tmp.x,tmp.z,1))if(blocked(tmp.x,tmp.z,1,[b],world.bounds))tmp.y=Math.max(tmp.y,(b.h||20)+5);
-  camera.position.lerp(tmp,1-Math.exp(-dt*4.5));
+  tmp.set(p.x+Math.sin(heading)*dist,1.6+Math.tan(view.pitch)*dist,p.z+Math.cos(heading)*dist);
+  // Shorten the view before a wall or roof, including obstacles between the actor and camera.
+  const focus={x:p.x,y:1.6,z:p.z},clear=resolveCameraPosition(focus,tmp,world.cameraColliders,world.bounds);
+  tmp.set(clear.x,clear.y,clear.z);
+  camera.position.lerp(tmp,1-Math.exp(-dt*(view.dragging?12:4.5)));
+  const safe=resolveCameraPosition(focus,camera.position,world.cameraColliders,world.bounds);
+  camera.position.set(safe.x,safe.y,safe.z);
   camTarget.set(p.x-Math.sin(heading)*5,1.6,p.z-Math.cos(heading)*5);camera.lookAt(camTarget);
+  if(game.gps)$('gps-bearing').style.transform=`rotate(${destinationBearing(p,game.gps.approach,heading)}rad)`;
   const fov=52+(!game.onFoot&&inputState().boost&&car.speed>25?6:0);camera.fov=THREE.MathUtils.lerp(camera.fov,fov,dt*3);camera.updateProjectionMatrix();
   game.sun.position.set(p.x-100,150,p.z+90);sunTarget.position.set(p.x,0,p.z);sunTarget.updateMatrixWorld();
 }
@@ -466,7 +482,7 @@ function drawMap(canvas,full){
     ctx.textAlign='left';ctx.font='bold 13px system-ui';ctx.fillStyle='#dbe4d9';ctx.fillText('N ↑',18,27);
     const metres=Math.round(span/NETWORK.scale/5/100)*100;ctx.font='11px system-ui';ctx.fillText(`${metres>=1000?(metres/1000).toFixed(1)+' km':metres+' m'} approx.`,18,h-18);ctx.fillRect(18,h-12,w/5,2);
   }else for(const v of cars){if(!v.mesh.visible||v===car||!visible(v))continue;const p=map(v);ctx.fillStyle=police.includes(v)?'#ef7369':'#b7c4ac';ctx.fillRect(p.x-1,p.y-1,2,2);}
-  const point=map(pos);ctx.save();ctx.translate(point.x,point.y);ctx.rotate(game.onFoot?player.heading:car.heading);ctx.fillStyle='#fff5da';ctx.strokeStyle='#122b2d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,6);ctx.lineTo(0,3);ctx.lineTo(-6,6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+  const point=map(pos);ctx.save();ctx.translate(point.x,point.y);ctx.rotate(mapHeading(game.onFoot?player.heading:car.heading));ctx.fillStyle='#fff5da';ctx.strokeStyle='#122b2d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,6);ctx.lineTo(0,3);ctx.lineTo(-6,6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
 }
 
 function frame(){

@@ -543,6 +543,7 @@ export function createWorld(scene) {
     instanceCount += b.matrices.length;
   }
   const labelStats = labels.finish();
+  const cameraColliders = [...colliders, ...labelStats.cameraOccluders];
   chunkMeshes.push(...labelStats.meshes);
   let lastFocus = { x: Infinity, z: Infinity }, lastCull = 0;
   function setFocus(focus) {
@@ -559,7 +560,7 @@ export function createWorld(scene) {
   setFocus(SPAWN);
   group.userData = { architecture: 'Illustrative original models; mapped streets and researched place names', fillerCount, priorityFillers, coreFillers, startingLaneTrees, signCount: labelStats.signCount, atlasCount: 1, batchCount: batches.size };
   return {
-    group, colliders, landmarks: PLACES, roads: NETWORK, bounds: BOUNDS,
+    group, colliders, cameraColliders, landmarks: PLACES, roads: NETWORK, bounds: BOUNDS,
     setFocus,
     getStats() { return { batches: chunkMeshes.length, visibleBatches: chunkMeshes.filter(mesh => mesh.visible).length, instances: instanceCount, fillers: fillerCount, priorityFillers, coreFillers, startingLaneTrees, placeCount: PLACES.length, signs: labelStats.signCount, atlases: 1 }; },
     animate(_dt, elapsed) { materials.water.roughness = 0.27 + Math.sin(elapsed * 0.2) * 0.035; },

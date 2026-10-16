@@ -30,7 +30,7 @@ export function createCityLabels(places, group, chunkSize = 200) {
   texture.anisotropy = 4;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.85, side: THREE.DoubleSide, emissive: '#fff2d2', emissiveIntensity: 0.14 });
-  const chunks = new Map();
+  const chunks = new Map(), cameraOccluders = [];
   const indexById = new Map(places.map((p, index) => [p.id, index]));
   function fit(text, maxWidth, size) {
     ctx.font = `800 ${size}px "Noto Sans Devanagari", Arial, sans-serif`;
@@ -63,7 +63,10 @@ export function createCityLabels(places, group, chunkSize = 200) {
   else if (document.fonts?.ready) document.fonts.ready.then(paint).catch(() => {});
   function sign(idOrIndex, x, y, z, width, height, rotation = 0) {
     const index = typeof idOrIndex === 'number' ? idOrIndex : indexById.get(idOrIndex);
-    if (index == null) return;
+    if (!Number.isInteger(index) || index < 0 || index >= labels.length ||
+        ![x, y, z, width, height, rotation].every(Number.isFinite) || width <= 0 || height <= 0) return;
+    // Raised signs obscure the camera but must not block traffic below them.
+    cameraOccluders.push({ x, z, w: width, d: 0.12, minY: y - height / 2, h: y + height / 2, rotation });
     const key = `${Math.floor(x / chunkSize)},${Math.floor(z / chunkSize)}`;
     if (!chunks.has(key)) chunks.set(key, { positions: [], uvs: [], indices: [] });
     const b = chunks.get(key), start = b.positions.length / 3;
@@ -87,7 +90,7 @@ export function createCityLabels(places, group, chunkSize = 200) {
         geometry.setIndex(b.indices); geometry.computeVertexNormals(); geometry.computeBoundingSphere();
         const mesh = new THREE.Mesh(geometry, material); mesh.name = 'City place signs'; group.add(mesh); meshes.push(mesh);
       }
-      return { texture, meshes, signCount: [...chunks.values()].reduce((n, b) => n + b.positions.length / 12, 0), atlasCount: 1 };
+      return { texture, meshes, cameraOccluders, signCount: [...chunks.values()].reduce((n, b) => n + b.positions.length / 12, 0), atlasCount: 1 };
     },
   };
 }

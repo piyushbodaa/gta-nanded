@@ -426,3 +426,8 @@ body:has(#welcome:not([hidden])) .utility-button{height:40px;border:2px solid #e
   #welcome .front-panel,#welcome .front-panel img,#welcome .front-content{animation:none;transform:none;opacity:1}
   #welcome .front-option{transition:none}
 }
+
+/* Street gestures belong to the camera; HUD buttons retain their own pointers. */
+body.is-playing #game-canvas{touch-action:none;cursor:grab}
+body.is-playing #game-canvas:active{cursor:grabbing}
+@media(max-width:1100px){.keyboard-strip{gap:12px;font-size:8px}}

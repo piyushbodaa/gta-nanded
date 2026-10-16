@@ -6,7 +6,9 @@ The playable vehicles, characters, building illustrations, signage and synthesiz
 
 ## Play
 
-- **WASD / arrow keys:** drive or walk
+- **WASD / arrow keys:** drive or walk; walking follows the direction of the camera
+- **Drag the street / swipe the screen:** look around and tilt the camera
+- **C / Center camera button:** return the camera behind your character or vehicle
 - **E:** enter or exit a nearby vehicle; slow down before exiting
 - **Space:** handbrake
 - **Shift:** boost or sprint
@@ -16,9 +18,9 @@ The playable vehicles, characters, building illustrations, signage and synthesiz
 - **R:** recover and repair your vehicle, costing up to ₹100 of in-game earnings
 - **N:** accept the next job or retry after completion/failure
 
-Touch devices have direction, brake, boost, enter/exit and map buttons. The mobile minimap starts hidden behind **Mini map**, and street-job details start collapsed; tap the job's chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
+Touch devices have direction, brake, boost, enter/exit and map buttons. Hold a driving button with one finger and drag the open street with another to look around. Looking around holds its angle while stopped; driving recenters the view after two seconds without a drag. The camera moves closer when a wall or roof would block the character. Both maps stay north-up, and their player arrows show character/vehicle facing. The GPS-card arrow points toward the destination relative to your camera. The mobile minimap starts hidden behind **Mini map**, and street-job details start collapsed; tap the job's chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
 
-Start with **Hit the streets** to drive or **Explore on foot** to walk. The original **12-second animated comic opening** can be skipped immediately or replayed with **Watch opening**. Sound starts off; the opening's sound button keeps your choice for later replays on the same page. If the browser blocks sound, the sequence continues silently. Reduced-motion preferences, unavailable animation or failed artwork loading use a still opening with a continue button. Switching to another tab pauses the sequence and its music until you return.
+Start with **Story Drive** to drive or **Free Roam** to walk. The original **12-second animated comic opening** can be skipped immediately or replayed with **Replay Intro**. Sound starts off; the opening's sound button keeps your choice for later replays on the same page. If the browser blocks sound, the sequence continues silently. Reduced-motion preferences, unavailable animation or failed artwork loading use a still opening with a continue button. Switching to another tab pauses the sequence and its music until you return.
 
 The entrance and opening feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local dialogue in coaching, chai, station and reunion jobs.
 
@@ -62,6 +64,9 @@ Use `npm run preview` to inspect the production build. Vite prints the actual pr
 - `src/guide.js`: place search, filters, source details and travel actions
 - `src/navigation.js`: street-graph navigation and routes
 - `src/mobile.js`: compact layout, minimap/job toggles and best-effort landscape controls
+- `src/camera-controls.js`: touch/mouse orbit, pitch limits, recentering and camera-relative walking
+- `src/map-direction.js`: north-up map headings and camera-relative GPS bearings
+- `src/camera-obstruction.js`: keeps the view clear of buildings along the camera path
 - `src/intro.js`: animated comic opening, replay, opt-in sound, tab visibility handling and static fallback
 - `src/launch.css`: opening panels, typography, transitions and responsive presentation
 - `src/world.js` and `src/world-labels.js`: illustrated city geometry, signs and collision data
