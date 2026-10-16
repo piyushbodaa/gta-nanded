@@ -39,7 +39,38 @@ to `.env.local`; it must never enter source control or a shared archive.
 After deployment, verify the real game page and JavaScript assets at
 `https://gta.nanded.fun`, then perform a gameplay check on that domain.
 
-## Current release — comic entrance, 16 October 2026
+## Current release — camera and map controls, 16 October 2026
+
+- Production deployment: `dpl_68zr5tCjm9NLxniPUjy1pyEVUVLh` (READY).
+- Deployed source commit: `3f76a68`.
+- Primary URL: https://gta.nanded.fun
+- Deployment URL: https://nanded-street-stories-gadgj386h-piyushbodaa.vercel.app
+- Drag or swipe the open street to orbit and tilt. The Center camera button or
+  C restores the chase view; walking follows the view. Driving recenters after
+  two seconds without a camera gesture. Pointer ownership permits looking
+  while another finger holds a driving button, and releases cleanly on cancel,
+  pause, map, blur and visibility changes.
+- The camera shortens its distance before buildings, roofs and elevated signs,
+  including during interpolation. Signs only obstruct the camera at their
+  actual height; physical movement colliders are unchanged.
+- Player arrows on both north-up maps now match world facing. The GPS-card
+  arrow responds to the destination bearing relative to the camera.
+- Production build and all 54 tests pass, including 10 camera gesture/lifecycle
+  tests, 11 obstruction tests and 5 map/GPS direction tests.
+- Browser checks covered desktop 1576×807, portrait 390×844 and landscape
+  844×390: drag/tilt, reset, walking after orbit, street-control focus, sign
+  clearance and GPS bearing updates. Physical iOS/Android multitouch has not
+  been tested; simultaneous pointer ownership is covered by automated tests.
+- Public HTTPS verification at 18:00 UTC: all 17 files match `dist/` byte for
+  byte (12,547,899 bytes), and media range requests return HTTP 206. Production
+  gameplay, mouse orbit, reset, guide selection and GPS rotation passed with
+  no browser console warnings or errors.
+- Evidence: [release hashes](artifacts/verification/live-release.json),
+  [live camera and GPS](artifacts/verification/live-camera-controls.png),
+  [landscape controls](artifacts/verification/camera-phone-landscape.png),
+  [camera sign clearance](artifacts/verification/camera-wall-clearance.png).
+
+## Previous release — comic entrance, 16 October 2026
 
 - Production deployment: `dpl_6QXNDNadnRrVE19i8LxS8pWQPbvE` (READY).
 - Deployed source commit: `eb238e4`.

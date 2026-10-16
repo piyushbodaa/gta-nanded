@@ -14,18 +14,18 @@
   "verifiedFiles": [
     {
       "path": "index.html",
-      "bytes": 16392,
-      "sha256": "3d0b5bf6fc09288094f08fef9b17174e154d119d7428bf2f7bba28e241486d8c"
+      "bytes": 16960,
+      "sha256": "bacbe09908b6f158e869312d7e938dbc37e7d2a9a0b1fd64090916b5ffbdac6d"
     },
     {
-      "path": "assets/index-CIFt5fma.js",
-      "bytes": 91924,
-      "sha256": "8c17699b3a2f374c27ff6710735d77ec78151f41f7368723abdc1ab68b54a795"
+      "path": "assets/index-CO2Bi53S.js",
+      "bytes": 95924,
+      "sha256": "04eb398d4683e29b7ae0a00b700e97d766701c02173b641aa7ef3870e871bfd4"
     },
     {
-      "path": "assets/index-DdyYBGXH.css",
-      "bytes": 91602,
-      "sha256": "352acbf32942fe474f8b89d5cc932ff3e9460a80923b757fd377ee68dc11601a"
+      "path": "assets/index-CPVEBjx3.css",
+      "bytes": 91778,
+      "sha256": "02c10c7c214842ef367c95fa0bc95ff0fcb11dff2af5a9a8cd496bf35de9e143"
     },
     {
       "path": "assets/places-C_gPfxtd.js",
