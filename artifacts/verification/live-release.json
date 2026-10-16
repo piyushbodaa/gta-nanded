@@ -1,0 +1,67 @@
+{
+  "url": "https://gta.nanded.fun",
+  "result": "PASS",
+  "videoRangeRequests": "PASS",
+  "verifiedFiles": [
+    {
+      "path": "index.html",
+      "bytes": 18642,
+      "sha256": "b3548d98b5f45e983faa2a9a90334cdca51ce75f7b368bd2cd65a462182604a9"
+    },
+    {
+      "path": "assets/index-7WOlUU9H.js",
+      "bytes": 83075,
+      "sha256": "0a181ccb4c276550504eb198ec3c0b2c6fc9e74bcf695421a8b2d0d420dee9d9"
+    },
+    {
+      "path": "assets/index-BfFphLMR.css",
+      "bytes": 63330,
+      "sha256": "a354ed9f8a681da941891a96ca82e4a7b0606972592725e9269976120a5cda71"
+    },
+    {
+      "path": "assets/places-C_gPfxtd.js",
+      "bytes": 122520,
+      "sha256": "34f5b15e66813c5743c81493b1e28cba371867bde4a7fb8da117de52bc331529"
+    },
+    {
+      "path": "assets/street-map-DxtH7s3W.js",
+      "bytes": 2622922,
+      "sha256": "3369b8704d96a6b57d2d5f96a185c20ae5fd920d3b113c98c59523bfb72f0ca8"
+    },
+    {
+      "path": "assets/three-U5FKNCC1.js",
+      "bytes": 484359,
+      "sha256": "d7b3fc948f9893f8bf051aeeb87584c9d8dcc7c547d96f0fab806f75c5b7046b"
+    },
+    {
+      "path": "data/network.json",
+      "bytes": 2625628,
+      "sha256": "3fef5697fc696092507752dc7df50b04259d2b24868fdb0d41cda8c6d5ef9f07"
+    },
+    {
+      "path": "data/places.json",
+      "bytes": 146664,
+      "sha256": "322723d59d1305f17d639c48f7c322f2f52b98397868db514bee14b103acbb6a"
+    },
+    {
+      "path": "media/nanded-key-art.webp",
+      "bytes": 294744,
+      "sha256": "ed2f3fbdebc9fc616f59a5a562963f57668636afcf3881529b5fc87bd79b8d3b"
+    },
+    {
+      "path": "media/nanded-lanes.webp",
+      "bytes": 415950,
+      "sha256": "023616ceb2262adbf03aeaad0eefd248aff6c052b9596fdc552b86c918851499"
+    },
+    {
+      "path": "media/nanded-opening-provenance.json",
+      "bytes": 2190,
+      "sha256": "271f79c6d38301d6631f2b222dc7f47866bc1bd1ce994e53ad9919a0f7273a4e"
+    },
+    {
+      "path": "media/nanded-opening.mp4",
+      "bytes": 4304203,
+      "sha256": "81308e5fdbf1cce6594ed010e01e1ed684e95a73d9359f338607bbf052722885"
+    }
+  ]
+}

@@ -39,19 +39,37 @@ to `.env.local`; it must never enter source control or a shared archive.
 After deployment, verify the real game page and JavaScript assets at
 `https://gta.nanded.fun`, then perform a gameplay check on that domain.
 
-## Published release — 16 October 2026
+## Published release — 16 October 2026, 16:51 UTC
 
-- Production deployment: `dpl_4uUyJLjHhHTNydxf3ARdzkggoFkB` (READY)
-- Deployed source commit: `2e274eb`
+- Production deployment: `dpl_AqGxGLJVM325Yv42vTQnjg5GZmfB` (READY)
+- Deployed source commit: `34e0f16`
 - Primary URL: https://gta.nanded.fun
-- Public alternate URL: https://nanded-street-stories.vercel.app
-- The `gta` CNAME was created in Hostinger; the record is visible in hPanel.
-- Google (8.8.8.8) and Cloudflare (1.1.1.1) DNS resolve the new subdomain.
-- TLS-validated requests to the DNS-resolved Vercel address returned the game
-  HTML and every bundled JS/CSS asset; all three assets matched the local build
-  byte for byte.
-- Browser render and controls checked locally and on the public Vercel URL.
-  Desktop and 390-pixel layout checked. Eight mechanics tests pass.
-- At release time this laptop's resolver still cached an earlier NXDOMAIN for
-  `gta.nanded.fun`; direct browser verification on the custom hostname must be
-  repeated after that cache refreshes. The alternate URL works immediately.
+- Deployment URL: https://nanded-street-stories-cjlv5zus9-piyushbodaa.vercel.app
+- The custom hostname resolves normally, with valid HTTPS and no sign-in required.
+- All 12 production files checked against the local build match byte for byte:
+  HTML, five JS/CSS bundles, two map datasets and four media/provenance files
+  (11,184,227 bytes). Video byte-range requests return HTTP 206.
+- Evidence and file hashes: [live-release.json](artifacts/verification/live-release.json).
+- 129 places, 64 mapped locations and 65 area anchors; 53 locality labels.
+- Starts on the street beside the public Zenda Chowk pin in Taroda Khurd.
+- Original illustrated entrance and an 18-second opening film, with skip,
+  replay, optional sound and a reduced-motion/video-error fallback.
+- Mobile minimap and job detail toggles, touch controls, portrait and landscape
+  layouts, and best-effort fullscreen/orientation support.
+- Fourteen mechanics, data, spawn, routing and collision tests passed.
+  The geometry smoke checked all 129 approaches and 409,253 samples along
+  26,252 road edges without a road obstruction.
+- Chrome checks on the production build covered 390×844 portrait and 844×390
+  landscape, film playback/replay/skip/sound, entering a car, touch acceleration,
+  map toggling, searchable places and setting a GPS route. Desktop entrance and
+  the opening were also checked directly on the custom production hostname.
+  A final keyboard guard fix was verified with W acceleration in preview,
+  arrow-key acceleration on production, M map search and Escape close/pause.
+  No new console errors appeared after that fix.
+  These are browser viewport checks, not physical iOS/Android device testing.
+- Film verification: 540 frames, 18.00 seconds, 1280×720, H.264 yuv420p,
+  AAC 48 kHz, faststart, 4,304,203 bytes; full audio/video decode passed.
+
+The earlier 16 October release (`dpl_4uUyJLjHhHTNydxf3ARdzkggoFkB`, source
+`2e274eb`) was the initial smaller city. Its temporary local DNS cache issue is
+resolved and does not apply to this release.
