@@ -21,27 +21,30 @@
       </a>
       <nav class="utility-nav" aria-label="Game settings">
         <button id="sound-toggle" class="utility-button" type="button" aria-label="Toggle game sound" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m16 9 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span id="sound-label">Sound off</span></button>
-        <button id="help-toggle" class="utility-button" type="button" aria-controls="pause-menu"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 15h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Controls</span></button>
+        <button id="help-toggle" class="utility-button" type="button" aria-controls="pause-menu" aria-label="Controls and pause"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 15h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Controls</span></button>
         <button id="fullscreen-toggle" class="utility-button icon-only" type="button" aria-label="Toggle fullscreen"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button id="landscape-toggle" class="utility-button landscape-toggle" type="button" aria-label="Wide view: use fullscreen and landscape when supported"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M17 10v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Wide view</span></button>
       </nav>
     </header>
 
     <main id="welcome" class="welcome">
+      <img class="welcome-art" src="/media/nanded-key-art.webp" alt="" fetchpriority="high" decoding="async" />
       <div class="welcome-shade" aria-hidden="true"></div>
       <div class="welcome-content">
         <div class="coordinates"><span class="live-dot" aria-hidden="true"></span>19°09′N 77°19′E <span class="coordinate-divider">/</span> MAHARASHTRA</div>
         <p class="eyebrow"><span></span>YOUR CITY. YOUR RULES.</p>
         <h1><span>Nanded.</span><span class="title-second">Street <em>stories.</em></span></h1>
-        <p class="hero-description">Small-city streets. Big main-character energy.<br />Grab a ride, chase a job, or take the long way home.</p>
+        <p class="hero-description">Your coaching lane. Your college. Your evening chai.<br />Real Nanded streets, <span data-place-total>129</span> familiar places, and a ride home.</p>
         <div class="start-actions">
           <button id="start-drive" class="button button-primary" type="button" disabled>Hit the streets<span aria-hidden="true">↗</span></button>
           <button id="start-explore" class="button button-secondary" type="button" disabled>Explore on foot<span aria-hidden="true">→</span></button>
         </div>
+        <div class="welcome-secondary-actions"><button id="start-guide" class="welcome-guide-link" type="button" disabled>Explore <span data-place-total>129</span> places <span aria-hidden="true">↗</span></button><button id="intro-replay" class="intro-replay" type="button" disabled><span aria-hidden="true">▷</span> Watch opening</button></div>
         <p id="loading-status" class="loading-status" role="status"><span class="loading-spinner" aria-hidden="true"></span>Warming up the city…</p>
         <div class="intro-features" aria-label="Game features">
           <div><span class="feature-number">01 /</span><strong>Find your ride</strong><span>Cars &amp; auto-rickshaws</span></div>
           <div><span class="feature-number">02 /</span><strong>Own the streets</strong><span>Street jobs &amp; open roads</span></div>
-          <div><span class="feature-number">03 /</span><strong>Take a detour</strong><span>A little Nanded, reimagined</span></div>
+          <div><span class="feature-number">03 /</span><strong>Find your Nanded</strong><span>Landmarks, classes &amp; favourite stops</span></div>
         </div>
       </div>
       <aside class="scene-caption" aria-label="Setting"><div class="scene-caption-mark" aria-hidden="true">↙</div><span>ON THE BANKS OF THE GODAVARI</span><strong>Somewhere between<br />a shortcut &amp; a story.</strong><div class="scene-caption-line"></div><small>BUILT FOR THE BROWSER<br /><b>NO DOWNLOADS. JUST DRIVE.</b></small></aside>
@@ -49,19 +52,24 @@
     </main>
 
     <main id="hud" class="hud" hidden aria-label="Game heads-up display">
-      <div class="district-marker"><span class="district-line"></span><div><span class="hud-eyebrow">YOU'RE IN</span><strong id="district">Nanded City</strong></div></div>
-      <div class="player-status"><div class="cash-readout"><span class="hud-eyebrow">YOUR POCKET</span><strong id="cash">₹0</strong></div><div id="wanted" class="wanted" aria-label="Wanted level">☆☆☆☆☆</div></div>
+      <div class="district-marker"><span class="district-line"></span><div><span class="hud-eyebrow">YOU'RE IN</span><strong id="district">Nanded City</strong><span id="discovered-count" class="discovered-count">0 places discovered</span></div></div>
+      <div class="player-status"><div class="cash-readout"><span class="hud-eyebrow">YOUR POCKET</span><strong id="cash">₹0</strong></div><div id="wanted" class="wanted" aria-label="Wanted level">☆☆☆☆☆</div><button id="roam-toggle" class="roam-toggle" type="button" aria-pressed="false">Free roam</button></div>
+
+      <section id="gps-panel" class="gps-panel" aria-label="Your destination" hidden><span class="gps-arrow" aria-hidden="true">↗</span><div class="gps-copy"><span class="hud-eyebrow">ON YOUR WAY TO</span><strong id="gps-title"></strong></div><span id="gps-distance" class="gps-distance"></span><button id="gps-clear" type="button" aria-label="Clear destination">✕</button></section>
+      <div id="nearby-place" class="nearby-place" aria-live="polite"></div>
 
       <section id="mission-panel" class="mission-panel" aria-label="Current street job">
         <div class="mission-topline"><span class="mission-dot" aria-hidden="true"></span><span id="mission-label">STREET JOB</span><span class="mission-corner" aria-hidden="true">↗</span></div>
+        <button id="job-toggle" class="job-toggle" type="button" aria-expanded="false" aria-controls="job-details mission-next" aria-label="Show street job details"><span aria-hidden="true">⌄</span></button>
         <h2 id="mission-title">A city full of stories</h2>
-        <p id="mission-description">Follow the marker to find your next street job.</p>
-        <div id="mission-progress" class="mission-progress"></div>
+        <div id="job-details"><p id="mission-description">Follow the marker to find your next street job.</p><div id="mission-progress" class="mission-progress"></div></div>
         <div class="mission-metrics"><span id="mission-distance">— m</span><span id="mission-time"></span></div>
         <button id="mission-next" class="button mission-next" type="button" hidden>Next job <span aria-hidden="true">→</span></button>
       </section>
 
-      <section class="minimap-panel" aria-label="Local map"><div class="map-heading"><span class="hud-eyebrow">THE NEIGHBOURHOOD</span><span class="map-north">N ↑</span></div><canvas id="minimap" width="200" height="200" tabindex="0" role="button" aria-controls="map-overlay" aria-label="Open the city map"></canvas><div class="map-footer"><span id="map-label">NANDED</span><span><kbd>M</kbd> OPEN MAP</span></div></section>
+      <button id="minimap-toggle" class="minimap-toggle" type="button" aria-controls="local-map" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span>Mini map</span></button>
+      <section id="local-map" class="minimap-panel" aria-label="Local map"><div class="map-heading"><span class="hud-eyebrow">THE NEIGHBOURHOOD</span><span class="map-north">N ↑</span></div><canvas id="minimap" width="200" height="200" tabindex="0" role="button" aria-controls="map-overlay" aria-label="Open the city map"></canvas><div class="map-footer"><span id="map-label">NANDED</span><span><kbd>M</kbd> OPEN MAP</span></div></section>
+      <aside id="rotate-hint" class="rotate-hint" role="status" hidden><span id="rotate-hint-text">Rotate your phone for a wider view</span><button id="rotate-hint-dismiss" type="button" aria-label="Dismiss rotation tip">✕</button></aside>
 
       <section class="vehicle-panel" aria-label="Player and vehicle status"><div class="vehicle-topline"><span class="vehicle-dot" aria-hidden="true"></span><span id="vehicle-name">ON FOOT</span></div><div class="speed-readout"><strong id="speed">0</strong><span>KM/H</span></div><div class="resource-bar"><span>HEALTH</span><div class="bar-track"><div id="health-fill" class="bar-fill health-fill"></div></div></div><div class="resource-bar"><span>BOOST</span><div class="bar-track"><div id="nitro-fill" class="bar-fill nitro-fill"></div></div></div></section>
 
@@ -74,9 +82,41 @@
       <div class="pause-card"><span class="eyebrow">NANDED / STREET STORIES</span><h2 id="pause-title">Take a<br /><em>breather.</em></h2><p class="pause-description">The streets will be right here.</p><div class="pause-actions"><button id="resume" class="button button-primary" type="button">Back to the streets<span aria-hidden="true">↗</span></button><button id="restart" class="button button-secondary" type="button">Start a new run<span aria-hidden="true">↻</span></button></div><section id="help" class="help"><h3>Know your way around</h3><dl><div><dt><kbd>W A S D</kbd><span>or arrow keys</span></dt><dd>Drive / walk</dd></div><div><dt><kbd>E</kbd></dt><dd>Enter / exit a vehicle</dd></div><div><dt><kbd>SPACE</kbd></dt><dd>Handbrake</dd></div><div><dt><kbd>SHIFT</kbd></dt><dd>Boost / sprint</dd></div><div><dt><kbd>M</kbd></dt><dd>City map</dd></div><div><dt><kbd>ESC</kbd></dt><dd>Pause / resume</dd></div></dl><p>Follow the orange marker for your job. Explore the streets at your own pace.</p></section><button id="reset-save" class="text-button" type="button">Reset saved progress</button></div>
     </section>
 
-    <section id="map-overlay" class="modal-overlay map-overlay" role="dialog" aria-modal="true" aria-labelledby="map-title" hidden><div class="full-map-panel"><div class="full-map-header"><div><span class="eyebrow">FIND YOUR NEXT TURN</span><h2 id="map-title">Your Nanded.</h2></div><button id="map-close" class="map-close" type="button" aria-label="Close city map">✕</button></div><div class="full-map-canvas-wrap"><canvas id="full-map" width="700" height="700" aria-label="Full city map"></canvas><span class="full-map-north">N ↑</span></div><div class="map-legend"><span><i class="legend-player"></i>You</span><span><i class="legend-mission"></i>Your next stop</span><span><i class="legend-landmark"></i>Landmark</span><span class="map-legend-hint"><kbd>M</kbd> CLOSE MAP</span></div><p class="map-note">A playful interpretation of Nanded. Take a turn and make it yours.</p></div></section>
+    <section id="map-overlay" class="modal-overlay map-overlay" role="dialog" aria-modal="true" aria-labelledby="map-title" hidden>
+      <div class="full-map-panel city-guide-panel">
+        <div class="full-map-header"><div><span class="eyebrow">EVERY TURN HAS A MEMORY</span><h2 id="map-title">City guide<span class="guide-title-dot">.</span></h2></div><div class="guide-header-meta"><span id="guide-visited-summary">0 of 129 discovered</span><button id="map-close" class="map-close" type="button" aria-label="Close city guide">✕</button></div></div>
+        <div class="guide-mobile-tabs" aria-label="City guide views"><button id="guide-show-places" type="button" aria-pressed="true">Places</button><button id="guide-show-map" type="button" aria-pressed="false">Map</button></div>
+        <div class="guide-body" data-view="places">
+          <section class="guide-map-section" aria-label="Nanded city map">
+            <div class="full-map-canvas-wrap"><canvas id="full-map" width="700" height="700" tabindex="0" aria-label="Nanded city map. Select a place from the guide to see its location."></canvas><div class="guide-map-controls" aria-label="Map view controls"><button id="map-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button><button id="map-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button><button id="map-overview" type="button" aria-label="Show whole city" title="Show whole city">⤢</button></div><span class="full-map-north">N ↑</span><span class="guide-map-caption">NANDED <span>19°09′N / 77°19′E</span></span></div>
+            <div class="map-legend"><span><i class="legend-player"></i>You</span><span><i class="legend-mission"></i>Destination</span><span><i class="legend-landmark"></i>Places</span><span class="map-legend-hint"><kbd>M</kbd> CLOSE</span></div>
+            <p class="map-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">Street map © OpenStreetMap contributors · ODbL</a><br />Buildings are illustrated; some locations are placed by neighbourhood.</p>
+          </section>
+          <section class="guide-directory" aria-label="Find a place in Nanded">
+            <div class="guide-tools">
+              <label class="guide-search"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><input id="guide-search" type="search" placeholder="Find your college, café, coaching…" autocomplete="off" spellcheck="false" aria-label="Search places by name, area or alias"/><button id="guide-clear-search" type="button" aria-label="Clear place search" hidden>✕</button></label>
+              <div class="guide-filters"><label><span>WHAT'S THE PLAN?</span><select id="guide-category" aria-label="Filter by place category"><option value="">Every kind of place</option></select></label><label><span>WHICH PART OF TOWN?</span><select id="guide-area" aria-label="Filter by neighbourhood"><option value="">All neighbourhoods</option></select></label></div>
+              <div class="guide-results-heading"><span id="guide-result-count" role="status">129 places</span><button id="guide-unvisited" type="button" aria-pressed="false">Still to discover</button></div>
+            </div>
+            <div id="guide-results" class="guide-results" aria-label="Places" tabindex="-1"></div>
+            <section id="guide-detail" class="guide-detail" aria-label="Selected place" hidden></section>
+            <p id="guide-pick-hint" class="guide-pick-hint"><span aria-hidden="true">↗</span> Pick a familiar name. Make a new memory.</p>
+          </section>
+        </div>
+      </div>
+    </section>
 
     <div id="touch-controls" class="touch-controls" hidden aria-label="Touch game controls"><div class="touch-direction"><button type="button" data-control="up" aria-label="Accelerate or move forward">↑</button><button type="button" data-control="left" aria-label="Steer or move left">←</button><button type="button" data-control="down" aria-label="Brake or move backward">↓</button><button type="button" data-control="right" aria-label="Steer or move right">→</button></div><div class="touch-actions"><button id="touch-map" class="touch-small" type="button" aria-label="Open map">MAP</button><button id="touch-interact" type="button" aria-label="Enter or exit vehicle">E</button><button type="button" data-control="brake" aria-label="Handbrake">BRAKE</button><button type="button" data-control="boost" aria-label="Boost or sprint">BOOST</button></div></div>
+
+    <section id="cinematic-intro" class="cinematic-intro" role="dialog" aria-modal="true" aria-labelledby="intro-title" hidden>
+      <h2 id="intro-title" class="visually-hidden">Nanded: Street Stories — opening film</h2>
+      <div class="intro-backdrop" aria-hidden="true"></div>
+      <video id="intro-video" class="intro-video" poster="/media/nanded-key-art.webp" preload="none" playsinline muted aria-label="An illustrated opening film of Nanded, its streets, people and landmarks"></video>
+      <div class="intro-film-shade" aria-hidden="true"></div>
+      <div class="intro-topline"><span class="intro-kicker"><i aria-hidden="true"></i>NANDED / STREET STORIES</span><div class="intro-controls"><button id="intro-sound" type="button" aria-pressed="false" aria-label="Turn opening film sound on"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m11 5-5 4H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m16 9 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span id="intro-sound-label">Sound off</span></button><button id="intro-skip" type="button">Skip opening <span aria-hidden="true">↗</span></button></div></div>
+      <div id="intro-fallback" class="intro-fallback" hidden><p class="eyebrow">YOUR CITY. YOUR STORY.</p><h3>Nanded<span>is calling.</span></h3><p id="intro-fallback-message">Start your story in the streets you know.</p><button id="intro-continue" class="button button-primary" type="button">Start game <span aria-hidden="true">↗</span></button></div>
+      <footer class="intro-bottomline"><div class="intro-chapter"><span>START YOUR STORY</span><strong>Zenda Chowk <i>/</i> Taroda Khurd</strong></div><div class="intro-playback"><div class="intro-playback-label"><span id="intro-status" role="status">Opening film</span><span id="intro-time">0:00 / 0:18</span></div><div id="intro-progress" class="intro-progress" role="progressbar" aria-label="Opening film progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="intro-progress-fill"></span></div></div></footer>
+    </section>
 
     <section id="fatal-error" class="fatal-error" role="alert" hidden><div><span class="eyebrow">A SMALL ROADBLOCK</span><h2>We couldn't start<br />the city.</h2><p id="fatal-error-message">This game needs WebGL. Try a recent browser with hardware acceleration enabled, then reload.</p><button class="button button-primary" type="button" onclick="location.reload()">Try again <span aria-hidden="true">↻</span></button></div></section>
     <script type="module" src="/src/main.js"></script>

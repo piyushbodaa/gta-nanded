@@ -1,0 +1,68 @@
+{
+  "title": "Nanded: Street Stories — original illustrated opening",
+  "generatedAt": "2026-10-16T16:41:29.035277+00:00",
+  "durationSeconds": 18,
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "videoCodec": "H.264",
+  "pixelFormat": "yuv420p",
+  "faststart": true,
+  "audioCodec": "AAC",
+  "audioSampleRate": 48000,
+  "artworkProvenance": "Two original image-generation artworks supplied for this game; illustrated scenes, not photographs or exact architectural surveys.",
+  "musicProvenance": "Original 96 BPM instrumental composed and synthesized in scripts/render-opening.py; no external recordings or audio samples.",
+  "motion": "Two original illustrations with slow pan/zoom and a 1.5-second crossfade; not live gameplay footage.",
+  "titles": [
+    "NANDED",
+    "STREET STORIES",
+    "YOUR CITY. YOUR STREETS.",
+    "Zenda Chowk / Taroda Khurd"
+  ],
+  "sources": [
+    {
+      "file": "nanded-key-art-original.png",
+      "sha256": "297f32e1c77a096928dc695f44424693386bc1c563430dc4aa2c08692134b9fa"
+    },
+    {
+      "file": "nanded-lanes-original.png",
+      "sha256": "482041061b14e47150e16bdae9347c5e9529460387dca864be1bc55e835a547c"
+    }
+  ],
+  "outputs": [
+    {
+      "file": "nanded-opening.mp4",
+      "bytes": 4304203,
+      "sha256": "81308e5fdbf1cce6594ed010e01e1ed684e95a73d9359f338607bbf052722885"
+    },
+    {
+      "file": "nanded-key-art.webp",
+      "bytes": 294744,
+      "sha256": "ed2f3fbdebc9fc616f59a5a562963f57668636afcf3881529b5fc87bd79b8d3b"
+    },
+    {
+      "file": "nanded-lanes.webp",
+      "bytes": 415950,
+      "sha256": "023616ceb2262adbf03aeaad0eefd248aff6c052b9596fdc552b86c918851499"
+    }
+  ],
+  "validation": {
+    "fullDecode": "passed",
+    "frameCount": 540,
+    "durationSeconds": 18.0,
+    "sizeUnder6MB": true,
+    "faststartAtomOrder": "verified",
+    "audioIntegratedLufs": -18.19,
+    "audioTruePeakDbtp": -6.45,
+    "visualReview": "passed: title placement, readability, scene transition and closing location card",
+    "reviewedFramesSeconds": [
+      3,
+      7,
+      9,
+      11,
+      13.3,
+      16
+    ]
+  },
+  "rebuild": "python scripts/render-opening.py --key-art /path/key-art.png --lanes /path/taroda-lanes.png"
+}

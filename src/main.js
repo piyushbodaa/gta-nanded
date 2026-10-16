@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import './style.css';
 import { createWorld } from './world.js';
+import { NETWORK, PLACES, DISTRICTS, BOUNDS, SPAWN, PLACE_BY_ID } from './city-data.js';
+import { createNavigator, pathLength, indexColliders } from './navigation.js';
+import { createGuide } from './guide.js';
+import { initMobileUI } from './mobile.js';
+import { createIntro } from './intro.js';
 import { createVehicle, createPerson } from './vehicles.js';
 import { GameAudio } from './audio.js';
 import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, loadProgress, saveProgress } from './mechanics.js';
@@ -10,12 +15,16 @@ const show = (id, visible) => { if ($(id)) $(id).hidden = !visible; };
 const text = (id, value) => { if ($(id)) $(id).textContent = value; };
 const keys = new Set();
 const audio = new GameAudio();
+const intro = createIntro();
 let storage;
 try { storage=window.localStorage; } catch { storage={getItem:()=>null,setItem:()=>{throw Error('unavailable');}}; }
 const progress=loadProgress(storage);
-const game={started:false,paused:false,mapOpen:false,helpOnly:false,onFoot:false,cash:progress.cash,completed:progress.completed,mission:newMission(progress.completed),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0};
-const player={x:-5,z:210,heading:0};
+const game={started:false,paused:false,mapOpen:false,helpOnly:false,onFoot:false,roam:false,cash:progress.cash,completed:progress.completed,mission:newMission(progress.completed),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0,gps:null};
+const player={...SPAWN};
 let renderer,scene,camera,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0;
+let guide,routeLine,routePoints=[],routeAge=10,routeKey='',mapCenter={...SPAWN},mapSpan=3600,lastTrafficFocus={...SPAWN};
+const navigator=createNavigator(NETWORK),visited=new Set();
+try{for(const id of JSON.parse(storage.getItem('nanded-discoveries-v1')||'[]'))if(PLACE_BY_ID.has(id))visited.add(id);}catch{/* Storage is optional. */}
 const cars=[],police=[],pedestrians=[];
 let lastNearby=null;
 let introTime=0;
@@ -31,40 +40,38 @@ function addCar(kind,color,x,z,heading=0,route=null){
 }
 
 function setup(){
+  const mobileGraphics=matchMedia('(any-pointer: coarse)').matches||innerWidth<=760;
   renderer=new THREE.WebGLRenderer({canvas:$('game-canvas'),antialias:true,powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,mobileGraphics?1.2:1.6));renderer.setSize(innerWidth,innerHeight);
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.22;
   scene=new THREE.Scene();scene.background=new THREE.Color('#ddb8a0');scene.fog=new THREE.Fog('#ddb8a0',190,640);
   camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,0.2,1200);
   const hemi=new THREE.HemisphereLight('#e1f2f4','#af8060',2.7);scene.add(hemi);
   const sun=new THREE.DirectionalLight('#ffdbab',3.3);sun.position.set(-100,150,90);sun.castShadow=true;
-  sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-110;sun.shadow.camera.right=110;sun.shadow.camera.top=110;sun.shadow.camera.bottom=-110;sun.shadow.camera.near=1;sun.shadow.camera.far=420;sun.shadow.bias=-0.0005;sun.shadow.normalBias=0.04;sun.target=sunTarget;scene.add(sun,sunTarget);
+  const shadowSize=mobileGraphics?1024:2048;sun.shadow.mapSize.set(shadowSize,shadowSize);sun.shadow.camera.left=-110;sun.shadow.camera.right=110;sun.shadow.camera.top=110;sun.shadow.camera.bottom=-110;sun.shadow.camera.near=1;sun.shadow.camera.far=420;sun.shadow.bias=-0.0005;sun.shadow.normalBias=0.04;sun.target=sunTarget;scene.add(sun,sunTarget);
   game.sun=sun;
   world=createWorld(scene);
-  car=addCar('hatchback','#ec9b3d',-5,210);car.occupied=true;
-  addCar('auto','#196e56',-15,194,Math.PI);
-  addCar('sedan','#f1e5cf',15,145);
-  addCar('hatchback','#387d9d',-120,104);
-  addCar('auto','#1d7057',104,-120,Math.PI/2);
-  addCar('sedan','#9c443c',240,-104);
+  indexColliders(world.colliders);world.setFocus?.(SPAWN);
+  car=addCar('hatchback','#ec9b3d',SPAWN.x,SPAWN.z,SPAWN.heading);car.occupied=true;
+  const parked=['iib-parnakuti','rcc-nanded','yeshwant-college','hazur-sahib','sggs-engineering'];
+  parked.forEach((id,i)=>{const p=PLACE_BY_ID.get(id).approach;addCar(i%2?'sedan':'auto',i%2?'#eee1bd':'#196e56',p.x,p.z);});
   const palette=['#dfb94e','#568c8a','#d5d5b9','#b45e4b','#597d53','#637b97'];
-  for(let i=0;i<16;i++){
-    const left=[-240,-120,0][i%3],right=left+120*(1+(i%2));
-    const top=[-240,-120,0][Math.floor(i/3)%3],bottom=top+120*(1+(Math.floor(i/2)%2));
-    const lane=5;
-    const route=[{x:left+lane,z:top+lane},{x:right-lane,z:top+lane},{x:right-lane,z:bottom-lane},{x:left+lane,z:bottom-lane}];
-    const idx=i%4,next=route[(idx+1)%4],a=route[idx];const t=(i*0.239)%0.9;
-    const x=THREE.MathUtils.lerp(a.x,next.x,t),z=THREE.MathUtils.lerp(a.z,next.z,t);
-    const v=addCar(i%4===0?'auto':i%3===0?'sedan':'hatchback',palette[i%palette.length],x,z,Math.atan2(-(next.x-x),-(next.z-z)),route);v.routeIndex=(idx+1)%4;
+  const nearPlaces=[...PLACES].sort((a,b)=>distance(a,SPAWN)-distance(b,SPAWN));
+  for(let i=0;i<24;i++){
+    const route=navigator.walk(nearPlaces[(i+2)%24].approach,i*773+31,28);
+    if(route.length<3)continue;
+    const index=route.findIndex(point=>distance(point,SPAWN)>22&&cars.every(v=>distance(v,point)>9));
+    if(index<0)continue;const start=route[index],next=route[(index+1)%route.length];
+    const v=addCar(i%4===0?'auto':i%3===0?'sedan':'hatchback',palette[i%palette.length],start.x,start.z,Math.atan2(-(next.x-start.x),-(next.z-start.z)),route);v.routeIndex=(index+1)%route.length;
   }
   for(let i=0;i<3;i++){
-    const v=addCar('police','#eee9d7',-240,180-i*20);v.mesh.visible=false;v.active=false;police.push(v);
+    const v=addCar('police','#eee9d7',SPAWN.x,SPAWN.z);v.mesh.visible=false;v.active=false;police.push(v);
   }
   avatar=createPerson('#e37747');scene.add(avatar);avatar.visible=false;
-  for(let i=0;i<28;i++){
-    const axis=i%2,road=world.roads.xs[i%5],side=i%3===0?-16:16;
-    const x=axis?road+side:-270+(i*37)%540,z=axis?-270+(i*43)%540:road+side;
+  for(let i=0;i<60;i++){
+    const place=nearPlaces[i%nearPlaces.length],axis=i%2;
+    const angle=place.rotation,x=place.approach.x-Math.sin(angle)*3+(i%3-1)*2,z=place.approach.z-Math.cos(angle)*3;
     if(blocked(x,z,0.6,world.colliders,world.bounds))continue;
     const mesh=createPerson(['#d8913c','#3e8f9b','#a74b5a','#e4d6ac','#586e9e'][i%5]);mesh.position.set(x,0,z);scene.add(mesh);
     pedestrians.push({mesh,x,z,axis,direction:i%2?1:-1,origin:axis?z:x});
@@ -73,52 +80,121 @@ function setup(){
   markerRing=new THREE.Mesh(new THREE.TorusGeometry(7.5,0.2,8,64),new THREE.MeshBasicMaterial({color:'#ffd269'}));markerRing.rotation.x=Math.PI/2;markerRing.position.y=0.24;marker.add(markerRing);
   const glow=new THREE.Mesh(new THREE.CylinderGeometry(7.5,7.5,6,48,1,true),new THREE.MeshBasicMaterial({color:'#ffc75f',transparent:true,opacity:0.12,side:THREE.DoubleSide,depthWrite:false}));glow.position.y=3;marker.add(glow);
   arrow=new THREE.Mesh(new THREE.ConeGeometry(1.3,2.4,4),new THREE.MeshBasicMaterial({color:'#ffd269'}));arrow.rotation.z=Math.PI;arrow.position.y=8;marker.add(arrow);
+  routeLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:'#ffd269',transparent:true,opacity:0.9,depthTest:false}));routeLine.renderOrder=3;scene.add(routeLine);
+  guide=createGuide({places:PLACES,onNavigate:setDestination,onTravel:travelTo,onSelect:place=>{mapCenter={...place};mapSpan=1000;drawMap($('full-map'),true);},onClose:()=>{if(game.mapOpen)toggleMap();},getVisited:()=>visited,getPosition:()=>({...playerPosition(),metersPerUnit:1/NETWORK.scale})});
   clock=new THREE.Clock();
   text('loading-status','THE CITY IS YOURS');$('start-drive').disabled=false;$('start-explore').disabled=false;
   hookUI();updateHUD();requestAnimationFrame(frame);
+  console.info(`Nanded city ready: ${PLACES.length} places, ${NETWORK.edges.length} street segments.`,world.getStats?.()||'');
   // Read-only diagnostics in all builds; test controls only in local development.
   window.nandedDiagnostics=()=>({started:game.started,paused:game.paused,onFoot:game.onFoot,position:{x:playerPosition().x,z:playerPosition().z},speed:car.speed,mission:{...game.mission},cash:game.cash,wanted:game.wanted,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,carCount:cars.length,landmarks:world.landmarks.map(l=>l.name)});
 }
 
 function start(onFoot=false){
   if(!renderer)return;
-  game.started=true;game.paused=false;game.onFoot=onFoot;car.occupied=!onFoot;
+  game.started=true;game.paused=false;game.onFoot=onFoot;game.roam=onFoot;car.occupied=!onFoot;
   player.x=car.x-4;player.z=car.z;player.heading=car.heading;
   avatar.visible=onFoot;show('welcome',false);show('hud',true);show('touch-controls',true);show('pause-menu',false);
   document.body.classList.add('is-playing');keys.clear();
   const p=playerPosition();camera.position.set(p.x+14,12,p.z+20);
-  beginMission();toast(onFoot?'Walk with WASD. Press E beside a vehicle to hop in.':'Welcome to Nanded. WASD to drive. Follow the amber marker.',6);
+  beginMission();toast(onFoot?`Free roam. Explore ${PLACES.length} places in the city guide.`:'Welcome to Zenda Chowk, Taroda Khurd. Your Nanded story starts here.',6);
   $('game-canvas').focus();
 }
 
 function beginMission(){
   game.capture=0;
-  if(MISSIONS[game.mission.index].chase){game.wanted=2;game.heat=45;game.trouble=game.time;spawnPolice();}
+  if(!game.roam&&MISSIONS[game.mission.index].chase){game.wanted=2;game.heat=45;game.trouble=game.time;spawnPolice();}
+  routeAge=10;
   updateHUD();
 }
 
 function pause(force,helpOnly=false){
   if(!game.started&&!helpOnly&&!game.paused)return;
   game.paused=force??!game.paused;game.helpOnly=helpOnly;
-  show('pause-menu',game.paused);show('map-overlay',false);game.mapOpen=false;keys.clear();
+  show('pause-menu',game.paused);guide.close();game.mapOpen=false;keys.clear();
   if(game.paused){text('resume',game.started?'Back to the streets':'Back');$('resume')?.focus();}
   else $('game-canvas')?.focus();
-  audio.update(car.speed,!game.onFoot,game.paused);
+  audio.update(car.speed,game.started&&!game.onFoot,game.paused);
 }
 
 function toggleMap(){
   if(!game.started)return;
   game.mapOpen=!game.mapOpen;game.paused=game.mapOpen;
   show('map-overlay',game.mapOpen);show('pause-menu',false);keys.clear();
-  if(game.mapOpen){drawMap($('full-map'),true);$('map-close')?.focus();}else $('game-canvas').focus();
+  if(game.mapOpen){mapCenter={...playerPosition()};mapSpan=3000;guide.open();drawMap($('full-map'),true);}else{guide.close();$('game-canvas').focus();}
 }
 
 function recover(message='Back on the road. Your ride is repaired.'){
-  car.x=-5;car.z=210;car.heading=0;car.speed=0;car.health=100;car.nitro=100;
-  if(game.onFoot){player.x=-9;player.z=210;}
+  const spot=navigator.nearest(playerPosition())||SPAWN;
+  car.x=spot.x;car.z=spot.z;car.heading=SPAWN.heading;car.speed=0;car.health=100;car.nitro=100;
+  if(game.onFoot){player.x=spot.x;player.z=spot.z;}
   game.wanted=0;game.heat=0;game.capture=0;
   police.forEach(p=>{p.active=false;p.mesh.visible=false;});
   toast(message);audio.tone(260,0.3);
+}
+
+function setRoam(value){
+  game.roam=value;game.gps=null;routeAge=10;
+  if(value){game.wanted=0;game.heat=0;police.forEach(p=>{p.active=false;p.mesh.visible=false;});}
+  else beginMission();
+  updateHUD();
+}
+
+function setDestination(place){
+  setRoam(true);game.gps=place;routeAge=10;
+  refreshRoute(2);
+  if(game.mapOpen)toggleMap();
+  toast(`Route set: ${place.shortName}. Follow the blue line.`,4);updateHUD();
+}
+
+function travelTo(place){
+  setRoam(true);
+  const p=place.approach;
+  if(game.onFoot){
+    player.x=p.x;player.z=p.z;player.heading=place.rotation+Math.PI;
+    const parking=navigator.nearest({x:p.x+Math.cos(place.rotation)*6,z:p.z-Math.sin(place.rotation)*6});
+    car.x=parking.x;car.z=parking.z;car.speed=0;car.route=null;car.occupied=false;
+  }
+  else{car.x=p.x;car.z=p.z;car.heading=place.rotation+Math.PI;car.speed=0;}
+  if(game.mapOpen)toggleMap();
+  camera.position.set(p.x+18,15,p.z+18);world.setFocus?.(p);refreshTraffic(p,true);refreshRoute(2);
+  discoverPlaces();toast(`${place.shortName} · ${place.area}`,5);updateHUD();
+}
+
+function destination(){
+  if(game.gps)return game.gps.approach;
+  return !game.roam&&game.mission.status==='active'?MISSIONS[game.mission.index].stops[game.mission.stage]:null;
+}
+
+function discoverPlaces(){
+  const p=playerPosition();let changed=false;
+  for(const place of PLACES){
+    if(visited.has(place.id)||distance(p,place.approach)>18)continue;
+    visited.add(place.id);changed=true;
+    if(game.gps?.id===place.id)toast(`Arrived at ${place.shortName}. Take a look around.`,5);
+    else if(game.roam)toast(`Discovered ${place.shortName} · ${visited.size}/${PLACES.length}`,3);
+  }
+  if(changed){try{storage.setItem('nanded-discoveries-v1',JSON.stringify([...visited]));}catch{/* Visiting remains available without storage. */}}
+}
+
+function refreshRoute(dt){
+  routeAge+=dt;const target=destination(),key=target?`${target.x},${target.z}`:'';
+  if(routeAge<1.5&&key===routeKey)return;
+  routeAge=0;routeKey=key;routePoints=target?navigator.route(playerPosition(),target):[];
+  routeLine.geometry.dispose();routeLine.geometry=new THREE.BufferGeometry().setFromPoints(routePoints.map(p=>new THREE.Vector3(p.x,0.3,p.z)));
+  routeLine.material.color.set(game.gps?'#7edac8':'#ffd269');routeLine.visible=Boolean(target);
+}
+
+function refreshTraffic(p,force=false){
+  if(!force&&distance(p,lastTrafficFocus)<300)return;
+  lastTrafficFocus={x:p.x,z:p.z};const nearby=navigator.nearbyEdges(p,240);if(!nearby.length)return;
+  cars.filter(v=>v.route&&v!==car&&!police.includes(v)).forEach((v,i)=>{
+    if(!force&&distance(v,p)<450)return;
+    const edge=NETWORK.edges[nearby[(i*37)%nearby.length]],a=NETWORK.nodes[edge.a],b=NETWORK.nodes[edge.b];
+    const pos={x:(a.x+b.x)/2,z:(a.z+b.z)/2};if(distance(pos,p)<22)return;
+    const route=navigator.walk(pos,i*733+17,24);if(route.length<3)return;
+    v.x=pos.x;v.z=pos.z;v.route=route;v.routeIndex=1;v.speed=0;
+  });
 }
 
 function interact(){
@@ -143,19 +219,33 @@ function interact(){
 }
 
 function hookUI(){
-  $('start-drive').addEventListener('click',()=>start(false));$('start-explore').addEventListener('click',()=>start(true));
+  initMobileUI({onLayout:()=>{
+    camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
+    if(game.mapOpen)drawMap($('full-map'),true);
+  }});
+  $('start-drive').addEventListener('click',()=>intro.play(()=>start(false),{mode:'drive'}));
+  $('start-explore').addEventListener('click',()=>intro.play(()=>start(true),{mode:'foot'}));
+  $('start-guide')?.addEventListener('click',()=>intro.play(()=>{start(false);setRoam(true);toggleMap();},{mode:'guide'}));
+  $('roam-toggle')?.addEventListener('click',()=>{setRoam(!game.roam);toast(game.roam?'Free roam. Jobs wait while you explore.':'Job resumed. Follow the amber route.');});
+  $('gps-clear')?.addEventListener('click',()=>{game.gps=null;routeAge=10;updateHUD();});
   $('resume')?.addEventListener('click',()=>pause(false));
   $('help-toggle')?.addEventListener('click',()=>pause(!game.paused,true));
-  $('restart')?.addEventListener('click',()=>{game.mission=newMission(game.mission.index);recover();pause(false);if(!game.started)start();else beginMission();});
-  $('mission-next')?.addEventListener('click',()=>{const retry=game.mission.status==='failed';game.mission=newMission(retry?game.mission.index:game.completed);beginMission();toast(retry?'Job restarted. You’ve got this.':'New job. Follow the amber marker.');});
-  $('reset-save')?.addEventListener('click',()=>{game.cash=0;game.completed=0;game.mission=newMission(0);persist();recover('Fresh start. Welcome back to Nanded.');pause(false);if(!game.started)start();});
+  $('restart')?.addEventListener('click',()=>{game.mission=newMission(game.mission.index);recover();pause(false);setRoam(false);if(!game.started)intro.play(()=>start(false),{mode:'drive'});});
+  $('mission-next')?.addEventListener('click',()=>{const retry=game.mission.status==='failed';game.mission=newMission(retry?game.mission.index:game.completed);setRoam(false);beginMission();toast(retry?'Job restarted. You’ve got this.':'New job. Follow the amber marker.');});
+  $('reset-save')?.addEventListener('click',()=>{game.cash=0;game.completed=0;game.mission=newMission(0);visited.clear();try{storage.setItem('nanded-discoveries-v1','[]');}catch{}persist();recover('Fresh start. Welcome back to Nanded.');pause(false);setRoam(false);if(!game.started)intro.play(()=>start(false),{mode:'drive'});});
   $('sound-toggle')?.addEventListener('click',async()=>{try{const enabled=await audio.toggle();text('sound-label',enabled?'Sound on':'Sound off');$('sound-toggle').setAttribute('aria-pressed',String(enabled));}catch{toast('Audio is unavailable in this browser.');}});
   $('fullscreen-toggle')?.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{toast('Fullscreen is unavailable in this browser.');}});
-  $('map-close')?.addEventListener('click',toggleMap);$('touch-map')?.addEventListener('click',toggleMap);$('touch-interact')?.addEventListener('click',interact);
+  $('touch-map')?.addEventListener('click',toggleMap);$('touch-interact')?.addEventListener('click',interact);
+  $('map-zoom-in')?.addEventListener('click',()=>{mapSpan=Math.max(300,mapSpan/1.7);drawMap($('full-map'),true);});
+  $('map-zoom-out')?.addEventListener('click',()=>{mapSpan=Math.min(11000,mapSpan*1.7);drawMap($('full-map'),true);});
+  $('map-overview')?.addEventListener('click',()=>{mapCenter={x:(BOUNDS.minX+BOUNDS.maxX)/2,z:(BOUNDS.minZ+BOUNDS.maxZ)/2};mapSpan=Math.max(BOUNDS.maxX-BOUNDS.minX,BOUNDS.maxZ-BOUNDS.minZ)+100;drawMap($('full-map'),true);});
+  $('full-map')?.addEventListener('click',e=>{const rect=e.currentTarget.getBoundingClientRect(),p={x:mapCenter.x+((e.clientX-rect.left)/rect.width-.5)*mapSpan,z:mapCenter.z+((e.clientY-rect.top)/rect.height-.5)*mapSpan};const near=[...PLACES].sort((a,b)=>distance(a,p)-distance(b,p))[0];if(distance(near,p)<mapSpan*.035)guide.select?.(near.id);});
   $('minimap')?.addEventListener('click',toggleMap);$('minimap')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();toggleMap();}});
   window.addEventListener('keydown',e=>{
+    if(intro.active)return;
+    if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextArea){if(e.code==='Escape'&&game.mapOpen)toggleMap();return;}
     if(e.target instanceof HTMLButtonElement&&['Space','Enter'].includes(e.code))return;
-    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab'].includes(e.code)&&game.started&&e.code!=='Tab')e.preventDefault();
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)&&game.started&&!game.paused)e.preventDefault();
     if(e.repeat){keys.add(e.code);return;}
     if(e.code==='Escape'){if(game.mapOpen)toggleMap();else pause();}
     if(e.code==='KeyM')toggleMap();
@@ -176,7 +266,6 @@ function hookUI(){
     button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);keys.add(key);});
     ['pointerup','pointercancel','lostpointercapture'].forEach(type=>button.addEventListener(type,()=>keys.delete(key)));
   });
-  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);if(game.mapOpen)drawMap($('full-map'),true);});
   $('game-canvas').addEventListener('webglcontextlost',e=>{e.preventDefault();pause(true);show('fatal-error',true);text('fatal-error-message','The graphics connection was interrupted. Reload this page to return to Nanded.');});
 }
 
@@ -187,25 +276,13 @@ function addHeat(amount){game.heat=clamp(game.heat+amount,0,90);game.wanted=Math
 function spawnPolice(){
   police.forEach((p,i)=>{
     if(i>=game.wanted||p.active)return;
-    const pos=playerPosition();const x=world.roads.xs.reduce((a,b)=>Math.abs(b-pos.x)<Math.abs(a-pos.x)?b:a);
-    p.x=x-5;p.z=clamp(pos.z+70+i*28,-290,275);p.active=true;p.mesh.visible=true;p.health=100;p.path=[];p.repath=0;p.speed=0;
+    const pos=playerPosition(),near=navigator.nearest({x:pos.x+55+i*30,z:pos.z+80+i*22});
+    p.x=near.x;p.z=near.z;p.active=true;p.mesh.visible=true;p.health=100;p.path=[];p.repath=0;p.speed=0;
   });
 }
 
 function roadPath(from,to){
-  const xs=world.roads.xs,zs=world.roads.zs;
-  const near=(arr,n)=>arr.reduce((a,b)=>Math.abs(b-n)<Math.abs(a-n)?b:a);
-  const sx=near(xs,from.x),sz=near(zs,from.z),tx=near(xs,to.x),tz=near(zs,to.z);
-  const fromVertical=Math.abs(from.x-sx)<Math.abs(from.z-sz);
-  const toVertical=Math.abs(to.x-tx)<Math.abs(to.z-tz);
-  const start=fromVertical?{x:sx-4,z:from.z}:{x:from.x,z:sz+4};
-  const end=toVertical?{x:tx-4,z:to.z}:{x:to.x,z:tz+4};
-  const route=[start];
-  if(fromVertical&&toVertical){if(sx!==tx){route.push({x:sx-4,z:tz+4},{x:tx-4,z:tz+4});}}
-  else if(!fromVertical&&!toVertical){if(sz!==tz){route.push({x:tx-4,z:sz+4},{x:tx-4,z:tz+4});}}
-  else if(fromVertical)route.push({x:sx-4,z:tz+4});
-  else route.push({x:tx-4,z:sz+4});
-  route.push(end);return route.filter((p,i)=>i===0||distance(p,route[i-1])>2);
+  return navigator.route(from,to);
 }
 
 function updateTraffic(dt){
@@ -289,16 +366,16 @@ function updateMission(dt){
       if(!game.wanted)toast('The heat is off. You lost the patrol.');
     }
   }
-  const result=advanceMission(game.mission,pos,game.onFoot?0:car.speed,!game.onFoot,dt);
+  const result=game.roam?null:advanceMission(game.mission,pos,game.onFoot?0:car.speed,!game.onFoot,dt);
   if(result==='complete'){
     game.cash+=def.reward;game.completed++;persist();audio.success();
     if(def.chase){game.wanted=0;game.heat=0;}
     toast(`Job complete. +₹${def.reward.toLocaleString('en-IN')} · Press N for the next job.`,7);
   }else if(result==='checkpoint'){audio.tone(660,0.2);toast(def.stops[game.mission.stage].label,3);}
   else if(result==='failed'){toast('Time’s up. Retry the job when you’re ready.',6);audio.tone(150,0.4);}
-  const target=game.mission.status==='active'?def.stops[game.mission.stage]:null;
+  const target=destination();
   marker.visible=Boolean(target);
-  if(target){marker.position.set(target.x,0,target.z);arrow.position.y=9+Math.sin(game.time*3)*0.8;arrow.rotation.y=game.time;markerRing.scale.setScalar(1+Math.sin(game.time*2)*0.025);}
+  if(target){marker.position.set(target.x,0,target.z);arrow.position.y=9+Math.sin(game.time*3)*0.8;arrow.rotation.y=game.time;markerRing.scale.setScalar(1+Math.sin(game.time*2)*0.025);markerRing.material.color.set(game.gps?'#7edac8':'#ffd269');arrow.material.color.copy(markerRing.material.color);}
 }
 
 function updateCamera(dt){
@@ -307,7 +384,7 @@ function updateCamera(dt){
   const dist=game.onFoot?15:19+Math.min(Math.abs(car.speed)*0.12,5);
   tmp.set(p.x+Math.sin(heading)*dist,game.onFoot?13:10.5,p.z+Math.cos(heading)*dist);
   // Lift the camera above nearby buildings instead of clipping through them.
-  for(const b of world.colliders)if(Math.abs(tmp.x-b.x)<b.w/2+1&&Math.abs(tmp.z-b.z)<b.d/2+1)tmp.y=Math.max(tmp.y,(b.h||20)+5);
+  for(const b of world.colliders.query(tmp.x,tmp.z,1))if(blocked(tmp.x,tmp.z,1,[b],world.bounds))tmp.y=Math.max(tmp.y,(b.h||20)+5);
   camera.position.lerp(tmp,1-Math.exp(-dt*4.5));
   camTarget.set(p.x-Math.sin(heading)*5,1.6,p.z-Math.cos(heading)*5);camera.lookAt(camTarget);
   const fov=52+(!game.onFoot&&inputState().boost&&car.speed>25?6:0);camera.fov=THREE.MathUtils.lerp(camera.fov,fov,dt*3);camera.updateProjectionMatrix();
@@ -315,12 +392,7 @@ function updateCamera(dt){
 }
 
 function district(p){
-  if(p.z>220)return 'GODAVARI RIVERFRONT';
-  if(p.x>100&&p.z>110)return 'HAZUR SAHIB PRECINCT';
-  if(p.z< -195)return 'RAILWAY QUARTER';
-  if(p.x< -55)return 'VAZIRABAD';
-  if(p.x>150)return 'EAST NANDED';
-  return 'SHIVAJI CHOWK';
+  return DISTRICTS.reduce((nearest,d)=>distance(d,p)<distance(nearest,p)?d:nearest,DISTRICTS[0]).name.toUpperCase();
 }
 
 function updateHUD(){
@@ -338,47 +410,73 @@ function updateHUD(){
   text('mission-distance',m.status==='active'&&target?`${Math.round(distance(p,target))} m`:'');
   const remaining=Math.max(0,Math.ceil(def.seconds-m.elapsed));text('mission-time',m.status==='active'?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'');
   show('mission-next',m.status!=='active');text('mission-next',m.status==='failed'?'Retry job ↗':'Next job ↗');
-  const nearTarget=target&&distance(p,target)<18&&m.status==='active'&&!def.race;
+  if(game.roam){
+    text('mission-label','YOUR CITY / FREE ROAM');text('mission-title','Find your Nanded');text('mission-description','No timer. Open the city guide to find your classes, college, favourite food stop or a place you have never visited.');text('mission-progress',`${visited.size} of ${PLACES.length} places discovered`);text('mission-distance','');text('mission-time','');show('mission-next',true);text('mission-next','Take a street job ↗');
+  }else if(target&&m.status==='active')text('mission-distance',`${Math.round((pathLength(routePoints)||distance(p,target))/NETWORK.scale)} m route`);
+  $('roam-toggle')?.setAttribute('aria-pressed',String(game.roam));text('roam-toggle',game.roam?'Free roam ✓':'Free roam');
+  show('gps-panel',Boolean(game.gps));text('gps-title',game.gps?.shortName||'');text('gps-distance',game.gps?`${Math.round((pathLength(routePoints)||distance(p,game.gps.approach))/NETWORK.scale)} m route`:'');
+  text('discovered-count',`${visited.size}/${PLACES.length} discovered`);
+  const nearest=PLACES.reduce((a,b)=>distance(a.approach,p)<distance(b.approach,p)?a:b,PLACES[0]);
+  text('nearby-place',distance(nearest.approach,p)<100?`NEAR ${nearest.shortName.toUpperCase()}`:'M · FIND A PLACE IN NANDED');
+  const nearTarget=!game.roam&&target&&distance(p,target)<18&&m.status==='active'&&!def.race;
   const hint=game.capture>0?'PATROL NEARBY · KEEP MOVING':game.onFoot?(lastNearby?`E · Drive ${VEHICLES[lastNearby.kind].name}`:'WASD · Walk   SHIFT · Run'):nearTarget?'SLOW DOWN INSIDE THE AMBER RING':'E · Step out   H · Horn   R · Recover';
   text('interaction',hint);text('map-label',district(p));drawMap($('minimap'),false);
 }
 
 function drawMap(canvas,full){
   if(!canvas||!world)return;const ctx=canvas.getContext('2d');if(!ctx)return;
-  const w=canvas.width,h=canvas.height,pos=playerPosition();
-  const scale=full?w/740:w/245,center=full?{x:0,z:30}:pos;
+  const w=canvas.width,h=canvas.height,pos=playerPosition(),span=full?mapSpan:280;
+  const scale=w/span,center=full?mapCenter:pos;
   const map=p=>({x:w/2+(p.x-center.x)*scale,y:h/2+(p.z-center.z)*scale});
-  ctx.clearRect(0,0,w,h);ctx.fillStyle='#172b2b';ctx.fillRect(0,0,w,h);
-  const rect=(x,z,bw,bd,color)=>{const p=map({x:x-bw/2,z:z-bd/2});ctx.fillStyle=color;ctx.fillRect(p.x,p.y,bw*scale,bd*scale);};
-  rect(0,360,740,120,'#315c60');
-  world.colliders.forEach(b=>rect(b.x,b.z,b.w,b.d,'#2c4140'));
-  for(const x of world.roads.xs)rect(x,0,world.roads.width,650,'#63716a');
-  for(const z of world.roads.zs)rect(0,z,650,world.roads.width,'#63716a');
-  const def=MISSIONS[game.mission.index],target=game.mission.status==='active'?def.stops[game.mission.stage]:null;
+  const visible=p=>Math.abs(p.x-center.x)<span*.6&&Math.abs(p.z-center.z)<span*.6;
+  ctx.fillStyle='#172b2b';ctx.fillRect(0,0,w,h);ctx.lineCap='round';ctx.lineJoin='round';
+  function line(points,color,width){ctx.beginPath();points.forEach((p,i)=>{const q=map(p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
+  for(const river of NETWORK.rivers)line(river.points,'#315f65',Math.max(2,river.width*scale));
+  const edgeIds=full?NETWORK.edges.map((_,i)=>i):navigator.nearbyEdges(pos,200);
+  ctx.strokeStyle='#526762';
+  for(const i of edgeIds){const edge=NETWORK.edges[i],a=NETWORK.nodes[edge.a],b=NETWORK.nodes[edge.b];
+    if(full&&edge.type==='residential'&&span>5000)continue;
+    if(!visible(a)&&!visible(b))continue;
+    line([a,b],edge.type==='residential'?'#354d49':'#65786b',Math.max(full?.65:1,edge.width*scale));
+  }
+  ctx.setLineDash([3,4]);for(const rail of NETWORK.rails)line(rail,'#8b9390',full?1:2);ctx.setLineDash([]);
+  const target=destination();
   if(target){
-    const route=[pos,...roadPath(pos,target),target];ctx.beginPath();route.forEach((p,i)=>{const q=map(p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.strokeStyle='#edbb60';ctx.lineWidth=full?3:2;ctx.setLineDash([5,4]);ctx.stroke();ctx.setLineDash([]);
-    const t=map(target);ctx.fillStyle='#ffd477';ctx.beginPath();ctx.arc(t.x,t.y,full?8:5,0,Math.PI*2);ctx.fill();
-    if(!full&&(t.x<8||t.x>w-8||t.y<8||t.y>h-8)){ctx.beginPath();ctx.arc(clamp(t.x,8,w-8),clamp(t.y,8,h-8),4,0,Math.PI*2);ctx.fill();}
+    line([pos,...routePoints],game.gps?'#7edac8':'#edbb60',full?3:2);
+    const t=map(target);ctx.fillStyle=game.gps?'#7edac8':'#ffd477';ctx.beginPath();ctx.arc(clamp(t.x,6,w-6),clamp(t.y,6,h-6),full?7:5,0,Math.PI*2);ctx.fill();
   }
-  if(full){
-    ctx.font='600 12px system-ui';ctx.textAlign='center';
-    for(const l of world.landmarks){const q=map(l);ctx.fillStyle='#d3ddd2';ctx.beginPath();ctx.arc(q.x,q.y,3,0,Math.PI*2);ctx.fill();ctx.fillText(l.name,q.x,q.y-10);}
-    ctx.fillStyle='#8fbcbe';ctx.font='italic 15px Georgia';const river=map({x:60,z:350});ctx.fillText('G O D A V A R I',river.x,river.y);
+  const colors={coaching:'#f8bf68',college:'#9fb9ec',school:'#9fb9ec',landmark:'#ecd8a0',hotel:'#e3a7bc',restaurant:'#f59875',cafe:'#f59875',hospital:'#df8b8b',transport:'#94c8c9',shopping:'#d5acda',cinema:'#d5acda',junction:'#b2c8b4',park:'#90be8f'};
+  const occupied=[];
+  for(const place of PLACES){
+    if(!visible(place))continue;
+    const q=map(place),selected=full&&guide?.selectedId===place.id;
+    ctx.fillStyle=colors[place.category]||'#b2c8b4';ctx.beginPath();ctx.arc(q.x,q.y,selected?8:full?3.5:2,0,Math.PI*2);ctx.fill();
+    if(selected){ctx.strokeStyle='#fff7df';ctx.lineWidth=2;ctx.stroke();}
+    if(full&&(span<2200||selected)){
+      ctx.font=selected?'bold 13px system-ui':'11px system-ui';ctx.textAlign='left';
+      const label=place.shortName,width=ctx.measureText(label).width,rect={x:q.x+8,y:q.y-14,w:width+8,h:17};
+      if(selected||!occupied.some(r=>rect.x<r.x+r.w&&rect.x+rect.w>r.x&&rect.y<r.y+r.h&&rect.y+rect.h>r.y)){
+        ctx.fillStyle='#172b2be8';ctx.fillRect(rect.x-3,rect.y-1,rect.w,rect.h);ctx.fillStyle=selected?'#fff2cb':'#dbe4d9';ctx.fillText(label,rect.x,rect.y+12);occupied.push(rect);
+      }
+    }
   }
-  for(const v of cars){if(!v.mesh.visible||v===car)continue;const p=map(v);ctx.fillStyle=police.includes(v)?'#ef7369':'#b7c4ac';ctx.fillRect(p.x-1.5,p.y-1.5,3,3);}
+  if(full){ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.fillStyle='#b8c9b6';
+    for(const d of DISTRICTS){if(!visible(d)||span<1800)continue;const p=map(d);const rect={x:p.x-50,y:p.y,w:100,h:15};if(occupied.some(r=>rect.x<r.x+r.w&&rect.x+rect.w>r.x&&rect.y<r.y+r.h&&rect.y+rect.h>r.y))continue;ctx.fillText(d.name.toUpperCase(),p.x,p.y);occupied.push(rect);}
+    ctx.textAlign='left';ctx.font='bold 13px system-ui';ctx.fillStyle='#dbe4d9';ctx.fillText('N ↑',18,27);
+    const metres=Math.round(span/NETWORK.scale/5/100)*100;ctx.font='11px system-ui';ctx.fillText(`${metres>=1000?(metres/1000).toFixed(1)+' km':metres+' m'} approx.`,18,h-18);ctx.fillRect(18,h-12,w/5,2);
+  }else for(const v of cars){if(!v.mesh.visible||v===car||!visible(v))continue;const p=map(v);ctx.fillStyle=police.includes(v)?'#ef7369':'#b7c4ac';ctx.fillRect(p.x-1,p.y-1,2,2);}
   const point=map(pos);ctx.save();ctx.translate(point.x,point.y);ctx.rotate(game.onFoot?player.heading:car.heading);ctx.fillStyle='#fff5da';ctx.strokeStyle='#122b2d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,6);ctx.lineTo(0,3);ctx.lineTo(-6,6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
 }
 
 function frame(){
   requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),0.05);introTime+=dt;
-  if(!game.started){
-    const orbit=introTime*0.025;camera.position.set(175+Math.sin(orbit)*45,155,310+Math.cos(orbit)*25);camera.lookAt(10,0,50);
-    updateTraffic(dt);for(const v of cars){v.mesh.position.set(v.x,0.12,v.z);v.mesh.rotation.y=v.heading;}
-  }else if(!game.paused){
+  // The full-screen artwork/film needs no background WebGL work or game timers.
+  if(!game.started||intro.active)return;
+  if(!game.paused){
     game.time+=dt;game.collisionCooldown=Math.max(0,game.collisionCooldown-dt);
-    updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);
+    updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);refreshRoute(dt);world.setFocus?.(playerPosition());refreshTraffic(playerPosition());
     if(game.toastTime>0){game.toastTime-=dt;if(game.toastTime<=0)show('toast',false);}
-    lastHUD+=dt;if(lastHUD>0.1){updateHUD();lastHUD=0;}
+    lastHUD+=dt;if(lastHUD>0.2){discoverPlaces();updateHUD();lastHUD=0;}
   }
   world.animate?.(dt,introTime);audio.update(car.speed,game.started&&!game.onFoot,game.paused);
   renderer.render(scene,camera);

@@ -35,7 +35,7 @@ test('mission expiry cannot be awarded and chase completes after survival time',
   const m=newMission(1);assert.equal(advanceMission(m,MISSIONS[1].stops[0],0,true,151),'failed');
   const chase=newMission(3);assert.equal(advanceMission(chase,{x:0,z:0},30,true,49),null);assert.equal(advanceMission(chase,{x:0,z:0},30,true,1),'complete');
 });
-test('all five jobs replay after a full circuit',()=>assert.equal(newMission(5).index,0));
+test('all jobs replay after a full circuit',()=>assert.equal(newMission(MISSIONS.length).index,0));
 test('saved progress survives reload; corrupted or unavailable storage is safe',()=>{
   let value;const storage={getItem:()=>value,setItem:(k,v)=>value=v};
   assert.equal(saveProgress(storage,{cash:450,completed:1}),true);assert.deepEqual(loadProgress(storage),{cash:450,completed:1});

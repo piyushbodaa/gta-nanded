@@ -1,0 +1,905 @@
+{
+  "iib-parnakuti": {
+    "lat": 19.1764011,
+    "lon": 77.3101065,
+    "coordinateSourceUrl": "https://www.iibedu.com/iib-neetcoaching/nanded-branch/",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "rcc-nanded": {
+    "lat": 19.172765,
+    "lon": 77.309361,
+    "coordinateSourceUrl": "https://rccpattern.com/contact-us/",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "allen-nanded": {
+    "lat": 19.1744827,
+    "lon": 77.3090586,
+    "coordinateSourceUrl": "https://www.greatachievers.co.in/",
+    "locationPrecision": "area",
+    "note": "Placed in Shyam Nagar from street address; exact frontage unverified. Great Achievers official address says adjacent to ALLEN."
+  },
+  "aakash-nanded": {
+    "lat": 19.177281,
+    "lon": 77.308451,
+    "coordinateSourceUrl": "https://centers.aakash.ac.in/aakash-educational-service-limited-nanded-coaching-center-bhagya-nagar-nanded-99241/Contact-Us",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "chate-purna-road": {
+    "lat": 19.1858021,
+    "lon": 77.291807,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002083",
+    "locationPrecision": "area",
+    "note": "Placed in Purna Road from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "chate-stadium-road": {
+    "lat": 19.16931922,
+    "lon": 77.30798527,
+    "coordinateSourceUrl": "https://www.facebook.com/274722946392338",
+    "locationPrecision": "area",
+    "note": "Placed in Stadium Road from street address; exact frontage unverified. Official address says opposite Kusum Auditorium."
+  },
+  "chate-chaitanya-nagar": {
+    "lat": 19.1848524,
+    "lon": 77.305179,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002030",
+    "locationPrecision": "area",
+    "note": "Placed in Taroda Budruk from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "konale-neet": {
+    "lat": 19.1730883,
+    "lon": 77.309267,
+    "coordinateSourceUrl": "https://konaleclasses.com/home/contact",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "konale-iit-jee": {
+    "lat": 19.1560604,
+    "lon": 77.3105887,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/13710087819",
+    "locationPrecision": "area",
+    "note": "Placed in Vishnu Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "pw-nanded": {
+    "lat": 19.1721654,
+    "lon": 77.31525,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002056",
+    "locationPrecision": "area",
+    "note": "Placed in Anand Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "great-achievers": {
+    "lat": 19.1744827,
+    "lon": 77.3090586,
+    "coordinateSourceUrl": "https://www.greatachievers.co.in/",
+    "locationPrecision": "mapped",
+    "note": "Name and street address matched Overture 2026-09-23.1 feature f7e432ef-5b1d-4151-8f81-d6681cfda0fb in prior place-source.json; mapped point, not surveyed entrance."
+  },
+  "brilliant-commerce": {
+    "lat": 19.1624466,
+    "lon": 77.3168754,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7210920502",
+    "locationPrecision": "area",
+    "note": "Placed in New Mondha from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "shaheen-academy": {
+    "lat": 19.152325,
+    "lon": 77.282747,
+    "coordinateSourceUrl": "https://tools.paintmaps.com/map-cropping/IN/4-890507055/samples",
+    "locationPrecision": "area",
+    "note": "Placed in Hassapur from street address; exact frontage unverified. Broad Hassapur locality anchor; not the remote Bhokar village of the same name."
+  },
+  "srtm-university": {
+    "lat": 19.102196,
+    "lon": 77.2843176,
+    "coordinateSourceUrl": "https://srtmun.ac.in/srtmun-on-google-map/",
+    "locationPrecision": "mapped",
+    "note": "Official Nanded campus link https://goo.gl/maps/EFaTAQfvdKG43XsP7 resolves to these place coordinates; other sub-campus links rejected."
+  },
+  "sggs-engineering": {
+    "lat": 19.1117,
+    "lon": 77.293,
+    "coordinateSourceUrl": "https://collegetix.in/index.php?id=shri-guru-gobind-singhji-institute-of-engineering-and-technology&page=college",
+    "locationPrecision": "mapped",
+    "note": "Published campus map point; official institute and district site confirm Vishnupuri."
+  },
+  "yeshwant-college": {
+    "lat": 19.1698023434381,
+    "lon": 77.3091493977393,
+    "coordinateSourceUrl": "https://nanded.gov.in/en/public-utility/yeshwant-mahavidyalaya-nanded/",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "nes-science-college": {
+    "lat": 19.1747222222,
+    "lon": 77.3002777778,
+    "coordinateSourceUrl": "https://www.ijirmf.com/wp-content/uploads/IJIRMF202003036.pdf",
+    "locationPrecision": "mapped",
+    "note": "College research gives 19°10′29″N 77°18′01″E near Agriculture College, agreeing with OSM NES campus. Rejected conflicting Overture point east of this campus."
+  },
+  "peoples-college": {
+    "lat": 19.1748877,
+    "lon": 77.300832,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075880",
+    "locationPrecision": "area",
+    "note": "Placed in Sneh Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "mgm-engineering": {
+    "lat": 19.1798087,
+    "lon": 77.3255458,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/993255381",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "mgm-csit": {
+    "lat": 19.1798087,
+    "lon": 77.3255458,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/993255381",
+    "locationPrecision": "area",
+    "note": "Placed in Airport Road from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "itm-nanded": {
+    "lat": 19.1689862,
+    "lon": 77.3087403,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/993255387",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "nsb-college": {
+    "lat": 19.1494136,
+    "lon": 77.3125667,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/993255389",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "pratibha-niketan-college": {
+    "lat": 19.1500775,
+    "lon": 77.3118733,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/6905010061",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "vasantrao-naik-college": {
+    "lat": 19.1320644,
+    "lon": 77.3204612,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424699",
+    "locationPrecision": "area",
+    "note": "Placed in Vasarni from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "government-polytechnic": {
+    "lat": 19.1697802,
+    "lon": 77.3117379,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075883",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "government-iti": {
+    "lat": 19.1691844,
+    "lon": 77.3034751,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/1258365919",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "nanded-pharmacy": {
+    "lat": 19.175868,
+    "lon": 77.307992,
+    "coordinateSourceUrl": "https://www.nandedpharmacycollege.org/admin/uploads/aqar_criteria/4_1_1_adequate_infrastructure__compressed.pdf",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "government-medical-college": {
+    "lat": 19.1107015,
+    "lon": 77.2909403,
+    "coordinateSourceUrl": "https://www.courierslist.com/detail/india/nanded/medical-college/1790118/dr-shankarrao-chavan-govt-medical-college-26-hospital",
+    "locationPrecision": "mapped",
+    "note": "Vishnupuri pin 476R+79P agrees within 10 m with OSM blood-bank node 6896420917. Official address confirms Vishnupuri. Rejected obsolete central node 7225067286. College and hospital intentionally share campus anchor."
+  },
+  "government-ayurved-college": {
+    "lat": 19.1560387,
+    "lon": 77.3090382,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/6896421231",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "narayanrao-chavan-law": {
+    "lat": 19.1692077,
+    "lon": 77.3093426,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/993255386",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "krm-mahila-college": {
+    "lat": 19.1518923,
+    "lon": 77.3131105,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7050847665",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "government-education-college": {
+    "lat": 19.1798875,
+    "lon": 77.318203125,
+    "coordinateSourceUrl": "https://gcenanded.co.in/contactus.php",
+    "locationPrecision": "mapped",
+    "note": "Decoded official contact-page plus code 58H9+X74, Shobha Nagar / Swatantrya Sainik Colony."
+  },
+  "gramin-technical-campus": {
+    "lat": 19.1084415,
+    "lon": 77.2879096,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7225067131",
+    "locationPrecision": "area",
+    "note": "Placed in Vishnupuri from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "indira-technology": {
+    "lat": 19.11194,
+    "lon": 77.28889,
+    "coordinateSourceUrl": "https://india.worldplaces.me/places-in-nanded/31371124-vishnupuri-nanded.html",
+    "locationPrecision": "area",
+    "note": "Placed in Vishnupuri from street address; exact frontage unverified. Vishnupuri anchor near the independently listed Sahayog institution."
+  },
+  "yeshwant-physical-education": {
+    "lat": 19.1103523,
+    "lon": 77.323613,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424681",
+    "locationPrecision": "area",
+    "note": "Placed in CIDCO from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "mgm-fine-arts": {
+    "lat": 19.1798087,
+    "lon": 77.3255458,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/993255381",
+    "locationPrecision": "area",
+    "note": "Placed in Airport Road from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "jawaharlal-nehru-social-work": {
+    "lat": 19.1103523,
+    "lon": 77.323613,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424681",
+    "locationPrecision": "area",
+    "note": "Placed in CIDCO from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "kv-scr-nanded": {
+    "lat": 19.1849138675,
+    "lon": 77.3197524275,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/402370753",
+    "locationPrecision": "area",
+    "note": "Placed in Taroda from street address; exact frontage unverified. Nearby Sangvi Road geometry; precise DRM campus Gate 4 remains unresolved."
+  },
+  "narayana-nanded": {
+    "lat": 19.1930163,
+    "lon": 77.2845819,
+    "coordinateSourceUrl": "https://fndy.in/nanded-waghala/grocery-stores/dmart-nanded",
+    "locationPrecision": "area",
+    "note": "Placed in Wadi Budruk from street address; exact frontage unverified. School and store addresses place these institutions beside or opposite D-Mart; school entrances are unverified."
+  },
+  "podar-nanded": {
+    "lat": 19.1930163,
+    "lon": 77.2845819,
+    "coordinateSourceUrl": "https://fndy.in/nanded-waghala/grocery-stores/dmart-nanded",
+    "locationPrecision": "area",
+    "note": "Placed in Purna Road from street address; exact frontage unverified. School and store addresses place these institutions beside or opposite D-Mart; school entrances are unverified."
+  },
+  "gyan-mata": {
+    "lat": 19.179199,
+    "lon": 77.332139,
+    "coordinateSourceUrl": "https://www.icbse.com/schools/gyan-mata-vidya-vihar-9172vo",
+    "locationPrecision": "area",
+    "note": "Placed in Nasratpur from street address; exact frontage unverified. Directory JSON-LD used only as an area anchor because it warns automatic mapping may be wrong. Official school confirms airport/Kamtha Road address; unrelated western Nasratpur village rejected."
+  },
+  "nagarjuna-school": {
+    "lat": 19.1327249,
+    "lon": 77.3016745,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/13705050425",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "shakuntal-school": {
+    "lat": 19.218142447,
+    "lon": 77.2985804,
+    "coordinateSourceUrl": "https://bricks.curioussouls.in/mhvillage/23843",
+    "locationPrecision": "area",
+    "note": "Placed in Pasadgaon from street address; exact frontage unverified. Pasadgaon village centre, not school entrance."
+  },
+  "oxford-global-school": {
+    "lat": 19.20958,
+    "lon": 77.27334,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/9993352808",
+    "locationPrecision": "area",
+    "note": "Placed in Puyni from street address; exact frontage unverified. Puyni village centre corroborated by https://mapcarta.com/33243076, not school entrance."
+  },
+  "cambridge-vidyalaya": {
+    "lat": 19.162177,
+    "lon": 77.304319,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002014",
+    "locationPrecision": "area",
+    "note": "Placed in Shivaji Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "visawa-palace": {
+    "lat": 19.1664312,
+    "lon": 77.3062077,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11697920745",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "ashirwad-lodge": {
+    "lat": 19.1560604,
+    "lon": 77.3105887,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/13710087819",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "city-pride": {
+    "lat": 19.1759,
+    "lon": 77.3245,
+    "coordinateSourceUrl": "https://in.via.com/hotels/hotel-city-pride-961335",
+    "locationPrecision": "mapped",
+    "note": "Booking page static-map marker agrees with Airport Road / Hanumangadh address."
+  },
+  "chandralok": {
+    "lat": 19.1722337,
+    "lon": 77.3221947,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11145789229",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "ramakrishna-international": {
+    "lat": 19.1583577,
+    "lon": 77.3076408,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/6895218077",
+    "locationPrecision": "area",
+    "note": "Placed in Doctor Lane from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "pooja-garden": {
+    "lat": 19.1348301,
+    "lon": 77.3052956,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424714",
+    "locationPrecision": "area",
+    "note": "Placed in Latur Phata from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "anuradha-palace": {
+    "lat": 19.1618072,
+    "lon": 77.3176132,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7043397901",
+    "locationPrecision": "area",
+    "note": "Placed in Hingoli Gate from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "atithi-hotel": {
+    "lat": 19.1664312,
+    "lon": 77.3062077,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11697920745",
+    "locationPrecision": "area",
+    "note": "Placed in Shivaji Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "taj-patil": {
+    "lat": 19.1692167,
+    "lon": 77.3049992,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11698312644",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "aakruti-hotel": {
+    "lat": 19.1327249,
+    "lon": 77.3016745,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/13705050425",
+    "locationPrecision": "area",
+    "note": "Placed in Kautha from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "tulsi-comfort": {
+    "lat": 19.1748063,
+    "lon": 77.3131097,
+    "coordinateSourceUrl": "https://www.google.com/maps?cid=15162140821138501614",
+    "locationPrecision": "mapped",
+    "note": "Prior district-landmark-reference.json reconciles Tulsi Comfort exterior photos with the current Hotel Grand Tulsi name; OSM node 11145755039 corroborates.",
+    "name": "Hotel Grand Tulsi",
+    "shortName": "Grand Tulsi",
+    "aliases": [
+      "Hotel Tulsi Comfort",
+      "Tulsi Comfort"
+    ],
+    "nameSourceUrl": "https://www.openstreetmap.org/node/11145755039"
+  },
+  "midland-hotel": {
+    "lat": 19.1639543,
+    "lon": 77.3091418,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/1258308920",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "punjab-bhavan": {
+    "lat": 19.1523793,
+    "lon": 77.3189557,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075906",
+    "locationPrecision": "area",
+    "note": "Placed in Hazur Sahib from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "guru-angad-yatri-niwas": {
+    "lat": 19.1523793,
+    "lon": 77.3189557,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075906",
+    "locationPrecision": "area",
+    "note": "Placed in Hazur Sahib from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "guru-tegh-bahadur-niwas": {
+    "lat": 19.1523793,
+    "lon": 77.3189557,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075906",
+    "locationPrecision": "area",
+    "note": "Placed in Hazur Sahib from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "gokul-veg": {
+    "lat": 19.1678503,
+    "lon": 77.3049725,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11691288439",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "madhur-bhoj": {
+    "lat": 19.1685978,
+    "lon": 77.3054912,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11691394288",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "vithal-kamats": {
+    "lat": 19.1107015,
+    "lon": 77.2909403,
+    "coordinateSourceUrl": "https://www.courierslist.com/detail/india/nanded/medical-college/1790118/dr-shankarrao-chavan-govt-medical-college-26-hospital",
+    "locationPrecision": "area",
+    "note": "Placed in Vishnupuri from street address; exact frontage unverified. Official restaurant address says opposite the medical college."
+  },
+  "om-veg": {
+    "lat": 19.1664312,
+    "lon": 77.3062077,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11697920745",
+    "locationPrecision": "area",
+    "note": "Placed in Shivaji Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "patels-zaika": {
+    "lat": 19.1685978,
+    "lon": 77.3054912,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11691394288",
+    "locationPrecision": "area",
+    "note": "Placed in ITI Corner from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "godavari-sweets-bakes": {
+    "lat": 19.16856989,
+    "lon": 77.30531497,
+    "coordinateSourceUrl": "https://www.facebook.com/367179736770175",
+    "locationPrecision": "mapped",
+    "note": "Name and street address matched Overture 2026-09-23.1 feature f6670554-d95f-4cc8-bf28-c80183476d86 in prior place-source.json; mapped point, not surveyed entrance."
+  },
+  "new-kamal-sweet": {
+    "lat": 19.1536931,
+    "lon": 77.3116916,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/6888430063",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "prasad-sweet-house": {
+    "lat": 19.1494988,
+    "lon": 77.3201543,
+    "coordinateSourceUrl": "https://datagemba.com/b/v/in/nanded/shopping-centre",
+    "locationPrecision": "area",
+    "note": "Placed in Old Mondha from street address; exact frontage unverified. Old Mondha Clock Tower / Reliance Trends mapped neighbor used only as old-market area anchor."
+  },
+  "khandelwal-sweets": {
+    "lat": 19.1494988,
+    "lon": 77.3201543,
+    "coordinateSourceUrl": "https://datagemba.com/b/v/in/nanded/shopping-centre",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Old Mondha Clock Tower / Reliance Trends mapped neighbor used only as old-market area anchor."
+  },
+  "frespresso": {
+    "lat": 19.172004635014,
+    "lon": 77.309503555298,
+    "coordinateSourceUrl": "https://www.facebook.com/103663622183693",
+    "locationPrecision": "mapped",
+    "note": "Name and street address matched Overture 2026-09-23.1 feature 66c80834-bcc0-4cac-b0c0-cd8855a8dbe0 in prior place-source.json; mapped point, not surveyed entrance."
+  },
+  "crazy-cheesy": {
+    "lat": 19.175459,
+    "lon": 77.3116204,
+    "coordinateSourceUrl": "https://www.crazycheesy.com/store-locator/",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "chaiway-main": {
+    "lat": 19.1792161,
+    "lon": 77.30596694,
+    "coordinateSourceUrl": "https://www.facebook.com/664914387182474",
+    "locationPrecision": "mapped",
+    "note": "Name and street address matched Overture 2026-09-23.1 feature c9834353-5be2-480a-b10f-02c129c8b33b in prior place-source.json; mapped point, not surveyed entrance."
+  },
+  "amrut-cafe": {
+    "lat": 19.1734942,
+    "lon": 77.3150503,
+    "coordinateSourceUrl": "https://www.google.com/maps?cid=13213604312182751305",
+    "locationPrecision": "mapped",
+    "note": "Prior district-landmark-reference.json coordinate and exterior photograph corroboration."
+  },
+  "c-square": {
+    "lat": 19.17670935,
+    "lon": 77.30867223,
+    "coordinateSourceUrl": "https://www.facebook.com/412113618943226",
+    "locationPrecision": "mapped",
+    "note": "Name and street address matched Overture 2026-09-23.1 feature aa853524-704c-4670-b4b1-4228d37db158 in prior place-source.json; mapped point, not surveyed entrance."
+  },
+  "cafe-food-court": {
+    "lat": 19.1721654,
+    "lon": 77.31525,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002056",
+    "locationPrecision": "area",
+    "note": "Placed in Anand Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "pizza-hut-shivaji": {
+    "lat": 19.1665111,
+    "lon": 77.3052688,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11691288420",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "dominos-shivaji": {
+    "lat": 19.1668706,
+    "lon": 77.3051796,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11691288425",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "dominos-hazur": {
+    "lat": 19.1523793,
+    "lon": 77.3189557,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075906",
+    "locationPrecision": "area",
+    "note": "Placed in Hazur Sahib from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "dominos-taroda": {
+    "lat": 19.184962,
+    "lon": 77.299324,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002088",
+    "locationPrecision": "area",
+    "note": "Placed in Taroda from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "pvr-treasure": {
+    "lat": 19.12905,
+    "lon": 77.30899,
+    "coordinateSourceUrl": "https://india.worldplaces.me/movie-theaters-in-nanded/41107814-pvr-cinemas-multiplex-nanded.html",
+    "locationPrecision": "mapped",
+    "note": "Cinema pin on Treasure Bazaar parcel; official ticket listing confirms mall and cinema."
+  },
+  "bharat-multiplex": {
+    "lat": 19.19503833973871,
+    "lon": 77.27947791415556,
+    "coordinateSourceUrl": "https://www.moviebuff.com/nanded-bharat-e-square-multiplex-meera-arcade",
+    "locationPrecision": "mapped",
+    "note": "Named cinema map link at Meera Arcade, Canal Road. Rejected conflicting WorldPlaces pin east of airport."
+  },
+  "treasure-bazaar": {
+    "lat": 19.1289149,
+    "lon": 77.309783,
+    "coordinateSourceUrl": "https://datagemba.com/b/v/in/nanded/shopping-centre/ChIJb1jR1SHW0TsRJMMJpLhsN1c",
+    "locationPrecision": "mapped",
+    "note": "Mall map point agrees with Nanded Square and PVR on the Latur Road parcel."
+  },
+  "sarafa-bazar": {
+    "lat": 19.1494988,
+    "lon": 77.3201543,
+    "coordinateSourceUrl": "https://datagemba.com/b/v/in/nanded/shopping-centre",
+    "locationPrecision": "area",
+    "note": "Placed in Old City from street address; exact frontage unverified. Old Mondha Clock Tower / Reliance Trends mapped neighbor used only as old-market area anchor."
+  },
+  "dmart-wadi": {
+    "lat": 19.1930163,
+    "lon": 77.2845819,
+    "coordinateSourceUrl": "https://fndy.in/nanded-waghala/grocery-stores/dmart-nanded",
+    "locationPrecision": "mapped",
+    "note": "JSON-LD, map link and plus code 57VM+6R4 agree. Wadi Budruk / Canal Road independently supported by supplier and SBI store lists."
+  },
+  "hazur-sahib": {
+    "lat": 19.1523793,
+    "lon": 77.3189557,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075906",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "nagina-ghat": {
+    "lat": 19.146978,
+    "lon": 77.314078,
+    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
+    "locationPrecision": "mapped",
+    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
+  },
+  "banda-ghat": {
+    "lat": 19.14852,
+    "lon": 77.310907,
+    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
+    "locationPrecision": "mapped",
+    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
+  },
+  "langar-sahib": {
+    "lat": 19.148063435,
+    "lon": 77.314831845,
+    "coordinateSourceUrl": "https://www.waze.com/af/live-map/directions/gurudwara-langar-sahib-langer-saheb-road-nanded?to=place.w.50659519.506660731.12119760",
+    "locationPrecision": "mapped",
+    "note": "Waze venue latLng and JSON-LD agree on Langer Saheb Road."
+  },
+  "hira-ghat": {
+    "lat": 19.160094,
+    "lon": 77.40004,
+    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
+    "locationPrecision": "mapped",
+    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
+  },
+  "mata-sahib": {
+    "lat": 19.155535,
+    "lon": 77.406473,
+    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
+    "locationPrecision": "mapped",
+    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
+  },
+  "shikar-ghat": {
+    "lat": 19.129661,
+    "lon": 77.411608,
+    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
+    "locationPrecision": "mapped",
+    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
+  },
+  "mal-tekdi": {
+    "lat": 19.175138,
+    "lon": 77.342199,
+    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
+    "locationPrecision": "mapped",
+    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
+  },
+  "sangat-sahib": {
+    "lat": 19.145377,
+    "lon": 77.33362,
+    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
+    "locationPrecision": "mapped",
+    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
+  },
+  "nandgiri-fort": {
+    "lat": 19.14161,
+    "lon": 77.32477,
+    "coordinateSourceUrl": "https://mapcarta.com/W826268915",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "kaleshwar-temple": {
+    "lat": 19.1198776,
+    "lon": 77.2839308,
+    "coordinateSourceUrl": "https://nanded.gov.in/tourist-place/काळेश्वर-मंदिर/",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "vishnupuri-dam": {
+    "lat": 19.1258,
+    "lon": 77.2811,
+    "coordinateSourceUrl": "https://mjp.maharashtra.gov.in/wp-content/uploads/2022/12/Appendix-15-WATER-DEMAND-FOR-INDUSTRIAL-USE-Capacity-of-WSS-in-MLD-data-recived-from-MIDC.pdf",
+    "locationPrecision": "area",
+    "note": "Placed in Vishnupuri from street address; exact frontage unverified. Government source/intake coordinate used as reservoir-area anchor; not surveyed dam alignment."
+  },
+  "godavari-river": {
+    "lat": 19.1440458333,
+    "lon": 77.3177441667,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/102662423",
+    "locationPrecision": "area",
+    "note": "Placed in Riverfront from street address; exact frontage unverified. Actual river bridge geometry; OSM way lacks local bridge name. Render river from its geometry, not as a building."
+  },
+  "nanded-station": {
+    "lat": 19.16018,
+    "lon": 77.30988,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/732565041",
+    "locationPrecision": "mapped",
+    "note": "Station/platform node corroborated by https://mapcarta.com/N732565041; not front-door survey."
+  },
+  "nanded-bus-stand": {
+    "lat": 19.1594079,
+    "lon": 77.3061186,
+    "coordinateSourceUrl": "https://mapcarta.com/W912075890",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "nanded-airport": {
+    "lat": 19.18111111111111,
+    "lon": 77.32249999999999,
+    "coordinateSourceUrl": "https://aim-india.aai.aero/eAIP_Archive/06-08-2026/eAIP/IN-AD%202.1VOND-en-GB.html",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "govardhan-ghat-bridge": {
+    "lat": 19.1455357632,
+    "lon": 77.3082279158,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/306010135",
+    "locationPrecision": "area",
+    "note": "Placed in Godavari riverfront from street address; exact frontage unverified. Actual bridge geometry, but local-name association remains unverified."
+  },
+  "navghat-bridge": {
+    "lat": 19.1440458333,
+    "lon": 77.3177441667,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/102662423",
+    "locationPrecision": "area",
+    "note": "Placed in Godavari riverfront from street address; exact frontage unverified. Actual river bridge geometry; OSM way lacks local bridge name. Render river from its geometry, not as a building."
+  },
+  "hingoli-gate": {
+    "lat": 19.16054120625,
+    "lon": 77.3158315125,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/135956397",
+    "locationPrecision": "mapped",
+    "note": "Centroid of named Hingoli Gate Flyover geometry from osm-network.json."
+  },
+  "government-medical-hospital": {
+    "lat": 19.1107015,
+    "lon": 77.2909403,
+    "coordinateSourceUrl": "https://www.courierslist.com/detail/india/nanded/medical-college/1790118/dr-shankarrao-chavan-govt-medical-college-26-hospital",
+    "locationPrecision": "mapped",
+    "note": "Vishnupuri pin 476R+79P agrees within 10 m with OSM blood-bank node 6896420917. Official address confirms Vishnupuri. Rejected obsolete central node 7225067286. College and hospital intentionally share campus anchor."
+  },
+  "sggs-civil-hospital": {
+    "lat": 19.1553972,
+    "lon": 77.3117703,
+    "coordinateSourceUrl": "https://nanded.gov.in/en/public-utility-category/hospitals/",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "government-womens-hospital": {
+    "lat": 19.175827,
+    "lon": 77.309114,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7225067193",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "municipal-veterinary-hospital": {
+    "lat": 19.181231,
+    "lon": 77.302801,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002023",
+    "locationPrecision": "area",
+    "note": "Placed in Ashok Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "lavekar-hospital": {
+    "lat": 19.1518923,
+    "lon": 77.3131105,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7050847665",
+    "locationPrecision": "mapped",
+    "note": "Named OSM point or campus/building centre."
+  },
+  "visava-garden": {
+    "lat": 19.169036,
+    "lon": 77.305095,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002047",
+    "locationPrecision": "area",
+    "note": "Placed in Vishnu Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "collector-office": {
+    "lat": 19.1518923,
+    "lon": 77.3131105,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7050847665",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "municipal-corporation": {
+    "lat": 19.1518923,
+    "lon": 77.3131105,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7050847665",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "district-court": {
+    "lat": 19.1518923,
+    "lon": 77.3131105,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7050847665",
+    "locationPrecision": "area",
+    "note": "Placed in Station Road from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "sggs-stadium": {
+    "lat": 19.1639543,
+    "lon": 77.3091418,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/1258308920",
+    "locationPrecision": "area",
+    "note": "Placed in Gokul Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "kusum-auditorium": {
+    "lat": 19.16931922,
+    "lon": 77.30798527,
+    "coordinateSourceUrl": "https://www.facebook.com/274722946392338",
+    "locationPrecision": "mapped",
+    "note": "Name and street address matched Overture 2026-09-23.1 feature e4738174-755a-48dc-b9f1-85bb0eb8d36d in prior place-source.json; mapped point, not surveyed entrance."
+  },
+  "shankarrao-auditorium": {
+    "lat": 19.1658625,
+    "lon": 77.311078125,
+    "coordinateSourceUrl": "https://www.trip.com/travel-guide/attraction/nanded/shri-shankarrao-chavan-auditorium-141792141?curr=USD&locale=en-US",
+    "locationPrecision": "mapped",
+    "note": "Decoded venue plus code 5886+8CW; municipal development plan corroborates stadium vicinity."
+  },
+  "iti-corner": {
+    "lat": 19.169036,
+    "lon": 77.305095,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002047",
+    "locationPrecision": "area",
+    "note": "Placed in Vishnu Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "bhagya-nagar-kaman": {
+    "lat": 19.17722,
+    "lon": 77.3093456,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002096",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "shivaji-putla": {
+    "lat": 19.1560604,
+    "lon": 77.3105887,
+    "coordinateSourceUrl": "https://www.justdial.com/Nanded/Soham-Gurukul-Behind-Uday-Xerox-Near-Shivaji-Putla-Shivaji-Putala/9999P2462-2462-240113200253-S1I7_BZDET",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "annabhau-sathe-chowk": {
+    "lat": 19.1622231,
+    "lon": 77.3198726,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424700",
+    "locationPrecision": "area",
+    "note": "Placed in Datta Nagar from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "mahatma-phule-chowk": {
+    "lat": 19.1670497,
+    "lon": 77.3051425,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/11691288426",
+    "locationPrecision": "area",
+    "note": "Placed in ITI / Phule Market from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "workshop-corner": {
+    "lat": 19.1800057,
+    "lon": 77.3041901,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002071",
+    "locationPrecision": "mapped",
+    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+  },
+  "raj-corner": {
+    "lat": 19.183768,
+    "lon": 77.304629,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/10807019676",
+    "locationPrecision": "area",
+    "note": "Placed in Taroda from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "namaskar-chowk": {
+    "lat": 19.1759,
+    "lon": 77.3245,
+    "coordinateSourceUrl": "https://in.via.com/hotels/hotel-city-pride-961335",
+    "locationPrecision": "area",
+    "note": "Placed in Airport bypass from street address; exact frontage unverified. Airport Road hotel vicinity; official physiotherapy college address locates Namaskar Chowk near City Pride, but exact junction remains unverified."
+  },
+  "taroda-naka": {
+    "lat": 19.184962,
+    "lon": 77.299324,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7635002088",
+    "locationPrecision": "area",
+    "note": "Placed in Taroda from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "degloor-naka": {
+    "lat": 19.1528109,
+    "lon": 77.329597,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424696",
+    "locationPrecision": "area",
+    "note": "Placed in Degloor Naka from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "mahavir-chowk": {
+    "lat": 19.1518923,
+    "lon": 77.3131105,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7050847665",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "gandhi-putla": {
+    "lat": 19.1518923,
+    "lon": 77.3131105,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7050847665",
+    "locationPrecision": "area",
+    "note": "Placed in Vazirabad from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  },
+  "ambedkar-chowk-latur-phata": {
+    "lat": 19.1348301,
+    "lon": 77.3052956,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424714",
+    "locationPrecision": "area",
+    "note": "Placed in Latur Phata from street address; exact frontage unverified. Anchor is a mapped nearby feature, not this venue."
+  }
+}

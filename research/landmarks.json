@@ -1,0 +1,831 @@
+[
+  {
+    "id": "hazur-sahib",
+    "name": "Takht Sachkhand Sri Hazur Abchalnagar Sahib",
+    "shortName": "Hazur Sahib",
+    "category": "landmark",
+    "area": "Hazur Sahib",
+    "address": "Gurudwara Road, Nanded 431601",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/history",
+    "sourceTitle": "Hazur Sahib Board — history",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The Takht complex has a central sanctum, surrounding galleries and the Angitha Sahib shrine.",
+    "confidence": "official",
+    "aliases": [
+      "Sachkhand Gurudwara",
+      "Hazoor Sahib",
+      "Abchalnagar",
+      "हजूर साहिब"
+    ]
+  },
+  {
+    "id": "nagina-ghat",
+    "name": "Gurudwara Nagina Ghat Sahib",
+    "shortName": "Nagina Ghat",
+    "category": "landmark",
+    "area": "Godavari riverfront",
+    "address": "Godavari riverbank, southwest of Hazur Sahib, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/gurudwara_nagina_ghat",
+    "sourceTitle": "Hazur Sahib Board — Nagina Ghat",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "On the Godavari about 400 m southwest of the Takht; the raised hall has a smaller domed room above.",
+    "confidence": "official",
+    "aliases": [
+      "नगीना घाट"
+    ]
+  },
+  {
+    "id": "banda-ghat",
+    "name": "Gurudwara Banda Ghat Sahib",
+    "shortName": "Banda Ghat",
+    "category": "landmark",
+    "area": "Godavari riverfront",
+    "address": "Godavari riverbank upstream from Nagina Ghat, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/gurudwara_banda_ghat",
+    "sourceTitle": "Hazur Sahib Board — Banda Ghat",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "About 400 m upstream from Nagina Ghat; a square shrine with a covered passage around it.",
+    "confidence": "official",
+    "aliases": [
+      "बंदा घाट"
+    ]
+  },
+  {
+    "id": "langar-sahib",
+    "name": "Gurudwara Langar Sahib",
+    "shortName": "Langar Sahib",
+    "category": "landmark",
+    "area": "Godavari riverfront",
+    "address": "Baba Nidhan Singh Chowk, Nagina Ghat Road, Nanded 431601",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.bharatibiz.com/en/gurudwara-langar-sahib-02462-242-461",
+    "sourceTitle": "Bharatibiz — Gurudwara Langar Sahib",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The Langar Sahib complex is identified at Baba Nidhan Singh Chowk, beside the riverfront shrine district.",
+    "confidence": "directory",
+    "aliases": [
+      "Dera Baba Nidhan Singh",
+      "लंगर साहिब"
+    ]
+  },
+  {
+    "id": "hira-ghat",
+    "name": "Gurudwara Heera Ghat Sahib",
+    "shortName": "Hira Ghat",
+    "category": "landmark",
+    "area": "Eastern river outskirts",
+    "address": "Godavari riverbank downstream of Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/gurudwara_heera_ghat",
+    "sourceTitle": "Hazur Sahib Board — Heera Ghat",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The Board places this shrine about nine kilometres downstream from Nanded.",
+    "confidence": "official",
+    "aliases": [
+      "Heera Ghat",
+      "हीरा घाट"
+    ]
+  },
+  {
+    "id": "mata-sahib",
+    "name": "Gurudwara Mata Sahib Devaan Ji",
+    "shortName": "Mata Sahib",
+    "category": "landmark",
+    "area": "Eastern river outskirts",
+    "address": "Godavari riverbank downstream of Hira Ghat, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/gurudwara_mata_sahib_devaan_ji",
+    "sourceTitle": "Hazur Sahib Board — Mata Sahib Devaan Ji",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The Board places this shrine about half a kilometre downstream from Hira Ghat.",
+    "confidence": "official",
+    "aliases": [
+      "Mata Sahib Devan",
+      "माता साहिब"
+    ]
+  },
+  {
+    "id": "shikar-ghat",
+    "name": "Gurudwara Shikar Ghat Sahib",
+    "shortName": "Shikar Ghat",
+    "category": "landmark",
+    "area": "Godavari outskirts",
+    "address": "Near the Godavari, about six kilometres from Hazur Sahib, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/gurudwara_shikar_ghat",
+    "sourceTitle": "Hazur Sahib Board — Shikar Ghat",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "White-marble shrine on a low hill near the river; its river crossing was built through kar seva.",
+    "confidence": "official",
+    "aliases": [
+      "Shikaar Ghat",
+      "शिकार घाट"
+    ]
+  },
+  {
+    "id": "mal-tekdi",
+    "name": "Gurudwara Mal Tekdi Sahib",
+    "shortName": "Mal Tekdi",
+    "category": "landmark",
+    "area": "Maltekdi",
+    "address": "Maltekdi, linked to Nanded–Akola Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/mal_tekdi_sahib",
+    "sourceTitle": "Hazur Sahib Board — Mal Tekdi Sahib",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The Board identifies it about five kilometres from Hazur Sahib, linked to the Nanded–Akola road.",
+    "confidence": "official",
+    "aliases": [
+      "Maltekdi",
+      "Maal Tekdi",
+      "माल टेकडी"
+    ]
+  },
+  {
+    "id": "sangat-sahib",
+    "name": "Gurudwara Sangat Sahib",
+    "shortName": "Sangat Sahib",
+    "category": "landmark",
+    "area": "Godavari riverfront",
+    "address": "Godavari riverbank, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://hazursahib.com/web/gurudwara_sangat_sahib",
+    "sourceTitle": "Hazur Sahib Board — Sangat Sahib",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The Board places the riverside shrine about two miles from Hazur Sahib.",
+    "confidence": "official",
+    "aliases": [
+      "संगत साहिब"
+    ]
+  },
+  {
+    "id": "nandgiri-fort",
+    "name": "Nanded Fort (Nandgiri)",
+    "shortName": "Nandgiri Fort",
+    "category": "landmark",
+    "area": "Old Nanded",
+    "address": "Godavari riverbank, Nanded",
+    "lat": 19.14161,
+    "lon": 77.32477,
+    "sourceUrl": "https://mapcarta.com/W826268915",
+    "sourceTitle": "OpenStreetMap via Mapcarta — Nanded Fort",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "Mapped as a riverside fort southeast of Nanded railway station. This is the city fort, separate from Kandhar Fort.",
+    "confidence": "mapped",
+    "aliases": [
+      "Nandagiri Fort",
+      "Nanded Fort",
+      "नंदगिरी किल्ला"
+    ]
+  },
+  {
+    "id": "kaleshwar-temple",
+    "name": "Kaleshwar Temple",
+    "shortName": "Kaleshwar",
+    "category": "landmark",
+    "area": "Vishnupuri",
+    "address": "Vishnupuri, Nanded",
+    "lat": 19.1198776,
+    "lon": 77.2839308,
+    "sourceUrl": "https://nanded.gov.in/tourist-place/काळेश्वर-मंदिर/",
+    "sourceTitle": "Nanded District — Kaleshwar Temple",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The temple is in Vishnupuri beside the Godavari river.",
+    "confidence": "official",
+    "aliases": [
+      "Kaleshwar Mandir",
+      "काळेश्वर मंदिर"
+    ],
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/717024610"
+  },
+  {
+    "id": "vishnupuri-dam",
+    "name": "Vishnupuri Dam",
+    "shortName": "Vishnupuri Dam",
+    "category": "landmark",
+    "area": "Vishnupuri",
+    "address": "Godavari River, Vishnupuri, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://maharashtratourism.gov.in/mr/nature/vishnupuri-dam/",
+    "sourceTitle": "Maharashtra Tourism — Vishnupuri Dam",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "A barrage across the Godavari associated with the Vishnupuri irrigation and water-supply project.",
+    "confidence": "official",
+    "aliases": [
+      "Vishnupuri Barrage",
+      "विष्णुपुरी धरण"
+    ]
+  },
+  {
+    "id": "godavari-river",
+    "name": "Godavari River",
+    "shortName": "Godavari",
+    "category": "landmark",
+    "area": "Riverfront",
+    "address": "Godavari river through Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.prod.incredibleindia.gov.in/content/incredible-india-v2/en/destinations/nanded.html",
+    "sourceTitle": "Incredible India — Nanded",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The riverfront includes named ghats such as Urvashi, Ram and Govardhan Ghat.",
+    "confidence": "official",
+    "aliases": [
+      "Godawari",
+      "गोदावरी"
+    ]
+  },
+  {
+    "id": "nanded-station",
+    "name": "Hazur Sahib Nanded Railway Station",
+    "shortName": "Nanded Station",
+    "category": "transport",
+    "area": "Station Road",
+    "address": "Railway Station Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://nanded.gov.in/en/how-to-reach/",
+    "sourceTitle": "Nanded District — How to Reach",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The city railway station is Hazur Sahib Nanded on South Central Railway.",
+    "confidence": "official",
+    "aliases": [
+      "NED",
+      "Huzur Sahib Nanded",
+      "नांदेड रेल्वे स्थानक"
+    ]
+  },
+  {
+    "id": "nanded-bus-stand",
+    "name": "Nanded Central Bus Stand",
+    "shortName": "ST Bus Stand",
+    "category": "transport",
+    "area": "Vazirabad",
+    "address": "Bus Stand Road, Nanded",
+    "lat": 19.1594079,
+    "lon": 77.3061186,
+    "sourceUrl": "https://mapcarta.com/W912075890",
+    "sourceTitle": "OpenStreetMap via Mapcarta — Nanded Bus Stand",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The mapped bus station lies west of Hazur Sahib Nanded railway station.",
+    "confidence": "mapped",
+    "aliases": [
+      "MSRTC Bus Stand",
+      "नांदेड बस स्थानक"
+    ],
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/912075890"
+  },
+  {
+    "id": "nanded-airport",
+    "name": "Shri Guru Gobind Singh Ji Airport",
+    "shortName": "Nanded Airport",
+    "category": "transport",
+    "area": "Sangvi",
+    "address": "Sangvi (Bk), Old Hingoli Road, Nanded",
+    "lat": 19.18111111111111,
+    "lon": 77.32249999999999,
+    "sourceUrl": "https://aim-india.aai.aero/eAIP_Archive/06-08-2026/eAIP/IN-AD%202.1VOND-en-GB.html",
+    "sourceTitle": "Airports Authority of India — VOND aerodrome information",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The published aerodrome reference point is 5 km northeast of Nanded; this coordinate is the airfield reference point, not its entrance.",
+    "confidence": "official",
+    "aliases": [
+      "NDC",
+      "VOND",
+      "नांदेड विमानतळ"
+    ]
+  },
+  {
+    "id": "govardhan-ghat-bridge",
+    "name": "Govardhan Ghat Bridge",
+    "shortName": "Govardhan Bridge",
+    "category": "transport",
+    "area": "Godavari riverfront",
+    "address": "Govardhan Ghat Bridge Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://iwai.nic.in/sites/default/files/7825944126NW-04%20Extn%20Godavari%20River%20Final%20FSR_0.pdf",
+    "sourceTitle": "Inland Waterways Authority of India — Godavari feasibility report",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The river survey identifies the Gowerdhan Ghat Road Bridge near Banda Ghat.",
+    "confidence": "official",
+    "aliases": [
+      "Gowardhan Ghat Bridge",
+      "Gowerdhan Ghat Road Bridge",
+      "गोवर्धन घाट पूल"
+    ]
+  },
+  {
+    "id": "navghat-bridge",
+    "name": "Navghat Road Bridge",
+    "shortName": "Navghat Bridge",
+    "category": "transport",
+    "area": "Godavari riverfront",
+    "address": "Godavari River, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://iwai.nic.in/sites/default/files/7825944126NW-04%20Extn%20Godavari%20River%20Final%20FSR_0.pdf",
+    "sourceTitle": "Inland Waterways Authority of India — Godavari feasibility report",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The river survey names the Navghat Road Bridge across the Godavari at river chainage 613.493 km.",
+    "confidence": "official",
+    "aliases": [
+      "नवघाट पूल"
+    ]
+  },
+  {
+    "id": "hingoli-gate",
+    "name": "Hingoli Gate Overbridge",
+    "shortName": "Hingoli Gate",
+    "category": "transport",
+    "area": "Hingoli Gate",
+    "address": "Hingoli Gate, Nanded 431601",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.royalbusonline.com/contact_us",
+    "sourceTitle": "Royal Travels — branch offices",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The travel operator identifies its Nanded branch near the Hingoli Gate overbridge.",
+    "confidence": "official",
+    "aliases": [
+      "Hingoli Gate Flyover",
+      "हिंगोली गेट"
+    ]
+  },
+  {
+    "id": "government-medical-hospital",
+    "name": "Dr. Shankarrao Chavan Government Medical College and Hospital",
+    "shortName": "Government Hospital",
+    "category": "hospital",
+    "area": "Vishnupuri",
+    "address": "Vishnupuri, Nanded 431606",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.drscgmcnanded.in/overview.php",
+    "sourceTitle": "Government Medical College Nanded — overview",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The medical college and teaching hospital occupy the Vishnupuri campus on the Nanded–Latur highway.",
+    "confidence": "official",
+    "aliases": [
+      "GMC Nanded",
+      "SCGMC",
+      "शासकीय रुग्णालय विष्णुपुरी"
+    ]
+  },
+  {
+    "id": "sggs-civil-hospital",
+    "name": "S.G.G.S. Memorial Government Hospital",
+    "shortName": "Civil Hospital",
+    "category": "hospital",
+    "area": "Vazirabad",
+    "address": "Railway Station Road, Vazirabad, Nanded 431601",
+    "lat": 19.1553972,
+    "lon": 77.3117703,
+    "sourceUrl": "https://nanded.gov.in/en/public-utility-category/hospitals/",
+    "sourceTitle": "Nanded District — hospitals",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The district directory places the civil hospital on Railway Station Road in Vazirabad.",
+    "confidence": "official",
+    "aliases": [
+      "Guru Gobind Singh Memorial Hospital",
+      "Old Civil Hospital"
+    ],
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/7634424724"
+  },
+  {
+    "id": "government-womens-hospital",
+    "name": "Government Women’s Hospital",
+    "shortName": "Women’s Hospital",
+    "category": "hospital",
+    "area": "Shyam Nagar",
+    "address": "College Road, Harsha Nagar, Shyam Nagar, Nanded 431605",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://nanded.gov.in/en/public-utility-category/hospitals/",
+    "sourceTitle": "Nanded District — hospitals",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The district directory lists the women’s hospital on College Road in Shyam Nagar.",
+    "confidence": "official"
+  },
+  {
+    "id": "municipal-veterinary-hospital",
+    "name": "NWCMC Veterinary Hospital",
+    "shortName": "Veterinary Hospital",
+    "category": "hospital",
+    "area": "Ashok Nagar",
+    "address": "Ashok Nagar, near water tank, Peer Burhan Nagar, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://nanded.gov.in/en/public-utility-category/hospitals/",
+    "sourceTitle": "Nanded District — hospitals",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The municipal veterinary hospital is listed near the Ashok Nagar water tank.",
+    "confidence": "official"
+  },
+  {
+    "id": "lavekar-hospital",
+    "name": "Lavekar Hospital",
+    "shortName": "Lavekar Hospital",
+    "category": "hospital",
+    "area": "Vazirabad",
+    "address": "Main Road, Vazirabad, behind Gandhi Putla, near Multipurpose High School, Nanded 431601",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.lavekarhospitalent.com/contact-us.html",
+    "sourceTitle": "Lavekar Hospital — contact",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The hospital’s own address identifies the Gandhi Putla and Multipurpose High School area.",
+    "confidence": "official"
+  },
+  {
+    "id": "visava-garden",
+    "name": "Mata Gujriji Visava Garden",
+    "shortName": "Visava Garden",
+    "category": "park",
+    "area": "Vishnu Nagar",
+    "address": "VIP Road, Vishnu Nagar, Nanded 431601",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://yappe.in/maharashtra/nanded/visawa-nagar-park/53332",
+    "sourceTitle": "Yappe — Visava Garden",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The park is listed on VIP Road in Vishnu Nagar.",
+    "confidence": "directory",
+    "aliases": [
+      "Visawa Garden",
+      "Mata Gujriji Visava Udyan",
+      "विसावा उद्यान"
+    ]
+  },
+  {
+    "id": "collector-office",
+    "name": "District Collector Office",
+    "shortName": "Collector Office",
+    "category": "civic",
+    "area": "Vazirabad",
+    "address": "Near BSNL office, Vajirabad, Nanded 431601",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://nanded.gov.in/en/contact-us/",
+    "sourceTitle": "Nanded District — Contact Us",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The district administration gives its postal address beside the BSNL office in Vajirabad.",
+    "confidence": "official",
+    "aliases": [
+      "जिल्हाधिकारी कार्यालय"
+    ]
+  },
+  {
+    "id": "municipal-corporation",
+    "name": "Nanded Waghala City Municipal Corporation",
+    "shortName": "NWCMC",
+    "category": "civic",
+    "area": "Vazirabad",
+    "address": "Vazirabad, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.nwcmc.gov.in/web/upload_files/tender_filesSWWS%2012373.pdf",
+    "sourceTitle": "NWCMC — tender notice",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The municipal corporation’s notice identifies its office address as Vazirabad, Nanded.",
+    "confidence": "official",
+    "aliases": [
+      "Mahanagarpalika",
+      "नांदेड वाघाळा महानगरपालिका"
+    ]
+  },
+  {
+    "id": "district-court",
+    "name": "District and Sessions Court, Nanded",
+    "shortName": "District Court",
+    "category": "civic",
+    "area": "Station Road",
+    "address": "Railway Station Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3ec0432fdab6559cdfa4f167f8c31b919/uploads/2023/11/2023112270.pdf",
+    "sourceTitle": "Bombay High Court — legal services contact directory",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The official directory places the district court premises and Vidhi Seva Sadan on Railway Station Road.",
+    "confidence": "official",
+    "aliases": [
+      "जिल्हा न्यायालय"
+    ]
+  },
+  {
+    "id": "sggs-stadium",
+    "name": "Shri Guru Govind Singh Stadium",
+    "shortName": "SGGS Stadium",
+    "category": "civic",
+    "area": "Gokul Nagar",
+    "address": "Gokul Nagar, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://sgfi.org.in/UPLOAD/501/4/NANDED/638657185562915512-BASEBALL%20U-19%20B%26G%20NANDED.PDF",
+    "sourceTitle": "School Games Federation of India — Nanded tournament invitation",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The national school-games invitation identifies the stadium and neighbouring district sports complex in Gokul Nagar.",
+    "confidence": "official",
+    "aliases": [
+      "Guru Gobind Singh Stadium",
+      "गुरु गोविंद सिंह स्टेडियम"
+    ]
+  },
+  {
+    "id": "kusum-auditorium",
+    "name": "Kusum Auditorium",
+    "shortName": "Kusum Auditorium",
+    "category": "civic",
+    "area": "Baba Nagar",
+    "address": "Yeshwant Mahavidyalaya campus, VIP Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.ymnnanded.in/AQAR/aqar_2020-21.pdf",
+    "sourceTitle": "Yeshwant Mahavidyalaya — annual quality report",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The college identifies Kusum as its auditorium, with an approximately 1,000-seat hall.",
+    "confidence": "official",
+    "aliases": [
+      "Kusum Sabhagruha",
+      "कुसुम सभागृह"
+    ]
+  },
+  {
+    "id": "shankarrao-auditorium",
+    "name": "Shri Shankarrao Chavan Auditorium",
+    "shortName": "Chavan Auditorium",
+    "category": "civic",
+    "area": "Vishnu Nagar",
+    "address": "Vishnu Nagar, Nanded 431602",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.justdial.com/Nanded/Shri-Shankarrao-Chavan-Auditorium-Vishnu-Nagar/9999P2462-2462-191121200018-X2N6_BZDET",
+    "sourceTitle": "Justdial — Shri Shankarrao Chavan Auditorium",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "A listed auditorium in the Vishnu Nagar and stadium area.",
+    "confidence": "directory",
+    "aliases": [
+      "Shankarrao Chavan Sabhagruha"
+    ]
+  },
+  {
+    "id": "iti-corner",
+    "name": "ITI Corner",
+    "shortName": "ITI Corner",
+    "category": "junction",
+    "area": "Vishnu Nagar",
+    "address": "VIP Road, Vishnu Nagar, Nanded 431602",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://sggs.ac.in/source/About-sggs/How-to-reach-nanded/Hotel-Accommodation-Details.pdf",
+    "sourceTitle": "SGGS Institute — accommodation directions",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The institute’s local directions name ITI Corner on VIP Road.",
+    "confidence": "official",
+    "aliases": [
+      "आयटीआय कॉर्नर"
+    ]
+  },
+  {
+    "id": "bhagya-nagar-kaman",
+    "name": "Bhagya Nagar Kaman",
+    "shortName": "Bhagya Nagar Kaman",
+    "category": "junction",
+    "area": "Bhagya Nagar",
+    "address": "Bhagya Nagar Road, Nanded 431602",
+    "lat": 19.17722,
+    "lon": 77.3093456,
+    "sourceUrl": "https://www.openstreetmap.org/node/7635002096",
+    "sourceTitle": "OpenStreetMap — Bhagya Nagar address evidence",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "Entrance landmark on Bhagya Nagar Road. The coordinate is corroborated by the adjacent mapped road junction.",
+    "confidence": "mapped",
+    "aliases": [
+      "Bhagyanagar Kaman",
+      "भाग्यनगर कमान"
+    ]
+  },
+  {
+    "id": "shivaji-putla",
+    "name": "Chhatrapati Shivaji Maharaj Putla",
+    "shortName": "Shivaji Putla",
+    "category": "junction",
+    "area": "Vazirabad",
+    "address": "Shivaji Putla Road, Vazirabad, Nanded 431601",
+    "lat": 19.1560604,
+    "lon": 77.3105887,
+    "sourceUrl": "https://www.justdial.com/Nanded/Soham-Gurukul-Behind-Uday-Xerox-Near-Shivaji-Putla-Shivaji-Putala/9999P2462-2462-240113200253-S1I7_BZDET",
+    "sourceTitle": "Justdial — Soham Gurukul location",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The local business address identifies Shivaji Putla in Vazirabad near Uday Xerox.",
+    "confidence": "directory",
+    "aliases": [
+      "Shivaji Putala",
+      "शिवाजी पुतळा"
+    ],
+    "coordinateSourceUrl": "https://www.openstreetmap.org/node/13710087819"
+  },
+  {
+    "id": "annabhau-sathe-chowk",
+    "name": "Annabhau Sathe Chowk",
+    "shortName": "Sathe Chowk",
+    "category": "junction",
+    "area": "Datta Nagar",
+    "address": "Annabhau Sathe Chowk, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.saketinfra.com/ongoing-projects.php",
+    "sourceTitle": "Saket Infra — PWD Nanded road project",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The contractor names the Workshop Corner–Mahatma Phule Chowk–Annabhau Sathe Chowk road project.",
+    "confidence": "official",
+    "aliases": [
+      "Anna Bhau Sathe Chowk",
+      "अण्णाभाऊ साठे चौक"
+    ]
+  },
+  {
+    "id": "mahatma-phule-chowk",
+    "name": "Mahatma Phule Chowk",
+    "shortName": "Phule Chowk",
+    "category": "junction",
+    "area": "ITI / Phule Market",
+    "address": "Mahatma Phule Chowk, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.saketinfra.com/ongoing-projects.php",
+    "sourceTitle": "Saket Infra — PWD Nanded road project",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The contractor lists this junction on the link from Workshop Corner to Annabhau Sathe Chowk.",
+    "confidence": "official",
+    "aliases": [
+      "Phule Market",
+      "महात्मा फुले चौक"
+    ]
+  },
+  {
+    "id": "workshop-corner",
+    "name": "Workshop Corner",
+    "shortName": "Workshop Corner",
+    "category": "junction",
+    "area": "Workshop Corner",
+    "address": "Vazirabad Road / Workshop Road, Nanded",
+    "lat": 19.1800057,
+    "lon": 77.3041901,
+    "sourceUrl": "https://www.openstreetmap.org/node/7635002071",
+    "sourceTitle": "OpenStreetMap — Workshop Corner address evidence",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "Road-junction coordinate cross-checked against mapped Workshop Corner addresses.",
+    "confidence": "mapped",
+    "aliases": [
+      "वर्कशॉप कॉर्नर"
+    ]
+  },
+  {
+    "id": "raj-corner",
+    "name": "Raj Corner",
+    "shortName": "Raj Corner",
+    "category": "junction",
+    "area": "Taroda",
+    "address": "Raj Corner, Taroda, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://tickets.paytm.com/bus/sharma-travels-ned/nanded-pune",
+    "sourceTitle": "Paytm Travel — Sharma Travels boarding points",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The operator listing identifies Raj Corner near Bhagya Nagar police station.",
+    "confidence": "directory",
+    "aliases": [
+      "राज कॉर्नर"
+    ]
+  },
+  {
+    "id": "namaskar-chowk",
+    "name": "Namaskar Chowk",
+    "shortName": "Namaskar Chowk",
+    "category": "junction",
+    "area": "Airport bypass",
+    "address": "Namaskar Chowk, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://petrolpump.hpretail.in/hindustan-petroleum-corporation-limited-nanded-police-petrol-pump-petrol-pump-sneh-nagar-nanded-388340/Home",
+    "sourceTitle": "Hindustan Petroleum — nearby Nanded outlets",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "HP’s outlet listing associates Namaskar Chowk with New Airport Bypass Road.",
+    "confidence": "official",
+    "aliases": [
+      "Namaskar Chouk",
+      "नमस्कार चौक"
+    ]
+  },
+  {
+    "id": "taroda-naka",
+    "name": "Taroda Naka",
+    "shortName": "Taroda Naka",
+    "category": "junction",
+    "area": "Taroda",
+    "address": "Taroda Naka, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.jetir.org/papers/JETIR2304408.pdf",
+    "sourceTitle": "JETIR — transport and communication of Nanded Waghala city",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The transport study identifies the sequence Taroda Naka, Raj Corner, Workshop Corner and Shri Nagar.",
+    "confidence": "directory",
+    "aliases": [
+      "Taroda Chowk",
+      "तरोडा नाका"
+    ]
+  },
+  {
+    "id": "degloor-naka",
+    "name": "Degloor Naka",
+    "shortName": "Degloor Naka",
+    "category": "junction",
+    "area": "Degloor Naka",
+    "address": "Degloor Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.mahaepos.gov.in/SB/Eatery_plate_limit_abstarct.jsp",
+    "sourceTitle": "Maharashtra food department — Shivbhojan locations",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The government food-centre list identifies Degloor Naka as a Nanded locality.",
+    "confidence": "official",
+    "aliases": [
+      "Deglour Naka",
+      "Deglur Naka",
+      "देगलूर नाका"
+    ]
+  },
+  {
+    "id": "mahavir-chowk",
+    "name": "Mahavir Chowk",
+    "shortName": "Mahavir Chowk",
+    "category": "junction",
+    "area": "Vazirabad",
+    "address": "Mahavir Chowk, Vazirabad, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://beta.mehtapublishinghouse.com/distributors.aspx",
+    "sourceTitle": "Mehta Publishing House — distributors",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The publisher lists bookshops at Mahavir Chowk and on nearby Chikhalwadi Road.",
+    "confidence": "official",
+    "aliases": [
+      "Mahaveer Chowk",
+      "महावीर चौक"
+    ]
+  },
+  {
+    "id": "gandhi-putla",
+    "name": "Mahatma Gandhi Putla",
+    "shortName": "Gandhi Putla",
+    "category": "junction",
+    "area": "Vazirabad",
+    "address": "Vazirabad Main Road, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.lavekarhospitalent.com/contact-us.html",
+    "sourceTitle": "Lavekar Hospital — contact directions",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The hospital’s directions identify Gandhi Putla on the Vazirabad main-road approach.",
+    "confidence": "official",
+    "aliases": [
+      "Gandhi Putala",
+      "गांधी पुतळा"
+    ]
+  },
+  {
+    "id": "ambedkar-chowk-latur-phata",
+    "name": "Dr. Ambedkar Chowk, Latur Phata",
+    "shortName": "Latur Phata",
+    "category": "junction",
+    "area": "Latur Phata",
+    "address": "Latur Phata, Nanded",
+    "lat": null,
+    "lon": null,
+    "sourceUrl": "https://www.saketinfra.com/ongoing-projects.php",
+    "sourceTitle": "Saket Infra — PWD Nanded road project",
+    "verifiedAt": "2026-10-16",
+    "localDetail": "The contractor explicitly identifies Latur Phata as Ambedkar Chowk, linked to Dhavale Corner.",
+    "confidence": "official",
+    "aliases": [
+      "Ambedkar Chowk",
+      "लातूर फाटा",
+      "आंबेडकर चौक"
+    ]
+  }
+]

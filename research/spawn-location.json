@@ -1,0 +1,22 @@
+{
+  "id": "zenda-chowk",
+  "name": "Zenda Chowk",
+  "shortName": "Zenda Chowk",
+  "category": "junction",
+  "area": "Taroda Khurd",
+  "address": "Chhatrapati Chowk to Kabra Nagar Road, Ashtvinayak Nagar, Taroda Khurd, Nanded, Maharashtra 431605",
+  "lat": 19.1930005,
+  "lon": 77.291982,
+  "locationPrecision": "mapped",
+  "coordinateSourceUrl": "https://www.google.com/maps/place/Zenda+Chowk/@19.1930005,77.291982,17z/data=!3m1!4b1!4m6!3m5!1s0x3bd1d77746c0453d:0x585fd8e032f20f3b!8m2!3d19.1930005!4d77.291982!16s%2Fg%2F11rn7mg38_",
+  "sourceUrl": "https://www.google.com/maps/place/Zenda+Chowk/@19.1930005,77.291982,17z/data=!3m1!4b1!4m6!3m5!1s0x3bd1d77746c0453d:0x585fd8e032f20f3b!8m2!3d19.1930005!4d77.291982!16s%2Fg%2F11rn7mg38_",
+  "sourceTitle": "Google Maps — Zenda Chowk, Taroda Khurd, Nanded",
+  "verifiedAt": "2026-10-16",
+  "localDetail": "Public junction on the Chhatrapati Chowk to Kabra Nagar road in Taroda Khurd; Podar's local school bus routes list Zhenda Chowk and the nearby Swayamwaar Mangal stop.",
+  "confidence": "mapped",
+  "aliases": [
+    "Zhenda Chowk",
+    "Jhenda Chowk",
+    "झेंडा चौक"
+  ]
+}

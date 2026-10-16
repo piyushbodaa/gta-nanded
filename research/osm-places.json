@@ -1,0 +1,5050 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-10-16T15:49:40Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 1600737860,
+  "lat": 19.1119870,
+  "lon": 77.3246047,
+  "tags": {
+    "name": "Waghala",
+    "name:mr": "वाघाळा",
+    "place": "suburb"
+  }
+},
+{
+  "type": "node",
+  "id": 6632771193,
+  "lat": 19.0891082,
+  "lon": 77.2547460,
+  "tags": {
+    "amenity": "college",
+    "name": "Matoshri College"
+  }
+},
+{
+  "type": "node",
+  "id": 6632771200,
+  "lat": 19.0773127,
+  "lon": 77.2412269,
+  "tags": {
+    "amenity": "place_of_worship",
+    "name": "Stone Gods",
+    "religion": "hindu"
+  }
+},
+{
+  "type": "node",
+  "id": 6888430063,
+  "lat": 19.1536931,
+  "lon": 77.3116916,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:full": "Parsi Anjuman Complex, Vazirabad, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "blood_bank",
+    "contact:mobile": "9850947545",
+    "contact:phone": "02462236699; 02462231012; 02462236633; 02462227335",
+    "email": "ircsnanded@gmail.com",
+    "name": "Indian Red Cross Society Blood Bank, Vazirabad",
+    "opening_hours": "24/7",
+    "operator:type": "ngo",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 6895218077,
+  "lat": 19.1583577,
+  "lon": 77.3076408,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:full": "2nd Floor, Dayma Complex, Doctor Lane, Ghamodia, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "blood_bank",
+    "contact:mobile": "9881907646",
+    "contact:phone": "02462241587; 02452239587",
+    "name": "Arpan Blood Bank, Nanded",
+    "operator:type": "ngo",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 6896420917,
+  "lat": 19.1106737,
+  "lon": 77.2908676,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:full": "Vazirabad, Nanded",
+    "addr:state": "Maharashtra",
+    "amenity": "blood_bank",
+    "contact:mobile": "09890172702; 09503007847; 09860127959",
+    "contact:phone": "02462235711; 02462235712; 02462234702",
+    "email": "gmcbbnanded@gmail.com",
+    "name": "Dr. Shankarrao Chavan Government Medical College and Guru Govindsinghji Memorial Hospital Blood Bank",
+    "opening_hours": "24/7",
+    "operator:type": "government",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 6896421225,
+  "lat": 19.1496201,
+  "lon": 77.3152341,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:full": "2nd Floor, Opposite to Bank of India, Sant Kripa Market, GG Road, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "blood_bank",
+    "contact:mobile": "09689100000; 09960596860",
+    "contact:phone": "02462248888; 02462239999",
+    "email": "shs.bloodbanknanded@gmail.com",
+    "fax": "0246 2244948",
+    "name": "Hazur Saheb Blood Bank",
+    "opening_hours": "24/7",
+    "operator:type": "ngo",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 6896421231,
+  "lat": 19.1560387,
+  "lon": 77.3090382,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:full": "Geeta Bhavan 1 & 2 Floor, House No 3-1-366, Near Government, Opposite to Ayurvedic College, Bus Stand Road, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "blood_bank",
+    "contact:mobile": "9145432520",
+    "contact:phone": "2462233332",
+    "email": "ggbloodbank@gmail.com",
+    "name": "Guru Gobindsinghji Blood Bank",
+    "opening_hours": "24/7",
+    "operator:type": "ngo",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 6896421236,
+  "lat": 19.1661219,
+  "lon": 77.3055996,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:full": "Shivaji Nagar , Opposite to Adhar Hospital, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "blood_bank",
+    "contact:mobile": "9422382810",
+    "contact:phone": "2462233810",
+    "email": "nandedbloodbank@gmail.com",
+    "name": "Nanded Blood Bank",
+    "opening_hours": "24/7",
+    "operator:type": "ngo",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 6905010061,
+  "lat": 19.1500775,
+  "lon": 77.3118733,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:full": "Plot No.2-12-407, Bandhaghat Road, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "blood_bank",
+    "contact:mobile": "9822589088",
+    "contact:phone": "2462243300",
+    "name": "Golvalkar Guruji Blood Bank",
+    "operator:type": "ngo",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7043041314,
+  "lat": 19.1685403,
+  "lon": 77.3065067,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:full": "Vip Road, Iti Corner",
+    "addr:housenumber": "5894+CH",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "addr:street": "VIP Rd",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Global Super Speciality Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7043397901,
+  "lat": 19.1618072,
+  "lon": 77.3176132,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Hingoli Gate (Under Bridge)",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Godavari Hospital ( Giccm )",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7048918872,
+  "lat": 19.1579640,
+  "lon": 77.3081519,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near : Sbi, Opp: Kala Mandir Ghamodia, Doctor's Lane",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Bokare Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7049673893,
+  "lat": 19.1589189,
+  "lon": 77.3086345,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane, Chamodiya Area,Opposite Sbi Bank,Vazirabad",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Toshniwal Chest Hospital Maternity and Nursing Home",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7050847665,
+  "lat": 19.1518923,
+  "lon": 77.3131105,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lavekar Hospital Subhash Road Vazirabad",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Lavekar Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7054148418,
+  "lat": 19.1617154,
+  "lon": 77.3045093,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivajinagar",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Radha Govind Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7054243698,
+  "lat": 19.1612093,
+  "lon": 77.3047158,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Nagar",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Ashwini Hospital and RamaKant Heart Center Pvt.Ltd.",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7054809809,
+  "lat": 19.1588093,
+  "lon": 77.3075844,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Bus Stand,Ghamodiya,Doctors Lane",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Motewar Netrlaya",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7062539957,
+  "lat": 19.1516585,
+  "lon": 77.3079519,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Borban Goverdhanghat Road, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Mahale Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7065820629,
+  "lat": 19.1561901,
+  "lon": 77.3070078,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "No. 2-9-70, Somesh Colony,Behind Kala Mandir",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Tungenwar Orthopaedic and Maternity Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7066505806,
+  "lat": 19.1561331,
+  "lon": 77.3100252,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Shivaj Putla",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Wadekar Hospital, Nanded",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7067261129,
+  "lat": 19.1528348,
+  "lon": 77.3101547,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Borban Factory Area,Govardhan Ghat Road",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Marathawada Bal Rugnalya",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7070543975,
+  "lat": 19.1589429,
+  "lon": 77.3069950,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctors Lane",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Dr Komawar Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7070704237,
+  "lat": 19.1578079,
+  "lon": 77.3089322,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "12, Doctor`S Lane , Vaziirabad",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "clinic",
+    "name": "Bidwai Nursing Home",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7073651561,
+  "lat": 19.1570554,
+  "lon": 77.3081812,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "1,2 & 3, Doctors Lane",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Kadam Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7075571871,
+  "lat": 19.1620979,
+  "lon": 77.3020490,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Peoples High School, Gokul Nagar",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Gargi Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7076379886,
+  "lat": 19.1582411,
+  "lon": 77.3089510,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor's Plaza, Doctor's Lane ,Near Bus Stand & Railway Station",
+    "addr:postcode": "431731",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Lotus Hospital and Critical Care Centre",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7076557569,
+  "lat": 19.1577014,
+  "lon": 77.3088706,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Aarif Sir's Account Classes, Dr Lane Rd Number 1, Khadakpura",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Jayashree Ent and Maternity Nursing Home",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7079411336,
+  "lat": 19.1551133,
+  "lon": 77.3066255,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Somesh Colony, Behind Kalamandir",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Vishwa Institute Urology and Kidney Centre",
+    "source": "OpenGovernmentData",
+    "website": "https://www.vishwaurology.com/"
+  }
+},
+{
+  "type": "node",
+  "id": 7080413691,
+  "lat": 19.1624666,
+  "lon": 77.3191146,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Lokmanya Mangal Karyalay,Hingoli Gate",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Samarth Orthopedic and Accident Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7081227359,
+  "lat": 19.1502029,
+  "lon": 77.3092648,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Goverdhan Ghat Road",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Kardile Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7085422891,
+  "lat": 19.1649058,
+  "lon": 77.3146601,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "V.I.P. Road, Visen Nagar",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Shri Venkatadri Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7210907282,
+  "lat": 19.1616063,
+  "lon": 77.3163430,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hingoli Gate Flyover, Samrat Nagar, Hyder Bagh,Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Max Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7210920487,
+  "lat": 19.1617475,
+  "lon": 77.3163780,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hingoli Gate Subway Road, Ashraf Nagar, Hyder Bagh, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Cure Max Multi_Speciality Hospital And Critical Care Centre",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7210920492,
+  "lat": 19.1617948,
+  "lon": 77.3170365,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hingoli Gate Flyover,nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Sharma Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7210920497,
+  "lat": 19.1617920,
+  "lon": 77.3168407,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "NearMseb Office, Hingoli Gate, Ashraf Nagar,nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Shriniwas Orthopaedic Nursing Home",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7210920502,
+  "lat": 19.1624466,
+  "lon": 77.3168754,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Opposite Mseb Office New Mondha",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Samarth Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7225067131,
+  "lat": 19.1084415,
+  "lon": 77.2879096,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:postcode": "431606",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Vishnupuri Gramin Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7225067193,
+  "lat": 19.1758270,
+  "lon": 77.3091140,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Opp. Pharmacy College, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "description": "Women Hospital",
+    "name": "Women Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7225067228,
+  "lat": 19.1801530,
+  "lon": 77.3024630,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Nanded-Malegaon Road, Near Employment Office, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "NDMC Jangamwadi Government Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7225067283,
+  "lat": 19.1434270,
+  "lon": 77.3247380,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Arab Galli Area, Darbaar Masjid Road, Near Nanded Fort, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "NDMC Arabgalli Municipal Hospital",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7225067286,
+  "lat": 19.1564820,
+  "lon": 77.3130950,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "description": "Medical Colleges Hospital",
+    "name": "Dr Shankarrao Chavan Government Medical College and Hospital, Vazirabad",
+    "source": "OpenGovernmentData"
+  }
+},
+{
+  "type": "node",
+  "id": 7605276552,
+  "lat": 19.1100465,
+  "lon": 77.3220992,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Nanded",
+    "addr:postcode": "431603",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Government Hospital, Nanded",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7607937766,
+  "lat": 19.1423055,
+  "lon": 77.3095579,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Pahar Ganj",
+    "addr:postcode": "431603",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Government Hospital, Kautha",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424672,
+  "lat": 19.1512345,
+  "lon": 77.3085905,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane Borban, Vazirabad, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Marathwada Children Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424673,
+  "lat": 19.1565720,
+  "lon": 77.3070150,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Somesh Colony, Behind Kalamandir, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Motewar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424674,
+  "lat": 19.1537600,
+  "lon": 77.3147470,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Chikhalwadi, Hyder Bagh, Dashmesh Nagar, Dulleshah Raheman Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sai Children's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424675,
+  "lat": 19.1480054,
+  "lon": 77.3152162,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ganeem Pura, Khadakpura, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Nidan Singh Memorial Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424676,
+  "lat": 19.1621540,
+  "lon": 77.3166430,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ashraf Nagar, Hingoli Gate, Opp. Samarth Hospital, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sahyadri Children's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424677,
+  "lat": 19.1516681,
+  "lon": 77.3160923,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Samrat Nagar, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Jija Mata Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424679,
+  "lat": 19.1579360,
+  "lon": 77.3064630,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Mill Gate Road, Beside Bus Stand, Kalamandir, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Patil Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424680,
+  "lat": 19.1539523,
+  "lon": 77.3083028,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Behind S. P. Office, Police Head Quaters Road, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Arham Hospital Maternity & Surgical Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424681,
+  "lat": 19.1103523,
+  "lon": 77.3236130,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "CIDCO Colony, Nanded",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. Ashok Bhise Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424682,
+  "lat": 19.1517219,
+  "lon": 77.3070070,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctors Line Road, Vinayak Nagar, Dulleshah Raheman Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Bhandari Super Speciality Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424684,
+  "lat": 19.1559250,
+  "lon": 77.3059280,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Somesh Colony, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Rayat General Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424686,
+  "lat": 19.1517920,
+  "lon": 77.3158400,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Gurudwara Road, Samrat Nagar, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. A. P. Deshmukh Kahalekar",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424687,
+  "lat": 19.1554094,
+  "lon": 77.3093364,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Opposite S.P. Office, Shivaji Putala, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Shreenivas Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424688,
+  "lat": 19.1526995,
+  "lon": 77.3097008,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. M.A.Gaffar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424689,
+  "lat": 19.1514060,
+  "lon": 77.3151390,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Chikhalwadi to Gurudwara Road, Samrat Nagar, Hyder Bagh, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Ardhapurkar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424690,
+  "lat": 19.1580579,
+  "lon": 77.3091841,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Infront Of Lotus Hospital, Doctor Lane, Ghamodia, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Mapare Dental Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424691,
+  "lat": 19.1514740,
+  "lon": 77.3327858,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Opp. Madina Medical, Hyderabad Road, Deglour Naka, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Raheman Clinic & Nursing Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424693,
+  "lat": 19.1622598,
+  "lon": 77.3295291,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hyder Bagh, Dashmesh Nagar, Deglour Naka, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Shafaque Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424694,
+  "lat": 19.1433330,
+  "lon": 77.3289090,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Liberty Function Hall, Hatai, Ganipura, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Tawakkal Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424695,
+  "lat": 19.1526957,
+  "lon": 77.3383123,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Beside New Hindustan Medical Qudwai Nagar Chowk, Eidgah Road, Deglour Naka, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Shifa Family Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424696,
+  "lat": 19.1528109,
+  "lon": 77.3295970,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Beside Iqra School, Degloor Naka Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Raziya Memorial Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424697,
+  "lat": 19.1575492,
+  "lon": 77.3049299,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "NTC Mill Road, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Mathurai Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424698,
+  "lat": 19.1494332,
+  "lon": 77.3236343,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Mohammed Ali Road, Hyder Bagh, Dashmesh Nagar, Saibaba Chowk, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Goda Nursing Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424699,
+  "lat": 19.1320644,
+  "lon": 77.3204612,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Besides Hanuman Mandir, Opp Water Tank, Wasarni, Kautha, Nanded",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Krushnai Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424700,
+  "lat": 19.1622231,
+  "lon": 77.3198726,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Aanabhau, Sathi Chowk, Samrat Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Ankur Super-Speciality Women Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424701,
+  "lat": 19.1549750,
+  "lon": 77.3065080,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Behind Kala Mandir, Near Nehru English School, Somesh colony, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sai Netralaya Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424702,
+  "lat": 19.1444092,
+  "lon": 77.3251840,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Arab Galli Area, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Ansari Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424703,
+  "lat": 19.1519870,
+  "lon": 77.3167770,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Gurudwara Gate No 2, Beside SBH Bank",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Guru Dashmesh Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424704,
+  "lat": 19.1488467,
+  "lon": 77.3242074,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Itwara Road, Near kela Market, Near Solanki Brothers, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Deshmukh Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424707,
+  "lat": 19.1591059,
+  "lon": 77.3088177,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane Road, Number 2, Railway Station Road, Opposite SBI ATM, Khadakpura, Nanded-Waghala,",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Rehman Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424708,
+  "lat": 19.1528035,
+  "lon": 77.3147142,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Chikhalwadi Corner, Samrat Nagar, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Shusurusha Hospital ICSI & Test Tube Centre",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424709,
+  "lat": 19.1526299,
+  "lon": 77.3104517,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vazirabad, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Bajaj Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424710,
+  "lat": 19.1577430,
+  "lon": 77.3083880,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Patil Eye Hospital and Maternity Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424712,
+  "lat": 19.1584868,
+  "lon": 77.3086669,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ghamodiya, Doctor Lane, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Ashtvinayak Hospital and ICU",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424713,
+  "lat": 19.1578167,
+  "lon": 77.3107968,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Gavalipura, Railway Station Road, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Deglurkar Hospital & Suyog Maternity Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424714,
+  "lat": 19.1348301,
+  "lon": 77.3052956,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Gowardhan Ghat Bridge Road, MHADA Colony, Navakotha, Nanded",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "YashoSai Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424715,
+  "lat": 19.1552110,
+  "lon": 77.3098051,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Railway Station Road, Shivaji Putala, Vazirabad, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Gilda's Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424716,
+  "lat": 19.1636880,
+  "lon": 77.3174550,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hingoli Gate, Opp. M.S.E.B Office, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Mala Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424717,
+  "lat": 19.1580470,
+  "lon": 77.3077990,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ghamodia Compound, Doctor Line Road, Opp. Kalamandir, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Umrekar Multispeciality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424718,
+  "lat": 19.1647284,
+  "lon": 77.3180888,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Samrat Nagar, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Swami Vivekanand Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424721,
+  "lat": 19.1124727,
+  "lon": 77.3247623,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "CIDCO Colony, Nanded",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Nirmal Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424722,
+  "lat": 19.1523350,
+  "lon": 77.3079834,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane Borban, Vazirabad, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Galaxy Hospital - Centre for GI & liver diseases",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424723,
+  "lat": 19.1568706,
+  "lon": 77.3059721,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Behind Kalamandir, Somesh colony, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. Santosh Malpani Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424724,
+  "lat": 19.1553972,
+  "lon": 77.3117703,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Railway Station Road, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "S.G.G.S Memorial Government Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424725,
+  "lat": 19.1555690,
+  "lon": 77.3170180,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Harsh Nagar, Hyder Bagh, Dashmesh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dashmesh Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424726,
+  "lat": 19.1509416,
+  "lon": 77.3083445,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane Borban, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Gayakwad Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424727,
+  "lat": 19.1524681,
+  "lon": 77.3099237,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Gowardhan Ghat, Bridge Road, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Bhaskar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424729,
+  "lat": 19.1522230,
+  "lon": 77.3087808,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane Borban, Vazirabad, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Shree Yogeshwari Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424730,
+  "lat": 19.1504038,
+  "lon": 77.3087515,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Borban Factory Area, Vazirabad, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Omsai Surgical and Leproscopy Centre",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424732,
+  "lat": 19.1581790,
+  "lon": 77.3105050,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Opp Zilla Parishad, Old Chunhi Naka, Infront of Station, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Apeksha Dental Hospital and Superspeciality Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424733,
+  "lat": 19.1520827,
+  "lon": 77.3109069,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Renuka Eye Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424734,
+  "lat": 19.1574129,
+  "lon": 77.3281975,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Tipu Sultan Road, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. Saqueb Seva Children's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424735,
+  "lat": 19.1257809,
+  "lon": 77.3268645,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "MHADA Colony, Mujampeth",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "New Sanjeevani Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424737,
+  "lat": 19.1320308,
+  "lon": 77.3204558,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Itwara Chowk Bazar, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Fatima Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424738,
+  "lat": 19.1590750,
+  "lon": 77.3093350,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Line Road, No.1, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. Narlawar Vishal Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424739,
+  "lat": 19.1586270,
+  "lon": 77.3078060,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Anham Somesh Colony, Kalamandir, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Mangalmurti Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424741,
+  "lat": 19.1579100,
+  "lon": 77.3085930,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane Road, Number 1, Doctor Lane, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Shri Chidrawar Super Specality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424742,
+  "lat": 19.1125398,
+  "lon": 77.3245471,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ramnagar New, Cidco, Nanded",
+    "addr:postcode": "431003",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Vakratund Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424743,
+  "lat": 19.1551360,
+  "lon": 77.3079190,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Hotel Gokul, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Rayet Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424744,
+  "lat": 19.1512793,
+  "lon": 77.3089281,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Line Borban, Vazirabad, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Vighnharta Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424747,
+  "lat": 19.1517437,
+  "lon": 77.3313175,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Baba Seth Complex, Opp Police Chowki, Madina Chowk, Degloor Road, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Shams Hospital and Maternity Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424748,
+  "lat": 19.1575680,
+  "lon": 77.3120000,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Behind District Court, Near Andhra Samiti School, Gawalipura, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Monark Cancer Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424749,
+  "lat": 19.1510900,
+  "lon": 77.3085592,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Besides Marathwada Bai Rugnalaya Borban Area, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Katte Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424750,
+  "lat": 19.1515622,
+  "lon": 77.3153292,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Chikhalwadi, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Perke Hospital and Maternity Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424751,
+  "lat": 19.1021340,
+  "lon": 77.3583520,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Tuppa Wadgaon, Tuppa",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Jaundice Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424753,
+  "lat": 19.1601530,
+  "lon": 77.3151510,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Railway Station - Bafna Road, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Railway Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424754,
+  "lat": 19.1505122,
+  "lon": 77.3087722,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Borban Factory Area, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Sparsh Skin, Dental, Hair, Cosmetology and Laser Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424755,
+  "lat": 19.1401290,
+  "lon": 77.3136720,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Laxmi Narayan Niwas, Beside Akshay All In One Shopping Center, Juna Kautha Road, Nanded",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Dr. Sharma's Ayush Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424757,
+  "lat": 19.1517755,
+  "lon": 77.3096360,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Dilipsingh Colony, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sajne Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424758,
+  "lat": 19.1622615,
+  "lon": 77.3190715,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Samratnagar/ Duttanagar, Near Anna Bhau Sathe Chowk, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Abhyuday's Lifecare Superspeciality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424759,
+  "lat": 19.1584257,
+  "lon": 77.3072857,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor's Lane, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Bannalikar Children's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424760,
+  "lat": 19.1540321,
+  "lon": 77.3091705,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vazirabad Square, Behind SP Office, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Jeevan Jyoti Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424761,
+  "lat": 19.1585530,
+  "lon": 77.3088120,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Maharaja Complex, Near S.B.I Bank, Doctor Lane, Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Shri Parth Netralaya Eye Care Centre",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424763,
+  "lat": 19.1589457,
+  "lon": 77.3074618,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Doctor Lane, Khadakpura, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sanvedana Skin Care Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424764,
+  "lat": 19.1570521,
+  "lon": 77.3057897,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Behind Kalamandir, Somesh colony, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Prathamesh Eye Care Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424765,
+  "lat": 19.1557496,
+  "lon": 77.2972971,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Waghi - Sameera Bagh Road, Junction, Dulleshah Raheman Nagar, Nanded-Waghala",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Dr. Tayyab Taher Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424767,
+  "lat": 19.1621177,
+  "lon": 77.3166507,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hingoli Gate, Ashraf Nagar, Opp. Samarth Hospital, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Saisiddhi Multispeciality Dental Clinic & Implant Centre",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424768,
+  "lat": 19.1324950,
+  "lon": 77.3225890,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Kautha, Vasarani",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Dr. Samuel Hahnemann Homoeopathic Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424769,
+  "lat": 19.1520955,
+  "lon": 77.3111285,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Road, Dilipsingh Colony, Vazirabad, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Mamidwar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7634424770,
+  "lat": 19.1474920,
+  "lon": 77.3252040,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Itwara Bazar Road, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Quadri Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002009,
+  "lat": 19.1797115,
+  "lon": 77.2888739,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Omkar Apartment, Pawadewadi Road, Farande Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Atharva Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002010,
+  "lat": 19.1758422,
+  "lon": 77.3041161,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vivek Nagar Corner, Shivaji Nagar Nanded, Near Shri Nagar",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sharada Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002011,
+  "lat": 19.1720694,
+  "lon": 77.2967590,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Yeshwant Nagar, Ganesh Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Kesarle Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002012,
+  "lat": 19.1618490,
+  "lon": 77.3061023,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Alibhai Tower, 1st Floor Main Road, Shivaji Nagar, Opp. Center Point, Nanded",
+    "addr:postcode": "413602",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Ganga Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002013,
+  "lat": 19.1613548,
+  "lon": 77.3023891,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lalbadi, Shrawasti Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. Kalambkar's Sushroot Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002014,
+  "lat": 19.1621770,
+  "lon": 77.3043190,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Nagar, Near Hanuman Mandir, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dhondge Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002017,
+  "lat": 19.1876987,
+  "lon": 77.2998971,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Infront of SBI, Nanded Malegaon Road, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Swastik Skin Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002018,
+  "lat": 19.1765530,
+  "lon": 77.3099130,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Opp Bhagya Nagar, Near Home Guard Office, Bhagya Nagar, Nanded",
+    "addr:postcode": "431000",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Kadam Hospital and Nursing Home",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002021,
+  "lat": 19.1610739,
+  "lon": 77.3044972,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lalbadi, Shrawasti Nagar, Nanded-Waghala",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Chounde Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002022,
+  "lat": 19.1840137,
+  "lon": 77.3011968,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Nanded Malegaon Road, Kohinor City, Shri Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Prabhu Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002023,
+  "lat": 19.1812310,
+  "lon": 77.3028010,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Taroda Nakka Road, Ashok Nagar Road, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Srinath Prasutigruh Children's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002024,
+  "lat": 19.1615800,
+  "lon": 77.3056550,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Road, Shivaji Nagar Nai Abaadi, Vishnu Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dagadiya Dental Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002026,
+  "lat": 19.1723330,
+  "lon": 77.3168390,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Pranav Plaza, Anand Nagar, Near Dena Bank, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Dhanashree Dental Clinic & Implant Centre",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002028,
+  "lat": 19.1725685,
+  "lon": 77.3228906,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hingoli Naka, Gandhi Nagar, Opp. Bus Stop, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Gayatri Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002029,
+  "lat": 19.1843550,
+  "lon": 77.3073560,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Yash Park, Near Tarodekar Chambers, Chaitanya Nagar, Manik Nagar, Nanded",
+    "addr:postcode": "431604",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Kamal Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002030,
+  "lat": 19.1848524,
+  "lon": 77.3051790,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Maharashtra Gramin Bank, Near Manik Nagar, Chaitanya Nagar, Taroda Bk",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Gajanan Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002031,
+  "lat": 19.1609476,
+  "lon": 77.3051610,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Wadiya, Shivaji Putala, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Bhagwati Multispeciality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002032,
+  "lat": 19.1715844,
+  "lon": 77.3217655,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Maharana Pratap Chowk, Hingoli Naka, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Nirgude PolyClinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002034,
+  "lat": 19.1707410,
+  "lon": 77.3157702,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Sadbavana Marga, Vasnat Nagar, Nanded",
+    "addr:postcode": "431603",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Shree Durga Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002036,
+  "lat": 19.1640257,
+  "lon": 77.3010512,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Nagar Lalbadi, Mahavir Society, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Radhika Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002037,
+  "lat": 19.1812100,
+  "lon": 77.3031910,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Sanmitra Colony, Opp. Sinchan Bhawan Gate No. 2, Regional Workshop, Jangamwadi Road, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Maher Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002039,
+  "lat": 19.1622400,
+  "lon": 77.3018575,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Mahavir Society Road, Shivaji Road, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "City Hospital Super Speciality Centre",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002040,
+  "lat": 19.1644540,
+  "lon": 77.3004910,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "R.K.M, Kabde Hospital, Mahaveer Society, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Aditi Endocrine Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002041,
+  "lat": 19.1829459,
+  "lon": 77.3047435,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Fasal Nagar, Irrigation Colony, Peer Burhan Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Pulse Multispeciality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002042,
+  "lat": 19.1837911,
+  "lon": 77.3054268,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Raj Corner, Shivaji High School, Opposite Chaitanya Nagar Road, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Pearl Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002043,
+  "lat": 19.1843049,
+  "lon": 77.3070119,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Airport Road, Manik Nagar, Balaji Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "City Care Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002045,
+  "lat": 19.1900550,
+  "lon": 77.2880560,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lokmitra Nagar, Tirumala Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "More Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002047,
+  "lat": 19.1690360,
+  "lon": 77.3050950,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Visavanagar Colony, Vishnu Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Indira Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002048,
+  "lat": 19.1851303,
+  "lon": 77.3039237,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "kalyan Nagar, Canal Road, Ashtvinayak Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Utkarsh Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002049,
+  "lat": 19.1920525,
+  "lon": 77.2977600,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Tathagat Nagar, Ashtvinayak Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Bhanushri Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002051,
+  "lat": 19.1850325,
+  "lon": 77.3041658,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ashtvinayak Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Surya Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002052,
+  "lat": 19.1615303,
+  "lon": 77.3053063,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Wadiya Factory Area, Shivaji Nagar, Behind Hanuman Mandir, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. Kotalwar ENT Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002053,
+  "lat": 19.1792777,
+  "lon": 77.2889103,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Pawadewadi Road, Farande Nagar Wadi Bk, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Arogya Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002054,
+  "lat": 19.1854024,
+  "lon": 77.3007593,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ashtvinayak Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Jivala Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002056,
+  "lat": 19.1721654,
+  "lon": 77.3152500,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Bhagya Nagar Road, Hyder Bagh, Dashmesh Nagar, Anand Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Swami Vivekanand Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002058,
+  "lat": 19.1642427,
+  "lon": 77.3000506,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lalbadi, Mahavir Society, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Shree Naarayana Super Speciality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002060,
+  "lat": 19.1612880,
+  "lon": 77.3035110,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lalbadi, Shrawasti Nagar, Nanded-Waghala",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sanjeevani Critical Care & Trauma Care centre",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002062,
+  "lat": 19.1868594,
+  "lon": 77.3008010,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ulhas Nagar, Malegaon Road, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Shri Siddhivinayak Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002063,
+  "lat": 19.1842275,
+  "lon": 77.3060503,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Manik Nagar, Balaji Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Shri Rishikesh Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002064,
+  "lat": 19.1618391,
+  "lon": 77.3023378,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lalbadi, Shrawasti Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dhonde Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002065,
+  "lat": 19.1768235,
+  "lon": 77.3089499,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Plot No 59, Ravichandra Bunglow, Opp Chowgule Classes, Bhagyanagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Madhavbaug Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002066,
+  "lat": 19.1632610,
+  "lon": 77.3086550,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vishnu Nagar, Nanded-Waghala",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sadbhavana Netralaya Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002067,
+  "lat": 19.1797410,
+  "lon": 77.3025717,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shrinagar Taroda Naka Road, Prabhat Nagar, Shri Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Lions Eye Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002068,
+  "lat": 19.1906613,
+  "lon": 77.3085817,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vishwadeep Nagar, Balaji Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Mansi Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002069,
+  "lat": 19.1843789,
+  "lon": 77.2918724,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Waman Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Tirumala Multispeciality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002071,
+  "lat": 19.1791010,
+  "lon": 77.3058640,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Infront Of SBH Workshop Corner, Bhagya Nagar Road, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Gitai Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002074,
+  "lat": 19.1721844,
+  "lon": 77.2963423,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Yeshwant Nagar, Nagsen Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Aai Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002076,
+  "lat": 19.1864235,
+  "lon": 77.3005504,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Zilla Parishad Coloney, Opp Mahalaxmi Oil Shop, Malegaon Road, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sai Matruseva Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002077,
+  "lat": 19.1907700,
+  "lon": 77.2986520,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Nanded Malegaon Road, Sarpanch Nagar, Patijawal Malegaon Road, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Barade Children's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002078,
+  "lat": 19.1765700,
+  "lon": 77.3041998,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Road, Vivek Nagar, Kailash Nagar, Nanded-Waghala",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Mandakhalikar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002079,
+  "lat": 19.1651439,
+  "lon": 77.3000946,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ganesh Nagar Road, Mugdum Nagar, Opp. Remand Home, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Sana Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002080,
+  "lat": 19.1868681,
+  "lon": 77.3054461,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Canal Road, Pundhage Complex, Jyotiba Nagar,Taroda, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Shri Swami Samarth Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002082,
+  "lat": 19.1832910,
+  "lon": 77.3011440,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Kohinor City, Shri Nagar, Taroda",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Aahilya Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002083,
+  "lat": 19.1858021,
+  "lon": 77.2918070,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Chatrapati Chowk, Purna Road, Chatrapati Nagar, Wadi, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Janani Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002085,
+  "lat": 19.1606700,
+  "lon": 77.3046830,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Nagar, Wadia Factory Compound, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Joshi Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002086,
+  "lat": 19.1779795,
+  "lon": 77.3077815,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Studio Dental, Near Muscle Factory Gym, Bhagyanagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Shri Varad Studio Dental Implant Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002087,
+  "lat": 19.1921768,
+  "lon": 77.3088739,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Taroda Back Road, Balaji Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "N M C Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002088,
+  "lat": 19.1849620,
+  "lon": 77.2993240,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Purna Road, Taroda Naka, Opp. BSNL Office, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Dr. Kejkar's Siddhi Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002089,
+  "lat": 19.1622017,
+  "lon": 77.3068192,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Shivaji Nagar Nai Abaadi, Gokul Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Rachewad Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002090,
+  "lat": 19.1613040,
+  "lon": 77.3045240,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Wadiya Compound, Shivaji Nagar, Near Ashwini Hospital, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Aadhar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002093,
+  "lat": 19.1718775,
+  "lon": 77.3158994,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vasant Nagar, Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sangmeshwar Niwas, Sai seva Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002094,
+  "lat": 19.1609243,
+  "lon": 77.3047720,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lalbadi, Shrawasti Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Sahyadri Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002095,
+  "lat": 19.1764667,
+  "lon": 77.3069032,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vivek Nagar, Vishnu Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Jadhav Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002096,
+  "lat": 19.1770104,
+  "lon": 77.3092864,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Opp. Bhagya Nagar Kaman, Above AXIS Bank ATM, Nanded",
+    "addr:postcode": "413602",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Dande's Om Sai Multispeciality & Paediatric Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002098,
+  "lat": 19.1690036,
+  "lon": 77.2980991,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Ganesh Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Shree Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002099,
+  "lat": 19.1674150,
+  "lon": 77.2997030,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Nagsen Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Videkar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002100,
+  "lat": 19.1607557,
+  "lon": 77.3052491,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Wadia factory, Shivaji Road, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Dr. More Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002101,
+  "lat": 19.1723973,
+  "lon": 77.3153864,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Anand Nagar, Nanded",
+    "addr:postcode": "413602",
+    "addr:state": "Maharastra",
+    "amenity": "dentist",
+    "name": "Aayush Dental Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002103,
+  "lat": 19.1783035,
+  "lon": 77.3050528,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Beside Bojalwar Hospital, Kailash Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Ishwar Multispeciality Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002106,
+  "lat": 19.1759220,
+  "lon": 77.3049370,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Vivek Nagar, Vishnu Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Triveni Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002107,
+  "lat": 19.1619623,
+  "lon": 77.3035026,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Near Mahaveer Society, Lalbadi, Vishnu Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Kalpataru Children's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002108,
+  "lat": 19.1845727,
+  "lon": 77.3094347,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Chaitanya Nagar, Near Soubhadra Mangal Karyalaya, Balaji Nagar, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Pooja Women's Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002109,
+  "lat": 19.1610230,
+  "lon": 77.3045980,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Lalbadi, Shrawasti Nagar, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Vinayak Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002110,
+  "lat": 19.1609320,
+  "lon": 77.3028430,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Wadiya Factory Area, Shivaji Putala, Nanded",
+    "addr:postcode": "431602",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Vision Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002111,
+  "lat": 19.1734360,
+  "lon": 77.3152260,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Bhagya Nagar Road, Anand Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharastra",
+    "amenity": "hospital",
+    "name": "Allampallewar Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 7635002113,
+  "lat": 19.1704200,
+  "lon": 77.3254910,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Farooq Nagar, Hingoli Naka, Nanded",
+    "addr:postcode": "431605",
+    "addr:state": "Maharastra",
+    "amenity": "clinic",
+    "name": "Saleema Clinic",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 8806142669,
+  "lat": 19.1587555,
+  "lon": 77.3075630,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Khadakpura, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Adhav Hospitals Nirmal Neurocare And Superspeciality Center",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 8806171597,
+  "lat": 19.1695573,
+  "lon": 77.3220308,
+  "tags": {
+    "addr:district": "Nanded",
+    "addr:full": "Hyder Bagh, Dashmesh Nagar, Harsh Nagar, Nanded",
+    "addr:postcode": "431601",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "name": "Renukai Hospital",
+    "source": "Local Knowledge"
+  }
+},
+{
+  "type": "node",
+  "id": 9585141273,
+  "lat": 19.1574262,
+  "lon": 77.3171011,
+  "tags": {
+    "addr:street": "yatri niwas road",
+    "name": "Sri guru granth sahib ji bhavan",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 10170604017,
+  "lat": 19.1844594,
+  "lon": 77.3082362,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:postcode": "431605",
+    "addr:street": "Vitthal Nagar",
+    "amenity": "fuel",
+    "brand": "Hindustan Petroleum",
+    "brand:wikidata": "Q1619375",
+    "fuel:diesel": "yes",
+    "fuel:petrol": "yes",
+    "name": "HP Petrol Pump",
+    "official_name": "Hindustan Petroleum",
+    "self_service": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 10554171923,
+  "lat": 19.1704187,
+  "lon": 77.2989933,
+  "tags": {
+    "amenity": "place_of_worship",
+    "name": "Panchamukhi Hanuman Mandir",
+    "religion": "hindu"
+  }
+},
+{
+  "type": "node",
+  "id": 10806925440,
+  "lat": 19.1762560,
+  "lon": 77.3097257,
+  "tags": {
+    "amenity": "prep_school",
+    "name": "IIB"
+  }
+},
+{
+  "type": "node",
+  "id": 10806949114,
+  "lat": 19.1788863,
+  "lon": 77.3094905,
+  "tags": {
+    "amenity": "place_of_worship",
+    "name": "Ganpati mandir",
+    "religion": "hindu"
+  }
+},
+{
+  "type": "node",
+  "id": 10806973365,
+  "lat": 19.1773663,
+  "lon": 77.3084399,
+  "tags": {
+    "name": "Venkatesh book store",
+    "shop": "books"
+  }
+},
+{
+  "type": "node",
+  "id": 10807019676,
+  "lat": 19.1837680,
+  "lon": 77.3046290,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:postcode": "431605",
+    "addr:street": "Raj Corner",
+    "amenity": "bar",
+    "min_age": "18",
+    "name": "Raj Bar"
+  }
+},
+{
+  "type": "node",
+  "id": 11145745939,
+  "lat": 19.1741962,
+  "lon": 77.3137530,
+  "tags": {
+    "name": "Vidyut Nagar",
+    "place": "neighbourhood",
+    "postal_code": "430605"
+  }
+},
+{
+  "type": "node",
+  "id": 11145748285,
+  "lat": 19.1706326,
+  "lon": 77.3211719,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "name": "Hotel Amrit Residency",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 11145750747,
+  "lat": 19.1695906,
+  "lon": 77.3211098,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "name": "Hotel Nagarjuna",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 11145752100,
+  "lat": 19.1695482,
+  "lon": 77.3202975,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "amenity": "fuel",
+    "brand": "Indian Oil",
+    "brand:wikidata": "Q1289348",
+    "name": "Indian Oil"
+  }
+},
+{
+  "type": "node",
+  "id": 11145755039,
+  "lat": 19.1748983,
+  "lon": 77.3130195,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Maharashtra",
+    "addr:postcode": "431605",
+    "addr:street": "Near Vidyut Nagar",
+    "amenity": "restaurant",
+    "name": "Hotel Grand Tulsi"
+  }
+},
+{
+  "type": "node",
+  "id": 11145765067,
+  "lat": 19.1710111,
+  "lon": 77.3219702,
+  "tags": {
+    "artwork_type": "statue",
+    "name": "Maharana Pratap Statue",
+    "tourism": "artwork"
+  }
+},
+{
+  "type": "node",
+  "id": 11145765280,
+  "lat": 19.1745301,
+  "lon": 77.3134753,
+  "tags": {
+    "name": "Amar Gadi Ghar",
+    "shop": "Gadi Ghar"
+  }
+},
+{
+  "type": "node",
+  "id": 11145789229,
+  "lat": 19.1722337,
+  "lon": 77.3221947,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "name": "Hotel Chandralok",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 11145796233,
+  "lat": 19.1754883,
+  "lon": 77.3115402,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "amenity": "ice_cream",
+    "brand": "Cream Stone",
+    "name": "Cream Stone Ice Cream concepts"
+  }
+},
+{
+  "type": "node",
+  "id": 11145796238,
+  "lat": 19.1740778,
+  "lon": 77.3136444,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "name": "Raj Xerox",
+    "shop": "copyshop"
+  }
+},
+{
+  "type": "node",
+  "id": 11145796239,
+  "lat": 19.1743372,
+  "lon": 77.3136745,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "amenity": "restaurant",
+    "name": "Kolhapuri Saaj Restaurant and cloud kitchen"
+  }
+},
+{
+  "type": "node",
+  "id": 11145796388,
+  "lat": 19.1754883,
+  "lon": 77.3121089,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "amenity": "fast_food",
+    "name": "Andhra Idli Center"
+  }
+},
+{
+  "type": "node",
+  "id": 11145796535,
+  "lat": 19.1755484,
+  "lon": 77.3137582,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "name": "Vasantvilla Girls Hostel",
+    "tourism": "hostel"
+  }
+},
+{
+  "type": "node",
+  "id": 11145817011,
+  "lat": 19.1746455,
+  "lon": 77.3133230,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "name": "Sachin Enterprises",
+    "shop": "furniture"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288410,
+  "lat": 19.1619033,
+  "lon": 77.3054959,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5864+Q6H",
+    "addr:postcode": "431602",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "amenity": "pharmacy",
+    "dispensing": "yes",
+    "drive_through": "yes",
+    "healthcare": "pharmacy",
+    "name": "Shyam Medical",
+    "opening_hours": "Mo-Su 09:00-21:00"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288411,
+  "lat": 19.1622886,
+  "lon": 77.3057852,
+  "tags": {
+    "name": "city flower",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:cash": "yes",
+    "phone": "09665307343",
+    "shop": "florist"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288412,
+  "lat": 19.1621623,
+  "lon": 77.3055319,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5864+V6G",
+    "addr:postcode": "431602",
+    "addr:street": "Shivaji Nagar",
+    "name": "Shri Omkar Book Center",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:app": "yes",
+    "payment:cash": "yes",
+    "payment:debit_cards": "yes",
+    "payment:visa": "yes",
+    "phone": "09420847803",
+    "shop": "books"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288413,
+  "lat": 19.1630005,
+  "lon": 77.3060190,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5874+5C",
+    "addr:postcode": "431602",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "amenity": "internet_cafe",
+    "internet_access": "yes",
+    "internet_access:fee": "customers",
+    "name": "Reliance Multi Services",
+    "phone": "09422187178"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288414,
+  "lat": 19.1633308,
+  "lon": 77.3056543,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5874+87",
+    "addr:postcode": "431602",
+    "addr:street": "Shahaji Market",
+    "brand": "Xiaomi",
+    "brand:wikidata": "Q1636958",
+    "name": "Xiaomi",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "09169169211",
+    "shop": "mobile_phone"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288415,
+  "lat": 19.1635972,
+  "lon": 77.3056443,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5874+C7",
+    "addr:postcode": "431602",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "brand": "Airtel",
+    "brand:wikidata": "Q854867",
+    "name": "Airtel",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "shop": "mobile_phone"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288416,
+  "lat": 19.1632146,
+  "lon": 77.3053778,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5874+75M",
+    "addr:postcode": "431602",
+    "addr:street": "Shivaji Nagar",
+    "name": "Pawade Wine Shop",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:cash": "yes",
+    "shop": "wine"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288417,
+  "lat": 19.1646695,
+  "lon": 77.3055035,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5874+W7",
+    "addr:postcode": "431602",
+    "addr:street": "Vishnu Nagar",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "Hotel Uma Executive",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288418,
+  "lat": 19.1647140,
+  "lon": 77.3055113,
+  "tags": {
+    "brand": "Fastrack",
+    "brand:wikidata": "Q28164179",
+    "name": "Fastrack",
+    "shop": "watches"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288419,
+  "lat": 19.1663275,
+  "lon": 77.3053246,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:housenumber": "5884+G4",
+    "addr:postcode": "431602",
+    "addr:street": "Vishnu Nagar",
+    "alt_name": "Haldiram",
+    "amenity": "fast_food",
+    "brand": "Haldiram's",
+    "brand:wikidata": "Q17054442",
+    "cuisine": "indian",
+    "diet:vegetarian": "yes",
+    "name": "Haldiram's",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288420,
+  "lat": 19.1665111,
+  "lon": 77.3052688,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:housenumber": "5884+H4",
+    "addr:postcode": "431602",
+    "addr:street": "Vishnu Nagar",
+    "amenity": "restaurant",
+    "brand": "Pizza Hut",
+    "brand:wikidata": "Q191615",
+    "cuisine": "pizza",
+    "diet:healthy": "yes",
+    "diet:non-vegetarian": "yes",
+    "diet:vegetarian": "yes",
+    "name": "Pizza Hut",
+    "opening_hours": "Mo-Su 11:00-23:00",
+    "phone": "08929645635",
+    "website": "https://www.pizzahut.co.in/"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288425,
+  "lat": 19.1668706,
+  "lon": 77.3051796,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:housenumber": "5884+Q3",
+    "addr:postcode": "431602",
+    "addr:street": "Shivaji Nagar",
+    "amenity": "fast_food",
+    "brand": "Domino's",
+    "brand:wikidata": "Q839466",
+    "cuisine": "pizza",
+    "diet:non-vegetarian": "yes",
+    "diet:vegetarian": "yes",
+    "drive_through": "yes",
+    "name": "Domino's",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "phone": "18002081234",
+    "takeaway": "yes",
+    "website": "https://www.dominos.co.in/store-locations/nanded/shivaji-nagar-nanded-maharashtra?src=local_gmb"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288426,
+  "lat": 19.1670497,
+  "lon": 77.3051425,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5884+R3",
+    "addr:postcode": "431602",
+    "addr:street": "Mahatma Phule Market, College Rd",
+    "name": "A1 Xerox",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:cash": "yes",
+    "payment:contactless": "yes",
+    "shop": "copyshop"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288427,
+  "lat": 19.1672754,
+  "lon": 77.3050246,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5884+W2H",
+    "addr:postcode": "431602",
+    "addr:street": "MAHATMA PHULE MARKET ITI ROAD",
+    "amenity": "pharmacy",
+    "dispensing": "yes",
+    "drive_through": "yes",
+    "healthcare": "pharmacy",
+    "name": "Pawde Medical Agency",
+    "opening_hours": "Mo-Su 10:00-18:00"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288432,
+  "lat": 19.1676545,
+  "lon": 77.3049911,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+32",
+    "addr:postcode": "431602",
+    "addr:street": "rest house bipass",
+    "name": "Arun Oil Industries",
+    "shop": "supermarket"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288437,
+  "lat": 19.1671923,
+  "lon": 77.3052658,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5884+X2",
+    "addr:postcode": "431602",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "HOTEL JAIDHAN VEG REST. & LODGING",
+    "phone": "07038083809",
+    "tourism": "hotel",
+    "website": "https://hotel-jaidhan-veg-rest-lodging.business.site/"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288438,
+  "lat": 19.1682244,
+  "lon": 77.3049643,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5893+8X",
+    "addr:postcode": "431602",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "brand": "OYO",
+    "brand:wikidata": "Q24906315",
+    "internet_access": "yes",
+    "internet_access:fee": "customers",
+    "name": "OYO 63010 Godavari Lodge",
+    "phone": "01246201126",
+    "tourism": "hotel",
+    "website": "https://www.oyorooms.com/hotels-in-Nanded/"
+  }
+},
+{
+  "type": "node",
+  "id": 11691288439,
+  "lat": 19.1678503,
+  "lon": 77.3049725,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5893+6X",
+    "addr:postcode": "431602",
+    "addr:street": "Shivaji Nagar",
+    "amenity": "restaurant",
+    "cuisine": "south_indian",
+    "diet:vegetarian": "yes",
+    "name": "Gokul Veg Restaurant",
+    "opening_hours": "7:15 am-10:30 pm",
+    "phone": "02462255301"
+  }
+},
+{
+  "type": "node",
+  "id": 11691298641,
+  "lat": 19.1686098,
+  "lon": 77.3053235,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+C4",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "name": "GODAWARI",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:app": "yes",
+    "payment:cash": "yes",
+    "payment:debit_cards": "yes",
+    "shop": "bakery"
+  }
+},
+{
+  "type": "node",
+  "id": 11691298642,
+  "lat": 19.1685829,
+  "lon": 77.3051087,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+C3 Nanded, Maharashtra",
+    "addr:postcode": "431602",
+    "addr:street": "rest house bipass",
+    "name": "Titan World",
+    "opening_hours": "Mo-Su 10:00-20:00",
+    "payment:app": "yes",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "08929660548",
+    "shop": "watches",
+    "website": "https://stores.titan.co.in/titan-world-watch-shop-iti-corner-nanded-199324/Home"
+  }
+},
+{
+  "type": "node",
+  "id": 11691298643,
+  "lat": 19.1686070,
+  "lon": 77.3052499,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+C5",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "amenity": "restaurant",
+    "name": "Ice N Spice",
+    "opening_hours": "11 am-11 pm",
+    "phone": "09422172572"
+  }
+},
+{
+  "type": "node",
+  "id": 11691361032,
+  "lat": 19.1688716,
+  "lon": 77.3051903,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+G5",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "brand": "Apple Store",
+    "brand:wikidata": "Q421253",
+    "name": "Apple Store",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "08888578857",
+    "shop": "electronics",
+    "short_name": "Apple"
+  }
+},
+{
+  "type": "node",
+  "id": 11691392648,
+  "lat": 19.1689209,
+  "lon": 77.3058268,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+H9",
+    "addr:postcode": "431602",
+    "addr:street": "VIP ROAD",
+    "brand": "Tanishq",
+    "brand:en": "Tanishq",
+    "brand:wikidata": "Q13117711",
+    "name": "Tanishq",
+    "name:en": "Tanishq",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "02462252092",
+    "shop": "jewelry"
+  }
+},
+{
+  "type": "node",
+  "id": 11691394288,
+  "lat": 19.1685978,
+  "lon": 77.3054912,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+C5",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "amenity": "restaurant",
+    "cuisine": "regional",
+    "diet:vegetarian": "yes",
+    "name": "Madhur Bhoj",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "phone": "08444002222"
+  }
+},
+{
+  "type": "node",
+  "id": 11691405925,
+  "lat": 19.1690355,
+  "lon": 77.3057670,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "atmosphere"
+  }
+},
+{
+  "type": "node",
+  "id": 11694598198,
+  "lat": 19.1690148,
+  "lon": 77.3075595,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5895+J2",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "brand": "Samsung",
+    "brand:wikidata": "Q20718",
+    "name": "Samsung",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "payment:visa": "yes",
+    "phone": "07777053770",
+    "shop": "electronics"
+  }
+},
+{
+  "type": "node",
+  "id": 11694622413,
+  "lat": 19.1686559,
+  "lon": 77.3070775,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+CXJ",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "name": "Ratanlal C Bafna Jewellers",
+    "opening_hours": "Mo-Su 10:00-21:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "02462250333",
+    "shop": "jewelry"
+  }
+},
+{
+  "type": "node",
+  "id": 11697753635,
+  "lat": 19.1681033,
+  "lon": 77.3057345,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+58H",
+    "addr:postcode": "431602",
+    "addr:street": "Industrial Estate Number 1 Rd",
+    "name": "Mahindra Workshop",
+    "shop": "motorcycle_repair"
+  }
+},
+{
+  "type": "node",
+  "id": 11697791660,
+  "lat": 19.1669036,
+  "lon": 77.3078533,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5885+R4",
+    "addr:postcode": "431602",
+    "addr:street": "Industrial Estate",
+    "name": "Akshay Dry Clean",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:cash": "yes",
+    "shop": "dry_cleaning"
+  }
+},
+{
+  "type": "node",
+  "id": 11697792170,
+  "lat": 19.1687365,
+  "lon": 77.3077395,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5895+F5R",
+    "addr:postcode": "431602",
+    "addr:street": "Industrial Estate",
+    "name": "Godrej Interio",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "payment:visa": "yes",
+    "phone": "09923309990",
+    "shop": "interior_decoration"
+  }
+},
+{
+  "type": "node",
+  "id": 11697831581,
+  "lat": 19.1655139,
+  "lon": 77.3088983,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5885+5H",
+    "addr:postcode": "431602",
+    "addr:street": "Stadium Rd",
+    "name": "Shama Indane Gas Agency",
+    "opening_hours": "Mo-Fr 09:00-17:00",
+    "payment:cash": "yes",
+    "phone": "09767355585",
+    "shop": "gas"
+  }
+},
+{
+  "type": "node",
+  "id": 11697854628,
+  "lat": 19.1643466,
+  "lon": 77.3090968,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5875+QMC",
+    "addr:postcode": "431602",
+    "addr:street": "Stadium Rd",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "Hotel Central Park",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 11697855569,
+  "lat": 19.1663357,
+  "lon": 77.3085516,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5885+GF",
+    "addr:postcode": "431602",
+    "addr:street": "Stadium Rd",
+    "name": "Hi-Trak Furniture Manufacturer",
+    "shop": "furniture"
+  }
+},
+{
+  "type": "node",
+  "id": 11697873756,
+  "lat": 19.1625633,
+  "lon": 77.3094587,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5865+VMX",
+    "addr:postcode": "431602",
+    "addr:street": "Railway Station Rd",
+    "amenity": "food_court",
+    "internet_access": "no",
+    "name": "Biryani House",
+    "opening_hours": "Mo-Su 13:00-23:00"
+  }
+},
+{
+  "type": "node",
+  "id": 11697882234,
+  "lat": 19.1625633,
+  "lon": 77.3097441,
+  "tags": {
+    "amenity": "photo_booth",
+    "name": "Roop Sangam Digital Photo Studio & Xerox Center",
+    "payment:cash": "yes",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 11697915041,
+  "lat": 19.1657826,
+  "lon": 77.3069182,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5884+8Q",
+    "addr:postcode": "431602",
+    "amenity": "kindergarten",
+    "name": "Kidzee pre school",
+    "phone": "09168400800",
+    "preschool": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 11697920745,
+  "lat": 19.1664312,
+  "lon": 77.3062077,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5884+HG",
+    "addr:postcode": "431602",
+    "addr:street": "Industrial Estate",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "Visawa Palace",
+    "phone": "09175066755",
+    "tourism": "hotel",
+    "website": "https://visawapalace.business.site/"
+  }
+},
+{
+  "type": "node",
+  "id": 11698312644,
+  "lat": 19.1692167,
+  "lon": 77.3049992,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5894+M3R",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "name": "Taj Patil",
+    "phone": "02462256256",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 11698385927,
+  "lat": 19.1727091,
+  "lon": 77.3046990,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58F3+3WF",
+    "addr:postcode": "431602",
+    "addr:street": "Vivek Nagar",
+    "amenity": "fuel",
+    "brand": "Indian Oil",
+    "brand:wikidata": "Q1289348",
+    "fuel:octane_95": "yes",
+    "fuel:petrol": "yes",
+    "name": "Indian Oil",
+    "self_service": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 11698434149,
+  "lat": 19.1761791,
+  "lon": 77.3050964,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58G4+C2",
+    "addr:postcode": "431605",
+    "addr:street": "SRINAGAR",
+    "name": "HP World",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:app": "yes",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "08657568635",
+    "shop": "computer"
+  }
+},
+{
+  "type": "node",
+  "id": 11698447903,
+  "lat": 19.1749047,
+  "lon": 77.3050344,
+  "tags": {
+    "amenity": "telephone",
+    "name": "BSNL Office",
+    "operator": "BSNL",
+    "operator:wikidata": "Q278834",
+    "phone": "18003451500"
+  }
+},
+{
+  "type": "node",
+  "id": 11698455788,
+  "lat": 19.1763052,
+  "lon": 77.3050811,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58G4+G2",
+    "addr:postcode": "431605",
+    "addr:street": "SRINAGAR",
+    "name": "Acer Mall - Exclusive Store",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:app": "yes",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "09513384496",
+    "shop": "computer"
+  }
+},
+{
+  "type": "node",
+  "id": 11698458494,
+  "lat": 19.1768595,
+  "lon": 77.3041786,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58G3+PP",
+    "addr:postcode": "431605",
+    "addr:street": "SRINAGAR",
+    "name": "Panchsheel",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "phone": "02462251269",
+    "shop": "clothes"
+  }
+},
+{
+  "type": "node",
+  "id": 11698466400,
+  "lat": 19.1778932,
+  "lon": 77.3044261,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58H3+5Q9",
+    "addr:postcode": "431605",
+    "addr:street": "ShriNagar",
+    "amenity": "pharmacy",
+    "dispensing": "yes",
+    "drive_through": "yes",
+    "healthcare": "pharmacy",
+    "name": "Sonwane Medical",
+    "opening_hours": "24/7"
+  }
+},
+{
+  "type": "node",
+  "id": 11698466401,
+  "lat": 19.1785407,
+  "lon": 77.3045568,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58H3+FR7",
+    "addr:postcode": "431605",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "guest_house": "bed_and_breakfast",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "Falcon boys hostel",
+    "tourism": "hostel"
+  }
+},
+{
+  "type": "node",
+  "id": 11698636234,
+  "lat": 19.1783572,
+  "lon": 77.3043785,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58H3+9Q",
+    "addr:postcode": "431605",
+    "addr:street": "shrinagar",
+    "amenity": "post_office",
+    "brand": "Desk to Desk Courier & Cargo",
+    "brand:short": "DTDC",
+    "brand:wikidata": "Q55608802",
+    "name": "DTDC NANDED HUB OFFICE",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "operator": "Desk to Desk Courier & Cargo",
+    "operator:short": "DTDC",
+    "operator:wikidata": "Q55608802"
+  }
+},
+{
+  "type": "node",
+  "id": 11698717467,
+  "lat": 19.1761970,
+  "lon": 77.3103811,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431602",
+    "addr:street": "Bhagya Nagar Road",
+    "amenity": "cafe",
+    "cuisine": "coffee_shop",
+    "internet_access": "no",
+    "name": "COTTAGE COFFEE",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "outdoor_seating": "yes",
+    "phone": "08983711776"
+  }
+},
+{
+  "type": "node",
+  "id": 11698717762,
+  "lat": 19.1796803,
+  "lon": 77.3043321,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "58H3+VP",
+    "addr:postcode": "431605",
+    "addr:street": "MAIN ROAD",
+    "brand": "KTM",
+    "brand:wikidata": "Q215657",
+    "name": "KTM",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:app": "yes",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "shop": "motorcycle"
+  }
+},
+{
+  "type": "node",
+  "id": 11698717764,
+  "lat": 19.1796693,
+  "lon": 77.3053732,
+  "tags": {
+    "amenity": "atm",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "cash_in": "no",
+    "currency:INR": "yes",
+    "drive_through": "yes",
+    "name": "SBI ATM & CDM",
+    "operator": "State Bank of India",
+    "operator:wikidata": "Q1340361",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "node",
+  "id": 11698725004,
+  "lat": 19.1794066,
+  "lon": 77.3062121,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431602",
+    "addr:street": "Bhagya Nagar Road",
+    "amenity": "bank",
+    "atm": "yes",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "drive_through": "yes",
+    "name": "State Bank of India",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "node",
+  "id": 11698726670,
+  "lat": 19.1788509,
+  "lon": 77.3043553,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431605",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "name": " Nanded    17 photos Mochi Shoes",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:app": "yes",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "02462299044",
+    "shoes": "women;children",
+    "shop": "shoes"
+  }
+},
+{
+  "type": "node",
+  "id": 11698731888,
+  "lat": 19.1756156,
+  "lon": 77.3113880,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "19-521",
+    "addr:postcode": "431602",
+    "addr:street": "Kishore Nagar Rd",
+    "amenity": "ice_cream",
+    "brand": "Naturals",
+    "brand:wikidata": "Q24439154",
+    "name": "Naturals",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "outdoor_seating": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 11698734170,
+  "lat": 19.1772290,
+  "lon": 77.3091038,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Axis Bank",
+    "brand:wikidata": "Q2003549",
+    "cash_in": "yes",
+    "currency:INR": "yes",
+    "drive_through": "yes",
+    "name": "Axis Bank ATM",
+    "operator": "Axis Bank",
+    "operator:wikidata": "Q2003549"
+  }
+},
+{
+  "type": "node",
+  "id": 12225232102,
+  "lat": 19.1539825,
+  "lon": 77.3095956,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Bee n C"
+  }
+},
+{
+  "type": "node",
+  "id": 12225232103,
+  "lat": 19.1518846,
+  "lon": 77.3124360,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "shaw"
+  }
+},
+{
+  "type": "node",
+  "id": 13430730804,
+  "lat": 19.1908053,
+  "lon": 77.2897222,
+  "tags": {
+    "amenity": "place_of_worship",
+    "name": "Takshsheela Vihar",
+    "religion": "buddhist"
+  }
+},
+{
+  "type": "node",
+  "id": 13430730806,
+  "lat": 19.1893307,
+  "lon": 77.2888242,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Chaturthi Hotel"
+  }
+},
+{
+  "type": "node",
+  "id": 13595563449,
+  "lat": 19.1719387,
+  "lon": 77.3150324,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "431602",
+    "addr:street": "Vasant Nagar",
+    "name": "The Shoppers Mart",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:cards": "yes",
+    "payment:cash": "yes",
+    "payment:upi": "yes",
+    "shop": "supermarket"
+  }
+},
+{
+  "type": "node",
+  "id": 13624996301,
+  "lat": 19.1615339,
+  "lon": 77.2990804,
+  "tags": {
+    "addr:postcode": "431602",
+    "addr:street": "Paras Nagar",
+    "amenity": "place_of_worship",
+    "name": "Balaji Temple",
+    "name:hi": "बालाजी मंदिर"
+  }
+},
+{
+  "type": "node",
+  "id": 13703459438,
+  "lat": 19.1438112,
+  "lon": 77.3266717,
+  "tags": {
+    "amenity": "school",
+    "education": "school",
+    "grades": "1-12",
+    "name": "Prathiman Ketan High School",
+    "religion": "hindu"
+  }
+},
+{
+  "type": "node",
+  "id": 13705050425,
+  "lat": 19.1327249,
+  "lon": 77.3016745,
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "Nagarjuna Punlic School",
+    "addr:postcode": "431606",
+    "addr:street": "Kautha",
+    "amenity": "school",
+    "education": "school",
+    "grades": "1-10",
+    "name": "Nagarjuna Public School",
+    "religion": "all",
+    "website": "http://npsnanded.edu.in"
+  }
+},
+{
+  "type": "node",
+  "id": 13710087819,
+  "lat": 19.1560604,
+  "lon": 77.3105887,
+  "tags": {
+    "artwork_type": "statue",
+    "name": "Shivaji Maharaj Putla",
+    "tourism": "artwork"
+  }
+},
+{
+  "type": "node",
+  "id": 13893242021,
+  "lat": 19.1426279,
+  "lon": 77.3067515,
+  "tags": {
+    "name": "Kamdhenu",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "payment:upi": "yes",
+    "shop": "supermarket"
+  }
+},
+{
+  "type": "node",
+  "id": 13996597203,
+  "lat": 19.1863385,
+  "lon": 77.3100644,
+  "tags": {
+    "addr:postcode": "431605",
+    "addr:street": "Canal Road",
+    "internet_access": "wlan",
+    "name": "Mangesh Medical",
+    "opening_hours": "24/7",
+    "shop": "medical_supply"
+  }
+},
+{
+  "type": "node",
+  "id": 13996598001,
+  "lat": 19.1846637,
+  "lon": 77.3105772,
+  "tags": {
+    "addr:postcode": "431605",
+    "addr:street": "Sangvi Road",
+    "internet_access": "wlan",
+    "name": "Viju Arts",
+    "opening_hours": "Mo-Sa 00:00-24:00",
+    "tourism": "gallery"
+  }
+},
+{
+  "type": "node",
+  "id": 13996598202,
+  "lat": 19.1940731,
+  "lon": 77.2962257,
+  "tags": {
+    "name": "Ekart Logistics",
+    "opening_hours": "24/7",
+    "shop": "antiques"
+  }
+},
+{
+  "type": "way",
+  "id": 717024610,
+  "center": {
+    "lat": 19.1198776,
+    "lon": 77.2839308
+  },
+  "tags": {
+    "amenity": "place_of_worship",
+    "building": "yes",
+    "name": "Kaleshwar Temple",
+    "religion": "hindu"
+  }
+},
+{
+  "type": "way",
+  "id": 717024612,
+  "center": {
+    "lat": 19.1178563,
+    "lon": 77.2838550
+  },
+  "tags": {
+    "amenity": "community_centre",
+    "building": "yes",
+    "name": "Kaleshwar Mangalkarayala"
+  }
+},
+{
+  "type": "way",
+  "id": 912075880,
+  "center": {
+    "lat": 19.1748877,
+    "lon": 77.3008320
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "Nanded Education Society"
+  }
+},
+{
+  "type": "way",
+  "id": 912075881,
+  "center": {
+    "lat": 19.1753031,
+    "lon": 77.2954112
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "Nanded Agricultural College"
+  }
+},
+{
+  "type": "way",
+  "id": 912075883,
+  "center": {
+    "lat": 19.1697802,
+    "lon": 77.3117379
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "Government Polytechnic Nanded"
+  }
+},
+{
+  "type": "way",
+  "id": 912075886,
+  "center": {
+    "lat": 19.1592301,
+    "lon": 77.3027853
+  },
+  "tags": {
+    "amenity": "prison",
+    "name": "Nanded District Jail"
+  }
+},
+{
+  "type": "way",
+  "id": 912075890,
+  "center": {
+    "lat": 19.1594079,
+    "lon": 77.3061186
+  },
+  "tags": {
+    "amenity": "bus_station",
+    "name": "Nanded Bus Stand"
+  }
+},
+{
+  "type": "way",
+  "id": 912075906,
+  "center": {
+    "lat": 19.1523793,
+    "lon": 77.3189557
+  },
+  "tags": {
+    "amenity": "place_of_worship",
+    "building": "gurdwara",
+    "name": "Sach-Khand",
+    "religion": "sikh"
+  }
+},
+{
+  "type": "way",
+  "id": 993255381,
+  "center": {
+    "lat": 19.1798087,
+    "lon": 77.3255458
+  },
+  "tags": {
+    "alt_name": "MGM College of Engineering",
+    "amenity": "college",
+    "name": "Mahatma Gandhi Mission's College of Engineering",
+    "name:etymology:wikidata": "Q1001"
+  }
+},
+{
+  "type": "way",
+  "id": 993255386,
+  "center": {
+    "lat": 19.1692077,
+    "lon": 77.3093426
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "Narayanrao Chavan Law College",
+    "website": "https://nclawcollegenanded.org/"
+  }
+},
+{
+  "type": "way",
+  "id": 993255387,
+  "center": {
+    "lat": 19.1689862,
+    "lon": 77.3087403
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "Institute of Technology and Management",
+    "website": "https://www.ssbesitm.org/"
+  }
+},
+{
+  "type": "way",
+  "id": 993255388,
+  "center": {
+    "lat": 19.1711673,
+    "lon": 77.3089350
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "Yeshwant College",
+    "website": "https://ymnnanded.in/"
+  }
+},
+{
+  "type": "way",
+  "id": 993255389,
+  "center": {
+    "lat": 19.1494136,
+    "lon": 77.3125667
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "NSB College",
+    "website": "https://www.nsbcn.org/"
+  }
+},
+{
+  "type": "way",
+  "id": 1162009048,
+  "center": {
+    "lat": 19.1757446,
+    "lon": 77.3100068
+  },
+  "tags": {
+    "amenity": "police",
+    "building": "yes",
+    "name": "Homeguard police ground"
+  }
+},
+{
+  "type": "way",
+  "id": 1162013282,
+  "center": {
+    "lat": 19.1857735,
+    "lon": 77.3104696
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:postcode": "431605",
+    "addr:street": "Chitanya Nagar road",
+    "amenity": "place_of_worship",
+    "building": "yes",
+    "name": "Sai Baba temple",
+    "religion": "hindu"
+  }
+},
+{
+  "type": "way",
+  "id": 1162015083,
+  "center": {
+    "lat": 19.1843829,
+    "lon": 77.3053676
+  },
+  "tags": {
+    "addr:city": "Naded",
+    "addr:postcode": "431605",
+    "addr:street": "Manik Nagar Road",
+    "amenity": "school",
+    "name": "Shivaji Highschool Ground"
+  }
+},
+{
+  "type": "way",
+  "id": 1162024480,
+  "center": {
+    "lat": 19.1842499,
+    "lon": 77.3106087
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:postcode": "431605",
+    "addr:street": "Chaitanya Nagar Road",
+    "amenity": "place_of_worship",
+    "building": "yes",
+    "name": "Shiv Mandir",
+    "religion": "hindu"
+  }
+},
+{
+  "type": "way",
+  "id": 1257530600,
+  "center": {
+    "lat": 19.1583188,
+    "lon": 77.3074264
+  },
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "healthcare:speciality": "ophthalmology",
+    "name": "sai opticals"
+  }
+},
+{
+  "type": "way",
+  "id": 1257530601,
+  "center": {
+    "lat": 19.1619697,
+    "lon": 77.3058893
+  },
+  "tags": {
+    "building": "commercial",
+    "building:levels": "0",
+    "name": "Bikaner sweets",
+    "shop": "bakery"
+  }
+},
+{
+  "type": "way",
+  "id": 1257530602,
+  "center": {
+    "lat": 19.1652416,
+    "lon": 77.3057506
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5884+37P",
+    "addr:postcode": "431602",
+    "addr:street": "Near Shivaji Nagar",
+    "amenity": "bank",
+    "atm": "yes",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "building": "yes",
+    "name": "State Bank of India",
+    "opening_hours": "Mo-Sa 10:30-16:30",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "way",
+  "id": 1257530603,
+  "center": {
+    "lat": 19.1616134,
+    "lon": 77.3060277
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:postcode": "413602",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "amenity": "bank",
+    "brand": "Bank of Baroda",
+    "brand:wikidata": "Q2003797",
+    "building": "yes",
+    "layer": "1",
+    "name": "Bank of Baroda"
+  }
+},
+{
+  "type": "way",
+  "id": 1257530604,
+  "center": {
+    "lat": 19.1668473,
+    "lon": 77.3052911
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "NANDED",
+    "addr:housenumber": "5884+P2",
+    "addr:postcode": "431602",
+    "addr:street": "v",
+    "brand": "Reliance Digital",
+    "brand:wikidata": "Q7311012",
+    "building": "yes",
+    "name": "Reliance Digital",
+    "opening_hours": "Mo-Su 10:00-22:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "payment:mastercard": "yes",
+    "payment:visa": "yes",
+    "phone": "09324440305",
+    "shop": "electronics"
+  }
+},
+{
+  "type": "way",
+  "id": 1257530606,
+  "center": {
+    "lat": 19.1675229,
+    "lon": 77.3051758
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5893+7X",
+    "addr:postcode": "431602",
+    "addr:street": "Guru Gobind Singh Ji Rd",
+    "building": "yes",
+    "clothes": "women;underwear;men;wedding;children;sports;workwear;suits;babies",
+    "name": "Kisan Fashion Mall",
+    "opening_hours": "Mo-Su 10:00-21:00",
+    "payment:app": "yes",
+    "payment:cards": "yes",
+    "payment:cash": "yes",
+    "payment:contactless": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "09522952293",
+    "shop": "clothes"
+  }
+},
+{
+  "type": "way",
+  "id": 1257539799,
+  "center": {
+    "lat": 19.1685257,
+    "lon": 77.3057752
+  },
+  "tags": {
+    "amenity": "fuel",
+    "brand": "Indian Oil",
+    "brand:wikidata": "Q1289348",
+    "fuel:diesel": "yes",
+    "fuel:petrol": "yes",
+    "name": "Indian Oil",
+    "self_service": "no"
+  }
+},
+{
+  "type": "way",
+  "id": 1257912812,
+  "center": {
+    "lat": 19.1690403,
+    "lon": 77.3074566
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5895+M32",
+    "addr:postcode": "431602",
+    "amenity": "bank",
+    "atm": "yes",
+    "brand": "ICICI Bank",
+    "brand:wikidata": "Q1653258",
+    "building": "yes",
+    "drive_through": "yes",
+    "name": "ICICI Bank",
+    "opening_hours": "24/7",
+    "opening_hours:drive_through": "24/7",
+    "short_name": "ICICI"
+  }
+},
+{
+  "type": "way",
+  "id": 1258308920,
+  "center": {
+    "lat": 19.1639543,
+    "lon": 77.3091418
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5875+HM",
+    "addr:postcode": "431602",
+    "addr:street": "Stadium Rd",
+    "building": "yes",
+    "name": "HOTEL MIDLAND",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "way",
+  "id": 1258309311,
+  "center": {
+    "lat": 19.1629943,
+    "lon": 77.3089636
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5875+7H",
+    "addr:postcode": "431602",
+    "addr:street": "Gokul Nagar",
+    "amenity": "cinema",
+    "building": "yes",
+    "name": "Carnival Cinemas",
+    "payment:cash": "yes",
+    "payment:debit_cards": "yes",
+    "screen": "3"
+  }
+},
+{
+  "type": "way",
+  "id": 1258313504,
+  "center": {
+    "lat": 19.1685781,
+    "lon": 77.3093662
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "5895+CR6",
+    "addr:postcode": "431602",
+    "addr:street": "VIP Rd",
+    "building": "yes",
+    "museum": "local",
+    "name": "Shankarao Chavan Museum",
+    "tourism": "museum"
+  }
+},
+{
+  "type": "way",
+  "id": 1258365919,
+  "center": {
+    "lat": 19.1691844,
+    "lon": 77.3034751
+  },
+  "tags": {
+    "amenity": "college",
+    "name": "ITI Collagre"
+  }
+},
+{
+  "type": "way",
+  "id": 1495879845,
+  "center": {
+    "lat": 19.1660905,
+    "lon": 77.3188732
+  },
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "healthcare:speciality": "neurosurgery",
+    "name": "Nirmal Hospital",
+    "operator": "Adhav Hospitals",
+    "operator:type": "private"
+  }
+},
+{
+  "type": "way",
+  "id": 1495881334,
+  "center": {
+    "lat": 19.1719539,
+    "lon": 77.3150749
+  },
+  "tags": {
+    "building": "yes",
+    "name": "The Shoppers Mart",
+    "opening_hours": "Mo-Su 09:00-21:00",
+    "payment:cash": "yes",
+    "payment:coins": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "payment:upi": "yes",
+    "shop": "supermarket"
+  }
+},
+{
+  "type": "way",
+  "id": 1496528559,
+  "center": {
+    "lat": 19.1750864,
+    "lon": 77.3127846
+  },
+  "tags": {
+    "addr:city": "Nanded",
+    "addr:district": "Nanded",
+    "addr:housenumber": "Shop 103",
+    "addr:postcode": "431602",
+    "addr:street": "Kasliwal Complex",
+    "air_conditioning": "yes",
+    "building": "commercial",
+    "building:levels": "0",
+    "name": "Optimart",
+    "phone": "+918007504010",
+    "shop": "optician"
+  }
+},
+{
+  "type": "way",
+  "id": 1497278461,
+  "center": {
+    "lat": 19.1665164,
+    "lon": 77.3085173
+  },
+  "tags": {
+    "brand": "Reliance Fresh",
+    "brand:wikidata": "Q7311014",
+    "name": "Reliance Fresh",
+    "opening_hours": "Mo-Su 07:00-22:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "payment:upi": "yes",
+    "shop": "supermarket"
+  }
+},
+{
+  "type": "way",
+  "id": 1537136799,
+  "center": {
+    "lat": 19.1680752,
+    "lon": 77.3045371
+  },
+  "tags": {
+    "brand": "Cromā",
+    "brand:wikidata": "Q5187683",
+    "building": "yes",
+    "name": "Cromā",
+    "shop": "electronics"
+  }
+}
+
+  ]
+}

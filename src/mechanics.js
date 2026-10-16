@@ -1,13 +1,17 @@
+import { PLACE_BY_ID } from './city-data.js';
+
 export const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 export const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
 
 export function blocked(x, z, radius, colliders, bounds) {
   if (x < bounds.minX + radius || x > bounds.maxX - radius || z < bounds.minZ + radius || z > bounds.maxZ - radius) return true;
-  return colliders.some(b => {
-    const px = clamp(x, b.x - b.w / 2, b.x + b.w / 2);
-    const pz = clamp(z, b.z - b.d / 2, b.z + b.d / 2);
-    return (x - px) ** 2 + (z - pz) ** 2 < radius ** 2;
+  return (colliders.query?.(x,z,radius) || colliders).some(b => {
+    const cos=Math.cos(b.rotation||0),sin=Math.sin(b.rotation||0);
+    const lx=cos*(x-b.x)-sin*(z-b.z),lz=sin*(x-b.x)+cos*(z-b.z);
+    const px = clamp(lx, -b.w / 2, b.w / 2);
+    const pz = clamp(lz, -b.d / 2, b.d / 2);
+    return (lx - px) ** 2 + (lz - pz) ** 2 < radius ** 2;
   });
 }
 
@@ -47,16 +51,32 @@ export function driveStep(car, input, dt) {
   return { dx: -Math.sin(car.heading) * car.speed * dt, dz: -Math.cos(car.heading) * car.speed * dt, boosting };
 }
 
+function stop(id,label){const place=PLACE_BY_ID.get(id);if(!place)throw Error(`Unknown mission place: ${id}`);return {...place.approach,label:label||place.shortName,placeId:id};}
+
 export const MISSIONS = [
-  { title: 'Your first fare', label: '01 / AUTO DIARIES', description: 'Pick up a passenger at Vazirabad. Follow the amber marker and slow down inside the ring.', reward: 450, seconds: 180,
-    stops: [{x:-120,z:120,label:'Pick up at Vazirabad'}, {x:120,z:180,label:'Drop off near Hazur Sahib'}] },
-  { title: 'The market run', label: '02 / SPECIAL DELIVERY', description: 'Collect a parcel from the market, then take it to the railway station before the train leaves.', reward: 650, seconds: 150,
-    stops: [{x:-120,z:-50,label:'Collect the market parcel'}, {x:-180,z:-240,label:'Deliver at the railway station'}] },
-  { title: 'Godavari Grand Prix', label: '03 / STREET CIRCUIT', description: 'Five checkpoints. One riverfront circuit. Pick a fast car and keep your foot down.', reward: 1200, seconds: 100, race: true,
-    stops: [{x:0,z:240,label:'Riverfront start'}, {x:240,z:240,label:'East riverfront'}, {x:240,z:0,label:'East city turn'}, {x:0,z:0,label:'Shivaji Chowk'}, {x:0,z:240,label:'Finish at the riverfront'}] },
-  { title: 'Lose the tail', label: '04 / THE GETAWAY', description: 'Patrols are on your trail. Keep moving for 50 seconds and stay out of their reach.', reward: 1500, seconds: 80, chase: true, survive: 50, stops: [] },
-  { title: 'Across the city', label: '05 / LAST MILE', description: 'A long run across Nanded. Pick up the order, cross town, and finish by the Godavari.', reward: 900, seconds: 180,
-    stops: [{x:240,z:-240,label:'Collect the north-side order'}, {x:-240,z:0,label:'Stop in the old city'}, {x:0,z:270,label:'Deliver at Godavari Ghat'}] },
+  { title:'Before the next batch',label:'01 / COACHING BELT',description:'Pick up your friend outside RCC, then head to IIB Parnakuti. Slow down in each amber ring.',reward:450,seconds:180,
+    stops:[stop('rcc-nanded','Meet outside RCC'),stop('iib-parnakuti','Drop off at IIB Parnakuti')] },
+  { title:'The station parcel',label:'02 / AUTO DIARIES',description:'A parcel from Sarafa has to reach the railway station. Find your way through the old city.',reward:650,seconds:150,
+    stops:[stop('sarafa-bazar','Collect at Sarafa Bazar'),stop('nanded-station','Deliver at Hazur Sahib Nanded station')] },
+  { title:'Nanded circle',label:'03 / STREET CIRCUIT',description:'Bhagya Nagar, Workshop, ITI and Shivaji Putla. Five familiar checkpoints; keep an eye on the traffic.',reward:1200,seconds:220,race:true,
+    stops:[stop('bhagya-nagar-kaman'),stop('workshop-corner'),stop('iti-corner'),stop('shivaji-putla'),stop('bhagya-nagar-kaman','Finish at Bhagya Nagar Kaman')] },
+  { title:'Lose the tail',label:'04 / THE GETAWAY',description:'A fictional arcade chase. Keep moving for 50 seconds and stay out of the patrol’s reach.',reward:1500,seconds:80,chase:true,survive:50,stops:[] },
+  { title:'Vishnupuri express',label:'05 / CAMPUS CONNECTION',description:'Meet at Yeshwant, collect a friend near SGGS, and finish at SRTM University. It is a proper cross-city run.',reward:1400,seconds:360,
+    stops:[stop('yeshwant-college'),stop('sggs-engineering'),stop('srtm-university')] },
+  { title:'The evening food plan',label:'06 / FRIENDS & FOOD',description:'Meet your friends near Madhur Bhoj, Amrut Cafe and Frespresso. The next stop is always somebody’s idea.',reward:850,seconds:240,
+    stops:[stop('madhur-bhoj'),stop('amrut-cafe'),stop('frespresso')] },
+  { title:'Welcome to Nanded',label:'07 / STATION PICKUP',description:'Welcome a visitor at the station, drive to Hazur Sahib, and finish near Nagina Ghat.',reward:900,seconds:240,
+    stops:[stop('nanded-station'),stop('hazur-sahib'),stop('nagina-ghat')] },
+  { title:'Along the Godavari',label:'08 / RIVERSIDE JOURNEY',description:'Take the eastern road to Hira Ghat, Mata Sahib and Shikar Ghat. Use the city guide to explore more after the job.',reward:1800,seconds:480,
+    stops:[stop('hira-ghat'),stop('mata-sahib'),stop('shikar-ghat')] },
+  { title:'Airport auto',label:'09 / ARRIVALS',description:'A visitor is waiting near the airport approach. Take them to Grand Tulsi in the coaching district.',reward:800,seconds:240,
+    stops:[stop('nanded-airport'),stop('tulsi-comfort')] },
+  { title:'After the show',label:'10 / SOUTH OF THE RIVER',description:'Meet outside the Treasure Bazaar cinema complex, then drive to Aakruti in Kautha.',reward:950,seconds:240,
+    stops:[stop('pvr-treasure'),stop('aakruti-hotel')] },
+  { title:'Something sweet',label:'11 / MONDHA TO VAZIRABAD',description:'Pick up your friends near Prasad Sweet House and Khandelwal Sweets, then meet by the bus stand.',reward:750,seconds:240,
+    stops:[stop('prasad-sweet-house'),stop('khandelwal-sweets'),stop('nanded-bus-stand')] },
+  { title:'College reunion',label:'12 / OLD FRIENDS',description:'MGM, Science College and ITM. Three campuses, one reunion, and a lot of familiar roads.',reward:1100,seconds:300,
+    stops:[stop('mgm-engineering'),stop('nes-science-college'),stop('itm-nanded')] },
 ];
 
 export function newMission(index = 0) {
