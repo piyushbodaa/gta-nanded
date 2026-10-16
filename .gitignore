@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vercel/
+test-results/
+playwright-report/
+*.tar.gz
+*.log
+.vercel
+.env*
