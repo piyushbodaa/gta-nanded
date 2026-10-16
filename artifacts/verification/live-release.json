@@ -14,23 +14,23 @@
   "verifiedFiles": [
     {
       "path": "index.html",
-      "bytes": 16960,
-      "sha256": "bacbe09908b6f158e869312d7e938dbc37e7d2a9a0b1fd64090916b5ffbdac6d"
+      "bytes": 18944,
+      "sha256": "d8c42845c912168cda0893e56e555169f954f02c8c7569bf596a36905124c406"
     },
     {
-      "path": "assets/index-CO2Bi53S.js",
-      "bytes": 95924,
-      "sha256": "04eb398d4683e29b7ae0a00b700e97d766701c02173b641aa7ef3870e871bfd4"
+      "path": "assets/index-BU267egP.js",
+      "bytes": 115530,
+      "sha256": "914808be27f8992372787fd0cbfe44e3d381758a5485a8528d8925f357bb26ff"
     },
     {
-      "path": "assets/index-CPVEBjx3.css",
-      "bytes": 91778,
-      "sha256": "02c10c7c214842ef367c95fa0bc95ff0fcb11dff2af5a9a8cd496bf35de9e143"
+      "path": "assets/index-DZmEATGP.css",
+      "bytes": 98938,
+      "sha256": "c30e7395885d772483952a7d4a80914807ba6d44fc1fdcfba6cad1cb0a1c3d1f"
     },
     {
-      "path": "assets/places-C_gPfxtd.js",
-      "bytes": 122520,
-      "sha256": "34f5b15e66813c5743c81493b1e28cba371867bde4a7fb8da117de52bc331529"
+      "path": "assets/places-DnAo5gf7.js",
+      "bytes": 128322,
+      "sha256": "1d57348b0e39c0e37e13520cbe3b2838db44762ef5fcc60555471c2f1ea905d2"
     },
     {
       "path": "assets/street-map-DxtH7s3W.js",
@@ -49,8 +49,8 @@
     },
     {
       "path": "data/places.json",
-      "bytes": 146664,
-      "sha256": "322723d59d1305f17d639c48f7c322f2f52b98397868db514bee14b103acbb6a"
+      "bytes": 153411,
+      "sha256": "3b01aee2c553b8aed7a4d01ba97069ea50e29d2be62d6b09ba5b95904ca60aa6"
     },
     {
       "path": "media/gta-nanded-chase.webp",

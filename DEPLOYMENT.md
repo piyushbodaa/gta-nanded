@@ -39,7 +39,47 @@ to `.env.local`; it must never enter source control or a shared archive.
 After deployment, verify the real game page and JavaScript assets at
 `https://gta.nanded.fun`, then perform a gameplay check on that domain.
 
-## Current release — camera and map controls, 16 October 2026
+## Current release — on-foot adventures, 17 October 2026 (India)
+
+- Production deployment: `dpl_HdWWAczr62HxccwMYrhwnRWRem6B` (READY).
+- Deployed source commit: `09a948d`.
+- Primary URL: https://gta.nanded.fun
+- Deployment URL: https://nanded-street-stories-k2am21hhc-piyushbodaa.vercel.app
+- Story and free roam start on foot at Zenda Chowk. The untimed opening asks
+  the player to talk to a friend, explore the nearby lane and take a photo.
+  Cars are optional; Jump, Run and contextual Talk/Photo work on keyboard
+  and the phone controls.
+- The activity picker offers nine adventures: local conversations, photo
+  walks, an on-foot sprint, a street circuit and an arcade pursuit.
+- The landmark passport offers 17 stops among 133 researched places. Each
+  new stamp earns ₹150 once; stamps and cash save together. The catalog has
+  64 mapped places and 69 approximate area anchors, with 53 locality labels.
+  Models are illustrations, not surveyed architectural replicas.
+- Added distinct Hazur Sahib, Mal Tekdi, Kaleshwar, Vishnupuri Dam, ghat,
+  Clock Tower and Nandgiri Fort details. Landmark visits arrive on foot,
+  face the landmark and clear nearby vehicles from the arrival spot.
+- Production build and all 66 tests pass. World verification covers all
+  133 approaches and 409,253 road samples; activity checks cover nine starts,
+  23 checkpoints and 5,410 route samples without physical obstructions.
+- Local browser checks covered desktop, portrait 390×844 and landscape
+  844×390: on-foot spawn, talk and walking progression, jump, activity
+  switching, race/pursuit entry, landmark visits, photo rewards, duplicate
+  reward prevention and save persistence after reload. Physical phone
+  hardware has not been tested.
+- Public HTTPS verification at 18:50 UTC on 16 October: all 17 files match
+  `dist/` byte for byte (12,589,198 bytes), and media range requests return
+  HTTP 206. Live story launch, Talk progression, all nine menu entries,
+  Hazur Sahib arrival and its ₹150/one-stamp photo reward passed. Browser
+  console warnings and errors were empty.
+- Opening music remains the original track. The requested San Andreas
+  theme is pending a user-provided audio file authorized for this website.
+- Evidence: [release hashes](artifacts/verification/live-release.json),
+  [live on-foot opening](artifacts/verification/live-on-foot-adventures.png),
+  [live activity menu](artifacts/verification/live-adventure-menu.png),
+  [live Hazur Sahib passport](artifacts/verification/live-hazur-passport.png),
+  [landscape Clock Tower](artifacts/verification/clock-tower-landscape.png).
+
+## Previous release — camera and map controls, 16 October 2026
 
 - Production deployment: `dpl_68zr5tCjm9NLxniPUjy1pyEVUVLh` (READY).
 - Deployed source commit: `3f76a68`.
