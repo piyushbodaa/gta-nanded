@@ -1,22 +1,31 @@
 {
   "url": "https://gta.nanded.fun",
   "result": "PASS",
-  "videoRangeRequests": "PASS",
+  "mediaRangeRequests": [
+    {
+      "path": "media/nanded-opening.mp4",
+      "status": 206
+    },
+    {
+      "path": "media/launch-theme.m4a",
+      "status": 206
+    }
+  ],
   "verifiedFiles": [
     {
       "path": "index.html",
-      "bytes": 18995,
-      "sha256": "1ac2b1176ba01042a1fc5ce6ec2617fdb7639ea282d41d4b884962763cb0a3e1"
+      "bytes": 16392,
+      "sha256": "3d0b5bf6fc09288094f08fef9b17174e154d119d7428bf2f7bba28e241486d8c"
     },
     {
-      "path": "assets/index-CDPXsaZD.js",
-      "bytes": 83539,
-      "sha256": "17f03372fbeb53d2f393c2e5e6c913a044782687f85e7e753c2fb5ad54748157"
+      "path": "assets/index-CIFt5fma.js",
+      "bytes": 91924,
+      "sha256": "8c17699b3a2f374c27ff6710735d77ec78151f41f7368723abdc1ab68b54a795"
     },
     {
-      "path": "assets/index-D-ZQHjsJ.css",
-      "bytes": 65219,
-      "sha256": "92a19024032c5621a0dfe2cb433632a011e860cb57ea2d8cc7f9f7fbb094c4a8"
+      "path": "assets/index-DdyYBGXH.css",
+      "bytes": 91602,
+      "sha256": "352acbf32942fe474f8b89d5cc932ff3e9460a80923b757fd377ee68dc11601a"
     },
     {
       "path": "assets/places-C_gPfxtd.js",
@@ -42,6 +51,31 @@
       "path": "data/places.json",
       "bytes": 146664,
       "sha256": "322723d59d1305f17d639c48f7c322f2f52b98397868db514bee14b103acbb6a"
+    },
+    {
+      "path": "media/gta-nanded-chase.webp",
+      "bytes": 355258,
+      "sha256": "6713801ef6f210f31300621ac192c05a398b738a970646ba5fc26066186dd2df"
+    },
+    {
+      "path": "media/gta-nanded-city.webp",
+      "bytes": 300678,
+      "sha256": "9118b2d57235f99a6cc53389ac62f243adff6941ea76266785a6a2e51efe6c07"
+    },
+    {
+      "path": "media/gta-nanded-crew.webp",
+      "bytes": 265378,
+      "sha256": "eeb30df55845ded9ff7e78af422dc579740eeff4f41a6b9b333fa680d74c2317"
+    },
+    {
+      "path": "media/gta-nanded-driver.webp",
+      "bytes": 215156,
+      "sha256": "caee1f58c71d04b78f81b01cd1e3099425565751565fd2e65aebb28799c48a3d"
+    },
+    {
+      "path": "media/launch-theme.m4a",
+      "bytes": 195380,
+      "sha256": "912f12003ac34c96da3eab28abc8f8c67dcca38b3a3da5eabaa9459ef56d4d93"
     },
     {
       "path": "media/nanded-key-art.webp",

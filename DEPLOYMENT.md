@@ -39,7 +39,38 @@ to `.env.local`; it must never enter source control or a shared archive.
 After deployment, verify the real game page and JavaScript assets at
 `https://gta.nanded.fun`, then perform a gameplay check on that domain.
 
-## Published release — 16 October 2026, 17:02 UTC
+## Current release — comic entrance, 16 October 2026
+
+- Production deployment: `dpl_6QXNDNadnRrVE19i8LxS8pWQPbvE` (READY).
+- Deployed source commit: `eb238e4`.
+- Primary URL: https://gta.nanded.fun
+- Deployment URL: https://nanded-street-stories-fekgtfzkq-piyushbodaa.vercel.app
+- Four original comic illustrations, a split-panel cover, outlined GTA NANDED
+  title, Marathi banner and a four-choice game menu replace the earlier poster.
+- The opening now uses a responsive 12-second animated panel sequence with
+  diagonal scene transitions, a Marathi character scene, title assembly and
+  a 400 ms curtain into gameplay. The old MP4 remains an archived asset.
+- Sound starts off. The optional original soundtrack is AAC 48 kHz, 12 seconds,
+  195,380 bytes, fades before gameplay and passes a full decode check.
+- Build and all 28 tests pass: 14 gameplay/navigation checks plus 14 intro
+  lifecycle checks for skip, replay, focus, visibility, failure and cleanup.
+- Browser verification covered 1576×807 desktop, 390×844 and 320×568 portrait,
+  and 844×390 landscape. Story Drive naturally enters Zenda Chowk; Escape skips
+  into Free Roam without opening Pause; City Guide opens after Skip; Replay
+  returns to the menu. These are browser viewport checks, not physical devices.
+- Public HTTPS verification at 17:28 UTC: all 17 files match `dist/` byte for
+  byte (12,543,155 bytes), with HTTP 206 range support for both audio and the
+  archived MP4. The live phone opening, opt-in sound, title reveal, Zenda spawn
+  and post-opening driving were checked with no browser console errors.
+- Evidence: [release hashes](artifacts/verification/live-release.json),
+  [live cover](artifacts/verification/live-comic-entrance.png),
+  [phone opening](artifacts/verification/comic-phone-launch.png),
+  [portrait menu](artifacts/verification/comic-phone-portrait.png),
+  [landscape menu](artifacts/verification/comic-phone-landscape.png).
+- [Artwork prompts and saved paths](research/launch-art-prompts.json) record
+  the built-in image-generation mode and the four original illustrations.
+
+## Previous release — 16 October 2026, 17:02 UTC
 
 - Public branding: **GTA NANDED**.
 - Production deployment: `dpl_8PK9pxG4KX2WAgVdKyxh8QLLLTvb` (READY).
