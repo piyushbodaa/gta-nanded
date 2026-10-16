@@ -243,7 +243,7 @@ function hookUI(){
   $('minimap')?.addEventListener('click',toggleMap);$('minimap')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();toggleMap();}});
   window.addEventListener('keydown',e=>{
     if(intro.active)return;
-    if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextArea){if(e.code==='Escape'&&game.mapOpen)toggleMap();return;}
+    if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextAreaElement){if(e.code==='Escape'&&game.mapOpen)toggleMap();return;}
     if(e.target instanceof HTMLButtonElement&&['Space','Enter'].includes(e.code))return;
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)&&game.started&&!game.paused)e.preventDefault();
     if(e.repeat){keys.add(e.code);return;}
