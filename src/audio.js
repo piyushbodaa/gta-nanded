@@ -24,6 +24,19 @@ export class GameAudio {
   }
   success(){[440,554,660].forEach((f,i)=>setTimeout(()=>this.tone(f,0.25),i*100));}
   horn(){this.tone(300,0.3,'sawtooth',0.035);this.tone(380,0.3,'sine',0.045);}
+  // Rain is a looping, low-passed noise bed: it fades in while it rains and stays silent when sound is off.
+  setRain(raining){
+    if(!this.ctx)return;
+    if(!this.rain){
+      const buffer=this.ctx.createBuffer(1,this.ctx.sampleRate*2,this.ctx.sampleRate),data=buffer.getChannelData(0);
+      for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
+      const source=this.ctx.createBufferSource(),filter=this.ctx.createBiquadFilter(),gain=this.ctx.createGain();
+      source.buffer=buffer;source.loop=true;filter.type='lowpass';filter.frequency.value=900;gain.gain.value=0;
+      source.connect(filter);filter.connect(gain);gain.connect(this.ctx.destination);source.start();
+      this.rain=gain;
+    }
+    this.rain.gain.setTargetAtTime(raining&&this.enabled?0.035:0,this.ctx.currentTime,0.8);
+  }
   // A soft temple bell: a struck fundamental with a fifth above it that fades slowly.
   bell(){this.tone(523,1.4,'sine',0.05);setTimeout(()=>this.tone(784,1.8,'sine',0.025),120);}
 }
