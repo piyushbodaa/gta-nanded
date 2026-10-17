@@ -111,8 +111,12 @@ export function indexColliders(colliders,cell=50){
       const key=`${x},${z}`;if(!grid.has(key))grid.set(key,[]);grid.get(key).push(b);
     }
   }
+  const none=Object.freeze([]);
   colliders.query=(x,z,r=0)=>{
-    const found=new Set();for(let gx=Math.floor((x-r)/cell);gx<=Math.floor((x+r)/cell);gx++)for(let gz=Math.floor((z-r)/cell);gz<=Math.floor((z+r)/cell);gz++)for(const b of grid.get(`${gx},${gz}`)||[])found.add(b);
+    const x0=Math.floor((x-r)/cell),x1=Math.floor((x+r)/cell),z0=Math.floor((z-r)/cell),z1=Math.floor((z+r)/cell);
+    // Most bodies sit inside one cell: hand back its (read-only) list without copying.
+    if(x0===x1&&z0===z1)return grid.get(`${x0},${z0}`)||none;
+    const found=new Set();for(let gx=x0;gx<=x1;gx++)for(let gz=z0;gz<=z1;gz++)for(const b of grid.get(`${gx},${gz}`)||[])found.add(b);
     return [...found];
   };
   return colliders;

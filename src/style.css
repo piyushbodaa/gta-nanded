@@ -74,6 +74,17 @@
 .is-touch-device .touch-actions{right:var(--mobile-right);grid-template-columns:repeat(2,var(--touch-key))}
 .is-touch-device .touch-actions button{font-size:9px;letter-spacing:.25px}
 .is-touch-device .touch-actions #touch-interact{font-size:23px}
+/* Optional analog driving stick; the arrow pad stays the default and the on-foot control. */
+.touch-joystick,.touch-drive-mode{display:none}
+.is-touch-device:not(.on-foot) .touch-controls .touch-drive-mode{display:flex}
+.is-touch-device.drive-joystick:not(.on-foot) .touch-direction{display:none}
+.is-touch-device.drive-joystick:not(.on-foot) .touch-joystick{display:block}
+.is-touch-device .touch-joystick{--stick:calc(var(--touch-key) * 2.3);position:absolute;left:var(--mobile-left);bottom:calc(14px + var(--safe-bottom));width:var(--stick);height:var(--stick);border-radius:50%;border:1px solid #e8f2dd75;background:radial-gradient(circle,#142c2a26 55%,#142c2a4d);backdrop-filter:blur(3px);box-shadow:0 1px 7px #0719181a;pointer-events:auto;touch-action:none;user-select:none}
+.is-touch-device .touch-joystick-knob{position:absolute;inset:28%;border-radius:50%;border:1px solid #f4ead2b3;background:#e8f2dd47;box-shadow:0 2px 9px #07191859;pointer-events:none}
+.is-touch-device .touch-joystick.active .touch-joystick-knob{background:#ff7a4bb8;border-color:var(--orange)}
+.is-touch-device .touch-controls .touch-drive-mode{position:absolute;left:calc(var(--mobile-left) + var(--touch-key) * 2 + 16px);bottom:calc(32px + var(--touch-key) * 2 + var(--safe-bottom));width:var(--touch-key);height:40px;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;border-radius:10px;font-size:8px;letter-spacing:.3px}
+.is-touch-device .touch-drive-mode>span{font-size:15px;line-height:1}
+.is-touch-device .touch-controls .touch-drive-mode[aria-pressed=true]{background:#21493ac9;border-color:#a4e7d880;color:var(--cyan)}
 .is-touch-device .district-marker{top:calc(68px + var(--safe-top));left:var(--mobile-left);gap:7px;max-width:calc(100vw - 140px)}
 .is-touch-device .district-marker .hud-eyebrow{display:none}
 .is-touch-device .district-marker strong{font-size:19px;display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}

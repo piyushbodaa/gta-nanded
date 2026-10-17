@@ -6,6 +6,8 @@ const MIN_HEIGHT = 1;
 const SAMPLE_STEP = 0.5;
 const SURFACE_GAP = 0.15;
 const UNBOUNDED = { minX: -Infinity, maxX: Infinity, minZ: -Infinity, maxZ: Infinity };
+// Reused for every sample: this runs dozens of times per frame.
+const atHeight = [];
 
 /**
  * Shorten the camera boom before the first wall/roof between the actor and the
@@ -30,10 +32,14 @@ export function resolveCameraPosition(focus, desired, colliders = [], bounds = U
     Math.hypot(dx, dz) / 2 + CAMERA_RADIUS,
   ) || colliders;
   const pointAt = t => ({ x: origin.x + dx * t, y: origin.y + dy * t, z: origin.z + dz * t });
-  const obstructed = point => blocked(point.x, point.z, CAMERA_RADIUS,
-    candidates.filter(box =>
-      point.y >= (Number.isFinite(box.minY) ? box.minY : 0) - VERTICAL_PADDING &&
-      point.y <= (Number.isFinite(box.h) ? box.h : 20) + VERTICAL_PADDING), bounds);
+  const obstructed = point => {
+    atHeight.length = 0;
+    for (const box of candidates) {
+      if (point.y >= (Number.isFinite(box.minY) ? box.minY : 0) - VERTICAL_PADDING &&
+          point.y <= (Number.isFinite(box.h) ? box.h : 20) + VERTICAL_PADDING) atHeight.push(box);
+    }
+    return blocked(point.x, point.z, CAMERA_RADIUS, atHeight, bounds);
+  };
   // There is no valid outward ray if its origin is already inside geometry.
   // Staying at the actor is safer than jumping to the other side of the wall.
   if (obstructed(origin)) return origin;

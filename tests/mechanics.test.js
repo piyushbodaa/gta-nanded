@@ -20,6 +20,17 @@ test('accelerate, steer, brake, reverse and exhaust finite boost',()=>{
   for(let i=0;i<120;i++)driveStep(c,{brake:true},1/60);assert.ok(c.speed<1);
   for(let i=0;i<120;i++)driveStep(c,{down:true},1/60);assert.ok(c.speed<0);
 });
+test('a joystick throttles and steers in proportion to the push',()=>{
+  const half={kind:'hatchback',speed:0,heading:0,nitro:100},full={...half};
+  for(let i=0;i<600;i++){driveStep(half,{up:true,throttle:0.5},1/60);driveStep(full,{up:true,throttle:1},1/60);}
+  assert.ok(full.speed>36,'full stick reaches top speed');
+  assert.ok(half.speed>15&&half.speed<20,`half stick cruises near half of top speed (${half.speed})`);
+  const gentle={kind:'hatchback',speed:20,heading:0,nitro:100},hard={...gentle};
+  driveStep(gentle,{steer:0.3},0.1);driveStep(hard,{steer:1},0.1);
+  assert.ok(gentle.heading>0&&Math.abs(hard.heading/gentle.heading-1/0.3)<1e-6,'steering scales with deflection');
+  const reverse={kind:'hatchback',speed:0,heading:0,nitro:100};
+  for(let i=0;i<120;i++)driveStep(reverse,{down:true,throttle:-1},1/60);assert.ok(reverse.speed<0);
+});
 test('Zenda homecoming starts with a deliberate conversation on foot',()=>{
   const m=newMission(0),def=MISSIONS[0];
   assert.equal(def.startMode,'foot');assert.equal(def.stops[0].action,'interact');

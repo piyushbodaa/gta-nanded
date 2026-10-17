@@ -59,6 +59,17 @@ test('all adventure starts and checkpoints are clear and complete using their re
   }
 });
 
+test('the street circuit starts on the road behind its first checkpoint, facing a clear run to it',()=>{
+  const index=MISSIONS.findIndex(def=>def.race),def=MISSIONS[index],first=def.stops[0],start=def.start;
+  assert.ok(nav.nearest(start).distance<0.05,'grid must be on a mapped street');
+  const gap=Math.hypot(first.x-start.x,first.z-start.z);
+  assert.ok(gap>first.radius+5&&gap<60,`start line ${gap} units ahead`);
+  const forward={x:-Math.sin(start.heading),z:-Math.cos(start.heading)};
+  assert.ok((forward.x*(first.x-start.x)+forward.z*(first.z-start.z))/gap>0.98,'car faces the first checkpoint');
+  for(let t=0;t<=1;t+=0.02)assert.equal(blocked(start.x+(first.x-start.x)*t,start.z+(first.z-start.z)*t,1.7,colliders,BOUNDS),false,`run-up blocked at ${t}`);
+  assert.equal(advanceMission(newMission(index),start,0,true,0.05),null,'checkpoint 1 must not complete at the grid');
+});
+
 test('the first on-foot adventure stays in the Zenda lane and uses connected mapped streets',()=>{
   const first=MISSIONS[0];
   assert.equal(first.id,'zenda-homecoming');assert.equal(first.startMode,'foot');assert.equal(first.seconds,null);
