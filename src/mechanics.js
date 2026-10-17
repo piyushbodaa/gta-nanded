@@ -35,17 +35,20 @@ export const VEHICLES = {
   police: { name: 'Patrol SUV', maxSpeed: 35, acceleration: 16, handling: 1.8, radius: 1.6 },
 };
 
+// Optional analog input.throttle and input.steer (-1..1, a touch joystick) override the arrow keys.
 export function driveStep(car, input, dt) {
   const specs = VEHICLES[car.kind];
   const boosting = input.boost && input.up && car.nitro > 1 && car.speed > 8;
   const limit = specs.maxSpeed * (boosting ? 1.5 : 1);
-  const gas = (input.up ? 1 : 0) - (input.down ? 1 : 0);
-  if (gas) car.speed += gas * specs.acceleration * dt * (gas * car.speed < 0 ? 2.8 : boosting ? 1.8 : 1);
+  const gas = Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : (input.up ? 1 : 0) - (input.down ? 1 : 0);
+  // A partly pushed stick cruises at that share of top speed instead of flooring it.
+  const cruising = gas > 0 && gas < 1 && car.speed > limit * gas;
+  if (gas && !cruising) car.speed += gas * specs.acceleration * dt * (gas * car.speed < 0 ? 2.8 : boosting ? 1.8 : 1);
   else car.speed *= Math.exp(-0.55 * dt);
   if (input.brake) car.speed *= Math.exp(-3.8 * dt);
   car.speed = clamp(car.speed, -specs.maxSpeed * 0.36, limit);
   if (!gas && Math.abs(car.speed) < 0.12) car.speed = 0;
-  const steer = (input.left ? 1 : 0) - (input.right ? 1 : 0);
+  const steer = Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : (input.left ? 1 : 0) - (input.right ? 1 : 0);
   car.heading += steer * specs.handling * Math.min(Math.abs(car.speed) / 9, 1) * Math.sign(car.speed) * dt * (input.brake ? 1.7 : 1);
   car.nitro = clamp(car.nitro + (boosting ? -25 : 9) * dt, 0, 100);
   return { dx: -Math.sin(car.heading) * car.speed * dt, dz: -Math.cos(car.heading) * car.speed * dt, boosting };
@@ -60,6 +63,10 @@ function stop(id,label,options={}){
 const zendaCorner={x:-930.4,z:-1856.33},zendaPhoto={x:-945.75,z:-1859.47};
 const zendaStart={...SPAWN,heading:Math.atan2(-(zendaCorner.x-SPAWN.x),-(zendaCorner.z-SPAWN.z))};
 function lane(point,label,options={}){return {...point,placeId:'zenda-chowk',label,mode:'foot',radius:4,...options};}
+// The circuit grid is an OSM road vertex 34 units behind the Kaman start line, facing it,
+// so the first checkpoint is driven through rather than spawned on beside the arch.
+const circuitGrid={x:-35.59,z:-1015.89},kamanLine=PLACE_BY_ID.get('bhagya-nagar-kaman')?.approach||circuitGrid;
+const circuitStart={...circuitGrid,heading:Math.atan2(-(kamanLine.x-circuitGrid.x),-(kamanLine.z-circuitGrid.z))};
 const photo=(id,label)=>stop(id,label,{action:'photo'});
 const talk=(id,label,dialogue)=>stop(id,label,{action:'interact',dialogue});
 const raceStop=(id,label)=>stop(id,label,{mode:'vehicle',radius:15});
@@ -87,7 +94,7 @@ export const MISSIONS = [
     description:'One easy evening plan: photograph Visava Garden, then walk over to Madhur Bhoj. Look around, take your time and enjoy your city.',reward:550,seconds:null,
     stops:[photo('visava-garden','Photograph Visava Garden'),talk('madhur-bhoj','Meet outside Madhur Bhoj','भूक लागली ना? The garden photo is done. Time to catch up outside Madhur Bhoj.')] },
   { id:'nanded-street-circuit',kind:'race',title:'Nanded circle',label:'08 / STREET CIRCUIT',shortDescription:'Race through Bhagya Nagar, Workshop, ITI and Shivaji Putla.',
-    description:'Five checkpoints, one lap. Take the wheel through Bhagya Nagar, Workshop, ITI and Shivaji Putla, then race back to the finish.',reward:1200,seconds:220,race:true,startMode:'vehicle',
+    description:'Five checkpoints, one lap. Take the wheel through Bhagya Nagar, Workshop, ITI and Shivaji Putla, then race back to the finish.',reward:1200,seconds:220,race:true,start:{...circuitStart},startMode:'vehicle',
     stops:[raceStop('bhagya-nagar-kaman'),raceStop('workshop-corner'),raceStop('iti-corner'),raceStop('shivaji-putla'),raceStop('bhagya-nagar-kaman','Finish at Bhagya Nagar Kaman')] },
   { id:'lose-the-tail',kind:'chase',title:'Lose the tail',label:'09 / THE GETAWAY',shortDescription:'A fictional arcade pursuit through the Nanded streets.',
     description:'Take the wheel, make your own route and stay ahead of the fictional patrol for 50 seconds. The city is your escape route.',reward:1500,seconds:80,chase:true,survive:50,start:{...SPAWN},startMode:'vehicle',stops:[] },

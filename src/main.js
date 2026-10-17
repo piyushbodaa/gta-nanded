@@ -9,6 +9,7 @@ import { createGuide } from './guide.js';
 import { initMobileUI } from './mobile.js';
 import { createIntro } from './intro.js';
 import { createCameraControls, movementForCamera } from './camera-controls.js';
+import { createJoystick } from './joystick.js';
 import { resolveCameraPosition } from './camera-obstruction.js';
 import { mapHeading, destinationBearing } from './map-direction.js';
 import { LANDMARKS, loadStamps, nearestPhotoSpot, collectStamp, createAdventureMenu } from './adventures.js';
@@ -20,6 +21,9 @@ const $ = id => document.getElementById(id);
 const show = (id, visible) => { if ($(id)) $(id).hidden = !visible; };
 const text = (id, value) => { if ($(id)) $(id).textContent = value; };
 const keys = new Set();
+// Fog fully hides the city at this distance, so nothing further is drawn.
+const VIEW_DISTANCE = 640;
+const DRIVE_CONTROLS_KEY = 'nanded-drive-controls-v1';
 const audio = new GameAudio();
 const intro = createIntro();
 let storage;
@@ -28,7 +32,10 @@ const progress=loadProgress(storage);
 const game={started:false,paused:false,mapOpen:false,activityOpen:false,helpOnly:false,onFoot:true,roam:false,cash:progress.cash,completed:progress.completed,mission:newMission(0),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0,gps:null,landmarkView:null,jumpHeight:0,jumpSpeed:0,jumpHeld:false};
 const stamps=loadStamps(storage);
 const player={...SPAWN};
-let renderer,scene,camera,cameraControls,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0;
+let renderer,scene,camera,cameraControls,joystick,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0,pausedFrameDrawn=false;
+let driveControls='arrows';
+try{if(storage.getItem(DRIVE_CONTROLS_KEY)==='joystick')driveControls='joystick';}catch{/* Storage is optional. */}
+const toastQueue=[];
 let guide,adventureMenu,friend,routeLine,routePoints=[],routeAge=10,routeKey='',mapCenter={...SPAWN},mapSpan=3600,lastTrafficFocus={...SPAWN},photoTimer;
 const photoMarkers=[];
 const navigator=createNavigator(NETWORK),visited=new Set();
@@ -39,6 +46,8 @@ let introTime=0;
 const tmp=new THREE.Vector3(),camTarget=new THREE.Vector3(),sunTarget=new THREE.Object3D();
 
 function toast(message,seconds=4) {text('toast',message);show('toast',true);game.toastTime=seconds;}
+// Show after the current message instead of replacing it.
+function queueToast(message,seconds=4){if(game.toastTime>0)toastQueue.push([message,seconds]);else toast(message,seconds);}
 function persist(){const saved=saveProgress(storage,{cash:game.cash,completed:game.completed,stamps:[...stamps]});if(!saved)toast('Progress could not be saved in this browser. You can keep playing.');return saved;}
 function playerPosition(){return game.onFoot?player:car;}
 function addCar(kind,color,x,z,heading=0,route=null){
@@ -53,13 +62,13 @@ function setup(){
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,mobileGraphics?1.2:1.6));renderer.setSize(innerWidth,innerHeight);
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.22;
-  scene=new THREE.Scene();scene.background=new THREE.Color('#ddb8a0');scene.fog=new THREE.Fog('#ddb8a0',190,640);
-  camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,0.2,1200);
+  scene=new THREE.Scene();scene.background=new THREE.Color('#ddb8a0');scene.fog=new THREE.Fog('#ddb8a0',190,VIEW_DISTANCE);
+  camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,0.2,VIEW_DISTANCE+60);
   const hemi=new THREE.HemisphereLight('#e1f2f4','#af8060',2.7);scene.add(hemi);
   const sun=new THREE.DirectionalLight('#ffdbab',3.3);sun.position.set(-100,150,90);sun.castShadow=true;
   const shadowSize=mobileGraphics?1024:2048;sun.shadow.mapSize.set(shadowSize,shadowSize);sun.shadow.camera.left=-110;sun.shadow.camera.right=110;sun.shadow.camera.top=110;sun.shadow.camera.bottom=-110;sun.shadow.camera.near=1;sun.shadow.camera.far=420;sun.shadow.bias=-0.0005;sun.shadow.normalBias=0.04;sun.target=sunTarget;scene.add(sun,sunTarget);
   game.sun=sun;
-  world=createWorld(scene);
+  world=createWorld(scene,{viewDistance:VIEW_DISTANCE});
   indexColliders(world.colliders);indexColliders(world.cameraColliders);world.setFocus?.(SPAWN);
   const parkedStart=navigator.nearest({x:SPAWN.x+Math.sin(MISSIONS[0].start.heading)*12,z:SPAWN.z+Math.cos(MISSIONS[0].start.heading)*12});
   car=addCar('hatchback','#568c8a',parkedStart.x,parkedStart.z,SPAWN.heading);
@@ -125,7 +134,7 @@ function beginMission(){
 
 function openAdventures(view='activities'){
   if(!game.started||intro.active)return;
-  if(game.mapOpen)toggleMap();show('pause-menu',false);game.activityOpen=true;game.paused=true;keys.clear();cameraControls.cancel();adventureMenu.open(view);
+  if(game.mapOpen)toggleMap();show('pause-menu',false);game.activityOpen=true;game.paused=true;keys.clear();cameraControls.cancel();joystick.reset();adventureMenu.open(view);
 }
 function closeAdventures(){
   if(!game.activityOpen)return;
@@ -143,7 +152,8 @@ function placePlayer(position,onFoot=true){
   cameraControls.reset(heading);const dist=onFoot?9:19;
   const initial=resolveCameraPosition({x:position.x,y:1.6,z:position.z},{x:position.x+Math.sin(heading)*dist,y:1.6+Math.tan(.44)*dist,z:position.z+Math.cos(heading)*dist},world.cameraColliders,world.bounds);
   camera.position.set(initial.x,initial.y,initial.z);
-  world.setFocus?.(position);refreshTraffic(position,true);routeAge=10;
+  // A driving start keeps moving traffic off its run-up; on foot, cars only need to clear the kerb.
+  world.setFocus?.(position);refreshTraffic(position,true,onFoot?22:60);routeAge=10;
 }
 function clearArrival(position,exclude=null){
   const paths=[...navigator.walk(position,17,24),...navigator.walk(position,18,24)];
@@ -177,17 +187,20 @@ function takeAction(){
   if(!game.started||game.paused||intro.active)return;
   const target=missionActionTarget(),photoSpot=currentPhotoSpot();
   if(!game.onFoot){toast('Step out of your vehicle first.');return;}
-  if(target){
-    const result=advanceMission(game.mission,player,0,false,0,target.action);
-    if(result){handleMissionResult(result);if(target.dialogue)toast(target.dialogue,6);}
-    if(target.action==='photo')showPhoto(target.placeId?PLACE_BY_ID.get(target.placeId)?.shortName:'Zenda Chowk');
-  }
+  // One press can earn a stamp and advance the activity: show each message in turn.
+  const messages=[];
   if(photoSpot&&(!target||target.action==='photo')){
     const reward=collectStamp(stamps,photoSpot.id);
-    if(reward){game.cash+=reward;if(!persist())toast('Photo collected for this session. Browser storage is unavailable.');else toast(`नांदेडची आठवण! ${photoSpot.shortName} · +₹${reward} · ${stamps.size}/${LANDMARKS.length} stamps`,5);audio.success();}
-    else toast(`${photoSpot.shortName} is already in your passport.`,3);
-    showPhoto(photoSpot.shortName);
-  }else if(!target)toast('Find a mint photo ring at a landmark, or follow your activity marker.');
+    if(reward){game.cash+=reward;messages.push(persist()?[`नांदेडची आठवण! ${photoSpot.shortName} · +₹${reward} · ${stamps.size}/${LANDMARKS.length} stamps`,5]:['Photo collected for this session. Browser storage is unavailable.',4]);audio.success();}
+    else if(!target)messages.push([`${photoSpot.shortName} is already in your passport.`,3]);
+  }else if(!target)messages.push(['Find a mint photo ring at a landmark, or follow your activity marker.',4]);
+  if(target){
+    const result=advanceMission(game.mission,player,0,false,0,target.action);
+    if(result){if(target.dialogue)messages.push([target.dialogue,6]);messages.push(handleMissionResult(result,false));}
+  }
+  messages.forEach(([message,seconds],i)=>i?queueToast(message,seconds):toast(message,seconds));
+  if(photoSpot&&(!target||target.action==='photo'))showPhoto(photoSpot.shortName);
+  else if(target?.action==='photo')showPhoto(target.placeId?PLACE_BY_ID.get(target.placeId)?.shortName:'Zenda Chowk');
   updateHUD();
 }
 function showPhoto(title){
@@ -201,7 +214,7 @@ function pause(force,helpOnly=false){
   if(!game.started&&!helpOnly&&!game.paused)return;
   game.paused=force??!game.paused;game.helpOnly=helpOnly;
   show('pause-menu',game.paused);guide.close();game.mapOpen=false;keys.clear();
-  cameraControls?.cancel();
+  cameraControls?.cancel();joystick?.reset();
   if(game.paused){text('resume',game.started?'Back to the streets':'Back');$('resume')?.focus();}
   else $('game-canvas')?.focus();
   audio.update(car.speed,game.started&&!game.onFoot,game.paused);
@@ -212,7 +225,7 @@ function toggleMap(){
   if(game.activityOpen)closeAdventures();
   game.mapOpen=!game.mapOpen;game.paused=game.mapOpen;
   show('map-overlay',game.mapOpen);show('pause-menu',false);keys.clear();
-  cameraControls?.cancel();
+  cameraControls?.cancel();joystick?.reset();
   if(game.mapOpen){mapCenter={...playerPosition()};mapSpan=3000;guide.open();drawMap($('full-map'),true);}else{guide.close();$('game-canvas').focus();}
 }
 
@@ -273,16 +286,25 @@ function refreshRoute(dt){
   routeLine.material.color.set(game.gps?'#7edac8':'#ffd269');routeLine.visible=Boolean(target);
 }
 
-function refreshTraffic(p,force=false){
+function refreshTraffic(p,force=false,clearance=22){
   if(!force&&distance(p,lastTrafficFocus)<300)return;
   lastTrafficFocus={x:p.x,z:p.z};const nearby=navigator.nearbyEdges(p,240);if(!nearby.length)return;
   cars.filter(v=>v.route&&v!==car&&!police.includes(v)).forEach((v,i)=>{
     if(!force&&distance(v,p)<450)return;
-    const edge=NETWORK.edges[nearby[(i*37)%nearby.length]],a=NETWORK.nodes[edge.a],b=NETWORK.nodes[edge.b];
-    const pos={x:(a.x+b.x)/2,z:(a.z+b.z)/2};if(distance(pos,p)<22)return;
-    const route=navigator.walk(pos,i*733+17,24);if(route.length<3)return;
-    v.x=pos.x;v.z=pos.z;v.route=route;v.routeIndex=1;v.speed=0;
+    // Try other nearby streets rather than leaving this car wherever it was, which may be the arrival point.
+    for(let k=0;k<nearby.length;k+=7){
+      const edge=NETWORK.edges[nearby[(i*37+k)%nearby.length]],a=NETWORK.nodes[edge.a],b=NETWORK.nodes[edge.b];
+      const pos={x:(a.x+b.x)/2,z:(a.z+b.z)/2};if(distance(pos,p)<clearance)continue;
+      const route=navigator.walk(pos,i*733+17,24);if(route.length<3)continue;
+      v.x=pos.x;v.z=pos.z;v.route=route;v.routeIndex=1;v.speed=0;return;
+    }
   });
+}
+
+function nearestVehicle(){
+  let nearest=null,best=8;
+  for(const v of cars){if(!v.mesh.visible||police.includes(v))continue;const d=distance(v,player);if(d<best){nearest=v;best=d;}}
+  return nearest;
 }
 
 function interact(){
@@ -298,7 +320,7 @@ function interact(){
     if(!spot){toast('Find a little more space to step out.');return;}
     player.x=spot.x;player.z=spot.z;player.heading=car.heading;car.speed=0;car.occupied=false;car.route=null;game.onFoot=true;avatar.visible=true;toast('On foot. E to enter a nearby vehicle.');
   }else{
-    const nearest=cars.filter(v=>v.mesh.visible&&!police.includes(v)&&distance(v,player)<8).sort((a,b)=>distance(a,player)-distance(b,player))[0];
+    const nearest=nearestVehicle();
     if(!nearest){toast('Move closer to a parked car or an auto-rickshaw.');return;}
     if(nearest.route){addHeat(30);toast('Vehicle taken. The patrol has been alerted.');}
     else toast(`${VEHICLES[nearest.kind].name}. Let’s go.`);
@@ -309,8 +331,15 @@ function interact(){
 
 function hookUI(){
   cameraControls=createCameraControls($('game-canvas'),{canInteract:()=>game.started&&!intro.active&&!game.paused&&!game.mapOpen});
+  joystick=createJoystick($('touch-joystick'),$('touch-joystick-knob'),{canInteract:()=>game.started&&!intro.active&&!game.paused&&!game.onFoot});
+  $('touch-drive-mode')?.addEventListener('click',()=>{
+    driveControls=driveControls==='joystick'?'arrows':'joystick';joystick.reset();keys.clear();
+    try{storage.setItem(DRIVE_CONTROLS_KEY,driveControls);}catch{/* The choice still applies for this visit. */}
+    toast(driveControls==='joystick'?'Joystick steering: push up to drive, sideways to steer.':'Arrow steering is back.',3);updateHUD();
+  });
   initMobileUI({onLayout:()=>{
     camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
+    pausedFrameDrawn=false;
     if(game.mapOpen)drawMap($('full-map'),true);
   }});
   $('start-drive').addEventListener('click',()=>intro.play(()=>start(false),{mode:'foot'}));
@@ -356,6 +385,9 @@ function hookUI(){
     keys.add(e.code);
   });
   window.addEventListener('keyup',e=>keys.delete(e.code));
+  // A mouse or touch click leaves focus on the button, where Space would click it again
+  // instead of jumping or braking. Keyboard activation (detail 0) keeps its focus.
+  document.addEventListener('click',e=>{if(e.detail&&game.started&&!game.paused&&!intro.active&&e.target.closest?.('button'))$('game-canvas').focus({preventScroll:true});});
   window.addEventListener('blur',()=>{keys.clear();if(game.started&&!game.paused)pause(true);});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.started&&!game.paused)pause(true);});
   const controls={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',boost:'ShiftLeft',brake:'Space'};
@@ -367,7 +399,15 @@ function hookUI(){
   $('game-canvas').addEventListener('webglcontextlost',e=>{e.preventDefault();pause(true);show('fatal-error',true);text('fatal-error-message','The graphics connection was interrupted. Reload this page to return to Nanded.');});
 }
 
-function inputState(){return {up:keys.has('KeyW')||keys.has('ArrowUp'),down:keys.has('KeyS')||keys.has('ArrowDown'),left:keys.has('KeyA')||keys.has('ArrowLeft'),right:keys.has('KeyD')||keys.has('ArrowRight'),brake:keys.has('Space'),boost:keys.has('ShiftLeft')||keys.has('ShiftRight')};}
+function inputState(){
+  const input={up:keys.has('KeyW')||keys.has('ArrowUp'),down:keys.has('KeyS')||keys.has('ArrowDown'),left:keys.has('KeyA')||keys.has('ArrowLeft'),right:keys.has('KeyD')||keys.has('ArrowRight'),brake:keys.has('Space'),boost:keys.has('ShiftLeft')||keys.has('ShiftRight')};
+  if(!game.onFoot&&driveControls==='joystick'&&joystick?.active){
+    // Analog values drive the car; the flags keep boost, body roll and hints in step.
+    input.throttle=joystick.y;input.steer=-joystick.x;
+    input.up||=joystick.y>0.25;input.down||=joystick.y<-0.25;input.left||=joystick.x<-0.25;input.right||=joystick.x>0.25;
+  }
+  return input;
+}
 
 function addHeat(amount){game.heat=clamp(game.heat+amount,0,90);game.wanted=Math.min(3,Math.ceil(game.heat/30));game.trouble=game.time;spawnPolice();}
 
@@ -407,7 +447,8 @@ function updateTraffic(dt){
     p.heading+=wrapAngle(heading-p.heading)*Math.min(dt*4,1);
     p.speed=THREE.MathUtils.lerp(p.speed,Math.min(30+game.wanted*2,d*1.5),dt*2);
     const hit=moveBody(p,-Math.sin(p.heading)*p.speed*dt,-Math.cos(p.heading)*p.speed*dt,1.5,world.colliders,world.bounds);
-    if(hit){p.repath=0;p.speed*=0.6;}
+    // Grinding a wall replans soon, but not with a city-wide search on every frame.
+    if(hit){p.repath=Math.min(p.repath,0.5);p.speed*=0.6;}
     const lights=p.mesh.userData.lights;if(lights)lights.forEach((light,i)=>light.emissiveIntensity=Math.sin(game.time*12+i*Math.PI)>0?3:0.1);
   }
 }
@@ -428,7 +469,7 @@ function updatePlayer(dt){
     }
     avatar.position.set(player.x,0.15+game.jumpHeight,player.z);avatar.rotation.y=player.heading;
     avatar.userData.limbs.forEach((limb,i)=>limb.rotation.x=len?Math.sin(game.time*12+i*Math.PI)*0.45:0);
-    lastNearby=cars.filter(v=>v.mesh.visible&&!police.includes(v)&&distance(v,player)<8).sort((a,b)=>distance(a,player)-distance(b,player))[0];
+    lastNearby=nearestVehicle();
   }else{
     const beforeSpeed=car.speed,move=driveStep(car,input,dt);
     const collision=moveBody(car,move.dx,move.dz,VEHICLES[car.kind].radius,world.colliders,world.bounds);
@@ -480,16 +521,18 @@ function updateMission(dt){
   for(const {place,mesh} of photoMarkers){mesh.visible=distance(pos,place.approach)<130&&!stamps.has(place.id);mesh.scale.setScalar(1+Math.sin(game.time*2)*.06);}
 }
 
-function handleMissionResult(result){
-  if(!result)return;
-  const def=MISSIONS[game.mission.index];
+function handleMissionResult(result,announce=true){
+  if(!result)return null;
+  const def=MISSIONS[game.mission.index];let message=null;
   if(result==='complete'){
     game.cash+=def.reward;game.completed++;persist();audio.success();
     if(def.chase){game.wanted=0;game.heat=0;}
-    toast(`झकास! ${def.title} complete · +₹${def.reward.toLocaleString('en-IN')} · Choose your next adventure in Activities.`,7);
-  }else if(result==='checkpoint'){audio.tone(660,0.2);toast(def.stops[game.mission.stage].label,3);}
-  else if(result==='failed'){toast('Time’s up. Retry the challenge when you’re ready.',6);audio.tone(150,0.4);}
+    message=[`झकास! ${def.title} complete · +₹${def.reward.toLocaleString('en-IN')} · Choose your next adventure in Activities.`,7];
+  }else if(result==='checkpoint'){audio.tone(660,0.2);message=[def.stops[game.mission.stage].label,3];}
+  else if(result==='failed'){message=['Time’s up. Retry the challenge when you’re ready.',6];audio.tone(150,0.4);}
+  if(announce&&message)toast(...message);
   routeAge=10;refreshRoute(2);updateHUD();
+  return message;
 }
 
 function updateCamera(dt){
@@ -531,13 +574,15 @@ function updateHUD(){
   text('mission-description',m.status==='complete'?`झकास! ₹${def.reward.toLocaleString('en-IN')} earned. Your progress is saved.`:m.status==='failed'?'Take another run, or choose a different adventure.':def.description);
   text('mission-progress',m.status==='active'?(def.chase?`Stay ahead · ${Math.max(0,Math.ceil(def.survive-m.elapsed))}s`:target?.label||''):m.status==='complete'?'READY FOR ANOTHER?':'READY WHEN YOU ARE');
   text('mission-distance',m.status==='active'&&target?`${Math.round(distance(p,target))} m`:'');
-  const remaining=Math.max(0,Math.ceil((def.seconds||0)-m.elapsed));text('mission-time',m.status==='active'?(def.seconds?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'NO TIMER'):'');
+  // A getaway is won by surviving; its longer hard limit is never the clock to beat.
+  const limit=def.chase?def.survive:def.seconds,remaining=Math.max(0,Math.ceil((limit||0)-m.elapsed));text('mission-time',m.status==='active'?(limit?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'NO TIMER'):'');
   show('mission-next',m.status!=='active');text('mission-next',m.status==='failed'?'Retry challenge ↗':'Choose next adventure ↗');
   if(game.roam){
     text('mission-label','YOUR CITY / FREE ROAM');text('mission-title',game.landmarkView?.shortName||'Find your Nanded');text('mission-description',game.landmarkView?'Find a view you like and take a photo for your landmark passport. Walk or drag the view to explore on foot.':'Walk, sprint, jump or borrow a ride. Find mint photo rings at landmarks, or choose a challenge in Activities.');text('mission-progress',`${visited.size} of ${PLACES.length} places discovered`);text('mission-distance','');text('mission-time','');show('mission-next',true);text('mission-next','Choose an adventure ↗');
   }else if(target&&m.status==='active')text('mission-distance',`${Math.round((pathLength(routePoints)||distance(p,target))/NETWORK.scale)} m route`);
   text('roam-toggle','Activities');
-  document.body.classList.toggle('on-foot',game.onFoot);
+  document.body.classList.toggle('on-foot',game.onFoot);document.body.classList.toggle('drive-joystick',driveControls==='joystick');
+  $('touch-drive-mode')?.setAttribute('aria-pressed',String(driveControls==='joystick'));
   text('touch-jump',game.onFoot?'JUMP':'BRAKE');$('touch-jump')?.setAttribute('aria-label',game.onFoot?'Jump':'Handbrake');text('touch-sprint',game.onFoot?'RUN':'BOOST');
   text('passport-summary',`${stamps.size}/${LANDMARKS.length} landmark stamps`);
   text('objective-short',game.roam?(game.landmarkView?`Photo spot · ${stamps.has(game.landmarkView.id)?'Stamp collected':'₹150 for a new stamp'}`:'Your city. Your pace.'):m.status==='complete'?'Chapter complete. Choose your next adventure.':m.status==='failed'?'Try again in Activities.':target?.label||'Stay ahead of the patrol');
@@ -562,11 +607,19 @@ function drawMap(canvas,full){
   function line(points,color,width){ctx.beginPath();points.forEach((p,i)=>{const q=map(p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
   for(const river of NETWORK.rivers)line(river.points,'#315f65',Math.max(2,river.width*scale));
   const edgeIds=full?NETWORK.edges.map((_,i)=>i):navigator.nearbyEdges(pos,200);
-  ctx.strokeStyle='#526762';
+  // One stroke per colour and width: stroking 26k streets one by one stalls the full map.
+  const strokes=new Map();
   for(const i of edgeIds){const edge=NETWORK.edges[i],a=NETWORK.nodes[edge.a],b=NETWORK.nodes[edge.b];
     if(full&&edge.type==='residential'&&span>5000)continue;
     if(!visible(a)&&!visible(b))continue;
-    line([a,b],edge.type==='residential'?'#354d49':'#65786b',Math.max(full?.65:1,edge.width*scale));
+    const color=edge.type==='residential'?'#354d49':'#65786b',width=Math.max(full?.65:1,edge.width*scale),key=`${color}|${width}`;
+    if(!strokes.has(key))strokes.set(key,{color,width,segments:[]});strokes.get(key).segments.push(a,b);
+  }
+  // Residential lanes first, so main roads stay on top.
+  for(const {color,width,segments} of [...strokes.values()].sort((a,b)=>(b.color==='#354d49')-(a.color==='#354d49'))){
+    ctx.beginPath();
+    for(let i=0;i<segments.length;i+=2){const p=map(segments[i]),q=map(segments[i+1]);ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);}
+    ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();
   }
   ctx.setLineDash([3,4]);for(const rail of NETWORK.rails)line(rail,'#8b9390',full?1:2);ctx.setLineDash([]);
   const target=destination();
@@ -598,17 +651,21 @@ function drawMap(canvas,full){
 }
 
 function frame(){
-  requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),0.05);introTime+=dt;
+  // A 0.1 s cap keeps play at real speed down to 10 fps; movement substeps prevent tunnelling.
+  requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),0.1);introTime+=dt;
   // The full-screen artwork/film needs no background WebGL work or game timers.
   if(!game.started||intro.active)return;
   if(!game.paused){
     game.time+=dt;game.collisionCooldown=Math.max(0,game.collisionCooldown-dt);
     updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);refreshRoute(dt);world.setFocus?.(playerPosition());refreshTraffic(playerPosition());
-    if(game.toastTime>0){game.toastTime-=dt;if(game.toastTime<=0)show('toast',false);}
+    if(game.toastTime>0){game.toastTime-=dt;if(game.toastTime<=0){const next=toastQueue.shift();if(next)toast(...next);else show('toast',false);}}
     lastHUD+=dt;if(lastHUD>0.2){discoverPlaces();updateHUD();lastHUD=0;}
   }
-  world.animate?.(dt,introTime);audio.update(car.speed,game.started&&!game.onFoot,game.paused);
-  renderer.render(scene,camera);
+  audio.update(car.speed,game.started&&!game.onFoot,game.paused);
+  // Menus and the map cover a frozen city: draw it once, then again only after a resize.
+  if(game.paused&&pausedFrameDrawn)return;
+  pausedFrameDrawn=game.paused;
+  world.animate?.(dt,introTime);renderer.render(scene,camera);
 }
 
 try{setup();}catch(error){

@@ -6,7 +6,7 @@ export const WORLD = Object.freeze({ bounds: BOUNDS });
 const CHUNK = 200;
 
 /** Mapped streets and researched places, with original illustrative architecture. */
-export function createWorld(scene) {
+export function createWorld(scene, { viewDistance = 850 } = {}) {
   const group = new THREE.Group(); group.name = 'Nanded mapped city'; scene.add(group);
   const colliders = [], cameraStructures = [], batches = new Map(), dummy = new THREE.Object3D();
   let seed = 48271;
@@ -40,6 +40,8 @@ export function createWorld(scene) {
     cone: new THREE.ConeGeometry(1, 1, 8), sphere: new THREE.SphereGeometry(1, 8, 6),
     dome: new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
     arch: new THREE.TorusGeometry(1, 0.12, 4, 16, Math.PI),
+    // Road junction patches only ever show their top: 10 triangles instead of a 40-triangle cylinder.
+    disc: new THREE.CircleGeometry(1, 10).rotateX(-Math.PI / 2),
   };
   const labels = createCityLabels(PLACES, group, CHUNK);
   function shape(geometry, material, x, y, z, sx, sy, sz, rotation = 0, tilt = 0) {
@@ -149,7 +151,7 @@ export function createWorld(scene) {
       for (let s = 5; s < len - 4; s += 12) box('lane', e.aPoint.x + dx * s / len, 0.18, e.aPoint.z + dz * s / len, 0.17, 0.018, Math.min(4.5, len - s), yaw);
     }
   }
-  NETWORK.nodes.forEach((p, i) => { if (nodeWidths[i]) cylinder('asphalt', p.x, 0.13, p.z, nodeWidths[i] / 2, 0.08); });
+  NETWORK.nodes.forEach((p, i) => { if (nodeWidths[i]) shape('disc', 'asphalt', p.x, 0.17, p.z, nodeWidths[i] / 2, 1, nodeWidths[i] / 2); });
 
   // The railway follows source polylines rather than a parallel invented grid.
   for (const raw of NETWORK.rails || []) {
@@ -683,7 +685,7 @@ export function createWorld(scene) {
     if (distanceTo(p, coachingCenter) < 1200 || distanceTo(p, oldCity) < 900) coreFillers++;
     if (fillerCount % 12 === 0) {
       const tx = x + dx / len * (w / 2 + 3), tz = z + dz / len * (w / 2 + 3);
-      if (roadClear(tx, tz, 1) && lotClear(tx, tz, 2.4) && dryLand(tx, tz, 2)) { tree(tx, tz, fillerCount % 12 === 0, between(0.6, 0.9)); occupy(tx, tz, 2); decorationCount++; }
+      if (roadClear(tx, tz, 1) && lotClear(tx, tz, 2.4) && dryLand(tx, tz, 2)) { tree(tx, tz, fillerCount % 24 === 0, between(0.6, 0.9)); occupy(tx, tz, 2); decorationCount++; }
     }
   }
   // Lamps use a narrow collision-free verge and occur only near the populated city.
@@ -721,6 +723,11 @@ export function createWorld(scene) {
   const labelStats = labels.finish();
   const cameraColliders = [...colliders, ...cameraStructures, ...labelStats.cameraOccluders];
   chunkMeshes.push(...labelStats.meshes);
+  // The city never moves: compose its matrices once, then stop the renderer's
+  // per-frame scene walk at this group instead of visiting thousands of meshes.
+  group.updateMatrixWorld(true);
+  group.traverse(object => { object.matrixAutoUpdate = false; });
+  group.updateMatrixWorld = () => {};
   let lastFocus = { x: Infinity, z: Infinity }, lastCull = 0;
   function setFocus(focus) {
     if (!focus || !Number.isFinite(focus.x) || !Number.isFinite(focus.z)) return;
@@ -730,7 +737,7 @@ export function createWorld(scene) {
     for (const mesh of chunkMeshes) {
       const sphere = mesh.boundingSphere || mesh.geometry.boundingSphere;
       const distance = Math.hypot(sphere.center.x - focus.x, sphere.center.z - focus.z);
-      mesh.visible = distance < 850 + sphere.radius;
+      mesh.visible = distance < viewDistance + sphere.radius;
     }
   }
   setFocus(SPAWN);

@@ -70,7 +70,7 @@ export function createAdventureMenu({missions,onMission,onVisit,onRoam,onClose,g
       card.append(top,el('h3','',view==='landmarks'?item.shortName:item.title));
       card.append(el('p','',view==='landmarks'?(photoPrompts[item.id]||'Step into a familiar part of Nanded and collect its photo stamp.'):item.shortDescription));
       const bottom=el('div','adventure-card-bottom');
-      bottom.append(el('span','',view==='landmarks'?(collected?'In your passport':'+₹150 · PHOTO STAMP'):(item.seconds?`${Math.ceil(item.seconds)}s · ₹${item.reward}`:`NO TIMER · ₹${item.reward}`)));
+      bottom.append(el('span','',view==='landmarks'?(collected?'In your passport':'+₹150 · PHOTO STAMP'):(item.survive||item.seconds?`${Math.ceil(item.survive||item.seconds)}s · ₹${item.reward}`:`NO TIMER · ₹${item.reward}`)));
       const button=el('button','',view==='landmarks'?'Visit on foot →':'Play activity →');button.type='button';
       button.setAttribute('aria-label',`${view==='landmarks'?'Visit':'Play'} ${view==='landmarks'?item.shortName:item.title}`);
       button.addEventListener('click',()=>view==='landmarks'?onVisit(item):onMission(index));bottom.append(button);card.append(bottom);grid.append(card);
