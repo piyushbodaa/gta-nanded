@@ -12,24 +12,55 @@ test('collisions slide alongside walls and respect world boundaries',()=>{
   assert.ok(p.x<=-2);assert.ok(p.z>=19);
   moveBody(p,-1000,0,1,[],bounds);assert.ok(p.x>=-99);
 });
-test('accelerate, steer, brake, reverse and exhaust finite boost',()=>{
-  const c={kind:'hatchback',speed:0,heading:0,nitro:100};
-  for(let i=0;i<300;i++)driveStep(c,{up:true,boost:true},1/60);
-  assert.ok(c.speed>30);assert.ok(c.nitro>=0&&c.nitro<10);
-  const angle=c.heading;driveStep(c,{left:true},0.1);assert.ok(c.heading>angle);
-  for(let i=0;i<120;i++)driveStep(c,{brake:true},1/60);assert.ok(c.speed<1);
-  for(let i=0;i<120;i++)driveStep(c,{down:true},1/60);assert.ok(c.speed<0);
+const dt=1/60,kmh=v=>v*3.6;
+const fresh=(kind='hatchback',speed=0)=>({kind,speed,heading:0,nitro:100});
+test('cars accelerate and top out at grounded city speeds',()=>{
+  const c=fresh();let t=0,to60=null;
+  while(t<40){driveStep(c,{up:true},dt);t+=dt;if(to60===null&&kmh(c.speed)>=60)to60=t;}
+  assert.ok(to60>2.5&&to60<5,`hatchback 0-60 km/h in ${to60}s`);
+  assert.ok(kmh(c.speed)>90&&kmh(c.speed)<110,`hatchback top ${kmh(c.speed)} km/h`);
+  const auto=fresh('auto');for(let i=0;i<2400;i++)driveStep(auto,{up:true},dt);
+  assert.ok(kmh(auto.speed)>45&&kmh(auto.speed)<60,`auto-rickshaw top ${kmh(auto.speed)} km/h`);
 });
-test('a joystick throttles and steers in proportion to the push',()=>{
-  const half={kind:'hatchback',speed:0,heading:0,nitro:100},full={...half};
-  for(let i=0;i<600;i++){driveStep(half,{up:true,throttle:0.5},1/60);driveStep(full,{up:true,throttle:1},1/60);}
-  assert.ok(full.speed>36,'full stick reaches top speed');
-  assert.ok(half.speed>15&&half.speed<20,`half stick cruises near half of top speed (${half.speed})`);
-  const gentle={kind:'hatchback',speed:20,heading:0,nitro:100},hard={...gentle};
-  driveStep(gentle,{steer:0.3},0.1);driveStep(hard,{steer:1},0.1);
-  assert.ok(gentle.heading>0&&Math.abs(hard.heading/gentle.heading-1/0.3)<1e-6,'steering scales with deflection');
-  const reverse={kind:'hatchback',speed:0,heading:0,nitro:100};
-  for(let i=0;i<120;i++)driveStep(reverse,{down:true,throttle:-1},1/60);assert.ok(reverse.speed<0);
+test('brakes stop from 60 km/h in a realistic distance, then reverse slowly',()=>{
+  const c=fresh('hatchback',60/3.6);let travelled=0;
+  while(c.speed>0){travelled+=c.speed*dt;driveStep(c,{footBrake:true},dt);}
+  assert.ok(travelled>10&&travelled<18,`stopped in ${travelled} m`);
+  for(let i=0;i<30;i++)driveStep(c,{footBrake:true},dt);assert.equal(c.speed,0,'a held brake does not reverse');
+  for(let i=0;i<600;i++)driveStep(c,{down:true},dt);
+  assert.ok(c.speed<0&&kmh(-c.speed)<30,`reverse ${kmh(-c.speed)} km/h`);
+  const rolling=fresh('hatchback',-5);driveStep(rolling,{up:true},dt);assert.ok(rolling.speed>-5,'accelerator brakes a car rolling backwards first');
+});
+test('steering eases in from the keys, tightens when slow and never exceeds tyre grip',()=>{
+  const c=fresh('hatchback',8);driveStep(c,{left:true},dt);
+  assert.ok(c.steer>0&&c.steer<0.1,'keys ease toward full lock');
+  for(let i=0;i<60;i++)driveStep(c,{left:true,throttle:8/30},dt);
+  assert.ok(Math.abs(c.steer-1)<1e-9);
+  const slow=fresh('hatchback',5);slow.steer=1;driveStep(slow,{steer:1,throttle:5/30},dt);
+  const radius=slow.speed/(slow.heading/dt);assert.ok(radius>3.5&&radius<6,`turning circle ${radius} m`);
+  const fast=fresh('hatchback',25);fast.steer=1;driveStep(fast,{steer:1},dt);
+  assert.ok(fast.speed*fast.heading/dt<=9.0001,'lateral acceleration capped by grip');
+  const back=fresh('hatchback',-4);driveStep(back,{steer:1},dt);assert.ok(back.heading<0,'steering inverts when reversing');
+});
+test('boost is finite and an empty tank coasts but still brakes and steers',()=>{
+  const c=fresh('hatchback',20);for(let i=0;i<600;i++)driveStep(c,{up:true,boost:true},dt);
+  assert.ok(c.nitro<5,'nitro drains while boosting');
+  const plain=fresh('hatchback',20);for(let i=0;i<600;i++)driveStep(plain,{up:true},dt);
+  const boosted=fresh('hatchback',20);for(let i=0;i<180;i++)driveStep(boosted,{up:true,boost:true},dt);
+  assert.ok(boosted.speed>plain.speed,'boost beats the normal top speed');
+  const empty={...fresh('hatchback',15),fuel:0};driveStep(empty,{up:true},dt);
+  assert.ok(empty.speed<15,'no fuel, no power');driveStep(empty,{left:true},0.2);assert.ok(empty.heading>0);
+  const thirsty=fresh();for(let i=0;i<600;i++)driveStep(thirsty,{up:true},dt);assert.ok(thirsty.fuel<100&&thirsty.fuel>95);
+});
+test('a joystick or pedal throttles and steers in proportion to the push',()=>{
+  const half=fresh(),full=fresh();
+  for(let i=0;i<1800;i++){driveStep(half,{up:true,throttle:0.5},dt);driveStep(full,{up:true,throttle:1},dt);}
+  assert.ok(kmh(full.speed)>90,'full throttle reaches top speed');
+  assert.ok(half.speed>12&&half.speed<15.5,`half throttle cruises near half of top speed (${half.speed})`);
+  const gentle=fresh('hatchback',4),hard=fresh('hatchback',4);
+  driveStep(gentle,{steer:0.3},0.05);driveStep(hard,{steer:1},0.05);
+  assert.ok(gentle.heading>0&&hard.heading>2.5*gentle.heading,'steering grows with deflection');
+  const reverse=fresh();for(let i=0;i<120;i++)driveStep(reverse,{throttle:-1},dt);assert.ok(reverse.speed<0,'negative throttle (reverse gear) backs up');
 });
 test('Zenda homecoming starts with a deliberate conversation on foot',()=>{
   const m=newMission(0),def=MISSIONS[0];

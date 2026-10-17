@@ -84,3 +84,23 @@
   .is-touch-device .photo-memory{top:85px;right:28px;width:180px}
 }
 @media(prefers-reduced-motion:reduce){.photo-memory{transform:none}}
+
+/* Dial speedometer, gear and fuel for driving. */
+.speed-gauge{position:relative}
+.speed-dial{display:block;width:100%;height:auto;overflow:visible}
+.dial-track{fill:none;stroke:#f0f6d333;stroke-width:3}
+.dial-redline{fill:none;stroke:#ef7369;stroke-width:3}
+.dial-ticks{stroke:#e2ead4b3;stroke-width:1.2}
+.dial-labels{fill:#cfdbc5;font-size:7px;font-weight:600;text-anchor:middle}
+.dial-needle{stroke:var(--orange);stroke-width:2.4;stroke-linecap:round}
+.dial-hub{fill:#fff5dd}
+.speed-gauge .speed-readout{justify-content:center;margin-top:-2px}
+.vehicle-panel .speed-gauge .speed-readout strong{font-size:30px;letter-spacing:-1px;line-height:1.05}
+.gear-readout{font-weight:800;font-size:11px;color:var(--orange);border:1px solid #ff7a4b80;border-radius:4px;padding:0 4px;align-self:center}
+.fuel-fill{background:#e9c46a}
+.fuel-fill.low{background:#ef7369}
+.on-foot .vehicle-panel .speed-gauge,.on-foot #camera-view{display:none}
+.is-touch-device .vehicle-panel .speed-gauge .speed-readout{position:absolute;left:0;right:0;bottom:30%;margin:0;gap:3px}
+.is-touch-device .vehicle-panel .speed-gauge .speed-readout strong{font-size:16px;letter-spacing:0}
+.is-touch-device .vehicle-panel .speed-gauge .speed-readout>span{display:none}
+.is-touch-device .vehicle-panel .gear-readout{font-size:8px;padding:0 3px}

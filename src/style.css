@@ -83,8 +83,45 @@
 .is-touch-device .touch-joystick-knob{position:absolute;inset:28%;border-radius:50%;border:1px solid #f4ead2b3;background:#e8f2dd47;box-shadow:0 2px 9px #07191859;pointer-events:none}
 .is-touch-device .touch-joystick.active .touch-joystick-knob{background:#ff7a4bb8;border-color:var(--orange)}
 .is-touch-device .touch-controls .touch-drive-mode{position:absolute;left:calc(var(--mobile-left) + var(--touch-key) * 2 + 16px);bottom:calc(32px + var(--touch-key) * 2 + var(--safe-bottom));width:var(--touch-key);height:40px;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;border-radius:10px;font-size:8px;letter-spacing:.3px}
-.is-touch-device .touch-drive-mode>span{font-size:15px;line-height:1}
-.is-touch-device .touch-controls .touch-drive-mode[aria-pressed=true]{background:#21493ac9;border-color:#a4e7d880;color:var(--cyan)}
+.is-touch-device .touch-drive-mode>span:first-child{font-size:15px;line-height:1}
+/* Dr. Driving-style touch driving: steering wheel, D/R lever and pedals (the default while driving). */
+/* Keep the road and car clear: the district shows top left and driving recentres the camera itself. */
+.is-touch-device:not(.on-foot) .nearby-place,.is-touch-device:not(.on-foot) #camera-reset,.is-touch-device .dial-labels{display:none}
+#interaction:empty{display:none}
+.touch-wheel,.touch-gear,.touch-pedals{display:none}
+.is-touch-device.drive-wheel:not(.on-foot) .touch-direction,.is-touch-device.drive-wheel:not(.on-foot) #touch-jump{display:none}
+.is-touch-device.drive-wheel:not(.on-foot) .touch-wheel{display:block}
+.is-touch-device.drive-wheel:not(.on-foot) .touch-controls .touch-gear,.is-touch-device.drive-wheel:not(.on-foot) .touch-pedals{display:flex}
+.is-touch-device .touch-wheel{--wheel:calc(var(--touch-key) * 2.5);position:absolute;left:var(--mobile-left);bottom:calc(12px + var(--safe-bottom));width:var(--wheel);height:var(--wheel);border-radius:50%;pointer-events:auto;touch-action:none;user-select:none}
+.touch-wheel-rim{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 2px 6px #07191880)}
+.wheel-ring{fill:#142c2a2e;stroke:#e8f2ddc2;stroke-width:9}
+.wheel-spokes{fill:none;stroke:#e8f2dda6;stroke-width:7;stroke-linecap:round}
+.wheel-hub{fill:#142c2acc;stroke:#e8f2ddc2;stroke-width:3}
+.wheel-marker{stroke:var(--orange);stroke-width:7;stroke-linecap:round}
+.touch-wheel.active .wheel-ring{stroke:#ffb08f}
+.is-touch-device .touch-controls .touch-gear{position:absolute;left:calc(var(--mobile-left) + var(--touch-key) * 2.5 + 10px);bottom:calc(14px + var(--safe-bottom));width:calc(var(--touch-key) * .85);height:calc(var(--touch-key) * 2 + 8px);flex-direction:column;justify-content:space-evenly;align-items:center;padding:0;border-radius:12px;font-size:17px;font-weight:800}
+.touch-gear span{opacity:.38;transition:opacity .15s,color .15s}
+.touch-gear[data-gear=D] [data-gear-option=D],.touch-gear[data-gear=R] [data-gear-option=R]{opacity:1;color:var(--orange)}
+.is-touch-device .touch-pedals{position:absolute;right:var(--mobile-right);bottom:calc(14px + var(--safe-bottom));gap:10px;align-items:flex-end}
+.is-touch-device .touch-controls .touch-pedal{width:calc(var(--touch-key) * 1.15);height:calc(var(--touch-key) * 1.6);display:flex;align-items:flex-end;justify-content:center;padding:0 0 9px;border-radius:12px 12px 18px 18px;font-size:9px;letter-spacing:.7px;background:repeating-linear-gradient(180deg,#e8f2dd24 0 3px,transparent 3px 10px),#142c2a59}
+.is-touch-device .touch-controls .touch-pedal-gas{width:calc(var(--touch-key) * 1.25);height:calc(var(--touch-key) * 2.1);color:var(--orange);border-color:#ff7a4b80}
+.is-touch-device .touch-controls .touch-pedal.active{background:repeating-linear-gradient(180deg,#14251e33 0 3px,transparent 3px 10px),#ff7a4bc4;color:#14251e;transform:scale(.97);transform-origin:50% 100%}
+.is-touch-device.drive-wheel:not(.on-foot) .touch-actions{bottom:calc(var(--touch-key) * 2.1 + 26px + var(--safe-bottom));grid-template-columns:repeat(3,calc(var(--touch-key) * .82));grid-template-rows:calc(var(--touch-key) * .82);gap:6px}
+.is-touch-device.drive-wheel:not(.on-foot) .touch-actions button{width:calc(var(--touch-key) * .82);height:calc(var(--touch-key) * .82)}
+.is-touch-device.drive-wheel:not(.on-foot) .touch-controls .touch-drive-mode{left:calc(var(--mobile-left) + var(--touch-key) * 2.5 + 10px);bottom:calc(var(--touch-key) * 2 + 32px + var(--safe-bottom));width:calc(var(--touch-key) * .85)}
+@media(orientation:portrait){
+  .is-touch-device.drive-wheel:not(.on-foot) .minimap-toggle{bottom:calc(var(--touch-key) * 2.92 + 38px + var(--safe-bottom))}
+  .is-touch-device.drive-wheel:not(.on-foot) .minimap-panel{bottom:calc(var(--touch-key) * 2.92 + 92px + var(--safe-bottom))}
+  .is-touch-device:not(.on-foot) .world-action{top:calc(170px + var(--safe-top));bottom:auto;left:auto;right:var(--mobile-right);transform:none}
+  .is-touch-device:not(.on-foot):has(#gps-panel:not([hidden])) .world-action{top:calc(238px + var(--safe-top))}
+}
+@media(orientation:landscape) and (max-height:600px){
+  .is-touch-device:not(.on-foot) .nearby-place{bottom:calc(112px + var(--safe-bottom))}
+  .is-touch-device:not(.on-foot) .interaction{bottom:calc(150px + var(--safe-bottom))}
+  .is-touch-device:not(.on-foot) .hud .toast{bottom:calc(194px + var(--safe-bottom))}
+  .is-touch-device:not(.on-foot) .world-action{top:calc(62px + var(--safe-top));bottom:auto}
+  .is-touch-device:not(.on-foot):has(#gps-panel:not([hidden])) .world-action{top:calc(112px + var(--safe-top))}
+}
 .is-touch-device .district-marker{top:calc(68px + var(--safe-top));left:var(--mobile-left);gap:7px;max-width:calc(100vw - 140px)}
 .is-touch-device .district-marker .hud-eyebrow{display:none}
 .is-touch-device .district-marker strong{font-size:19px;display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
