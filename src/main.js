@@ -867,6 +867,7 @@ function frame(){
     lastHUD+=dt;if(lastHUD>0.2){discoverPlaces();updateHUD();lastHUD=0;}
   }
   audio.update(car.speed,game.started&&!game.onFoot,game.paused);
+  audio.setRain(game.started&&lifeSystem?.weather==='rain'&&!game.paused);
   // Menus and the map cover a frozen city: draw it once, then again only after a resize.
   if(game.paused&&pausedFrameDrawn)return;
   pausedFrameDrawn=game.paused;
