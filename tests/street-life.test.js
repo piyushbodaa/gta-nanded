@@ -28,3 +28,16 @@ test('the two new side missions are repeatable on foot with a clear objective', 
   }
   assert.equal(new Set(MISSIONS.map(m => m.id)).size, MISSIONS.length, 'mission ids are unique');
 });
+
+import { seasonalWeather } from '../src/street-life.js';
+
+test('the monsoon brings mostly rain, summer is hazy, and winter is clear', () => {
+  const on = month => new Date(2026, month, 15);
+  const never = () => 0.99; // the least likely roll: rain stays in the monsoon, haze otherwise
+  assert.equal(seasonalWeather(on(6), never), 'clear');
+  assert.equal(seasonalWeather(on(6), () => 0.1), 'rain');
+  assert.equal(seasonalWeather(on(3), () => 0.1), 'haze');
+  assert.equal(seasonalWeather(on(3), () => 0.9), 'clear');
+  assert.equal(seasonalWeather(on(11), () => 0.05), 'haze');
+  assert.equal(seasonalWeather(on(11), () => 0.5), 'clear');
+});

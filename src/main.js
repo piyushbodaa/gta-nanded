@@ -16,7 +16,7 @@ import { resolveCameraPosition } from './camera-obstruction.js';
 import { mapHeading, destinationBearing } from './map-direction.js';
 import { LANDMARKS, loadStamps, nearestPhotoSpot, collectStamp, createAdventureMenu } from './adventures.js';
 import { createVehicle, createPerson, createAnimal } from './vehicles.js';
-import { createVendors, createStreetLife, timeOfDay } from './street-life.js';
+import { createVendors, createStreetLife, seasonalWeather } from './street-life.js';
 import { GameAudio } from './audio.js';
 import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, loadProgress, saveProgress } from './mechanics.js';
 
@@ -145,7 +145,7 @@ function setup(){
   }
   // Roadside stalls at food places, and the lanterns and rain that change the city's light.
   vendors.push(...createVendors(scene,PLACES.filter(p=>['restaurant','food','cafe','market'].includes(p.category)),(x,z)=>blocked(x,z,0.8,world.colliders,world.bounds)));
-  lifeSystem=createStreetLife(scene,{sun:game.sun,hemi:game.hemi,lanternSpots:LANDMARKS.map(p=>p.approach),callbacks:{
+  lifeSystem=createStreetLife(scene,{sun:game.sun,hemi:game.hemi,lanternSpots:LANDMARKS.map(p=>p.approach),startWeather:seasonalWeather(),callbacks:{
     onChatter:line=>{if(game.started&&game.onFoot&&!game.paused&&game.toastTime<=0)toast(t(line.en,line.mr),3.5);},
     onHorn:()=>audio.horn(),
     onBell:()=>audio.bell(),

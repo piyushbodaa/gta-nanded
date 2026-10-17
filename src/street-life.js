@@ -35,6 +35,20 @@ export function timeOfDay(date = new Date()) {
   return 'day';
 }
 
+/**
+ * Nanded's seasons: the monsoon from June to September brings rain most days, October to
+ * February is clear and cool, and March to May is hot and hazy.
+ */
+export function seasonalWeather(date = new Date(), random = Math.random) {
+  const month = date.getMonth(); // 0 = January
+  const monsoon = month >= 5 && month <= 8;
+  const summer = month >= 2 && month <= 4;
+  const roll = random();
+  if (monsoon) return roll < 0.6 ? 'rain' : roll < 0.85 ? 'haze' : 'clear';
+  if (summer) return roll < 0.5 ? 'haze' : 'clear';
+  return roll < 0.1 ? 'haze' : 'clear';
+}
+
 /** Roadside stalls at food places, set out where the pavement is clear. */
 export function createVendors(scene, places, isBlocked) {
   const vendors = [];
@@ -57,8 +71,8 @@ export function createVendors(scene, places, isBlocked) {
  * Atmosphere, weather and ambient timers. `callbacks` receives onChatter(line), onHorn(), onBell();
  * the caller decides when a toast or a sound is appropriate.
  */
-export function createStreetLife(scene, { sun, hemi, lanternSpots = [], callbacks = {} }) {
-  let weather = 'clear';
+export function createStreetLife(scene, { sun, hemi, lanternSpots = [], callbacks = {}, startWeather = 'clear' }) {
+  let weather = startWeather;
   let chatterIn = 8, hornIn = 20, bellIn = 6;
   const fogTarget = new THREE.Color(), lerpFog = new THREE.Color();
 
