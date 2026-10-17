@@ -1127,6 +1127,12 @@ export function createWorld(scene, { viewDistance: viewDistanceOption = 850 } = 
     if (p.id === 'taroda-naka') shopRow(p, 4, 2);
     // Station Road and Vazirabad commercial edges.
     if (['nanded-station', 'nanded-bus-stand', 'shivaji-putla'].includes(p.id)) shopRow(p, 4, 1);
+    // The other great commercial stretches: Vazirabad's civic row, VIP Road
+    // at Baba Nagar, Mahatma Phule Chowk, Hingoli Gate and Degloor Naka.
+    if (p.id === 'municipal-corporation') shopRow(p, 6, 2);
+    if (p.id === 'yeshwant-college') shopRow(p, 5, 3);
+    if (p.id === 'mahatma-phule-chowk') { shopRow(p, 6, 0); marketStalls(p, 6); }
+    if (['hingoli-gate', 'degloor-naka', 'collector-office'].includes(p.id)) shopRow(p, 4, 5);
   }
 
   // Every real OSM-mapped building in the bounds (scripts/build-buildings.py).
@@ -1157,9 +1163,25 @@ export function createWorld(scene, { viewDistance: viewDistanceOption = 850 } = 
     const paletteForType = OSM_COLORS[btype] || OSM_COLORS[7];
     pbox(p, choose(paletteForType), 0, bh / 2, 0, bw, bh, bd);
     pbox(p, btype === 3 || btype === 6 ? 'tinRoof' : choose(OSM_ROOFS), 0, bh + 0.12, 0, bw + 0.22, 0.24, bd + 0.22);
-    if (bh >= 6.5 && bw >= 5) {
-      pbox(p, btype === 2 ? 'blueGlass' : 'window', 0, bh * 0.55, bd / 2 + 0.04, bw * 0.72, Math.min(2.2, bh * 0.3), 0.07);
-      if (bh >= 10) pbox(p, 'window', 0, bh * 0.82, bd / 2 + 0.04, bw * 0.72, 1.4, 0.07);
+    // A facade, not just a box: window bands per floor, a parapet lip, and
+    // the rooftop furniture of every Indian terrace — tank and stair cabin.
+    const floors = Math.max(1, Math.min(5, Math.round(bh / 3.1)));
+    if (bw >= 3.4 && bh >= 4) {
+      for (let floor = 1; floor <= floors; floor++)
+        pbox(p, btype === 2 && floor === 1 ? 'blueGlass' : 'window', 0, Math.min(bh - 0.8, floor * 3.0 - 0.4), bd / 2 + 0.04, bw * 0.7, 1.15, 0.07);
+      if (bd >= 5) pbox(p, 'window', bw / 2 + 0.04, bh * 0.55, 0, 0.07, Math.min(2, bh * 0.3), bd * 0.6);
+    }
+    if (bw >= 4 && bd >= 4) {
+      pbox(p, 'roofEdge', 0, bh + 0.42, bd / 2 - 0.06, bw + 0.24, 0.36, 0.12);
+      if (btype <= 1 && random() < 0.5) pshape(p, 'cylinder', 'dark', -bw * 0.3, bh + 0.85, -bd * 0.26, 0.55, 1.1, 0.55);
+      if (btype <= 2 && random() < 0.35) pbox(p, choose(paletteForType), bw * 0.24, bh + 0.85, -bd * 0.2, 1.7, 1.4, 1.7);
+      if (btype >= 2 && bh >= 6 && random() < 0.5) pbox(p, 'gateWhite', -bw * 0.34, bh * 0.62, bd / 2 + 0.3, 1, 0.62, 0.55);
+    }
+    if (btype === 1 && bw >= 6) for (let floor = 1; floor <= Math.min(floors, 3); floor++)
+      pbox(p, 'cream', 0, floor * 3.0 - 1.15, bd / 2 + 0.42, bw * 0.62, 0.14, 0.85);
+    if (btype === 2 && bw >= 4.5 && bh < 9) {
+      pbox(p, choose(['red', 'blue', 'green', 'saffron']), 0, 3.15, bd / 2 + 0.06, bw * 0.92, 0.75, 0.1);
+      for (let sIdx = 0; sIdx < 4; sIdx++) pbox(p, sIdx % 2 ? 'awningWhite' : 'awning', (sIdx - 1.5) * bw / 4.2, 2.68, bd / 2 + 0.62, bw / 4.2, 0.1, 1.25);
     }
     if (bw >= 2.4 && bd >= 2) pbox(p, 'dark', 0, Math.min(1.25, bh / 2), bd / 2 + 0.04, Math.min(1.6, bw * 0.3), Math.min(2.5, bh * 0.85), 0.08);
     if (btype === 5 && bh >= 5) pshape(p, 'dome', 'white', 0, bh + 0.25, 0, Math.min(bw, bd) * 0.24, Math.min(bw, bd) * 0.26, Math.min(bw, bd) * 0.24);
@@ -1311,7 +1333,7 @@ export function createWorld(scene, { viewDistance: viewDistanceOption = 850 } = 
   }
 
   // Rows of parked two-wheelers outside coaching classes and colleges.
-  for (const place of PLACES.filter(p => ['coaching', 'college', 'school'].includes(p.category)).slice(0, 24)) {
+  for (const place of PLACES.filter(p => ['coaching', 'college', 'school', 'market', 'shop', 'restaurant', 'hotel'].includes(p.category)).slice(0, 34)) {
     if (!place.approach) continue;
     const base = { x: place.approach.x, z: place.approach.z, rotation: place.rotation || 0 };
     for (let n = 0; n < 6; n++) {
@@ -1400,6 +1422,44 @@ export function createWorld(scene, { viewDistance: viewDistanceOption = 850 } = 
     }
   }
   setFocus(SPAWN);
+
+  // The Godavari, alive: foam flecks drifting downstream and three country
+  // boats working the main channel. Added to the scene (not the frozen city
+  // group) so they can actually move.
+  const riverPath = (NETWORK.rivers?.[0]?.points || []).map(p => ({ x: p.x, z: p.z }));
+  const riverLengths = [0];
+  for (let i = 1; i < riverPath.length; i++) riverLengths.push(riverLengths[i - 1] + Math.hypot(riverPath[i].x - riverPath[i - 1].x, riverPath[i].z - riverPath[i - 1].z));
+  const riverTotal = riverLengths.at(-1) || 0;
+  function riverAt(distance) {
+    if (!riverTotal) return { x: 0, z: 0, heading: 0 };
+    const d = ((distance % riverTotal) + riverTotal) % riverTotal;
+    let i = 1;
+    while (i < riverLengths.length - 1 && riverLengths[i] < d) i++;
+    const seg = riverLengths[i] - riverLengths[i - 1] || 1, t = (d - riverLengths[i - 1]) / seg;
+    const a = riverPath[i - 1], b = riverPath[i];
+    return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, heading: Math.atan2(-(b.x - a.x), -(b.z - a.z)) };
+  }
+  const boats = [];
+  if (riverTotal > 200) {
+    const hullMat = new THREE.MeshStandardMaterial({ color: '#7a4a2e', roughness: 0.8 });
+    const canopyMat = new THREE.MeshStandardMaterial({ color: '#e8b23e', roughness: 0.9 });
+    for (let b = 0; b < 3; b++) {
+      const boat = new THREE.Group();
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.7, 6.4), hullMat); hull.position.y = 0.32; boat.add(hull);
+      const prow = new THREE.Mesh(new THREE.ConeGeometry(0.85, 1.6, 4), hullMat); prow.rotation.x = Math.PI / 2; prow.rotation.y = Math.PI / 4; prow.position.set(0, 0.4, -3.9); boat.add(prow);
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 2.6), canopyMat); canopy.position.y = 1.65; boat.add(canopy);
+      for (const px of [-0.65, 0.65]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.1, 0.09), hullMat); post.position.set(px, 1.1, 0.6); boat.add(post); }
+      scene.add(boat);
+      boats.push({ mesh: boat, offset: riverTotal * (0.22 + b * 0.19), speed: 2.1 + b * 0.5, lane: (b - 1) * 13 });
+    }
+  }
+  const FOAM = 90, foamPositions = new Float32Array(FOAM * 3), foamS = new Float32Array(FOAM), foamLane = new Float32Array(FOAM);
+  for (let i = 0; i < FOAM; i++) { foamS[i] = riverTotal * (i / FOAM); foamLane[i] = (i % 7 - 3) * 7; }
+  const foamGeometry = new THREE.BufferGeometry();
+  foamGeometry.setAttribute('position', new THREE.BufferAttribute(foamPositions, 3));
+  const foam = new THREE.Points(foamGeometry, new THREE.PointsMaterial({ color: '#eef4ec', size: 0.85, transparent: true, opacity: 0.5, depthWrite: false }));
+  foam.frustumCulled = false; foam.visible = riverTotal > 200; scene.add(foam);
+
   group.userData = { architecture: 'Illustrative original models; mapped streets and researched place names', fillerCount, priorityFillers, coreFillers, startingLaneTrees, bridgeEdges, farmPlots, ridgeCount, signCount: labelStats.signCount, atlasCount: 1, batchCount: batches.size };
   return {
     group, colliders, cameraColliders, landmarks: PLACES, roads: NETWORK, bounds: BOUNDS,
@@ -1411,6 +1471,26 @@ export function createWorld(scene, { viewDistance: viewDistanceOption = 850 } = 
       viewDistance = distance; lastFocus = { x: Infinity, z: Infinity }; lastCull = 0;
     },
     getStats() { return { batches: chunkMeshes.length, visibleBatches: chunkMeshes.filter(mesh => mesh.visible).length, instances: instanceCount, fillers: fillerCount, priorityFillers, coreFillers, startingLaneTrees, bridgeEdges, farmPlots, ridges: ridgeCount, detailShops, osmBuildings, osmColliders, placeCount: PLACES.length, signs: labelStats.signCount, atlases: 1 }; },
-    animate(_dt, elapsed) { materials.water.roughness = 0.27 + Math.sin(elapsed * 0.2) * 0.035; },
+    animate(dt, elapsed) {
+      materials.water.roughness = 0.27 + Math.sin(elapsed * 0.2) * 0.035;
+      if (!riverTotal) return;
+      const step = Math.min(dt || 0, 0.1);
+      for (const boat of boats) {
+        boat.offset += boat.speed * step;
+        const p = riverAt(boat.offset);
+        boat.mesh.position.set(p.x + Math.cos(p.heading) * boat.lane, 0.12 + Math.sin(elapsed * 1.4 + boat.offset * 0.05) * 0.05, p.z - Math.sin(p.heading) * boat.lane);
+        boat.mesh.rotation.y = p.heading;
+        boat.mesh.rotation.z = Math.sin(elapsed * 1.1 + boat.offset) * 0.02;
+      }
+      for (let i = 0; i < FOAM; i++) {
+        foamS[i] += step * 5.5;
+        if (foamS[i] > riverTotal) foamS[i] -= riverTotal;
+        const p = riverAt(foamS[i]);
+        foamPositions[i * 3] = p.x + Math.cos(p.heading) * foamLane[i];
+        foamPositions[i * 3 + 1] = 0.22;
+        foamPositions[i * 3 + 2] = p.z - Math.sin(p.heading) * foamLane[i];
+      }
+      foamGeometry.attributes.position.needsUpdate = true;
+    },
   };
 }

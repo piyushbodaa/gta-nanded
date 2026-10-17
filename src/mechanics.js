@@ -154,10 +154,35 @@ export const MISSIONS = [
   { id:'airport-run',kind:'race',title:'Station ते Airport',label:'14 / AIRPORT RUN',shortDescription:'Race from Hazur Sahib Nanded station past Hingoli Gate to the airport.',
     description:'The classic cross-city dash: station forecourt, Hingoli Gate, Namaskar Chowk, then Shri Guru Gobind Singh Ji Airport. Four minutes on the clock — keep it clean.',reward:1400,seconds:240,race:true,start:{...airportStart},startMode:'vehicle',
     stops:[raceStop('hingoli-gate','Through Hingoli Gate'),raceStop('namaskar-chowk','Past Namaskar Chowk'),raceStop('nanded-airport','Finish at Shri Guru Gobind Singh Ji Airport')] },
+  // --- Chapter two: one full day in the city, admission to aarti. ---
+  { id:'admission-day',kind:'social',title:'प्रवेशाचा दिवस',label:'15 / ADMISSION DAY',shortDescription:'College admission morning: Yeshwant, People\'s College, then chai to celebrate.',
+    description:'First day of the rest of your life. Collect the admission form at Yeshwant Mahavidyalaya, photograph People\'s College for the family group, then celebrate with chai at Frespresso.',reward:800,seconds:null,
+    stops:[talk('yeshwant-college','Collect the form at Yeshwant Mahavidyalaya','फॉर्म मिळाला! आता People\'s College चा एक फोटो काढूया.'),photo('peoples-college','Photograph People\'s College'),talk('frespresso','Celebrate with chai at Frespresso','प्रवेश पक्का! Admission confirmed — chai on you!')] },
+  { id:'mondha-auction',kind:'delivery',title:'मोंढ्याचा लिलाव',label:'16 / MONDHA AUCTION',shortDescription:'Drive the produce run from Old Mondha to the New Mondha yard before the rates change.',
+    description:'Auction morning moves fast. Load up at Sarafa in the old city, drive the yard run to New Mondha while the rates hold, then seal the deal over sweets at Prasad.',reward:950,seconds:300,
+    stops:[stop('sarafa-bazar','Load up in the Sarafa lanes',{mode:'vehicle'}),stop('brilliant-commerce','Reach the New Mondha yard',{mode:'vehicle'}),talk('prasad-sweet-house','Seal it with sweets at Prasad','सौदा पक्का! आजचा भाव आपलाच.')] },
+  { id:'gurpurab-evening',kind:'photo',title:'गुरपुरबची संध्याकाळ',label:'17 / GURPURAB EVENING',shortDescription:'Photograph Hazur Sahib at its glowing best, do seva at the Langar, end at Nagina Ghat.',
+    description:'The Takht glows gold as the light falls. Photograph Sachkhand, help for a moment at Langar Sahib, and finish on the Nagina Ghat steps above the Godavari.',reward:1200,seconds:null,
+    stops:[photo('hazur-sahib','Photograph Takht Sri Hazur Sahib'),talk('langar-sahib','Do a little seva at Langar Sahib','सेवा परमो धर्म:. Thank you for your hands today.'),photo('nagina-ghat','End the evening at Nagina Ghat')] },
 ].map(def=>{
   const first=def.stops[0],place=first&&PLACE_BY_ID.get(first.placeId);
   return {startMode:'foot',...def,start:def.start||{x:first.x,z:first.z,heading:place?.rotation||0}};
 });
+
+/** Progress through a checkpoint race: later checkpoint wins, then nearer to it. */
+export function raceProgress(stage, distanceToNext) { return stage * 100000 - Math.max(0, distanceToNext || 0); }
+
+/** 1-based race position of the player among rivals, by checkpoint progress. */
+export function racePosition(playerStage, playerDistance, rivals = []) {
+  const mine = raceProgress(playerStage, playerDistance);
+  return 1 + rivals.filter(rival => raceProgress(rival.stage, rival.distance) > mine).length;
+}
+
+/** Gentle rubber-banding: rivals hurry when behind, ease off when ahead. */
+export function rubberBand(playerStage, playerDistance, rivalStage, rivalDistance) {
+  const gap = raceProgress(playerStage, playerDistance) - raceProgress(rivalStage, rivalDistance);
+  return Math.max(0.86, Math.min(1.16, 1 + gap / 1400));
+}
 
 export function newMission(index = 0) {
   return { index: ((index % MISSIONS.length) + MISSIONS.length) % MISSIONS.length, stage: 0, elapsed: 0, dwell: 0, status: 'active', crashes: 0 };

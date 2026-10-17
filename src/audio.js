@@ -39,4 +39,29 @@ export class GameAudio {
   }
   // A soft temple bell: a struck fundamental with a fifth above it that fades slowly.
   bell(){this.tone(523,1.4,'sine',0.05);setTimeout(()=>this.tone(784,1.8,'sine',0.025),120);}
+  // The two-tone chime that precedes an Indian Railways announcement.
+  announcement(){[660,523].forEach((f,i)=>setTimeout(()=>this.tone(f,0.35,'sine',0.05),i*260));}
+  // A long dual-tone train horn, low and far away.
+  trainHorn(){this.tone(311,1.1,'sawtooth',0.028);this.tone(370,1.1,'sawtooth',0.022);}
+  /**
+   * Place ambience: a soft murmur bed whose level follows where you stand —
+   * market lanes loudest — and a quiet harmonium-like drone near shrines.
+   * Levels are 0..1 proximities; everything stays under the engine mix.
+   */
+  setAmbience({market=0,shrine=0}={}) {
+    if(!this.ctx)return;
+    if(!this.ambience){
+      const buffer=this.ctx.createBuffer(1,this.ctx.sampleRate*2,this.ctx.sampleRate),data=buffer.getChannelData(0);
+      let last=0;for(let i=0;i<data.length;i++){const white=Math.random()*2-1;last=(last+0.04*white)/1.04;data[i]=last*3;}
+      const source=this.ctx.createBufferSource(),filter=this.ctx.createBiquadFilter(),gain=this.ctx.createGain();
+      source.buffer=buffer;source.loop=true;filter.type='bandpass';filter.frequency.value=620;filter.Q.value=0.6;gain.gain.value=0;
+      source.connect(filter);filter.connect(gain);gain.connect(this.ctx.destination);source.start();
+      const droneGain=this.ctx.createGain();droneGain.gain.value=0;droneGain.connect(this.ctx.destination);
+      for(const f of [146.83,220,293.66]){const o=this.ctx.createOscillator();o.type='triangle';o.frequency.value=f;o.connect(droneGain);o.start();}
+      this.ambience={murmur:gain,drone:droneGain};
+    }
+    const t=this.ctx.currentTime,on=this.enabled?1:0;
+    this.ambience.murmur.gain.setTargetAtTime(on*Math.max(0,Math.min(1,market))*0.05,t,0.9);
+    this.ambience.drone.gain.setTargetAtTime(on*Math.max(0,Math.min(1,shrine))*0.016,t,1.2);
+  }
 }

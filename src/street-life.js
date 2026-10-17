@@ -62,6 +62,108 @@ export function seasonalWeather(date = new Date(), random = Math.random) {
 }
 
 /** Roadside stalls at food places, set out where the pavement is clear. */
+/**
+ * The rhythm of a Nanded day, from the device clock: school rush, market
+ * morning, quiet afternoon, bazaar evening, night. Friday is the big
+ * Mondha day; Sunday the city breathes slower.
+ */
+export function daypart(date = new Date()) {
+  const hour = date.getHours(), day = date.getDay();
+  const part = hour < 5 ? 'night' : hour < 7 ? 'dawn' : hour < 10 ? 'school-rush' : hour < 13 ? 'market-morning'
+    : hour < 16 ? 'afternoon' : hour < 20 ? 'bazaar-evening' : hour < 23 ? 'night-market' : 'night';
+  return {
+    part,
+    marketDay: day === 5,
+    sunday: day === 0,
+    schoolTime: part === 'school-rush' || (hour >= 13 && hour < 15),
+    crowd: part === 'school-rush' || part === 'bazaar-evening' ? 1.3 : part === 'night' ? 0.55 : day === 0 ? 0.8 : 1,
+    horns: part === 'school-rush' ? 0.6 : part === 'night' ? 2.2 : 1,
+  };
+}
+
+/** Sample a polyline path at an arc-length distance. Returns point + heading. */
+export function pathSampler(points) {
+  const lengths = [0];
+  for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z));
+  const total = lengths.at(-1) || 0;
+  return {
+    total,
+    at(distance) {
+      if (!total || points.length < 2) return { x: points[0]?.x || 0, z: points[0]?.z || 0, heading: 0 };
+      const d = Math.max(0, Math.min(distance, total));
+      let i = 1;
+      while (i < lengths.length - 1 && lengths[i] < d) i++;
+      const seg = lengths[i] - lengths[i - 1] || 1, t = (d - lengths[i - 1]) / seg;
+      const a = points[i - 1], b = points[i];
+      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, heading: Math.atan2(-(b.x - a.x), -(b.z - a.z)) };
+    },
+  };
+}
+
+/**
+ * A train that actually runs: loco and five coaches along the longest mapped
+ * rail line, pausing at the station, sounding its horn near the player.
+ */
+export function createTrain(scene, rails = [], { station = null, onHorn = () => {} } = {}) {
+  const line = rails.reduce((best, r) => (r?.length > (best?.length || 0) ? r : best), null);
+  const group = new THREE.Group(); group.name = 'Running train'; scene.add(group);
+  if (!line || line.length < 2) return { update() {} };
+  const sampler = pathSampler(line);
+  const mats = {
+    loco: new THREE.MeshStandardMaterial({ color: '#b23a2e', roughness: 0.5 }),
+    cream: new THREE.MeshStandardMaterial({ color: '#f0e6cf', roughness: 0.6 }),
+    coach: new THREE.MeshStandardMaterial({ color: '#33569c', roughness: 0.55 }),
+    dark: new THREE.MeshStandardMaterial({ color: '#26303a', roughness: 0.8 }),
+  };
+  function carriage(material, band) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 11), material); body.position.y = 1.9; body.castShadow = true; g.add(body);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.3, 11.1), mats.cream); roof.position.y = 3.35; g.add(roof);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.66, 0.7, 10.4), band); stripe.position.y = 2.35; g.add(stripe);
+    const bogie = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.7, 9.5), mats.dark); bogie.position.y = 0.45; g.add(bogie);
+    group.add(g);
+    return g;
+  }
+  const SPACING = 12.2, SPEED = 19;
+  const makeConsist = () => [carriage(mats.loco, mats.cream), ...Array.from({ length: 5 }, () => carriage(mats.coach, mats.dark))];
+  // Two consists in opposite directions, so a train passes every few minutes.
+  const consists = [
+    { units: makeConsist(), head: SPACING * 6, direction: 1, dwell: 0, horned: false },
+    { units: makeConsist(), head: 0, direction: -1, dwell: 0, horned: false },
+  ];
+  const stationAt = station ? (() => {
+    let best = null, bestD = Infinity;
+    for (let d = 0; d <= sampler.total; d += 8) { const pt = sampler.at(d), dist = Math.hypot(pt.x - station.x, pt.z - station.z); if (dist < bestD) { bestD = dist; best = d; } }
+    return bestD < 60 ? best : null;
+  })() : null;
+  if (consists[1]) consists[1].head = Math.max(SPACING * 6, sampler.total - SPACING * 6);
+  return {
+    positions() { return consists.map(c => ({ x: Math.round(c.units[0].position.x), z: Math.round(c.units[0].position.z), direction: c.direction })); },
+    update(dt, player) {
+      for (const train of consists) {
+        if (train.dwell > 0) train.dwell -= dt;
+        else {
+          const before = train.head;
+          train.head += train.direction * SPEED * dt;
+          if (stationAt !== null && (before - stationAt) * (train.head - stationAt) <= 0 && before !== train.head) { train.head = stationAt; train.dwell = 7; }
+          if (train.head >= sampler.total) { train.head = sampler.total; train.direction = -1; train.dwell = 4; }
+          if (train.head <= SPACING * (train.units.length - 1)) { train.head = SPACING * (train.units.length - 1); train.direction = 1; train.dwell = 4; }
+          if (train.dwell > 0) train.horned = false;
+        }
+        train.units.forEach((unit, i) => {
+          const q = sampler.at(train.head - train.direction * i * SPACING);
+          unit.position.set(q.x, 0.15, q.z);
+          unit.rotation.y = train.direction > 0 ? q.heading : q.heading + Math.PI;
+        });
+        if (player && !train.horned && train.dwell <= 0) {
+          const front = train.units[0].position;
+          if (Math.hypot(front.x - player.x, front.z - player.z) < 170) { train.horned = true; onHorn(); }
+        }
+      }
+    },
+  };
+}
+
 export function createVendors(scene, places, isBlocked) {
   const vendors = [];
   places.slice(0, 16).forEach((place, i) => {
@@ -150,7 +252,7 @@ export function createStreetLife(scene, { sun, hemi, lanternSpots = [], callback
   // The sky follows the device clock until the player overrides it (L key),
   // so a night-time player is not stuck in the dark forever.
   let phaseOverride = null;
-  let chatterIn = 8, hornIn = 20, bellIn = 6;
+  let chatterIn = 8, hornIn = 20, bellIn = 6, hornScale = 1;
   const fogTarget = new THREE.Color(), lerpFog = new THREE.Color();
 
   // Festival lanterns: warm bulbs strung at the ghats and temples, lit at dusk and night.
@@ -165,6 +267,23 @@ export function createStreetLife(scene, { sun, hemi, lanternSpots = [], callback
     }
   }
   scene.add(lanterns);
+  // Aarti diyas: little flames floating at the waterline near the shrine
+  // approaches, lit with the lanterns at dusk. Deterministic scatter.
+  const diyas = new THREE.Group(); diyas.name = 'Aarti diyas';
+  {
+    const diyaGeo = new THREE.SphereGeometry(0.16, 6, 5);
+    const diyaMat = new THREE.MeshBasicMaterial({ color: '#ffb347' });
+    lanternSpots.forEach((spot, si) => {
+      for (let k = 0; k < 5; k++) {
+        const angle = ((si * 37 + k * 71) % 360) * Math.PI / 180, radius = 5 + ((si * 13 + k * 29) % 6);
+        const flame = new THREE.Mesh(diyaGeo, diyaMat);
+        flame.position.set(spot.x + Math.sin(angle) * radius, 0.3, spot.z + Math.cos(angle) * radius);
+        flame.scale.y = 1.5;
+        diyas.add(flame);
+      }
+    });
+  }
+  scene.add(diyas);
 
   // Rain: short streaks that follow the player and fall continuously.
   const COUNT = 500, HEIGHT = 26;
@@ -219,6 +338,7 @@ export function createStreetLife(scene, { sun, hemi, lanternSpots = [], callback
     sun.intensity = THREE.MathUtils.lerp(sun.intensity, base.sun * dimming, k);
     hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, base.hemi * (weather === 'rain' ? 0.85 : 1), k);
     lanterns.visible = phase !== 'day';
+    diyas.visible = phase !== 'day';
   }
 
   function updateRain(dt, center) {
@@ -238,6 +358,7 @@ export function createStreetLife(scene, { sun, hemi, lanternSpots = [], callback
     get weather() { return weather; },
     get phase() { return phaseOverride || timeOfDay(); },
     cycleWeather() { weather = WEATHER[(WEATHER.indexOf(weather) + 1) % WEATHER.length]; return weather; },
+    setRhythm(rhythm) { hornScale = rhythm?.horns || 1; },
     setWeather(next) { if (WEATHER.includes(next)) weather = next; },
     cyclePhase() {
       const current = phaseOverride || timeOfDay();
@@ -252,7 +373,7 @@ export function createStreetLife(scene, { sun, hemi, lanternSpots = [], callback
       chatterIn -= dt;
       if (chatterIn <= 0) { chatterIn = 9 + Math.random() * 6; if (onFoot && !busy) callbacks.onChatter?.(pick(CHATTER)); }
       hornIn -= dt;
-      if (hornIn <= 0) { hornIn = 18 + Math.random() * 25; if (!onFoot && Math.abs(speed) > 4) callbacks.onHorn?.(); }
+      if (hornIn <= 0) { hornIn = (18 + Math.random() * 25) * hornScale; if (!onFoot && Math.abs(speed) > 4) callbacks.onHorn?.(); }
       bellIn -= dt;
       if (!nearShrine) bellIn = Math.max(bellIn, 4);
       else if (bellIn <= 0) { bellIn = 14 + Math.random() * 6; callbacks.onBell?.(); }

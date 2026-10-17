@@ -16,11 +16,12 @@ import { resolveCameraPosition } from './camera-obstruction.js';
 import { mapHeading, destinationBearing } from './map-direction.js';
 import { LANDMARKS, loadStamps, nearestPhotoSpot, collectStamp, createAdventureMenu } from './adventures.js';
 import { createVehicle, createPerson, createAnimal } from './vehicles.js';
-import { createVendors, createStreetLife, createTrafficSignals, seasonalWeather } from './street-life.js';
+import { createVendors, createStreetLife, createTrafficSignals, createTrain, daypart, signalState, seasonalWeather } from './street-life.js';
+import { nextPhotoFilter, photoFilterCss } from './photo-filters.js';
 import { QUALITY_TIERS, initialTier, loadQualityMode, saveQualityMode, nextQualityMode, tierForMode, createAutoQuality, tierSettings } from './quality.js';
 import { buildRoadIndex } from './road-clearance.js';
 import { GameAudio } from './audio.js';
-import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, loadProgress, saveProgress, loadRecords, saveRecords } from './mechanics.js';
+import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, racePosition, rubberBand, loadProgress, saveProgress, loadRecords, saveRecords } from './mechanics.js';
 
 const $ = id => document.getElementById(id);
 const show = (id, visible) => { if ($(id)) $(id).hidden = !visible; };
@@ -49,6 +50,9 @@ const trafficKind = i => i === 5 ? 'bus' : i === 11 ? 'truck' : i === 17 ? 'temp
 const SHRINE_IDS = new Set(['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'kaleshwar-temple', 'govardhan-ghat', 'ram-ghat', 'urvashi-ghat', 'sangat-sahib', 'banda-ghat', 'shikar-ghat']);
 let lifeSystem = null;
 let trafficSignals = null;
+let trainSystem = null, rivalCars = [], rhythm = daypart(), lastDaypart = '';
+let rawPhoto = null, photoFilter = 'none', photoTitleText = '';
+const buzz = ms => { try { window.navigator.vibrate?.(ms); } catch { /* Haptics are optional. */ } };
 let roadIndex = null;
 // Adaptive quality: mode persists, the auto tracker steps tiers by frame time.
 let qualityMode = 'auto', autoQuality = null, qualitySettings = null, isMobileGraphics = false;
@@ -126,11 +130,12 @@ function applyQuality(tierIndex){
 }
 function currentTierIndex(){return QUALITY_TIERS.indexOf(tierForMode(qualityMode,autoQuality?.tier??0));}
 
-function setup(){
+async function setup(){
+  const stage=async label=>{text('loading-status',label);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));};
   const mobileGraphics=matchMedia('(any-pointer: coarse)').matches||innerWidth<=760;
   isMobileGraphics=mobileGraphics;
   qualityMode=loadQualityMode(storage);
-  autoQuality=createAutoQuality(initialTier({coarse:mobileGraphics,smallScreen:innerWidth<=760,cores:navigator.hardwareConcurrency||8,memory:navigator.deviceMemory||8}));
+  autoQuality=createAutoQuality(initialTier({coarse:mobileGraphics,smallScreen:innerWidth<=760,cores:window.navigator.hardwareConcurrency||8,memory:window.navigator.deviceMemory||8}));
   renderer=new THREE.WebGLRenderer({canvas:$('game-canvas'),antialias:true,powerPreference:'high-performance'});
   renderer.setSize(innerWidth,innerHeight);
   // The city is static, so the shadow map is refreshed on a cadence (and
@@ -143,7 +148,9 @@ function setup(){
   const sun=new THREE.DirectionalLight('#ffdbab',3.3);sun.position.set(-100,150,90);sun.castShadow=true;
   sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-110;sun.shadow.camera.right=110;sun.shadow.camera.top=110;sun.shadow.camera.bottom=-110;sun.shadow.camera.near=1;sun.shadow.camera.far=420;sun.shadow.bias=-0.0005;sun.shadow.normalBias=0.04;sun.target=sunTarget;scene.add(sun,sunTarget);
   game.sun=sun;
+  await stage('BUILDING THE CITY…');
   world=createWorld(scene,{viewDistance:VIEW_DISTANCE});
+  await stage('WAKING THE STREETS…');
   applyQuality(currentTierIndex());
   indexColliders(world.colliders);indexColliders(world.cameraColliders);world.setFocus?.(SPAWN);
   const parkedStart=navigator.nearest({x:SPAWN.x+Math.sin(MISSIONS[0].start.heading)*12,z:SPAWN.z+Math.cos(MISSIONS[0].start.heading)*12});
@@ -202,6 +209,11 @@ function setup(){
     onBell:()=>audio.bell(),
   }});
   trafficSignals=createTrafficSignals(scene,PLACES.filter(p=>p.category==='junction'&&p.approach).map(p=>({x:p.approach.x,z:p.approach.z,rotation:p.rotation||0})));
+  trainSystem=createTrain(scene,NETWORK.rails||[],{station:PLACE_BY_ID.get('nanded-station')?.approach,onHorn:()=>audio.trainHorn()});
+  // A sports bike for hire by the stadium: ₹300 the first time you take it.
+  {const sp=PLACE_BY_ID.get('sggs-stadium')?.approach;if(sp){const rental=addCar('bike','#d92b2b',sp.x+3,sp.z+2);rental.rental=true;}}
+  // One two-wheeler rides the wrong side on its loop, as they do.
+  {const wb=cars.find(v=>v.route&&v.kind==='bike');if(wb){wb.wrongWay=true;wb.lanes=wb.lanes?.map(x=>-x);}}
   marker=new THREE.Group();scene.add(marker);
   markerRing=new THREE.Mesh(new THREE.TorusGeometry(7.5,0.2,8,64),new THREE.MeshBasicMaterial({color:'#ffd269'}));markerRing.rotation.x=Math.PI/2;markerRing.position.y=0.24;marker.add(markerRing);
   const glow=new THREE.Mesh(new THREE.CylinderGeometry(7.5,7.5,6,48,1,true),new THREE.MeshBasicMaterial({color:'#ffc75f',transparent:true,opacity:0.12,side:THREE.DoubleSide,depthWrite:false}));glow.position.y=3;marker.add(glow);
@@ -214,7 +226,7 @@ function setup(){
   hookUI();updateHUD();requestAnimationFrame(frame);
   console.info(`Nanded city ready: ${PLACES.length} places, ${NETWORK.edges.length} street segments.`,world.getStats?.()||'');
   // Read-only diagnostics in all builds; test controls only in local development.
-  window.nandedDiagnostics=()=>({started:game.started,paused:game.paused,onFoot:game.onFoot,position:{x:playerPosition().x,z:playerPosition().z},speed:car.speed,mission:{...game.mission},cash:game.cash,wanted:game.wanted,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,fps:autoQuality?.fps??null,quality:{mode:qualityMode,tier:QUALITY_TIERS[currentTierIndex()].name,...qualitySettings},phase:lifeSystem?.phase,weather:lifeSystem?.weather,carCount:cars.length,pedestrians:pedestrians.length,landmarks:world.landmarks.map(l=>l.name)});
+  window.nandedDiagnostics=()=>({started:game.started,paused:game.paused,onFoot:game.onFoot,position:{x:playerPosition().x,z:playerPosition().z},speed:car.speed,mission:{...game.mission},cash:game.cash,wanted:game.wanted,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,trains:trainSystem?.positions?.()||[],racePosition:(rivalCars.length?racePosition(game.mission.stage,MISSIONS[game.mission.index]?.stops[game.mission.stage]?distance(playerPosition(),MISSIONS[game.mission.index].stops[game.mission.stage]):0,rivalCars.map(v=>({stage:v.rival?.stage||0,distance:MISSIONS[game.mission.index]?.stops[v.rival?.stage||0]?distance(v,MISSIONS[game.mission.index].stops[v.rival?.stage||0]):0}))):null),rivals:rivalCars.length,daypart:rhythm,fps:autoQuality?.fps??null,quality:{mode:qualityMode,tier:QUALITY_TIERS[currentTierIndex()].name,...qualitySettings},phase:lifeSystem?.phase,weather:lifeSystem?.weather,carCount:cars.length,pedestrians:pedestrians.length,landmarks:world.landmarks.map(l=>l.name)});
 }
 
 function start(roam=false){
@@ -222,6 +234,7 @@ function start(roam=false){
   game.started=true;game.paused=false;game.onFoot=true;game.roam=roam;game.gps=null;game.mission=newMission(0);car.occupied=false;car.speed=0;
   player.x=SPAWN.x;player.z=SPAWN.z;player.heading=MISSIONS[0].start.heading;game.jumpHeight=game.jumpSpeed=0;game.landmarkView=null;
   avatar.position.set(player.x,.15,player.z);avatar.visible=true;show('welcome',false);show('hud',true);show('touch-controls',true);show('pause-menu',false);
+  clearRivals();
   document.body.classList.add('is-playing');keys.clear();
   show('camera-reset',true);show('camera-view',true);cameraControls.reset(playerPosition().heading);
   const p=playerPosition(),initial=resolveCameraPosition({x:p.x,y:1.6,z:p.z},{x:p.x+Math.sin(p.heading)*9,y:1.6+Math.tan(.44)*9,z:p.z+Math.cos(p.heading)*9},world.cameraColliders,world.bounds);
@@ -244,6 +257,23 @@ function openAdventures(view='activities'){
 function closeAdventures(){
   if(!game.activityOpen)return;
   adventureMenu.close();game.activityOpen=false;game.paused=false;keys.clear();$('game-canvas').focus();
+}
+function clearRivals(){for(const v of rivalCars){delete v.rival;}rivalCars=[];}
+function startRivals(def){
+  clearRivals();
+  if(!def?.race)return;
+  const points=[];let from={x:def.start.x,z:def.start.z};
+  for(const stopDef of def.stops){const seg=navigator.route(from,{x:stopDef.x,z:stopDef.z});if(seg.length)points.push(...(points.length?seg.slice(1):seg));from={x:stopDef.x,z:stopDef.z};}
+  if(points.length<4)return;
+  rivalCars=cars.filter(v=>v!==car&&!police.includes(v)&&['hatchback','sedan','auto','bike'].includes(v.kind)).slice(0,3);
+  const fx=-Math.sin(def.start.heading),fz=-Math.cos(def.start.heading);
+  rivalCars.forEach((v,i)=>{
+    v.rival={stage:0};v.route=points;v.lanes=laneOffsets(points);v.routeIndex=1;
+    const back=7+i*5,side=(i-1)*2.4;
+    v.x=def.start.x-fx*back+fz*side;v.z=def.start.z-fz*back-fx*side;
+    v.heading=def.start.heading;v.speed=0;v.syncX=undefined;v.mesh.visible=true;
+  });
+  if(rivalCars.length)toast(t(`${rivalCars.length} rivals line up beside you. Beat them to the last ring!`,`${rivalCars.length} प्रतिस्पर्धी तयार आहेत!`),4);
 }
 function placePlayer(position,onFoot=true){
   const heading=position.heading??SPAWN.heading;
@@ -270,7 +300,7 @@ function clearArrival(position,exclude=null){
 }
 function playActivity(index){
   closeAdventures();game.mission=newMission(index);game.roam=false;game.gps=null;
-  const def=MISSIONS[index];placePlayer(def.start,def.startMode!=='vehicle');beginMission();refreshRoute(2);updateHUD();
+  const def=MISSIONS[index];placePlayer(def.start,def.startMode!=='vehicle');beginMission();startRivals(def);refreshRoute(2);updateHUD();
   toast(`${def.title} · ${def.stops[0]?.label||'Keep moving. Lose the patrol.'}`,6);
 }
 function visitLandmark(place){
@@ -314,17 +344,36 @@ function nearestVendor(){
   return vendors.filter(v=>distance(player,v)<=5).sort((a,b)=>distance(player,a)-distance(player,b))[0]||null;
 }
 function buyFrom(vendor){
-  if(game.cash<vendor.price){toast(t(`Not enough cash for ${vendor.item}.`,`${vendor.mr} घेण्यासाठी पुरेसे पैसे नाहीत.`),3.5);return;}
-  game.cash-=vendor.price;game.energyLeft=ENERGY_SECONDS;persist();audio.tone(660,0.1);
-  toast(t(`${vendor.item} · −₹${vendor.price} · Energy up for ${ENERGY_SECONDS}s · “${vendor.lineEn}”`,`${vendor.mr} · −₹${vendor.price} · ${ENERGY_SECONDS} सेकंद जोश · “${vendor.line}”`),4.5);
+  const price=rhythm.marketDay?Math.max(5,Math.round(vendor.price*0.8)):vendor.price;
+  if(game.cash<price){toast(t(`Not enough cash for ${vendor.item}.`,`${vendor.mr} घेण्यासाठी पुरेसे पैसे नाहीत.`),3.5);return;}
+  game.cash-=price;game.energyLeft=ENERGY_SECONDS;persist();audio.tone(660,0.1);
+  toast(t(`${vendor.item} · −₹${price}${rhythm.marketDay?' (Friday Mondha rate!)':''} · Energy up for ${ENERGY_SECONDS}s · “${vendor.lineEn}”`,`${vendor.mr} · −₹${price} · ${ENERGY_SECONDS} सेकंद जोश · “${vendor.line}”`),4.5);
+}
+function composePhoto(){
+  if(!rawPhoto)return;
+  const img=new Image();
+  img.onload=()=>{
+    const canvas=document.createElement('canvas');canvas.width=img.width;canvas.height=img.height+Math.round(img.width*0.09);
+    const ctx=canvas.getContext('2d');
+    ctx.filter=photoFilterCss(photoFilter);ctx.drawImage(img,0,0);ctx.filter='none';
+    ctx.fillStyle='#f7f2e6';ctx.fillRect(0,img.height,canvas.width,canvas.height-img.height);
+    ctx.fillStyle='#22303a';ctx.textAlign='center';
+    ctx.font=`700 ${Math.round(canvas.width*0.028)}px Georgia,serif`;
+    ctx.fillText(`${photoTitleText} · नांदेड`,canvas.width/2,img.height+canvas.width*0.038);
+    ctx.font=`${Math.round(canvas.width*0.016)}px Georgia,serif`;ctx.fillStyle='#7a6a55';
+    ctx.fillText('GTA NANDED · STREET STORIES',canvas.width/2,img.height+canvas.width*0.068);
+    latestPhoto=canvas.toDataURL('image/jpeg',0.9);
+    $('photo-preview').src=latestPhoto;$('photo-download').disabled=false;
+    const label=$('photo-filter');if(label)label.textContent=t('Filter: ','फिल्टर: ')+photoFilter;
+  };
+  img.src=rawPhoto;
 }
 function showPhoto(title){
   renderer.render(scene,camera);
-  latestPhoto = null;
+  latestPhoto = null;rawPhoto=null;photoFilter='none';photoTitleText=title||'Nanded memory';
   try {
-    latestPhoto = renderer.domElement.toDataURL('image/jpeg',.88);
-    $('photo-preview').src=latestPhoto;
-    $('photo-download').disabled=false;
+    rawPhoto = renderer.domElement.toDataURL('image/jpeg',.9);
+    composePhoto();
   } catch {
     $('photo-preview').removeAttribute('src');
     $('photo-download').disabled=true;
@@ -440,14 +489,14 @@ function refreshRoute(dt){
 function refreshTraffic(p,force=false,clearance=22){
   if(!force&&distance(p,lastTrafficFocus)<300)return;
   lastTrafficFocus={x:p.x,z:p.z};const nearby=navigator.nearbyEdges(p,240);if(!nearby.length)return;
-  cars.filter(v=>v.route&&v!==car&&!police.includes(v)).forEach((v,i)=>{
+  cars.filter(v=>v.route&&v!==car&&!police.includes(v)&&!v.rival).forEach((v,i)=>{
     if(!force&&distance(v,p)<450)return;
     // Try other nearby streets rather than leaving this car wherever it was, which may be the arrival point.
     for(let k=0;k<nearby.length;k+=7){
       const edge=NETWORK.edges[nearby[(i*37+k)%nearby.length]],a=NETWORK.nodes[edge.a],b=NETWORK.nodes[edge.b];
       const pos={x:(a.x+b.x)/2,z:(a.z+b.z)/2};if(distance(pos,p)<clearance)continue;
       const route=navigator.walk(pos,i*733+17,24);if(route.length<3)continue;
-      v.x=pos.x;v.z=pos.z;v.route=route;v.lanes=laneOffsets(route);v.routeIndex=1;v.speed=0;return;
+      v.x=pos.x;v.z=pos.z;v.route=route;v.lanes=laneOffsets(route).map(x=>v.wrongWay?-x:x);v.routeIndex=1;v.speed=0;return;
     }
   });
 }
@@ -458,6 +507,18 @@ function nearestVehicle(){
   return nearest;
 }
 
+function repairQuote(){
+  if(game.onFoot)return 0;
+  const corner=PLACE_BY_ID.get('workshop-corner');
+  if(!corner||distance(car,corner.approach)>12||car.health>=92)return 0;
+  return Math.ceil((100-car.health)*1.2);
+}
+function repairAtWorkshop(){
+  const quote=repairQuote();if(!quote)return;
+  if(game.cash<quote){toast(t(`Workshop Corner repair is ₹${quote}. Not enough cash.`,`दुरुस्ती ₹${quote} — पैसे कमी आहेत.`),3.5);return;}
+  game.cash-=quote;car.health=100;persist();audio.success();buzz(30);
+  toast(t(`Repaired at Workshop Corner · −₹${quote}. Good as new.`,`वर्कशॉप कॉर्नरला दुरुस्ती झाली · −₹${quote}`),4);updateHUD();
+}
 function interact(){
   if(!game.started||game.paused)return;
   game.landmarkView=null;
@@ -473,7 +534,11 @@ function interact(){
   }else{
     const nearest=nearestVehicle();
     if(!nearest){toast('Move closer to a parked car or an auto-rickshaw.');return;}
-    if(nearest.route){addHeat(30);toast('Vehicle taken. The patrol has been alerted.');}
+    if(nearest.rental&&!nearest.rented){
+      if(game.cash<300){toast(t('The stadium sports bike is ₹300 to hire.','स्टेडियमची स्पोर्ट्स बाईक ₹३०० भाड्याने आहे.'),3.5);return;}
+      game.cash-=300;nearest.rented=true;persist();audio.tone(660,0.1);toast(t('Sports bike hired · −₹300. It is yours for the day.','स्पोर्ट्स बाईक भाड्याने घेतली · −₹३००'),4);
+    }
+    else if(nearest.route){addHeat(30);toast('Vehicle taken. The patrol has been alerted.');}
     else toast(`${VEHICLES[nearest.kind].name}. Let’s go.`);
     car=nearest;car.route=null;car.occupied=true;car.speed=0;game.onFoot=false;avatar.visible=false;game.gear='D';wheel.reset();
   }
@@ -482,6 +547,7 @@ function interact(){
 
 function hookUI(){
   $('photo-download')?.addEventListener('click',downloadPhoto);
+  $('photo-filter')?.addEventListener('click',()=>{photoFilter=nextPhotoFilter(photoFilter).id;composePhoto();buzz(15);});
   $('photo-dismiss')?.addEventListener('click',closePhoto);
   $('photo-memory')?.addEventListener('pointerenter',()=>clearTimeout(photoTimer));
   $('photo-memory')?.addEventListener('pointerleave',schedulePhotoDismiss);
@@ -574,6 +640,7 @@ function hookUI(){
       if(e.code==='KeyT'&&lifeSystem){const next=lifeSystem.cycleWeather();toast(t(WEATHER_LABELS[next][0],WEATHER_LABELS[next][1]),3);}
       if(e.code==='KeyL'&&lifeSystem){const next=lifeSystem.cyclePhase();shadowCell='';toast(t(PHASE_LABELS[next][0],PHASE_LABELS[next][1]),3);}
       if(e.code==='KeyG')$('quality-toggle')?.click();
+      if(e.code==='KeyQ'&&!game.onFoot&&repairQuote()>0)repairAtWorkshop();
       if(e.code==='KeyH')audio.horn();
       if(e.code==='KeyR'){game.cash=Math.max(0,game.cash-100);persist();recover('Ride recovered. Repair cost: up to ₹100.');if(MISSIONS[game.mission.index].chase&&game.mission.status==='active')game.mission.status='failed';}
       if(e.code==='KeyN'&&(game.roam||game.mission.status!=='active'))$('mission-next').click();
@@ -674,13 +741,29 @@ function updateTraffic(dt){
       stepDt=v.farWait;v.farWait=0;
     }
     let target=laneTarget(v);
-    if(distance(v,target)<2){v.routeIndex=(v.routeIndex+1)%v.route.length;target=laneTarget(v);}
+    if(distance(v,target)<2&&!(v.rival&&v.routeIndex>=v.route.length-1)){v.routeIndex=(v.routeIndex+1)%v.route.length;target=laneTarget(v);}
     const d=distance(v,target),desired=Math.atan2(-(target.x-v.x),-(target.z-v.z));
     v.heading+=wrapAngle(desired-v.heading)*Math.min(stepDt*6,1);
     v.stunned=Math.max(0,(v.stunned||0)-stepDt);
     const node=v.route[v.routeIndex];
-    let aim=v.stunned?0:far?v.cruise:trafficTargetSpeed(v.cruise,{gap:gapAhead(v,obstacles,32,v.kind==='bike'?1:2.2),junctionDistance:junctions.has(node)?distance(v,node):Infinity});
+    const junctionDist=junctions.has(node)?distance(v,node):Infinity;
+    let cruise=v.cruise*(rhythm.sunday?0.82:1);
+    const raceDef=MISSIONS[game.mission.index];
+    if(v.rival&&raceDef?.race&&game.mission.status==='active'){
+      const stopDef=raceDef.stops[v.rival.stage], playerStop=raceDef.stops[game.mission.stage];
+      if(stopDef&&distance(v,stopDef)<(stopDef.radius||15))v.rival.stage++;
+      if(v.rival.stage>=raceDef.stops.length)cruise=0;
+      else cruise*=rubberBand(game.mission.stage,playerStop?distance(pos,playerStop):0,v.rival.stage,stopDef?distance(v,stopDef):0)*1.12;
+    }
+    let aim=v.stunned?0:far?cruise:trafficTargetSpeed(cruise,{gap:gapAhead(v,obstacles,32,v.kind==='bike'?1:2.2),junctionDistance:junctionDist});
+    // The signals are real now: a red at the next chowk means stop.
+    if(!far&&junctionDist<11&&signalState(game.time,(trafficIndex%2)*7)==='red')aim=0;
+    // Buses and autos dwell at junctions, loading imaginary passengers.
+    v.dwell=Math.max(0,(v.dwell||0)-stepDt);
+    if(v.dwell>0)aim=0;
+    else if(!far&&(v.kind==='bus'||v.kind==='auto')&&junctionDist<4&&Math.random()<0.006)v.dwell=v.kind==='bus'?4:2.5;
     if(game.onFoot&&distance(v,pos)<10)aim=0;
+    if(!far&&aim===0&&v.speed<0.5&&distance(v,pos)<42&&Math.random()<0.0018)audio.horn();
     v.speed=THREE.MathUtils.lerp(v.speed,aim,Math.min(1,stepDt*(aim<v.speed?4:2)));
     const step=Math.min(v.speed*stepDt,d);v.x+=(target.x-v.x)/Math.max(d,0.1)*step;v.z+=(target.z-v.z)/Math.max(d,0.1)*step;
   }
@@ -723,7 +806,7 @@ function updatePlayer(dt){
     wheel.update(dt);
     const beforeSpeed=car.speed,move=driveStep(car,input,dt);
     const collision=moveBody(car,move.dx,move.dz,VEHICLES[car.kind].radius,world.colliders,world.bounds);
-    if(collision){car.speed*=-0.22;if(Math.abs(beforeSpeed)>7&&game.collisionCooldown<=0){car.health-=Math.abs(beforeSpeed)*0.48;game.collisionCooldown=0.8;audio.tone(90,0.15,'sawtooth');}}
+    if(collision){car.speed*=-0.22;if(Math.abs(beforeSpeed)>7&&game.collisionCooldown<=0){car.health-=Math.abs(beforeSpeed)*0.48;game.collisionCooldown=0.8;audio.tone(90,0.15,'sawtooth');buzz(60);}}
     for(const v of cars){
       if(v===car||!v.mesh.visible)continue;
       const reach=VEHICLES[car.kind].radius+VEHICLES[v.kind].radius,d=distance(v,car);
@@ -761,7 +844,7 @@ function updatePedestrians(dt){
       if((frameCount+index)%2!==0)continue;
       stepDt=p.wait;p.wait=0;
     }
-    const delta=p.direction*stepDt*1.1;
+    const delta=p.direction*stepDt*1.1*(rhythm.crowd||1);
     let dx=p.axis?0:delta,dz=p.axis?delta:0;
     if(dist<7&&!game.onFoot){dx+=(p.x-pos.x)*stepDt;dz+=(p.z-pos.z)*stepDt;}
     const beforeX=p.x,beforeZ=p.z;
@@ -950,7 +1033,7 @@ function updateHUD(){
   const nearest=game.gps&&distance(game.gps.approach,p)<24?game.gps:nearestPlace(p);
   text('nearby-place',distance(nearest.approach,p)<100?`NEAR ${nearest.shortName.toUpperCase()}`:'M · FIND A PLACE IN NANDED');
   const nearTarget=!game.roam&&target&&distance(p,target)<18&&m.status==='active'&&!def.race;
-  const hint=game.capture>0?t('PATROL NEARBY · KEEP MOVING','गस्त जवळ आहे · पुढे चला'):game.onFoot?(actionTarget?`Q · ${actionTarget.action==='interact'?t('Talk to your friend','मित्राशी बोला'):t('Take the photo','फोटो काढा')}`:photoSpot?t('Q · Take a landmark photo','Q · खुणेचा फोटो काढा'):vendor?`Q · ${t(vendor.item,vendor.mr)}`:lastNearby?`E · ${t('Take','घ्या')} ${VEHICLES[lastNearby.kind].name}`:t('WASD · Walk   SHIFT · Run   SPACE · Jump','WASD · चाल   SHIFT · धाव   SPACE · उडी')):nearTarget?(target?.mode==='foot'?t('E · STEP OUT TO EXPLORE','E · उतरा आणि फिरा'):t('SLOW DOWN INSIDE THE AMBER RING','अंबर रिंगमध्ये हळू करा')):document.body.classList.contains('is-touch-device')?'':t('E · Step out   V · View   H · Horn   R · Recover','E · उतरा   V · दृश्य   H · हॉर्न   R · दुरुस्ती');
+  const hint=game.capture>0?t('PATROL NEARBY · KEEP MOVING','गस्त जवळ आहे · पुढे चला'):game.onFoot?(actionTarget?`Q · ${actionTarget.action==='interact'?t('Talk to your friend','मित्राशी बोला'):t('Take the photo','फोटो काढा')}`:photoSpot?t('Q · Take a landmark photo','Q · खुणेचा फोटो काढा'):vendor?`Q · ${t(vendor.item,vendor.mr)}`:lastNearby?`E · ${t('Take','घ्या')} ${VEHICLES[lastNearby.kind].name}`:t('WASD · Walk   SHIFT · Run   SPACE · Jump','WASD · चाल   SHIFT · धाव   SPACE · उडी')):nearTarget?(target?.mode==='foot'?t('E · STEP OUT TO EXPLORE','E · उतरा आणि फिरा'):t('SLOW DOWN INSIDE THE AMBER RING','अंबर रिंगमध्ये हळू करा')):repairQuote()>0?`Q · ${t('Repair here','इथे दुरुस्ती')} ₹${repairQuote()}`:document.body.classList.contains('is-touch-device')?'':t('E · Step out   V · View   H · Horn   R · Recover','E · उतरा   V · दृश्य   H · हॉर्न   R · दुरुस्ती');
   text('interaction',hint);text('map-label',district(p));drawMap($('minimap'),false);
 }
 
@@ -1029,11 +1112,22 @@ function frame(){
     // shadow cadence and view distance for a steady frame rate.
     if(qualityMode==='auto'&&autoQuality){const stepped=autoQuality.sample(rawDt);if(stepped!==null)applyQuality(stepped);}
     game.time+=dt;game.collisionCooldown=Math.max(0,game.collisionCooldown-dt);game.energyLeft=Math.max(0,(game.energyLeft||0)-dt);
+    if(rivalCars.length&&!(MISSIONS[game.mission.index]?.race&&game.mission.status==='active'))clearRivals();
     updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);updateSpeedometer();refreshRoute(dt);world.setFocus?.(playerPosition());refreshTraffic(playerPosition());
+    trainSystem?.update(dt,playerPosition());
     trafficSignals?.update(game.time);
     lifeSystem?.update(dt,{position:playerPosition(),onFoot:game.onFoot,speed:car.speed,nearShrine:nearShrine(),busy:game.toastTime>0});
     if(game.toastTime>0){game.toastTime-=dt;if(game.toastTime<=0){const next=toastQueue.shift();if(next)toast(...next);else show('toast',false);}}
-    lastHUD+=dt;if(lastHUD>0.2){discoverPlaces();updateHUD();lastHUD=0;}
+    lastHUD+=dt;if(lastHUD>0.2){discoverPlaces();updateHUD();lastHUD=0;
+      rhythm=daypart();
+      if(rhythm.part!==lastDaypart){
+        if(lastDaypart&&rhythm.part==='school-rush')toast(t('School time — the lanes fill with students. Drive slow.','शाळेची वेळ — हळू चालवा.'),4);
+        if(lastDaypart&&rhythm.marketDay&&rhythm.part==='market-morning')toast(t('Friday Mondha! Stall rates are friendlier today.','शुक्रवारचा मोंढा! आज दर कमी आहेत.'),4);
+        lastDaypart=rhythm.part;lifeSystem?.setRhythm?.(rhythm);
+      }
+      const nearP=nearestPlace(playerPosition()),marketNear=['market','shop','restaurant','cafe','food','coaching'].includes(nearP.category)?Math.max(0,1-distance(nearP.approach,playerPosition())/70):0;
+      audio.setAmbience({market:marketNear,shrine:nearShrine()?0.9:0});
+    }
   }
   audio.update(car.speed,game.started&&!game.onFoot,game.paused);
   audio.setRain(game.started&&lifeSystem?.weather==='rain'&&!game.paused);
@@ -1046,8 +1140,9 @@ function frame(){
   world.animate?.(dt,introTime);renderer.render(scene,camera);
 }
 
-try{setup();}catch(error){
+setup().catch(error=>{
   console.error('Nanded could not start:',error);
   text('loading-status','GRAPHICS UNAVAILABLE');show('fatal-error',true);
   text('fatal-error-message','The city could not load. Use a current browser with hardware acceleration enabled, then reload the page.');
-}
+});
+if('serviceWorker' in window.navigator&&import.meta.env.PROD)window.navigator.serviceWorker.register('/sw.js').catch(()=>{});
