@@ -35,6 +35,8 @@ export const VEHICLES = {
   auto: { name: 'Nanded Auto', maxSpeed: 16, acceleration: 3.4, brake: 7, reverse: 4, wheelbase: 1.9, steerLock: 0.7, radius: 1.15 },
   sedan: { name: 'Ambassador Classic', maxSpeed: 26, acceleration: 4.4, brake: 8.5, reverse: 6, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
   police: { name: 'Patrol SUV', maxSpeed: 31, acceleration: 6, brake: 10, reverse: 7, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
+  bike: { name: 'Nanded Bike', maxSpeed: 24, acceleration: 7, brake: 12, reverse: 3, wheelbase: 1.3, steerLock: 0.9, radius: 0.8 },
+  bus: { name: 'MSRTC Bus', maxSpeed: 18, acceleration: 2.6, brake: 6, reverse: 4, wheelbase: 4.6, steerLock: 0.4, radius: 1.9 },
 };
 // Sideways tyre grip (units/s²): no car can turn harder than this at speed.
 const GRIP = 9;
@@ -128,6 +130,12 @@ export const MISSIONS = [
   { id:'nanded-street-circuit',kind:'race',title:'Nanded circle',label:'08 / STREET CIRCUIT',shortDescription:'Race through Bhagya Nagar, Workshop, ITI and Shivaji Putla.',
     description:'Five checkpoints, one lap. Take the wheel through Bhagya Nagar, Workshop, ITI and Shivaji Putla, then race back to the finish.',reward:1200,seconds:300,race:true,start:{...circuitStart},startMode:'vehicle',
     stops:[raceStop('bhagya-nagar-kaman'),raceStop('workshop-corner'),raceStop('iti-corner'),raceStop('shivaji-putla'),raceStop('bhagya-nagar-kaman','Finish at Bhagya Nagar Kaman')] },
+  { id:'tiffin-run',kind:'social',title:'डबा पोहोचवा',label:'10 / TIFFIN RUN',shortDescription:'Deliver a tiffin to Madhur Bhoj, then to People’s College.',
+    description:'“अरे, डबा विसरलास!” Walk to Madhur Bhoj and hand over the tiffin, then carry the next order to People’s College. Quick and local, no timer.',reward:400,seconds:null,
+    stops:[talk('madhur-bhoj','Deliver the tiffin outside Madhur Bhoj','डबा आणलास? बरं झालं! Now take the next one to People’s College.'),talk('peoples-college','Deliver the second tiffin at People’s College','धन्यवाद, भावा! Chai is on me.')] },
+  { id:'ghat-errand',kind:'photo',title:'घाटावरची फेरी',label:'11 / GHAT ERRAND',shortDescription:'Photograph Ram Ghat and Govardhan Ghat on foot.',
+    description:'“गोदावरीचा घाट बघितल्याशिवाय नांदेड पूर्ण नाही!” Visit two riverfront ghats on foot and take a photo at each. No timer, just the river.',reward:700,seconds:null,
+    stops:[photo('ram-ghat','Photograph Ram Ghat'),photo('govardhan-ghat','Photograph Govardhan Ghat')] },
   { id:'lose-the-tail',kind:'chase',title:'Lose the tail',label:'09 / THE GETAWAY',shortDescription:'A fictional arcade pursuit through the Nanded streets.',
     description:'Take the wheel, make your own route and stay ahead of the fictional patrol for 50 seconds. The city is your escape route.',reward:1500,seconds:80,chase:true,survive:50,start:{...SPAWN},startMode:'vehicle',stops:[] },
 ].map(def=>{

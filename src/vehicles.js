@@ -34,6 +34,36 @@ export function createVehicle(kind = 'hatchback', color = '#e5a546') {
     }
     add(wheelGeometry,black,0,0.48,-1.2);
     box(1.3,0.18,0.7,0,1.15,0.7,black);
+  } else if (kind === 'bike') {
+    // A two-wheeler with a rider: the classic Nanded scooter-and-motorbike mix.
+    const small=new THREE.CylinderGeometry(0.34,0.34,0.14,10);small.rotateZ(Math.PI/2);
+    add(small,black,0,0.34,1.05);add(small,black,0,0.34,-1.05);
+    box(0.22,0.5,2.2,0,0.7,0,paint);
+    box(0.5,0.22,0.9,0,0.95,0.15,black);
+    box(0.9,0.06,0.08,0,1.25,0.85,chrome);
+    box(0.14,0.7,0.14,0,1.0,0.9,chrome);
+    box(0.2,0.2,0.2,0,0.95,-0.7,tail);
+    box(0.18,0.16,0.12,0,0.82,1.12,headlight);
+    const rider=createPerson('#4c7b9a');rider.scale.setScalar(0.62);rider.position.set(0,0.65,-0.15);group.add(rider);
+  } else if (kind === 'bus') {
+    // An MSRTC-style city bus: a long painted body, a window band and a white stripe.
+    const band=new THREE.MeshStandardMaterial({color:'#fff3d6',roughness:0.4});
+    box(2.5,2.8,8.6,0,1.9,0);
+    box(2.55,0.25,8.2,0,3.36,0,band);
+    for(const x of [-1.26,1.26]) {
+      box(0.05,0.9,7.4,x,2.25,0,glass);
+      box(0.05,0.18,8.0,x,1.25,0,band);
+    }
+    box(2.46,0.9,0.08,0,2.3,4.3,glass);
+    box(2.2,0.25,0.12,0,1.0,4.34,headlight);
+    box(2.2,0.25,0.12,0,1.0,-4.34,tail);
+    for(const z of [-2.9,2.6]) for(const x of [-1.22,1.22]) add(wheelGeometry,black,x,0.48,z);
+  } else if (kind === 'cart') {
+    box(1.6,0.2,1.2,0,0.85,0,paint);
+    box(0.12,1.6,0.12,0.75,1.6,0.5,chrome);box(0.12,1.6,0.12,-0.75,1.6,0.5,chrome);
+    box(1.9,0.1,1.2,0,2.42,0.3,paint);
+    box(1.4,0.5,0.8,0,1.12,-0.2,black);
+    for(const x of [-0.7,0.7]) add(wheelGeometry,black,x,0.38,0.2);
   } else {
     const long=kind==='sedan'?1.12:kind==='police'?1.08:1;
     box(2.25,0.64,4.4*long,0,0.9,0);
@@ -89,4 +119,26 @@ export function createPerson(color='#e88a4e') {
     const arm=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.7,0.23),shirt);arm.position.set(x*2.2,1.14,0);group.add(arm);limbs.push(arm);
   }
   group.traverse(o=>{if(o.isMesh)o.castShadow=true;});group.userData.limbs=limbs;return group;
+}
+
+/** A cow or a street dog, built from boxes with four legs so pedestrian animation works on it. */
+export function createAnimal(kind='cow') {
+  const group=new THREE.Group();
+  const cow=kind==='cow';
+  const coat=new THREE.MeshStandardMaterial({color:cow?'#e9e1cf':'#b7875a',roughness:1});
+  const patch=new THREE.MeshStandardMaterial({color:cow?'#6b4a33':'#8a6038',roughness:1});
+  const s=cow?1:0.5;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.1*s*1.6,0.7*s*1.6,0.6*s*1.6),coat);
+  body.position.set(0,0.95*s*1.6,0);group.add(body);
+  if(cow){const spot=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.42,0.62),patch);spot.position.set(0.2,1.05,0);group.add(spot);}
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.42*s*1.6,0.4*s*1.6,0.38*s*1.6),coat);
+  head.position.set(0,1.32*s*1.6,0.75*s*1.6);group.add(head);
+  const limbs=[];
+  for(const x of [-0.3,0.3]) for(const z of [-0.25,0.25]) {
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.14*s*1.6,0.55*s*1.6,0.14*s*1.6),patch);
+    leg.position.set(x*s*1.6,0.28*s*1.6,z*s*1.6);group.add(leg);limbs.push(leg);
+  }
+  if(!cow){const tail=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.4),patch);tail.position.set(0,0.9,-0.6);group.add(tail);}
+  group.traverse(o=>{if(o.isMesh)o.castShadow=true;});group.userData.limbs=limbs;
+  return group;
 }

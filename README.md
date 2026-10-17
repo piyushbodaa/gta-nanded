@@ -1,6 +1,6 @@
 # GTA NANDED
 
-An original, single-player 3D browser adventure built for **gta.nanded.fun**, set in Nanded, Maharashtra. Start on foot at **Zenda Chowk, Taroda Khurd**, meet a friend, explore your lane and choose from **nine optional activities**. Walk, sprint, jump, talk and take landmark photos; pick up a vehicle when you want to drive. The city contains **133 researched places** along compressed OpenStreetMap streets and a **17-landmark passport**.
+An original, single-player 3D browser adventure built for **gta.nanded.fun**, set in Nanded, Maharashtra. Start on foot at **Zenda Chowk, Taroda Khurd**, meet a friend, explore your lane and choose from **eleven optional activities**. Walk, sprint, jump, talk and take landmark photos; pick up a vehicle when you want to drive. The city contains **133 researched places** along compressed OpenStreetMap streets and a **17-landmark passport**.
 
 The playable vehicles, characters, building illustrations, signage and synthesized audio are made in code. The opening animates original comic artwork in the browser with a newly composed soundtrack. The street network comes from real map data; the game buildings are original illustrations.
 
@@ -20,6 +20,8 @@ The playable vehicles, characters, building illustrations, signage and synthesiz
 - **R:** recover and repair your vehicle, costing up to ₹100 of in-game earnings
 - **V / view button:** switch between the low chase camera and the cockpit view while driving
 - **N:** open the activity picker after completion or in free roam; retry a failed activity
+- **T:** cycle the weather between clear skies, a hazy afternoon and monsoon rain
+- **Buy at a roadside stall:** stand beside a vendor and press **Q** for chai, vada-pav, pani-puri, sugarcane juice or jalebi
 
 Touch devices have direction, **Jump**, **Run**, enter/exit and map buttons, plus contextual **Talk / Photo** actions. Jump and Run become brake and boost controls in a vehicle. Driving on a phone starts with a **steering wheel and pedals**: turn the wheel with your thumb (it springs back when released), press **GAS** and **BRAKE**, and tap the **D/R** lever to change gear. The switch above the lever cycles **Wheel → Stick → Arrows**; the stick is an analog joystick (push up to accelerate, sideways to steer; a partial push cruises slower). The choice is remembered on the device and the arrow pad always returns on foot. Hold a movement button with one finger and drag the open street with another to look around. Looking around holds its angle while stopped; driving recenters the view after two seconds without a drag. The camera moves closer when a wall, roof or sign would block the character. Both maps stay north-up, and their player arrows show character/vehicle facing. The GPS-card arrow points toward the destination relative to your camera. The mobile minimap starts hidden behind **Mini map**, and activity details start collapsed; tap the chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
 
@@ -41,8 +43,12 @@ Driving is tuned for grounded city speeds: a hatchback reaches about 100 km/h, a
 
 - 133 places across 53 locality labels: coaching institutes, colleges, schools, landmarks, junctions, transport stops, hospitals, civic buildings, a park, hotels, restaurants, cafés, cinemas and shopping places.
 - Seventeen passport landmarks, including newly added Urvashi Ghat, Ram Ghat, Govardhan Ghat and Old Mondha Clock Tower; familiar junctions, the station, airport and Vishnupuri campuses remain in the city guide.
-- Nine repeatable activities covering local conversations, photo walks, a foot sprint, a street circuit and a getaway. All stories are fictional; inclusion does not imply an institution or business commissioned or endorses them.
-- Hatchbacks, Ambassador-inspired sedans and auto-rickshaws; pedestrians, road traffic, police pursuit, vehicle damage, boost and recovery.
+- Eleven repeatable activities covering local conversations, a tiffin delivery, ghat photo walks, a foot sprint, a street circuit and a getaway. All stories are fictional; inclusion does not imply an institution or business commissioned or endorses them.
+- Hatchbacks, Ambassador-inspired sedans, auto-rickshaws, two-wheelers and an MSRTC-style bus; pedestrians, cows and street dogs, roadside vendors, road traffic, police pursuit, vehicle damage, boost and recovery.
+- A real-clock day: dusk and night light with festival lanterns at the ghats and temples, plus weather that changes with **T**.
+- Ambient street life: passing chatter in Marathi and English, horns from traffic, and temple bells near the ghats and shrines.
+- A **neighbourhood reputation**: each new locality visited pays ₹75 once.
+- A Marathi/English switch beside the sound button. Only the HUD prompts and buttons are translated so far.
 - A searchable city guide, category and neighborhood filters, a north-up map, GPS routes, free quick travel and discovery tracking.
 - Earnings, completed-activity count, discovered places and landmark passport stamps saved in browser local storage.
 

@@ -15,7 +15,8 @@ import { laneOffsetPoint, gapAhead, trafficTargetSpeed } from './traffic.js';
 import { resolveCameraPosition } from './camera-obstruction.js';
 import { mapHeading, destinationBearing } from './map-direction.js';
 import { LANDMARKS, loadStamps, nearestPhotoSpot, collectStamp, createAdventureMenu } from './adventures.js';
-import { createVehicle, createPerson } from './vehicles.js';
+import { createVehicle, createPerson, createAnimal } from './vehicles.js';
+import { createVendors, createStreetLife, timeOfDay } from './street-life.js';
 import { GameAudio } from './audio.js';
 import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, loadProgress, saveProgress } from './mechanics.js';
 
@@ -28,6 +29,20 @@ const VIEW_DISTANCE = 640;
 const DRIVE_CONTROLS_KEY = 'nanded-drive-controls-v1';
 const DRIVE_VIEW_KEY = 'nanded-drive-view-v1';
 const DRIVE_MODES = ['wheel', 'joystick', 'arrows'];
+const LANG_KEY = 'nanded-lang-v1';
+const REPUTATION_KEY = 'nanded-reputation-v1';
+// Each new neighbourhood (locality) visited pays once, which rewards exploring the whole city.
+const LOCALITY_REWARD = 75;
+// Quick Marathi/English switch for the HUD. Only the HUD prompts and buttons are translated so far.
+let lang = 'en';
+const t = (en, mr) => lang === 'mr' ? mr : en;
+const WEATHER_LABELS = { clear: ['Clear skies', 'स्वच्छ आकाश'], haze: ['Hazy summer afternoon', 'धुरकट दुपार'], rain: ['Monsoon rain', 'पावसाळा'] };
+// Mixed street traffic: a bus now and then, bikes every fifth car, autos, sedans and hatchbacks.
+const trafficKind = i => i === 5 ? 'bus' : i % 5 === 2 ? 'bike' : i % 4 === 0 ? 'auto' : i % 3 === 0 ? 'sedan' : 'hatchback';
+// Places where the bells ring when you are near: the Godavari ghats and the old city shrines.
+const SHRINE_IDS = new Set(['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'kaleshwar-temple', 'govardhan-ghat', 'ram-ghat', 'urvashi-ghat', 'sangat-sahib', 'banda-ghat', 'shikar-ghat']);
+let lifeSystem = null;
+const vendors = [];
 // Dr. Driving-style rules: every crash costs a fine; three crashes end a race, none earns a bonus.
 const CRASH_FINE = 50, RACE_CRASH_LIMIT = 3, CLEAN_RACE_BONUS = 300, REFILL_COST = 100;
 // The driver's eye in each cab, car-local: +x is the right-hand driver's seat, +z the back.
@@ -46,7 +61,8 @@ try{const saved=storage.getItem(DRIVE_CONTROLS_KEY);if(DRIVE_MODES.includes(save
 const toastQueue=[],pedals=new Set();
 let guide,adventureMenu,friend,routeLine,routePoints=[],routeAge=10,routeKey='',mapCenter={...SPAWN},mapSpan=3600,lastTrafficFocus={...SPAWN},photoTimer;
 const photoMarkers=[];
-const navigator=createNavigator(NETWORK),visited=new Set();
+const navigator=createNavigator(NETWORK),visited=new Set(),reputation=new Set();
+try{for(const name of JSON.parse(storage.getItem(REPUTATION_KEY)||'[]'))reputation.add(name);}catch{/* Storage is optional. */}
 // Traffic lanes and junction slowing read the road graph directly.
 const nodeIndex=new Map(NETWORK.nodes.map((node,i)=>[node,i])),junctions=new Set(NETWORK.nodes.filter((_,i)=>navigator.adj[i].length>=3));
 try{for(const id of JSON.parse(storage.getItem('nanded-discoveries-v1')||'[]'))if(PLACE_BY_ID.has(id))visited.add(id);}catch{/* Storage is optional. */}
@@ -62,7 +78,9 @@ function persist(){const saved=saveProgress(storage,{cash:game.cash,completed:ga
 function playerPosition(){return game.onFoot?player:car;}
 function addCar(kind,color,x,z,heading=0,route=null){
   const mesh=createVehicle(kind,color);scene.add(mesh);mesh.position.set(x,0.12,z);mesh.rotation.y=heading;
-  const vehicle={kind,mesh,x,z,heading,speed:0,nitro:100,fuel:100,steer:0,health:100,route,lanes:route?laneOffsets(route):null,routeIndex:0,cruise:8+Math.random()*5,occupied:false};
+  // Bikes weave quicker than cars; buses roll along at a steady, heavier pace.
+  const pace=kind==='bike'?1.35:kind==='bus'?0.6:1;
+  const vehicle={kind,mesh,x,z,heading,speed:0,nitro:100,fuel:100,steer:0,health:100,route,lanes:route?laneOffsets(route):null,routeIndex:0,cruise:(8+Math.random()*5)*pace,occupied:false};
   cars.push(vehicle);return vehicle;
 }
 // Keep-left offset for each route segment: a quarter of that mapped street's width.
@@ -82,7 +100,7 @@ function setup(){
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.22;
   scene=new THREE.Scene();scene.background=new THREE.Color('#ddb8a0');scene.fog=new THREE.Fog('#ddb8a0',190,VIEW_DISTANCE);
   camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,0.2,VIEW_DISTANCE+60);
-  const hemi=new THREE.HemisphereLight('#e1f2f4','#af8060',2.7);scene.add(hemi);
+  const hemi=new THREE.HemisphereLight('#e1f2f4','#af8060',2.7);scene.add(hemi);game.hemi=hemi;
   const sun=new THREE.DirectionalLight('#ffdbab',3.3);sun.position.set(-100,150,90);sun.castShadow=true;
   const shadowSize=mobileGraphics?1024:2048;sun.shadow.mapSize.set(shadowSize,shadowSize);sun.shadow.camera.left=-110;sun.shadow.camera.right=110;sun.shadow.camera.top=110;sun.shadow.camera.bottom=-110;sun.shadow.camera.near=1;sun.shadow.camera.far=420;sun.shadow.bias=-0.0005;sun.shadow.normalBias=0.04;sun.target=sunTarget;scene.add(sun,sunTarget);
   game.sun=sun;
@@ -92,14 +110,16 @@ function setup(){
   car=addCar('hatchback','#568c8a',parkedStart.x,parkedStart.z,SPAWN.heading);
   const parked=['iib-parnakuti','rcc-nanded','yeshwant-college','hazur-sahib','sggs-engineering'];
   parked.forEach((id,i)=>{const p=PLACE_BY_ID.get(id).approach;addCar(i%2?'sedan':'auto',i%2?'#eee1bd':'#196e56',p.x,p.z);});
+  // Two-wheelers and a bus park beside the coaching and food spots, ready to be taken.
+  [['frespresso','bike','#b23a2e'],['peoples-college','bike','#2f6fa3'],['madhur-bhoj','bus','#c8402f']].forEach(([id,kind,color])=>{const p=PLACE_BY_ID.get(id).approach;addCar(kind,color,p.x+2,p.z);});
   const palette=['#dfb94e','#568c8a','#d5d5b9','#b45e4b','#597d53','#637b97'];
   const nearPlaces=[...PLACES].sort((a,b)=>distance(a,SPAWN)-distance(b,SPAWN));
-  for(let i=0;i<24;i++){
-    const route=navigator.walk(nearPlaces[(i+2)%24].approach,i*773+31,28);
+  for(let i=0;i<30;i++){
+    const route=navigator.walk(nearPlaces[(i+2)%30].approach,i*773+31,28);
     if(route.length<3)continue;
     const index=route.findIndex(point=>distance(point,SPAWN)>22&&cars.every(v=>distance(v,point)>9));
     if(index<0)continue;const start=route[index],next=route[(index+1)%route.length];
-    const v=addCar(i%4===0?'auto':i%3===0?'sedan':'hatchback',palette[i%palette.length],start.x,start.z,Math.atan2(-(next.x-start.x),-(next.z-start.z)),route);v.routeIndex=(index+1)%route.length;
+    const v=addCar(trafficKind(i),i===5?'#c8402f':palette[i%palette.length],start.x,start.z,Math.atan2(-(next.x-start.x),-(next.z-start.z)),route);v.routeIndex=(index+1)%route.length;
   }
   for(let i=0;i<3;i++){
     const v=addCar('police','#eee9d7',SPAWN.x,SPAWN.z);v.mesh.visible=false;v.active=false;police.push(v);
@@ -115,6 +135,21 @@ function setup(){
     const mesh=createPerson(['#d8913c','#3e8f9b','#a74b5a','#e4d6ac','#586e9e'][i%5]);mesh.position.set(x,0,z);scene.add(mesh);
     pedestrians.push({mesh,x,z,axis,direction:i%2?1:-1,origin:axis?z:x});
   }
+  // Cows and street dogs wander the pavements on the same paths as pedestrians.
+  for(let i=0;i<10;i++){
+    const place=nearPlaces[(i*5+3)%nearPlaces.length],axis=i%2;
+    const x=place.approach.x+(i%3-1)*3,z=place.approach.z+(i%2?2:-2);
+    if(blocked(x,z,0.6,world.colliders,world.bounds))continue;
+    const mesh=createAnimal(i%3===0?'cow':'dog');mesh.position.set(x,0,z);scene.add(mesh);
+    pedestrians.push({mesh,x,z,axis,direction:i%2?1:-1,origin:axis?z:x});
+  }
+  // Roadside stalls at food places, and the lanterns and rain that change the city's light.
+  vendors.push(...createVendors(scene,PLACES.filter(p=>['restaurant','food','cafe','market'].includes(p.category)),(x,z)=>blocked(x,z,0.8,world.colliders,world.bounds)));
+  lifeSystem=createStreetLife(scene,{sun:game.sun,hemi:game.hemi,lanternSpots:LANDMARKS.map(p=>p.approach),callbacks:{
+    onChatter:line=>{if(game.started&&game.onFoot&&!game.paused&&game.toastTime<=0)toast(t(line.en,line.mr),3.5);},
+    onHorn:()=>audio.horn(),
+    onBell:()=>audio.bell(),
+  }});
   marker=new THREE.Group();scene.add(marker);
   markerRing=new THREE.Mesh(new THREE.TorusGeometry(7.5,0.2,8,64),new THREE.MeshBasicMaterial({color:'#ffd269'}));markerRing.rotation.x=Math.PI/2;markerRing.position.y=0.24;marker.add(markerRing);
   const glow=new THREE.Mesh(new THREE.CylinderGeometry(7.5,7.5,6,48,1,true),new THREE.MeshBasicMaterial({color:'#ffc75f',transparent:true,opacity:0.12,side:THREE.DoubleSide,depthWrite:false}));glow.position.y=3;marker.add(glow);
@@ -205,6 +240,8 @@ function takeAction(){
   if(!game.started||game.paused||intro.active)return;
   const target=missionActionTarget(),photoSpot=currentPhotoSpot();
   if(!game.onFoot){toast('Step out of your vehicle first.');return;}
+  const vendor=!target&&!photoSpot?nearestVendor():null;
+  if(vendor){buyFrom(vendor);updateHUD();return;}
   // One press can earn a stamp and advance the activity: show each message in turn.
   const messages=[];
   if(photoSpot&&(!target||target.action==='photo')){
@@ -220,6 +257,14 @@ function takeAction(){
   if(photoSpot&&(!target||target.action==='photo'))showPhoto(photoSpot.shortName);
   else if(target?.action==='photo')showPhoto(target.placeId?PLACE_BY_ID.get(target.placeId)?.shortName:'Zenda Chowk');
   updateHUD();
+}
+function nearestVendor(){
+  return vendors.filter(v=>distance(player,v)<=5).sort((a,b)=>distance(player,a)-distance(player,b))[0]||null;
+}
+function buyFrom(vendor){
+  if(game.cash<vendor.price){toast(t(`Not enough cash for ${vendor.item}.`,`${vendor.mr} घेण्यासाठी पुरेसे पैसे नाहीत.`),3.5);return;}
+  game.cash-=vendor.price;persist();audio.tone(660,0.1);
+  toast(t(`${vendor.item} · −₹${vendor.price} · “${vendor.lineEn}”`,`${vendor.mr} · −₹${vendor.price} · “${vendor.line}”`),4.5);
 }
 function showPhoto(title){
   renderer.render(scene,camera);
@@ -292,6 +337,13 @@ function discoverPlaces(){
     visited.add(place.id);changed=true;
     if(game.gps?.id===place.id)toast(`Arrived at ${place.shortName}. Take a look around.`,5);
     else if(game.roam)toast(`Discovered ${place.shortName} · ${visited.size}/${PLACES.length}`,3);
+  }
+  // A new neighbourhood pays once: exploring the whole city is part of the game.
+  const area=district(p);
+  if(!reputation.has(area)){
+    reputation.add(area);game.cash+=LOCALITY_REWARD;persist();
+    try{storage.setItem(REPUTATION_KEY,JSON.stringify([...reputation]));}catch{/* The reward still applies for this visit. */}
+    queueToast(t(`New neighbourhood: ${area} · ${reputation.size}/${DISTRICTS.length} · +₹${LOCALITY_REWARD}`,`नवीन परिसर: ${area} · ${reputation.size}/${DISTRICTS.length} · +₹${LOCALITY_REWARD}`),4);
   }
   if(changed){try{storage.setItem('nanded-discoveries-v1',JSON.stringify([...visited]));}catch{/* Visiting remains available without storage. */}}
 }
@@ -380,7 +432,18 @@ function hookUI(){
   $('help-toggle')?.addEventListener('click',()=>pause(!game.paused,true));
   $('restart')?.addEventListener('click',()=>{pause(false);if(!game.started)intro.play(()=>start(false),{mode:'foot'});else playActivity(game.mission.index);});
   $('mission-next')?.addEventListener('click',()=>game.mission.status==='failed'&&!game.roam?playActivity(game.mission.index):openAdventures());
-  $('reset-save')?.addEventListener('click',()=>{game.cash=0;game.completed=0;game.mission=newMission(0);visited.clear();stamps.clear();try{storage.setItem('nanded-discoveries-v1','[]');}catch{}persist();pause(false);if(!game.started)intro.play(()=>start(false),{mode:'foot'});else playActivity(0);});
+  $('reset-save')?.addEventListener('click',()=>{game.cash=0;game.completed=0;game.mission=newMission(0);visited.clear();stamps.clear();reputation.clear();try{storage.setItem('nanded-discoveries-v1','[]');storage.setItem(REPUTATION_KEY,'[]');}catch{}persist();pause(false);if(!game.started)intro.play(()=>start(false),{mode:'foot'});else playActivity(0);});
+  // Language switch sits beside the sound button and remembers the choice on this device.
+  try{if(storage.getItem(LANG_KEY)==='mr')lang='mr';}catch{/* English is the default. */}
+  const langButton=document.createElement('button');
+  langButton.id='lang-toggle';langButton.type='button';langButton.className=$('sound-toggle')?.className||'utility-button';
+  const setLangLabel=()=>{langButton.textContent=lang==='mr'?'English':'मराठी';langButton.setAttribute('aria-label',lang==='mr'?'Switch to English':'मराठीत बदला');document.documentElement.lang=lang;};
+  setLangLabel();
+  langButton.addEventListener('click',()=>{
+    lang=lang==='mr'?'en':'mr';setLangLabel();try{storage.setItem(LANG_KEY,lang);}catch{/* The switch still applies for this visit. */}
+    updateHUD();
+  });
+  $('sound-toggle')?.parentElement?.insertBefore(langButton,$('sound-toggle'));
   $('sound-toggle')?.addEventListener('click',async()=>{try{const enabled=await audio.toggle();text('sound-label',enabled?'Sound on':'Sound off');$('sound-toggle').setAttribute('aria-pressed',String(enabled));}catch{toast('Audio is unavailable in this browser.');}});
   $('fullscreen-toggle')?.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{toast('Fullscreen is unavailable in this browser.');}});
   $('touch-map')?.addEventListener('click',toggleMap);$('touch-interact')?.addEventListener('click',interact);
@@ -406,6 +469,7 @@ function hookUI(){
       if(e.code==='KeyQ')takeAction();
       if(e.code==='KeyC'){game.landmarkView=null;cameraControls.reset(playerPosition().heading);}
       if(e.code==='KeyV')toggleView();
+      if(e.code==='KeyT'&&lifeSystem){const next=lifeSystem.cycleWeather();toast(t(WEATHER_LABELS[next][0],WEATHER_LABELS[next][1]),3);}
       if(e.code==='KeyH')audio.horn();
       if(e.code==='KeyR'){game.cash=Math.max(0,game.cash-100);persist();recover('Ride recovered. Repair cost: up to ₹100.');if(MISSIONS[game.mission.index].chase&&game.mission.status==='active')game.mission.status='failed';}
       if(e.code==='KeyN'&&(game.roam||game.mission.status!=='active'))$('mission-next').click();
@@ -499,7 +563,7 @@ function updateTraffic(dt){
     v.heading+=wrapAngle(desired-v.heading)*Math.min(dt*6,1);
     v.stunned=Math.max(0,(v.stunned||0)-dt);
     const node=v.route[v.routeIndex];
-    let aim=v.stunned?0:trafficTargetSpeed(v.cruise,{gap:gapAhead(v,obstacles),junctionDistance:junctions.has(node)?distance(v,node):Infinity});
+    let aim=v.stunned?0:trafficTargetSpeed(v.cruise,{gap:gapAhead(v,obstacles,32,v.kind==='bike'?1:2.2),junctionDistance:junctions.has(node)?distance(v,node):Infinity});
     if(game.onFoot&&distance(v,pos)<10)aim=0;
     v.speed=THREE.MathUtils.lerp(v.speed,aim,Math.min(1,dt*(aim<v.speed?4:2)));
     const step=Math.min(v.speed*dt,d);v.x+=(target.x-v.x)/Math.max(d,0.1)*step;v.z+=(target.z-v.z)/Math.max(d,0.1)*step;
@@ -715,14 +779,14 @@ function updateHUD(){
   text('passport-summary',`${stamps.size}/${LANDMARKS.length} landmark stamps`);
   text('objective-short',game.roam?(game.landmarkView?`Photo spot · ${stamps.has(game.landmarkView.id)?'Stamp collected':'₹150 for a new stamp'}`:'Your city. Your pace.'):m.status==='complete'?'Chapter complete. Choose your next adventure.':m.status==='failed'?'Try again in Activities.':target?.label||'Stay ahead of the patrol');
   const actionTarget=missionActionTarget(),photoSpot=currentPhotoSpot();
-  const refill=!game.onFoot&&car.fuel<15;
-  show('world-action',refill||game.onFoot&&Boolean(actionTarget||photoSpot));text('world-action-label',refill?`Refill · ₹${REFILL_COST}`:actionTarget?.action==='interact'?'Talk':photoSpot&&stamps.has(photoSpot.id)?'Photo again':'Take photo');
+  const refill=!game.onFoot&&car.fuel<15,vendor=game.onFoot&&!actionTarget&&!photoSpot?nearestVendor():null;
+  show('world-action',refill||game.onFoot&&Boolean(actionTarget||photoSpot||vendor));text('world-action-label',refill?`${t('Refill','टाकी भरा')} · ₹${REFILL_COST}`:vendor?`${t('Buy','घ्या')} · ₹${vendor.price}`:actionTarget?.action==='interact'?t('Talk','बोला'):photoSpot&&stamps.has(photoSpot.id)?t('Photo again','पुन्हा फोटो'):t('Take photo','फोटो काढा'));
   show('gps-panel',Boolean(game.gps)&&distance(p,game.gps.approach)>24);text('gps-title',game.gps?.shortName||'');text('gps-distance',game.gps?`${Math.round((pathLength(routePoints)||distance(p,game.gps.approach))/NETWORK.scale)} m route`:'');
   text('discovered-count',`${visited.size}/${PLACES.length} discovered`);
   const nearest=game.gps&&distance(game.gps.approach,p)<24?game.gps:PLACES.reduce((a,b)=>distance(a.approach,p)<distance(b.approach,p)?a:b,PLACES[0]);
   text('nearby-place',distance(nearest.approach,p)<100?`NEAR ${nearest.shortName.toUpperCase()}`:'M · FIND A PLACE IN NANDED');
   const nearTarget=!game.roam&&target&&distance(p,target)<18&&m.status==='active'&&!def.race;
-  const hint=game.capture>0?'PATROL NEARBY · KEEP MOVING':game.onFoot?(actionTarget?`Q · ${actionTarget.action==='interact'?'Talk to your friend':'Take the photo'}`:photoSpot?'Q · Take a landmark photo':lastNearby?`E · Take ${VEHICLES[lastNearby.kind].name}`:'WASD · Walk   SHIFT · Run   SPACE · Jump'):nearTarget?(target?.mode==='foot'?'E · STEP OUT TO EXPLORE':'SLOW DOWN INSIDE THE AMBER RING'):document.body.classList.contains('is-touch-device')?'':'E · Step out   V · View   H · Horn   R · Recover';
+  const hint=game.capture>0?t('PATROL NEARBY · KEEP MOVING','गस्त जवळ आहे · पुढे चला'):game.onFoot?(actionTarget?`Q · ${actionTarget.action==='interact'?t('Talk to your friend','मित्राशी बोला'):t('Take the photo','फोटो काढा')}`:photoSpot?t('Q · Take a landmark photo','Q · खुणेचा फोटो काढा'):vendor?`Q · ${t(vendor.item,vendor.mr)}`:lastNearby?`E · ${t('Take','घ्या')} ${VEHICLES[lastNearby.kind].name}`:t('WASD · Walk   SHIFT · Run   SPACE · Jump','WASD · चाल   SHIFT · धाव   SPACE · उडी')):nearTarget?(target?.mode==='foot'?t('E · STEP OUT TO EXPLORE','E · उतरा आणि फिरा'):t('SLOW DOWN INSIDE THE AMBER RING','अंबर रिंगमध्ये हळू करा')):document.body.classList.contains('is-touch-device')?'':t('E · Step out   V · View   H · Horn   R · Recover','E · उतरा   V · दृश्य   H · हॉर्न   R · दुरुस्ती');
   text('interaction',hint);text('map-label',district(p));drawMap($('minimap'),false);
 }
 
@@ -779,6 +843,10 @@ function drawMap(canvas,full){
   const point=map(pos);ctx.save();ctx.translate(point.x,point.y);ctx.rotate(mapHeading(game.onFoot?player.heading:car.heading));ctx.fillStyle='#fff5da';ctx.strokeStyle='#122b2d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,6);ctx.lineTo(0,3);ctx.lineTo(-6,6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
 }
 
+function nearShrine(){
+  const p=playerPosition();
+  return LANDMARKS.some(place=>SHRINE_IDS.has(place.id)&&distance(p,place.approach)<45);
+}
 function frame(){
   // A 0.1 s cap keeps play at real speed down to 10 fps; movement substeps prevent tunnelling.
   requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),0.1);introTime+=dt;
@@ -787,6 +855,7 @@ function frame(){
   if(!game.paused){
     game.time+=dt;game.collisionCooldown=Math.max(0,game.collisionCooldown-dt);
     updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);updateSpeedometer();refreshRoute(dt);world.setFocus?.(playerPosition());refreshTraffic(playerPosition());
+    lifeSystem?.update(dt,{position:playerPosition(),onFoot:game.onFoot,speed:car.speed,nearShrine:nearShrine(),busy:game.toastTime>0});
     if(game.toastTime>0){game.toastTime-=dt;if(game.toastTime<=0){const next=toastQueue.shift();if(next)toast(...next);else show('toast',false);}}
     lastHUD+=dt;if(lastHUD>0.2){discoverPlaces();updateHUD();lastHUD=0;}
   }

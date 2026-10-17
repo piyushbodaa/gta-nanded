@@ -24,4 +24,6 @@ export class GameAudio {
   }
   success(){[440,554,660].forEach((f,i)=>setTimeout(()=>this.tone(f,0.25),i*100));}
   horn(){this.tone(300,0.3,'sawtooth',0.035);this.tone(380,0.3,'sine',0.045);}
+  // A soft temple bell: a struck fundamental with a fifth above it that fades slowly.
+  bell(){this.tone(523,1.4,'sine',0.05);setTimeout(()=>this.tone(784,1.8,'sine',0.025),120);}
 }
