@@ -17,6 +17,7 @@ import { mapHeading, destinationBearing } from './map-direction.js';
 import { LANDMARKS, loadStamps, nearestPhotoSpot, collectStamp, createAdventureMenu } from './adventures.js';
 import { createVehicle, createPerson, createAnimal } from './vehicles.js';
 import { createVendors, createStreetLife, seasonalWeather } from './street-life.js';
+import { buildRoadIndex } from './road-clearance.js';
 import { GameAudio } from './audio.js';
 import { clamp, distance, wrapAngle, blocked, moveBody, driveStep, VEHICLES, MISSIONS, newMission, advanceMission, loadProgress, saveProgress } from './mechanics.js';
 
@@ -42,6 +43,7 @@ const trafficKind = i => i === 5 ? 'bus' : i % 5 === 2 ? 'bike' : i % 4 === 0 ? 
 // Places where the bells ring when you are near: the Godavari ghats and the old city shrines.
 const SHRINE_IDS = new Set(['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'kaleshwar-temple', 'govardhan-ghat', 'ram-ghat', 'urvashi-ghat', 'sangat-sahib', 'banda-ghat', 'shikar-ghat']);
 let lifeSystem = null;
+let roadIndex = null;
 const vendors = [];
 // Dr. Driving-style rules: every crash costs a fine; three crashes end a race, none earns a bonus.
 const CRASH_FINE = 50, RACE_CRASH_LIMIT = 3, CLEAN_RACE_BONUS = 300, REFILL_COST = 100;
@@ -135,13 +137,14 @@ function setup(){
     const mesh=createPerson(['#d8913c','#3e8f9b','#a74b5a','#e4d6ac','#586e9e'][i%5]);mesh.position.set(x,0,z);scene.add(mesh);
     pedestrians.push({mesh,x,z,axis,direction:i%2?1:-1,origin:axis?z:x});
   }
-  // Cows and street dogs wander the pavements on the same paths as pedestrians.
+  // Cows and street dogs wander the pavements on the same paths as pedestrians, and turn back at the kerb.
+  roadIndex=buildRoadIndex(NETWORK.nodes,NETWORK.edges,NETWORK.scale);
   for(let i=0;i<10;i++){
     const place=nearPlaces[(i*5+3)%nearPlaces.length],axis=i%2;
     const x=place.approach.x+(i%3-1)*3,z=place.approach.z+(i%2?2:-2);
     if(blocked(x,z,0.6,world.colliders,world.bounds))continue;
     const mesh=createAnimal(i%3===0?'cow':'dog');mesh.position.set(x,0,z);scene.add(mesh);
-    pedestrians.push({mesh,x,z,axis,direction:i%2?1:-1,origin:axis?z:x});
+    pedestrians.push({mesh,x,z,axis,direction:i%2?1:-1,origin:axis?z:x,animal:true});
   }
   // Roadside stalls at food places, and the lanterns and rain that change the city's light.
   vendors.push(...createVendors(scene,PLACES.filter(p=>['restaurant','food','cafe','market'].includes(p.category)),(x,z)=>blocked(x,z,0.8,world.colliders,world.bounds)));
@@ -630,7 +633,9 @@ function updatePedestrians(dt){
     const delta=p.direction*dt*1.1;
     let dx=p.axis?0:delta,dz=p.axis?delta:0;
     if(distance(p,pos)<7&&!game.onFoot){dx+=(p.x-pos.x)*dt;dz+=(p.z-pos.z)*dt;}
+    const before={x:p.x,z:p.z};
     if(moveBody(p,dx,dz,0.5,world.colliders,world.bounds)||Math.abs((p.axis?p.z:p.x)-p.origin)>35)p.direction*=-1;
+    if(p.animal&&roadIndex?.onRoad(p.x,p.z)){p.x=before.x;p.z=before.z;p.direction*=-1;}
     p.mesh.position.set(p.x,0.1,p.z);p.mesh.rotation.y=p.axis?(p.direction>0?Math.PI:0):(p.direction>0?-Math.PI/2:Math.PI/2);
     p.mesh.userData.limbs.forEach((limb,i)=>limb.rotation.x=Math.sin(game.time*6+i*Math.PI)*0.25);
   }
