@@ -49,15 +49,21 @@ export function createNavigator(network){
     }
     return best;
   }
+  // A* scratch is allocated once and re-stamped per search: a route request
+  // used to allocate three 21k-entry arrays, which hitched the frame it ran on.
+  const routeScores=new Float64Array(nodes.length),routeParents=new Int32Array(nodes.length);
+  const routeClosed=new Int32Array(nodes.length),routeSeen=new Int32Array(nodes.length);let routeStamp=0;
   function route(from,to){
     const start=nearest(from),finish=nearest(to);
     if(!start||!finish)return [];
     if(start.edge===finish.edge)return [start,finish];
-    const scores=new Float64Array(nodes.length);scores.fill(Infinity);
-    const parents=new Int32Array(nodes.length);parents.fill(-1);
-    const closed=new Uint8Array(nodes.length),heap=new MinHeap();
+    // A node counts as scored/closed only when stamped by this search, so
+    // stale values from the previous route are ignored without any clearing.
+    const stamp=++routeStamp;
+    const scores=routeScores,parents=routeParents,closed=routeClosed,seen=routeSeen,heap=new MinHeap();
     const heuristic=id=>Math.hypot(nodes[id].x-finish.x,nodes[id].z-finish.z);
     for(const id of [start.a,start.b]){
+      seen[id]=stamp;parents[id]=-1;
       scores[id]=Math.hypot(nodes[id].x-start.x,nodes[id].z-start.z);
       heap.push({id,f:scores[id]+heuristic(id)});
     }
@@ -65,12 +71,12 @@ export function createNavigator(network){
     while(heap.length){
       const current=heap.pop(),id=current.id;
       if(current.f>=best)break;
-      if(closed[id])continue;closed[id]=1;
+      if(closed[id]===stamp)continue;closed[id]=stamp;
       if(id===finish.a||id===finish.b){const total=scores[id]+heuristic(id);if(total<best){best=total;goal=id;}}
       for(const edge of adj[id]){
         const cost=scores[id]+edge.length;
-        if(cost>=scores[edge.to])continue;
-        scores[edge.to]=cost;parents[edge.to]=id;heap.push({id:edge.to,f:cost+heuristic(edge.to)});
+        if(seen[edge.to]===stamp&&cost>=scores[edge.to])continue;
+        seen[edge.to]=stamp;scores[edge.to]=cost;parents[edge.to]=id;heap.push({id:edge.to,f:cost+heuristic(edge.to)});
       }
     }
     if(goal<0)return [];

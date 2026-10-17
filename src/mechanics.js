@@ -31,12 +31,15 @@ export function moveBody(body, dx, dz, radius, colliders, bounds) {
 // Speeds read as metres per second (the HUD shows km/h = units/s × 3.6), tuned for
 // grounded city driving: a hatchback tops out near 100 km/h, an auto-rickshaw near 53.
 export const VEHICLES = {
-  hatchback: { name: 'Deccan Sprint', maxSpeed: 30, acceleration: 6, brake: 10, reverse: 7, wheelbase: 2.5, steerLock: 0.6, radius: 1.5 },
-  auto: { name: 'Nanded Auto', maxSpeed: 16, acceleration: 3.4, brake: 7, reverse: 4, wheelbase: 1.9, steerLock: 0.7, radius: 1.15 },
-  sedan: { name: 'Ambassador Classic', maxSpeed: 26, acceleration: 4.4, brake: 8.5, reverse: 6, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
-  police: { name: 'Patrol SUV', maxSpeed: 31, acceleration: 6, brake: 10, reverse: 7, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
-  bike: { name: 'Nanded Bike', maxSpeed: 24, acceleration: 7, brake: 12, reverse: 3, wheelbase: 1.3, steerLock: 0.9, radius: 0.8 },
-  bus: { name: 'MSRTC Bus', maxSpeed: 18, acceleration: 2.6, brake: 6, reverse: 4, wheelbase: 4.6, steerLock: 0.4, radius: 1.9 },
+  hatchback: { name: 'Deccan Sprint', maxSpeed: 30, acceleration: 6.8, brake: 10, reverse: 7, wheelbase: 2.5, steerLock: 0.6, radius: 1.5 },
+  auto: { name: 'Nanded Auto', maxSpeed: 16, acceleration: 3.9, brake: 7, reverse: 4, wheelbase: 1.9, steerLock: 0.7, radius: 1.15 },
+  sedan: { name: 'Ambassador Classic', maxSpeed: 26, acceleration: 5, brake: 8.5, reverse: 6, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
+  police: { name: 'Patrol SUV', maxSpeed: 31, acceleration: 6.5, brake: 10, reverse: 7, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
+  bike: { name: 'Nanded Bike', maxSpeed: 24, acceleration: 7.6, brake: 12, reverse: 3, wheelbase: 1.3, steerLock: 0.9, radius: 0.8 },
+  bus: { name: 'MSRTC Lal Pari · एसटी', maxSpeed: 19, acceleration: 3, brake: 6, reverse: 4, wheelbase: 4.6, steerLock: 0.4, radius: 1.9 },
+  truck: { name: 'Deccan Highway Truck', maxSpeed: 21, acceleration: 2.8, brake: 6.5, reverse: 4, wheelbase: 5.2, steerLock: 0.38, radius: 2.1 },
+  tractor: { name: 'Farm Tractor', maxSpeed: 11, acceleration: 2.6, brake: 7, reverse: 3.5, wheelbase: 3.4, steerLock: 0.5, radius: 1.9 },
+  tempo: { name: 'Mondha Goods Tempo', maxSpeed: 15, acceleration: 3.2, brake: 7, reverse: 4, wheelbase: 2.2, steerLock: 0.65, radius: 1.4 },
 };
 // Sideways tyre grip (units/s²): no car can turn harder than this at speed.
 const GRIP = 9;
@@ -101,6 +104,10 @@ function lane(point,label,options={}){return {...point,placeId:'zenda-chowk',lab
 // so the first checkpoint is driven through rather than spawned on beside the arch.
 const circuitGrid={x:-35.59,z:-1015.89},kamanLine=PLACE_BY_ID.get('bhagya-nagar-kaman')?.approach||circuitGrid;
 const circuitStart={...circuitGrid,heading:Math.atan2(-(kamanLine.x-circuitGrid.x),-(kamanLine.z-circuitGrid.z))};
+// The airport run starts on the mapped street outside Hazur Sahib Nanded
+// station, facing the road vertex the Hingoli Gate route follows first.
+const stationRoad={x:33.81,z:9.78},stationApproach=PLACE_BY_ID.get('nanded-station')?.approach||stationRoad;
+const airportStart={...stationApproach,heading:Math.atan2(-(stationRoad.x-stationApproach.x),-(stationRoad.z-stationApproach.z))};
 const photo=(id,label)=>stop(id,label,{action:'photo'});
 const talk=(id,label,dialogue)=>stop(id,label,{action:'interact',dialogue});
 const raceStop=(id,label)=>stop(id,label,{mode:'vehicle',radius:15});
@@ -138,6 +145,15 @@ export const MISSIONS = [
     stops:[photo('ram-ghat','Photograph Ram Ghat'),photo('govardhan-ghat','Photograph Govardhan Ghat')] },
   { id:'lose-the-tail',kind:'chase',title:'Lose the tail',label:'09 / THE GETAWAY',shortDescription:'A fictional arcade pursuit through the Nanded streets.',
     description:'Take the wheel, make your own route and stay ahead of the fictional patrol for 50 seconds. The city is your escape route.',reward:1500,seconds:80,chase:true,survive:50,start:{...SPAWN},startMode:'vehicle',stops:[] },
+  { id:'darshan-yatra',kind:'photo',title:'दर्शन यात्रा',label:'12 / HAZUR SAHIB YATRA',shortDescription:'A Gurudwara photo yatra along the Godavari: Hazur Sahib to Sangat Sahib.',
+    description:'“वाहेगुरू जी का खालसा!” Walk the old-city riverfront like a yatri: photograph Takht Sri Hazur Sahib, then Nagina Ghat, Langar Sahib and Sangat Sahib. No timer — the Godavari sets the pace.',reward:1100,seconds:null,
+    stops:[photo('hazur-sahib','Photograph Takht Sri Hazur Sahib'),photo('nagina-ghat','Photograph Gurudwara Nagina Ghat'),photo('langar-sahib','Photograph Gurudwara Langar Sahib'),photo('sangat-sahib','Photograph Gurudwara Sangat Sahib')] },
+  { id:'old-city-bazaar',kind:'social',title:'जुन्या गावची फेरी',label:'13 / OLD CITY BAZAAR',shortDescription:'Sarafa lanes, the Old Mondha clock tower and hot jalebi to finish.',
+    description:'Old Nanded in one stroll: meet your friend in the Sarafa Bazar lanes, photograph the Old Mondha Clock Tower, then finish with sweets at Prasad Sweet House.',reward:650,seconds:null,
+    stops:[talk('sarafa-bazar','Meet in the Sarafa Bazar lanes','सराफ्यातली गर्दी बघ! Now go frame the Old Mondha Clock Tower.'),photo('old-mondha-clock-tower','Photograph the Old Mondha Clock Tower'),talk('prasad-sweet-house','Finish with sweets at Prasad Sweet House','गरम जिलेबी तयार आहे! Old city done right.')] },
+  { id:'airport-run',kind:'race',title:'Station ते Airport',label:'14 / AIRPORT RUN',shortDescription:'Race from Hazur Sahib Nanded station past Hingoli Gate to the airport.',
+    description:'The classic cross-city dash: station forecourt, Hingoli Gate, Namaskar Chowk, then Shri Guru Gobind Singh Ji Airport. Four minutes on the clock — keep it clean.',reward:1400,seconds:240,race:true,start:{...airportStart},startMode:'vehicle',
+    stops:[raceStop('hingoli-gate','Through Hingoli Gate'),raceStop('namaskar-chowk','Past Namaskar Chowk'),raceStop('nanded-airport','Finish at Shri Guru Gobind Singh Ji Airport')] },
 ].map(def=>{
   const first=def.stops[0],place=first&&PLACE_BY_ID.get(first.placeId);
   return {startMode:'foot',...def,start:def.start||{x:first.x,z:first.z,heading:place?.rotation||0}};
@@ -189,4 +205,21 @@ export function loadProgress(storage) {
 
 export function saveProgress(storage, progress) {
   try { storage.setItem('nanded-stories-v1', JSON.stringify(progress)); return true; } catch { return false; }
+}
+
+const RECORDS_KEY = 'nanded-activity-records-v1';
+const TIMED_MISSION_IDS = new Set(MISSIONS.filter(mission => Number.isFinite(mission.seconds)).map(mission => mission.id));
+
+export function loadRecords(storage) {
+  try {
+    const data = JSON.parse(storage.getItem(RECORDS_KEY));
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    return Object.fromEntries(Object.entries(data).filter(([id, seconds]) =>
+      TIMED_MISSION_IDS.has(id) && Number.isFinite(seconds) && seconds > 0 && seconds <= 86400
+    ));
+  } catch { return {}; }
+}
+
+export function saveRecords(storage, records) {
+  try { storage.setItem(RECORDS_KEY, JSON.stringify(records)); return true; } catch { return false; }
 }

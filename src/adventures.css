@@ -21,6 +21,7 @@
 .adventure-card p{font-size:11px;line-height:1.65;color:#c0cbb8;margin:0 0 18px}
 .adventure-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;flex-wrap:wrap}
 .adventure-card-bottom>span{font-size:8px;letter-spacing:.3px;color:#d5dfc8}
+.adventure-card-bottom>.adventure-record{flex-basis:100%;color:#9cdbc3;font-weight:750;letter-spacing:.6px}
 .adventure-card-bottom button{background:#ff8957;border:0;color:#172722;min-height:44px;padding:10px 13px;font-size:10px;font-weight:750}
 .landmark-card .adventure-symbol{color:#95e1c8;border-color:#95e1c866;background:#95e1c815}
 .landmark-card .adventure-card-bottom button{background:#9cdbc3}
@@ -34,10 +35,16 @@
 .on-foot .vehicle-panel .speed-readout,.on-foot .vehicle-panel .resource-bar{display:none}
 .on-foot .vehicle-panel{width:auto}
 .on-foot .vehicle-topline{font-size:11px}
-.photo-memory{position:fixed;z-index:62;right:32px;top:110px;width:260px;padding:9px 9px 16px;background:#f1e7ce;box-shadow:0 12px 50px #0007;transform:rotate(3deg);pointer-events:none;color:#20332c}
+.photo-memory{position:fixed;z-index:62;right:32px;top:110px;width:260px;padding:9px 9px 12px;background:#f1e7ce;box-shadow:0 12px 50px #0007;transform:rotate(3deg);pointer-events:auto;color:#20332c}
+.photo-memory .photo-dismiss{position:absolute;top:13px;right:13px;width:28px;height:28px;margin:0;padding:0;border:0;background:#13241fdd;color:#fff4df;font-size:21px;line-height:1;cursor:pointer}
+.photo-memory .photo-dismiss:focus-visible{outline:3px solid #e7774d;outline-offset:2px}
 .photo-memory img{width:100%;height:145px;object-fit:cover;background:#213d31;display:block}
 .photo-memory span{font-size:7px;letter-spacing:1.5px;display:block;margin:12px 4px 5px}
 .photo-memory strong{font-family:var(--display);font-size:24px;text-transform:uppercase;display:block;margin:0 4px}
+.photo-memory button{display:block;width:100%;margin-top:11px;padding:9px 10px;border:0;background:#203b32;color:#f6edda;font-size:10px;font-weight:750;letter-spacing:.6px;text-transform:uppercase;cursor:pointer}
+.photo-memory button:hover{background:#31594a}
+.photo-memory button:focus-visible{outline:3px solid #e7774d;outline-offset:2px}
+.photo-memory button:disabled{opacity:.55;cursor:not-allowed}
 .is-touch-device .world-action{bottom:calc(150px + var(--safe-bottom));padding:9px 16px;min-height:44px;font-size:11px;max-width:165px;gap:8px}
 .is-touch-device .world-action kbd{display:none}
 .is-touch-device.on-foot .vehicle-panel{display:none}

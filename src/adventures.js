@@ -56,12 +56,13 @@ const photoPromptsMr = {
 const kindIcon = {story:'01',sprint:'↗',photo:'◎',social:'✦',race:'⚑',chase:'★'};
 
 /** A paused activity picker: every card starts a real playable activity. */
-export function createAdventureMenu({missions,onMission,onVisit,onRoam,onClose,getStamps,t=(en)=>en}) {
+export function createAdventureMenu({missions,onMission,onVisit,onRoam,onClose,getStamps,getRecords=()=>({}),t=(en)=>en}) {
   const panel=document.getElementById('adventure-menu'), grid=document.getElementById('adventure-grid');
   const tabs=[...panel.querySelectorAll('[data-adventure-tab]')];
   let view='activities', returnFocus=null, inert=[];
   function render(){
     const stamps=getStamps();
+    const records=getRecords();
     document.getElementById('passport-count').textContent=t(`${stamps.size} / ${LANDMARKS.length} stamps`,`${stamps.size} / ${LANDMARKS.length} शिक्के`);
     document.getElementById('adventure-roam').textContent=t('Just roam →','फक्त फिरा →');
     tabs.forEach(tab=>{tab.textContent=t(tab.dataset.adventureTab==='activities'?'Adventures':'Landmark passport',tab.dataset.adventureTab==='activities'?'साहसं':'खुणांची पासपोर्ट');});
@@ -80,6 +81,7 @@ export function createAdventureMenu({missions,onMission,onVisit,onRoam,onClose,g
       card.append(el('p','',view==='landmarks'?t(photoPrompts[item.id]||'Step into a familiar part of Nanded and collect its photo stamp.',photoPromptsMr[item.id]||'नांदेडच्या ओळखीच्या भागात पाऊल ठेवा आणि शिक्का मिळवा.'):t(item.shortDescription,item.shortDescriptionMr||item.shortDescription)));
       const bottom=el('div','adventure-card-bottom');
       bottom.append(el('span','',view==='landmarks'?(collected?t('In your passport','पासपोर्टमध्ये'):t('+₹150 · PHOTO STAMP','+₹150 · फोटो शिक्का')):(item.survive||item.seconds?`${Math.ceil(item.survive||item.seconds)}s · ₹${item.reward}`:`${t('NO TIMER','वेळेचं बंधन नाही')} · ₹${item.reward}`)));
+      if(view==='activities'&&records[item.id])bottom.append(el('span','adventure-record',t(`PERSONAL BEST · ${records[item.id].toFixed(1)}s`,`वैयक्तिक सर्वोत्तम · ${records[item.id].toFixed(1)}से`)));
       const button=el('button','',view==='landmarks'?t('Visit on foot →','पायी भेट द्या →'):t('Play activity →','साहस सुरू करा →'));button.type='button';
       button.setAttribute('aria-label',`${view==='landmarks'?'Visit':'Play'} ${view==='landmarks'?item.shortName:item.title}`);
       button.addEventListener('click',()=>view==='landmarks'?onVisit(item):onMission(index));bottom.append(button);card.append(bottom);grid.append(card);

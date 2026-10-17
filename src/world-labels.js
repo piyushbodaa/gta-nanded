@@ -5,6 +5,7 @@ const CATEGORY_COLORS = {
   hotel: '#69493b', restaurant: '#963f32', food: '#963f32', cafe: '#76543c',
   landmark: '#946a28', transport: '#245467', hospital: '#287b7c',
   civic: '#596575', junction: '#936534', market: '#b76036', shop: '#49695d', park: '#476b45',
+  board: '#1e6b4a',
 };
 
 /** One shared atlas; signs are merged in spatial chunks for frustum culling. */
@@ -18,7 +19,27 @@ export function createCityLabels(places, group, chunkSize = 200) {
     { name: 'भोजनालय', shortName: 'BHOJANALAY', area: 'पोळी • भाजी • वरण भात', category: 'food' },
     { name: 'गॅरेज', shortName: 'MOTOR GARAGE', area: 'TYRES • SERVICE • REPAIRS', category: 'shop' },
     { name: 'बेकरी', shortName: 'BAKERY & SWEETS', area: 'FRESH EVERY DAY', category: 'food' },
+    // Green PWD direction boards (indices 8+). Fictional signs pointing at
+    // real parts of town; arrows are decorative, routes come from the GPS.
+    { name: 'हजूर साहिब', shortName: 'HAZUR SAHIB →', area: 'जुने गाव • OLD CITY', category: 'board' },
+    { name: 'रेल्वे स्थानक', shortName: 'RAILWAY STATION →', area: 'स्थानक रोड • STATION ROAD', category: 'board' },
+    { name: 'विमानतळ', shortName: 'AIRPORT →', area: 'सांगवी • SANGVI', category: 'board' },
+    { name: 'गोदावरी घाट', shortName: 'GODAVARI GHAT →', area: 'नदीकाठ • RIVERFRONT', category: 'board' },
+    { name: 'वजिराबाद', shortName: 'VAZIRABAD →', area: 'महानगरपालिका • CIVIC CENTRE', category: 'board' },
+    { name: 'सिडको', shortName: 'CIDCO →', area: 'नवीन वसाहत • NEW TOWNSHIP', category: 'board' },
+    { name: 'विष्णुपुरी', shortName: 'VISHNUPURI →', area: 'विद्यापीठ • UNIVERSITY', category: 'board' },
+    { name: 'देगलूर नाका', shortName: 'DEGLOOR NAKA →', area: 'देगलूर रोड • DEGLOOR ROAD', category: 'board' },
+    { name: 'छत्रपती चौक', shortName: 'CHHATRAPATI CHOWK →', area: 'पूर्णा रोड • PURNA ROAD', category: 'board' },
+    { name: 'श्री नगर', shortName: 'SHRI NAGAR →', area: 'तरोडा नाका रोड • TARODA NAKA ROAD', category: 'board' },
+    { name: 'मोंढा', shortName: 'MONDHA MARKET →', area: 'धान्य बाजार • GRAIN MARKET', category: 'board' },
+    // Coaching-lane results hoardings (after the boards): the flex banners
+    // with topper photos that wallpaper Shyam Nagar every June. Fictional.
+    { name: 'NEET निकाल', shortName: 'NEET RESULTS', area: 'AIR रँकर्स • अभिनंदन!', category: 'coaching' },
+    { name: 'JEE निकाल', shortName: 'JEE ADVANCED', area: 'IIT सिलेक्शन • अभिनंदन!', category: 'coaching' },
+    { name: 'प्रवेश सुरू', shortName: 'ADMISSIONS OPEN', area: 'NEET • JEE • CET • फाउंडेशन', category: 'coaching' },
+    { name: 'बोर्ड निकाल', shortName: 'BOARD TOPPERS', area: '९०%+ गुण • अभिनंदन!', category: 'coaching' },
   ];
+  const BOARD_COUNT = 11, HOARDING_START = 8 + BOARD_COUNT;
   const startingLane = { name: 'Your starting lane', shortName: 'आपली गल्ली', area: 'TARODA KHURD · NANDED', category: 'landmark' };
   const labels = [...places, ...filler, startingLane];
   const cols = 8, tileW = 512, tileH = 160, rows = Math.ceil(labels.length / cols);
@@ -80,6 +101,8 @@ export function createCityLabels(places, group, chunkSize = 200) {
   return {
     sign,
     generic(index, ...args) { sign(places.length + index % filler.length, ...args); },
+    board(index, ...args) { sign(places.length + 8 + index % BOARD_COUNT, ...args); },
+    hoarding(index, ...args) { sign(places.length + HOARDING_START + index % (filler.length - HOARDING_START), ...args); },
     startingLane(...args) { sign(places.length + filler.length, ...args); },
     finish() {
       const meshes = [];

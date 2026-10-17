@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { timeOfDay, VENDOR_MENU, CHATTER } from '../src/street-life.js';
+import { timeOfDay, VENDOR_MENU, CHATTER, signalState, PHASES } from '../src/street-life.js';
 import { MISSIONS, VEHICLES } from '../src/mechanics.js';
 
 test('the sky follows the local clock: day, a warm dusk, and a lantern-lit night', () => {
@@ -17,6 +17,27 @@ test('vendors, chatter and new vehicles are all defined', () => {
   assert.ok(CHATTER.every(line => line.mr && line.en));
   for (const kind of ['bike', 'bus']) assert.ok(VEHICLES[kind].maxSpeed > 0 && VEHICLES[kind].radius > 0, kind);
   assert.ok(VEHICLES.bike.maxSpeed > VEHICLES.auto.maxSpeed, 'a bike is quicker than an auto-rickshaw');
+});
+
+test('traffic signals cycle green, amber, red and opposite approaches never share a green', () => {
+  assert.equal(signalState(0), 'green');
+  assert.equal(signalState(6.5), 'amber');
+  assert.equal(signalState(10), 'red');
+  assert.equal(signalState(14), 'green', 'the cycle wraps');
+  assert.equal(signalState(-1), 'red', 'negative time still lands inside the cycle');
+  for (let t = 0; t < 28; t += 0.25) {
+    assert.ok(!(signalState(t, 0) === 'green' && signalState(t, 7) === 'green'), `both approaches green at ${t}s`);
+  }
+  assert.deepEqual(PHASES, ['day', 'dusk', 'night']);
+});
+
+test('the yatra, bazaar and airport adventures use real researched stops', () => {
+  const yatra = MISSIONS.find(m => m.id === 'darshan-yatra');
+  assert.deepEqual(yatra.stops.map(s => s.placeId), ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib']);
+  const run = MISSIONS.find(m => m.id === 'airport-run');
+  assert.equal(run.race, true);
+  assert.equal(run.stops.at(-1).placeId, 'nanded-airport');
+  assert.ok(run.seconds >= 180, 'a cross-city run needs a fair clock');
 });
 
 test('the two new side missions are repeatable on foot with a clear objective', () => {
