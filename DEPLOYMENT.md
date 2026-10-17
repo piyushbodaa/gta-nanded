@@ -24,9 +24,20 @@ Vercel before the public HTTPS address works. Do not change the separate
 
 ## Release
 
-The checkout is linked through ignored `.vercel/project.json`. Verify that
-the target is `piyushbodaa/nanded-street-stories`, then publish only after the
-game's build and browser checks pass:
+The Vercel project is connected to the GitHub repository
+`piyushbodaa/gta-nanded`, so releases are automatic:
+
+- **Every pull request and branch push** gets a preview deployment. Vercel
+  posts its link on the pull request; previews sit behind Vercel login.
+  Pull requests from forks build only after a maintainer authorises them in
+  Vercel.
+- **Every merge or push to `master`** deploys to production at
+  `https://gta.nanded.fun` within about a minute.
+
+Merge only after the checks in CONTRIBUTING.md pass and the preview has been
+played. To deploy by hand (for example to redeploy without a new commit), use
+the linked checkout. It is linked through ignored `.vercel/project.json`;
+verify that the target is `piyushbodaa/nanded-street-stories` first:
 
 ```sh
 npx --yes vercel@64.3.1 project inspect --non-interactive --scope piyushbodaa
