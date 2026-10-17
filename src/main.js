@@ -10,6 +10,8 @@ import { initMobileUI } from './mobile.js';
 import { createIntro } from './intro.js';
 import { createCameraControls, movementForCamera } from './camera-controls.js';
 import { createJoystick } from './joystick.js';
+import { createSteeringWheel } from './steering-wheel.js';
+import { laneOffsetPoint, gapAhead, trafficTargetSpeed } from './traffic.js';
 import { resolveCameraPosition } from './camera-obstruction.js';
 import { mapHeading, destinationBearing } from './map-direction.js';
 import { LANDMARKS, loadStamps, nearestPhotoSpot, collectStamp, createAdventureMenu } from './adventures.js';
@@ -24,21 +26,29 @@ const keys = new Set();
 // Fog fully hides the city at this distance, so nothing further is drawn.
 const VIEW_DISTANCE = 640;
 const DRIVE_CONTROLS_KEY = 'nanded-drive-controls-v1';
+const DRIVE_VIEW_KEY = 'nanded-drive-view-v1';
+const DRIVE_MODES = ['wheel', 'joystick', 'arrows'];
+// Dr. Driving-style rules: every crash costs a fine; three crashes end a race, none earns a bonus.
+const CRASH_FINE = 50, RACE_CRASH_LIMIT = 3, CLEAN_RACE_BONUS = 300, REFILL_COST = 100;
+// The driver's eye in each cab, car-local: +x is the right-hand driver's seat, +z the back.
+const COCKPIT_EYE = { hatchback: { x: 0.42, y: 1.78, z: 0.05 }, sedan: { x: 0.42, y: 1.8, z: 0.1 }, police: { x: 0.42, y: 1.82, z: 0.05 }, auto: { x: 0, y: 1.86, z: -0.3 } };
 const audio = new GameAudio();
 const intro = createIntro();
 let storage;
 try { storage=window.localStorage; } catch { storage={getItem:()=>null,setItem:()=>{throw Error('unavailable');}}; }
 const progress=loadProgress(storage);
-const game={started:false,paused:false,mapOpen:false,activityOpen:false,helpOnly:false,onFoot:true,roam:false,cash:progress.cash,completed:progress.completed,mission:newMission(0),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0,gps:null,landmarkView:null,jumpHeight:0,jumpSpeed:0,jumpHeld:false};
+const game={started:false,paused:false,mapOpen:false,activityOpen:false,helpOnly:false,onFoot:true,roam:false,cash:progress.cash,completed:progress.completed,mission:newMission(0),wanted:0,heat:0,trouble:0,time:0,capture:0,toastTime:0,collisionCooldown:0,gps:null,landmarkView:null,jumpHeight:0,jumpSpeed:0,jumpHeld:false,gear:'D'};
 const stamps=loadStamps(storage);
 const player={...SPAWN};
-let renderer,scene,camera,cameraControls,joystick,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0,pausedFrameDrawn=false;
-let driveControls='arrows';
-try{if(storage.getItem(DRIVE_CONTROLS_KEY)==='joystick')driveControls='joystick';}catch{/* Storage is optional. */}
-const toastQueue=[];
+let renderer,scene,camera,cameraControls,joystick,wheel,cockpit,needleAngle=null,world,car,avatar,marker,markerRing,arrow,clock,lastHUD=0,pausedFrameDrawn=false;
+let driveControls='wheel',driveView='chase';
+try{const saved=storage.getItem(DRIVE_CONTROLS_KEY);if(DRIVE_MODES.includes(saved))driveControls=saved;if(storage.getItem(DRIVE_VIEW_KEY)==='cockpit')driveView='cockpit';}catch{/* Storage is optional. */}
+const toastQueue=[],pedals=new Set();
 let guide,adventureMenu,friend,routeLine,routePoints=[],routeAge=10,routeKey='',mapCenter={...SPAWN},mapSpan=3600,lastTrafficFocus={...SPAWN},photoTimer;
 const photoMarkers=[];
 const navigator=createNavigator(NETWORK),visited=new Set();
+// Traffic lanes and junction slowing read the road graph directly.
+const nodeIndex=new Map(NETWORK.nodes.map((node,i)=>[node,i])),junctions=new Set(NETWORK.nodes.filter((_,i)=>navigator.adj[i].length>=3));
 try{for(const id of JSON.parse(storage.getItem('nanded-discoveries-v1')||'[]'))if(PLACE_BY_ID.has(id))visited.add(id);}catch{/* Storage is optional. */}
 const cars=[],police=[],pedestrians=[];
 let lastNearby=null;
@@ -52,8 +62,16 @@ function persist(){const saved=saveProgress(storage,{cash:game.cash,completed:ga
 function playerPosition(){return game.onFoot?player:car;}
 function addCar(kind,color,x,z,heading=0,route=null){
   const mesh=createVehicle(kind,color);scene.add(mesh);mesh.position.set(x,0.12,z);mesh.rotation.y=heading;
-  const vehicle={kind,mesh,x,z,heading,speed:0,nitro:100,health:100,route,routeIndex:0,cruise:8+Math.random()*5,occupied:false};
+  const vehicle={kind,mesh,x,z,heading,speed:0,nitro:100,fuel:100,steer:0,health:100,route,lanes:route?laneOffsets(route):null,routeIndex:0,cruise:8+Math.random()*5,occupied:false};
   cars.push(vehicle);return vehicle;
+}
+// Keep-left offset for each route segment: a quarter of that mapped street's width.
+function laneOffsets(route){
+  return route.map((point,i)=>{
+    const from=nodeIndex.get(route[(i-1+route.length)%route.length]),to=nodeIndex.get(point);
+    const link=from===undefined||to===undefined?null:navigator.adj[from].find(e=>e.to===to);
+    return (link?NETWORK.edges[link.edge].width:6)/4;
+  });
 }
 
 function setup(){
@@ -118,7 +136,7 @@ function start(roam=false){
   player.x=SPAWN.x;player.z=SPAWN.z;player.heading=MISSIONS[0].start.heading;game.jumpHeight=game.jumpSpeed=0;game.landmarkView=null;
   avatar.position.set(player.x,.15,player.z);avatar.visible=true;show('welcome',false);show('hud',true);show('touch-controls',true);show('pause-menu',false);
   document.body.classList.add('is-playing');keys.clear();
-  show('camera-reset',true);cameraControls.reset(playerPosition().heading);
+  show('camera-reset',true);show('camera-view',true);cameraControls.reset(playerPosition().heading);
   const p=playerPosition(),initial=resolveCameraPosition({x:p.x,y:1.6,z:p.z},{x:p.x+Math.sin(p.heading)*9,y:1.6+Math.tan(.44)*9,z:p.z+Math.cos(p.heading)*9},world.cameraColliders,world.bounds);
   camera.position.set(initial.x,initial.y,initial.z);
   beginMission();toast(roam?'आपली गल्ली. आपलं शहर. Walk, jump, explore — choose Activities whenever you like.':'अरे, परत आलास! Meet your friend in the amber ring. Tap Talk or press Q.',7);
@@ -146,7 +164,7 @@ function placePlayer(position,onFoot=true){
   police.forEach(p=>{p.active=false;p.mesh.visible=false;});
   player.x=position.x;player.z=position.z;player.heading=heading;
   if(!onFoot){car.x=position.x;car.z=position.z;car.heading=heading;car.route=null;}
-  car.speed=0;car.occupied=!onFoot;car.health=100;car.nitro=100;
+  car.speed=0;car.occupied=!onFoot;car.health=100;car.nitro=100;car.fuel=100;game.gear='D';wheel?.reset();
   clearArrival(position,onFoot?null:car);
   avatar.visible=onFoot;avatar.position.set(player.x,.15,player.z);
   cameraControls.reset(heading);const dist=onFoot?9:19;
@@ -231,7 +249,7 @@ function toggleMap(){
 
 function recover(message='Back on the road. Your ride is repaired.'){
   const spot=navigator.nearest(playerPosition())||SPAWN;
-  car.x=spot.x;car.z=spot.z;car.heading=SPAWN.heading;car.speed=0;car.health=100;car.nitro=100;
+  car.x=spot.x;car.z=spot.z;car.heading=SPAWN.heading;car.speed=0;car.health=100;car.nitro=100;car.fuel=100;
   if(game.onFoot){player.x=spot.x;player.z=spot.z;}
   cameraControls?.reset(playerPosition().heading);
   game.jumpHeight=game.jumpSpeed=0;
@@ -296,7 +314,7 @@ function refreshTraffic(p,force=false,clearance=22){
       const edge=NETWORK.edges[nearby[(i*37+k)%nearby.length]],a=NETWORK.nodes[edge.a],b=NETWORK.nodes[edge.b];
       const pos={x:(a.x+b.x)/2,z:(a.z+b.z)/2};if(distance(pos,p)<clearance)continue;
       const route=navigator.walk(pos,i*733+17,24);if(route.length<3)continue;
-      v.x=pos.x;v.z=pos.z;v.route=route;v.routeIndex=1;v.speed=0;return;
+      v.x=pos.x;v.z=pos.z;v.route=route;v.lanes=laneOffsets(route);v.routeIndex=1;v.speed=0;return;
     }
   });
 }
@@ -324,7 +342,7 @@ function interact(){
     if(!nearest){toast('Move closer to a parked car or an auto-rickshaw.');return;}
     if(nearest.route){addHeat(30);toast('Vehicle taken. The patrol has been alerted.');}
     else toast(`${VEHICLES[nearest.kind].name}. Let’s go.`);
-    car=nearest;car.route=null;car.occupied=true;car.speed=0;game.onFoot=false;avatar.visible=false;
+    car=nearest;car.route=null;car.occupied=true;car.speed=0;game.onFoot=false;avatar.visible=false;game.gear='D';wheel.reset();
   }
   updateHUD();
 }
@@ -332,11 +350,20 @@ function interact(){
 function hookUI(){
   cameraControls=createCameraControls($('game-canvas'),{canInteract:()=>game.started&&!intro.active&&!game.paused&&!game.mapOpen});
   joystick=createJoystick($('touch-joystick'),$('touch-joystick-knob'),{canInteract:()=>game.started&&!intro.active&&!game.paused&&!game.onFoot});
+  wheel=createSteeringWheel($('touch-wheel'),$('touch-wheel-rim'),{canInteract:()=>game.started&&!intro.active&&!game.paused&&!game.onFoot});
+  cockpit=createCockpit();
   $('touch-drive-mode')?.addEventListener('click',()=>{
-    driveControls=driveControls==='joystick'?'arrows':'joystick';joystick.reset();keys.clear();
+    driveControls=DRIVE_MODES[(DRIVE_MODES.indexOf(driveControls)+1)%DRIVE_MODES.length];joystick.reset();wheel.reset();keys.clear();pedals.clear();
     try{storage.setItem(DRIVE_CONTROLS_KEY,driveControls);}catch{/* The choice still applies for this visit. */}
-    toast(driveControls==='joystick'?'Joystick steering: push up to drive, sideways to steer.':'Arrow steering is back.',3);updateHUD();
+    toast({wheel:'Steering wheel: turn it with your thumb, drive with the pedals, tap D/R to change gear.',joystick:'Joystick steering: push up to drive, sideways to steer.',arrows:'Arrow steering.'}[driveControls],4);updateHUD();
   });
+  document.querySelectorAll('[data-pedal]').forEach(pedal=>{
+    const name=pedal.dataset.pedal;
+    pedal.addEventListener('pointerdown',e=>{e.preventDefault();pedal.setPointerCapture(e.pointerId);pedals.add(name);pedal.classList.add('active');});
+    ['pointerup','pointercancel','lostpointercapture'].forEach(type=>pedal.addEventListener(type,()=>{pedals.delete(name);pedal.classList.remove('active');}));
+  });
+  $('touch-gear')?.addEventListener('click',()=>{if(game.onFoot)return;game.gear=game.gear==='D'?'R':'D';audio.tone(game.gear==='R'?330:440,0.08);updateHUD();});
+  $('camera-view')?.addEventListener('click',toggleView);
   initMobileUI({onLayout:()=>{
     camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
     pausedFrameDrawn=false;
@@ -347,7 +374,7 @@ function hookUI(){
   $('start-guide')?.addEventListener('click',()=>intro.play(()=>{start(true);toggleMap();},{mode:'guide'}));
   $('roam-toggle')?.addEventListener('click',()=>openAdventures());
   $('passport-open')?.addEventListener('click',()=>openAdventures('landmarks'));
-  $('world-action')?.addEventListener('click',()=>{takeAction();$('game-canvas').focus();});
+  $('world-action')?.addEventListener('click',()=>{if(!game.onFoot&&car.fuel<15)refuel();else takeAction();$('game-canvas').focus();});
   $('gps-clear')?.addEventListener('click',()=>{game.gps=null;routeAge=10;updateHUD();});
   $('resume')?.addEventListener('click',()=>pause(false));
   $('help-toggle')?.addEventListener('click',()=>pause(!game.paused,true));
@@ -378,6 +405,7 @@ function hookUI(){
       if(e.code==='KeyB'){openAdventures();return;}
       if(e.code==='KeyQ')takeAction();
       if(e.code==='KeyC'){game.landmarkView=null;cameraControls.reset(playerPosition().heading);}
+      if(e.code==='KeyV')toggleView();
       if(e.code==='KeyH')audio.horn();
       if(e.code==='KeyR'){game.cash=Math.max(0,game.cash-100);persist();recover('Ride recovered. Repair cost: up to ₹100.');if(MISSIONS[game.mission.index].chase&&game.mission.status==='active')game.mission.status='failed';}
       if(e.code==='KeyN'&&(game.roam||game.mission.status!=='active'))$('mission-next').click();
@@ -399,14 +427,48 @@ function hookUI(){
   $('game-canvas').addEventListener('webglcontextlost',e=>{e.preventDefault();pause(true);show('fatal-error',true);text('fatal-error-message','The graphics connection was interrupted. Reload this page to return to Nanded.');});
 }
 
+function toggleView(){
+  if(!game.started||game.paused||game.onFoot)return;
+  driveView=driveView==='cockpit'?'chase':'cockpit';
+  try{storage.setItem(DRIVE_VIEW_KEY,driveView);}catch{/* The view still applies for this visit. */}
+  toast(driveView==='cockpit'?'Cockpit view. Press V or the view button for the chase camera.':'Chase view.',2.5);updateHUD();$('game-canvas').focus({preventScroll:true});
+}
+
 function inputState(){
   const input={up:keys.has('KeyW')||keys.has('ArrowUp'),down:keys.has('KeyS')||keys.has('ArrowDown'),left:keys.has('KeyA')||keys.has('ArrowLeft'),right:keys.has('KeyD')||keys.has('ArrowRight'),brake:keys.has('Space'),boost:keys.has('ShiftLeft')||keys.has('ShiftRight')};
+  if(!game.onFoot&&driveControls==='wheel'){
+    // Wheel and pedals: the gear lever decides which way the accelerator drives.
+    if(wheel?.turning)input.steer=wheel.steer;
+    if(pedals.has('gas')){input.throttle=game.gear==='R'?-1:1;input.up||=game.gear==='D';}
+    if(pedals.has('brake'))input.footBrake=true;
+  }
   if(!game.onFoot&&driveControls==='joystick'&&joystick?.active){
     // Analog values drive the car; the flags keep boost, body roll and hints in step.
     input.throttle=joystick.y;input.steer=-joystick.x;
     input.up||=joystick.y>0.25;input.down||=joystick.y<-0.25;input.left||=joystick.x<-0.25;input.right||=joystick.x>0.25;
   }
   return input;
+}
+
+function crash(other){
+  car.health-=Math.abs(car.speed)*0.6;car.speed*=-0.32;game.collisionCooldown=1.1;other.stunned=1.5;
+  addHeat(police.includes(other)?22:12);audio.tone(75,0.17,'sawtooth');
+  const def=MISSIONS[game.mission.index],active=!game.roam&&game.mission.status==='active';
+  // The getaway already punishes crashes with patrol attention; elsewhere they cost a fine.
+  if(active&&def.chase){toast('Watch the traffic. Patrol attention is rising.',2.5);return;}
+  game.cash=Math.max(0,game.cash-CRASH_FINE);persist();
+  if(active&&def.race){
+    game.mission.crashes++;
+    if(game.mission.crashes>=RACE_CRASH_LIMIT){game.mission.status='failed';toast(`Crash ${RACE_CRASH_LIMIT} of ${RACE_CRASH_LIMIT} · −₹${CRASH_FINE}. Race over: retry when you're ready.`,6);audio.tone(150,0.4);updateHUD();return;}
+    toast(`Crash ${game.mission.crashes} of ${RACE_CRASH_LIMIT} · −₹${CRASH_FINE}. Three crashes ends the race.`,3);return;
+  }
+  toast(`Crash! −₹${CRASH_FINE} fine. Patrol attention is rising.`,3);
+}
+
+function refuel(){
+  if(game.onFoot)return;
+  game.cash=Math.max(0,game.cash-REFILL_COST);car.fuel=100;car.fuelWarned=car.emptyWarned=false;persist();
+  toast(`Roadside refill · −₹${REFILL_COST}. Tank full.`,3);audio.tone(520,0.2);updateHUD();
 }
 
 function addHeat(amount){game.heat=clamp(game.heat+amount,0,90);game.wanted=Math.min(3,Math.ceil(game.heat/30));game.trouble=game.time;spawnPolice();}
@@ -425,15 +487,21 @@ function roadPath(from,to){
 
 function updateTraffic(dt){
   const pos=playerPosition();
+  // Traffic keeps left, queues behind whatever is in its lane and eases into junctions.
+  const obstacles=cars.filter(v=>v.mesh.visible);if(game.onFoot)obstacles.push(player);
+  const laneTarget=v=>{const n=v.route.length;return laneOffsetPoint(v.route[(v.routeIndex-1+n)%n],v.route[v.routeIndex],v.lanes?.[v.routeIndex]??1.5);};
   for(const v of cars){
     if(v===car&&!game.onFoot)continue;
     if(!v.route||police.includes(v))continue;
-    let target=v.route[v.routeIndex];
-    if(distance(v,target)<2){v.routeIndex=(v.routeIndex+1)%v.route.length;target=v.route[v.routeIndex];}
+    let target=laneTarget(v);
+    if(distance(v,target)<2){v.routeIndex=(v.routeIndex+1)%v.route.length;target=laneTarget(v);}
     const d=distance(v,target),desired=Math.atan2(-(target.x-v.x),-(target.z-v.z));
     v.heading+=wrapAngle(desired-v.heading)*Math.min(dt*6,1);
-    const close=distance(v,pos);const slow=game.onFoot&&close<10?0:close<7?0.2:1;
-    v.speed=THREE.MathUtils.lerp(v.speed,v.cruise*slow,dt*3);
+    v.stunned=Math.max(0,(v.stunned||0)-dt);
+    const node=v.route[v.routeIndex];
+    let aim=v.stunned?0:trafficTargetSpeed(v.cruise,{gap:gapAhead(v,obstacles),junctionDistance:junctions.has(node)?distance(v,node):Infinity});
+    if(game.onFoot&&distance(v,pos)<10)aim=0;
+    v.speed=THREE.MathUtils.lerp(v.speed,aim,Math.min(1,dt*(aim<v.speed?4:2)));
     const step=Math.min(v.speed*dt,d);v.x+=(target.x-v.x)/Math.max(d,0.1)*step;v.z+=(target.z-v.z)/Math.max(d,0.1)*step;
   }
   for(const p of police){
@@ -445,7 +513,8 @@ function updateTraffic(dt){
     const target=distance(p,pos)<24?pos:p.path[0]||pos;
     const d=distance(p,target),heading=Math.atan2(-(target.x-p.x),-(target.z-p.z));
     p.heading+=wrapAngle(heading-p.heading)*Math.min(dt*4,1);
-    p.speed=THREE.MathUtils.lerp(p.speed,Math.min(30+game.wanted*2,d*1.5),dt*2);
+    // Patrols sit just under a hatchback's top speed: boost or clever driving loses them.
+    p.speed=THREE.MathUtils.lerp(p.speed,Math.min(24+game.wanted*2.5,d*1.5),dt*2);
     const hit=moveBody(p,-Math.sin(p.heading)*p.speed*dt,-Math.cos(p.heading)*p.speed*dt,1.5,world.colliders,world.bounds);
     // Grinding a wall replans soon, but not with a city-wide search on every frame.
     if(hit){p.repath=Math.min(p.repath,0.5);p.speed*=0.6;}
@@ -471,16 +540,20 @@ function updatePlayer(dt){
     avatar.userData.limbs.forEach((limb,i)=>limb.rotation.x=len?Math.sin(game.time*12+i*Math.PI)*0.45:0);
     lastNearby=nearestVehicle();
   }else{
+    wheel.update(dt);
     const beforeSpeed=car.speed,move=driveStep(car,input,dt);
     const collision=moveBody(car,move.dx,move.dz,VEHICLES[car.kind].radius,world.colliders,world.bounds);
     if(collision){car.speed*=-0.22;if(Math.abs(beforeSpeed)>7&&game.collisionCooldown<=0){car.health-=Math.abs(beforeSpeed)*0.48;game.collisionCooldown=0.8;audio.tone(90,0.15,'sawtooth');}}
     for(const v of cars){
       if(v===car||!v.mesh.visible)continue;
-      if(distance(v,car)<VEHICLES[car.kind].radius+VEHICLES[v.kind].radius&&Math.abs(car.speed)>3&&game.collisionCooldown<=0){
-        car.health-=Math.abs(car.speed)*0.6;car.speed*=-0.32;game.collisionCooldown=1.1;
-        addHeat(police.includes(v)?22:12);audio.tone(75,0.17,'sawtooth');toast('Watch the traffic. Patrol attention is rising.',2.5);
-      }
+      const reach=VEHICLES[car.kind].radius+VEHICLES[v.kind].radius,d=distance(v,car);
+      if(d>=reach)continue;
+      // Cars never sit inside each other; a hit above walking pace is a crash.
+      if(d>0)moveBody(car,(car.x-v.x)/d*(reach-d),(car.z-v.z)/d*(reach-d),VEHICLES[car.kind].radius,world.colliders,world.bounds);
+      if(Math.abs(car.speed)>3&&game.collisionCooldown<=0)crash(v);
     }
+    if(car.fuel<15&&!car.fuelWarned){car.fuelWarned=true;toast(`Fuel low. Press R or tap Refill for a roadside top-up (₹${REFILL_COST}).`,5);}
+    if(car.fuel<=0&&!car.emptyWarned){car.emptyWarned=true;toast('Out of fuel. The engine is off: press R or tap Refill.',6);}
     if(car.health<=0){game.cash=Math.max(0,game.cash-150);persist();game.mission.status='failed';recover('Ride wrecked. Repaired at the garage. Retry your job.');}
     car.mesh.rotation.z=THREE.MathUtils.lerp(car.mesh.rotation.z,((input.left?1:0)-(input.right?1:0))*Math.min(Math.abs(car.speed)/500,0.07),dt*5);
   }
@@ -525,9 +598,10 @@ function handleMissionResult(result,announce=true){
   if(!result)return null;
   const def=MISSIONS[game.mission.index];let message=null;
   if(result==='complete'){
-    game.cash+=def.reward;game.completed++;persist();audio.success();
+    const clean=def.race&&!game.mission.crashes;
+    game.cash+=def.reward+(clean?CLEAN_RACE_BONUS:0);game.completed++;persist();audio.success();
     if(def.chase){game.wanted=0;game.heat=0;}
-    message=[`झकास! ${def.title} complete · +₹${def.reward.toLocaleString('en-IN')} · Choose your next adventure in Activities.`,7];
+    message=[clean?`झकास! ${def.title} complete with no crashes · +₹${def.reward.toLocaleString('en-IN')} + ₹${CLEAN_RACE_BONUS} clean-driving bonus.`:`झकास! ${def.title} complete · +₹${def.reward.toLocaleString('en-IN')} · Choose your next adventure in Activities.`,7];
   }else if(result==='checkpoint'){audio.tone(660,0.2);message=[def.stops[game.mission.stage].label,3];}
   else if(result==='failed'){message=['Time’s up. Retry the challenge when you’re ready.',6];audio.tone(150,0.4);}
   if(announce&&message)toast(...message);
@@ -539,22 +613,71 @@ function updateCamera(dt){
   const p=playerPosition();
   const view=cameraControls.update(dt,{heading:p.heading,speed:game.onFoot?0:car.speed,onFoot:game.onFoot}),heading=view.heading;
   if(view.dragging)game.landmarkView=null;
+  syncCockpit();
+  if(!game.onFoot&&driveView==='cockpit'){updateCockpitCamera(heading,view.pitch);finishCamera(p,heading,dt);return;}
   const landmark=game.landmarkView;
-  const dist=landmark?Math.max(20,Math.min(42,landmark.h*1.3)):game.onFoot?9:19+Math.min(Math.abs(car.speed)*0.12,5);
-  tmp.set(p.x+Math.sin(heading)*dist,1.6+Math.tan(view.pitch)*dist,p.z+Math.cos(heading)*dist);
+  // The chase camera sits close and low behind the car, as in Dr. Driving.
+  // A narrow portrait screen needs it further back and a little higher to show the road ahead.
+  const portrait=camera.aspect<1;
+  const dist=landmark?Math.max(20,Math.min(42,landmark.h*1.3)):game.onFoot?9:(portrait?14:10)+Math.min(Math.abs(car.speed)*0.1,3.5);
+  const pitch=game.onFoot||landmark?view.pitch:Math.max(0.06,view.pitch-(portrait?0.12:0.2));
+  tmp.set(p.x+Math.sin(heading)*dist,1.6+Math.tan(pitch)*dist,p.z+Math.cos(heading)*dist);
   // Shorten the view before a wall or roof, including obstacles between the actor and camera.
   const focus={x:p.x,y:1.6,z:p.z},clear=resolveCameraPosition(focus,tmp,world.cameraColliders,world.bounds);
   tmp.set(clear.x,clear.y,clear.z);
   camera.position.lerp(tmp,1-Math.exp(-dt*(view.dragging?12:4.5)));
   const safe=resolveCameraPosition(focus,camera.position,world.cameraColliders,world.bounds);
   camera.position.set(safe.x,safe.y,safe.z);
-  const lookAhead=game.onFoot?1.5:5;
+  const lookAhead=game.onFoot?1.5:6;
   if(landmark)camTarget.set(landmark.x,Math.min(landmark.h*.55,12),landmark.z);
-  else camTarget.set(p.x-Math.sin(heading)*lookAhead,1.6,p.z-Math.cos(heading)*lookAhead);
+  else camTarget.set(p.x-Math.sin(heading)*lookAhead,game.onFoot?1.6:1.3,p.z-Math.cos(heading)*lookAhead);
   camera.lookAt(camTarget);
+  finishCamera(p,heading,dt);
+}
+
+// The dial needle moves every frame; HUD text refreshes five times a second.
+function updateSpeedometer(){
+  if(game.onFoot)return;
+  const angle=clamp(Math.abs(car.speed)*3.6,0,160)/160*180-90;
+  if(needleAngle===null||Math.abs(angle-needleAngle)>0.4){$('speed-needle')?.setAttribute('transform',`rotate(${angle.toFixed(1)} 60 62)`);needleAngle=angle;}
+}
+
+function finishCamera(p,heading,dt){
   if(game.gps)$('gps-bearing').style.transform=`rotate(${destinationBearing(p,game.gps.approach,heading)}rad)`;
-  const fov=52+(!game.onFoot&&inputState().boost&&car.speed>25?6:0);camera.fov=THREE.MathUtils.lerp(camera.fov,fov,dt*3);camera.updateProjectionMatrix();
+  const fov=(!game.onFoot&&driveView==='cockpit'?(camera.aspect<1?78:62):52)+(!game.onFoot&&inputState().boost&&car.speed>25?6:0);camera.fov=THREE.MathUtils.lerp(camera.fov,fov,dt*3);camera.updateProjectionMatrix();
   game.sun.position.set(p.x-100,150,p.z+90);sunTarget.position.set(p.x,0,p.z);sunTarget.updateMatrixWorld();
+}
+
+// A simple dashboard and wheel ride inside the player's car only while the cockpit view is on.
+function createCockpit(){
+  const group=new THREE.Group(),dark=new THREE.MeshStandardMaterial({color:'#1d2526',roughness:.9}),trim=new THREE.MeshStandardMaterial({color:'#c9b98f',roughness:.6});
+  const dash=new THREE.Mesh(new THREE.BoxGeometry(1.86,0.18,0.46),dark);group.add(dash);
+  const binnacle=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.1,0.16),trim);group.add(binnacle);
+  const wheel=new THREE.Group(),rim=new THREE.Mesh(new THREE.TorusGeometry(0.15,0.022,8,28),dark);wheel.add(rim);
+  for(const angle of [0,Math.PI*2/3,Math.PI*4/3]){const spoke=new THREE.Mesh(new THREE.BoxGeometry(0.026,0.14,0.02),dark);spoke.position.set(Math.sin(angle)*0.07,-Math.cos(angle)*0.07,0);spoke.rotation.z=angle;wheel.add(spoke);}
+  wheel.rotation.x=-0.4;group.add(wheel);
+  group.userData={dash,binnacle,wheel};
+  group.traverse(o=>{o.castShadow=false;});return group;
+}
+function syncCockpit(){
+  const host=!game.onFoot&&driveView==='cockpit'?car.mesh:null;
+  if(cockpit.parent!==host){
+    cockpit.removeFromParent();
+    if(host){
+      // Below the sightline: the dash just out of view, the wheel's top arc along the bottom edge.
+      const eye=COCKPIT_EYE[car.kind]||COCKPIT_EYE.hatchback,{dash,binnacle,wheel}=cockpit.userData;
+      dash.position.set(0,eye.y-0.6,eye.z-0.8);binnacle.position.set(eye.x,eye.y-0.47,eye.z-0.72);wheel.position.set(eye.x,eye.y-0.4,eye.z-0.5);host.add(cockpit);
+    }
+  }
+  // On phones the on-screen wheel already shows the steering; a second one would block the road.
+  if(host){cockpit.userData.wheel.visible=!document.body.classList.contains('is-touch-device');cockpit.userData.wheel.rotation.z=(car.steer||0)*2.6;}
+}
+function updateCockpitCamera(heading,pitch){
+  const eye=COCKPIT_EYE[car.kind]||COCKPIT_EYE.hatchback,c=Math.cos(car.heading),s=Math.sin(car.heading);
+  camera.position.set(car.x+eye.x*c+eye.z*s,eye.y,car.z-eye.x*s+eye.z*c);
+  // Looking around still works; dragging up or down tilts the view a little.
+  camTarget.set(camera.position.x-Math.sin(heading)*20,eye.y-1.1-(pitch-0.44)*8,camera.position.z-Math.cos(heading)*20);
+  camera.lookAt(camTarget);
 }
 
 function district(p){
@@ -567,12 +690,14 @@ function updateHUD(){
   text('wanted','★'.repeat(game.wanted)+'☆'.repeat(3-game.wanted));$('wanted')?.setAttribute('aria-label',`Wanted level ${game.wanted} of 3`);
   text('speed',game.onFoot?'—':String(Math.round(Math.abs(car.speed)*3.6)).padStart(2,'0'));
   text('vehicle-name',game.onFoot?'ON FOOT':VEHICLES[car.kind].name.toUpperCase());
+  text('gear-readout',driveControls==='wheel'&&document.body.classList.contains('is-touch-device')?game.gear:car.speed<-0.3?'R':'D');
+  if($('fuel-fill')){$('fuel-fill').style.width=`${clamp(car.fuel,0,100)}%`;$('fuel-fill').classList.toggle('low',car.fuel<15);}
   if($('health-fill'))$('health-fill').style.width=`${clamp(car.health,0,100)}%`;
   if($('nitro-fill'))$('nitro-fill').style.width=`${car.nitro}%`;
   text('mission-label',m.status==='complete'?'ACTIVITY COMPLETE':m.status==='failed'?'TRY AGAIN':def.label);
   text('mission-title',def.title);
   text('mission-description',m.status==='complete'?`झकास! ₹${def.reward.toLocaleString('en-IN')} earned. Your progress is saved.`:m.status==='failed'?'Take another run, or choose a different adventure.':def.description);
-  text('mission-progress',m.status==='active'?(def.chase?`Stay ahead · ${Math.max(0,Math.ceil(def.survive-m.elapsed))}s`:target?.label||''):m.status==='complete'?'READY FOR ANOTHER?':'READY WHEN YOU ARE');
+  text('mission-progress',m.status==='active'?(def.chase?`Stay ahead · ${Math.max(0,Math.ceil(def.survive-m.elapsed))}s`:def.race?`${target?.label||''} · Crashes ${m.crashes}/${RACE_CRASH_LIMIT}`:target?.label||''):m.status==='complete'?'READY FOR ANOTHER?':'READY WHEN YOU ARE');
   text('mission-distance',m.status==='active'&&target?`${Math.round(distance(p,target))} m`:'');
   // A getaway is won by surviving; its longer hard limit is never the clock to beat.
   const limit=def.chase?def.survive:def.seconds,remaining=Math.max(0,Math.ceil((limit||0)-m.elapsed));text('mission-time',m.status==='active'?(limit?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'NO TIMER'):'');
@@ -581,19 +706,23 @@ function updateHUD(){
     text('mission-label','YOUR CITY / FREE ROAM');text('mission-title',game.landmarkView?.shortName||'Find your Nanded');text('mission-description',game.landmarkView?'Find a view you like and take a photo for your landmark passport. Walk or drag the view to explore on foot.':'Walk, sprint, jump or borrow a ride. Find mint photo rings at landmarks, or choose a challenge in Activities.');text('mission-progress',`${visited.size} of ${PLACES.length} places discovered`);text('mission-distance','');text('mission-time','');show('mission-next',true);text('mission-next','Choose an adventure ↗');
   }else if(target&&m.status==='active')text('mission-distance',`${Math.round((pathLength(routePoints)||distance(p,target))/NETWORK.scale)} m route`);
   text('roam-toggle','Activities');
-  document.body.classList.toggle('on-foot',game.onFoot);document.body.classList.toggle('drive-joystick',driveControls==='joystick');
-  $('touch-drive-mode')?.setAttribute('aria-pressed',String(driveControls==='joystick'));
+  document.body.classList.toggle('on-foot',game.onFoot);document.body.classList.toggle('drive-joystick',driveControls==='joystick');document.body.classList.toggle('drive-wheel',driveControls==='wheel');
+  const modeName={wheel:'WHEEL',joystick:'STICK',arrows:'ARROWS'}[driveControls];text('touch-drive-mode-label',modeName);
+  $('touch-drive-mode')?.setAttribute('aria-label',`Driving controls: ${modeName.toLowerCase()}. Tap to switch.`);
+  $('touch-gear')?.setAttribute('data-gear',game.gear);$('touch-gear')?.setAttribute('aria-label',game.gear==='D'?'Gear: drive. Tap for reverse.':'Gear: reverse. Tap for drive.');
+  $('camera-view')?.setAttribute('aria-label',driveView==='cockpit'?'Switch to chase view':'Switch to cockpit view');text('camera-view-label',driveView==='cockpit'?'Chase view':'Cockpit view');
   text('touch-jump',game.onFoot?'JUMP':'BRAKE');$('touch-jump')?.setAttribute('aria-label',game.onFoot?'Jump':'Handbrake');text('touch-sprint',game.onFoot?'RUN':'BOOST');
   text('passport-summary',`${stamps.size}/${LANDMARKS.length} landmark stamps`);
   text('objective-short',game.roam?(game.landmarkView?`Photo spot · ${stamps.has(game.landmarkView.id)?'Stamp collected':'₹150 for a new stamp'}`:'Your city. Your pace.'):m.status==='complete'?'Chapter complete. Choose your next adventure.':m.status==='failed'?'Try again in Activities.':target?.label||'Stay ahead of the patrol');
   const actionTarget=missionActionTarget(),photoSpot=currentPhotoSpot();
-  show('world-action',game.onFoot&&Boolean(actionTarget||photoSpot));text('world-action-label',actionTarget?.action==='interact'?'Talk':photoSpot&&stamps.has(photoSpot.id)?'Photo again':'Take photo');
+  const refill=!game.onFoot&&car.fuel<15;
+  show('world-action',refill||game.onFoot&&Boolean(actionTarget||photoSpot));text('world-action-label',refill?`Refill · ₹${REFILL_COST}`:actionTarget?.action==='interact'?'Talk':photoSpot&&stamps.has(photoSpot.id)?'Photo again':'Take photo');
   show('gps-panel',Boolean(game.gps)&&distance(p,game.gps.approach)>24);text('gps-title',game.gps?.shortName||'');text('gps-distance',game.gps?`${Math.round((pathLength(routePoints)||distance(p,game.gps.approach))/NETWORK.scale)} m route`:'');
   text('discovered-count',`${visited.size}/${PLACES.length} discovered`);
   const nearest=game.gps&&distance(game.gps.approach,p)<24?game.gps:PLACES.reduce((a,b)=>distance(a.approach,p)<distance(b.approach,p)?a:b,PLACES[0]);
   text('nearby-place',distance(nearest.approach,p)<100?`NEAR ${nearest.shortName.toUpperCase()}`:'M · FIND A PLACE IN NANDED');
   const nearTarget=!game.roam&&target&&distance(p,target)<18&&m.status==='active'&&!def.race;
-  const hint=game.capture>0?'PATROL NEARBY · KEEP MOVING':game.onFoot?(actionTarget?`Q · ${actionTarget.action==='interact'?'Talk to your friend':'Take the photo'}`:photoSpot?'Q · Take a landmark photo':lastNearby?`E · Take ${VEHICLES[lastNearby.kind].name}`:'WASD · Walk   SHIFT · Run   SPACE · Jump'):nearTarget?(target?.mode==='foot'?'E · STEP OUT TO EXPLORE':'SLOW DOWN INSIDE THE AMBER RING'):'E · Step out   H · Horn   R · Recover';
+  const hint=game.capture>0?'PATROL NEARBY · KEEP MOVING':game.onFoot?(actionTarget?`Q · ${actionTarget.action==='interact'?'Talk to your friend':'Take the photo'}`:photoSpot?'Q · Take a landmark photo':lastNearby?`E · Take ${VEHICLES[lastNearby.kind].name}`:'WASD · Walk   SHIFT · Run   SPACE · Jump'):nearTarget?(target?.mode==='foot'?'E · STEP OUT TO EXPLORE':'SLOW DOWN INSIDE THE AMBER RING'):document.body.classList.contains('is-touch-device')?'':'E · Step out   V · View   H · Horn   R · Recover';
   text('interaction',hint);text('map-label',district(p));drawMap($('minimap'),false);
 }
 
@@ -657,7 +786,7 @@ function frame(){
   if(!game.started||intro.active)return;
   if(!game.paused){
     game.time+=dt;game.collisionCooldown=Math.max(0,game.collisionCooldown-dt);
-    updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);refreshRoute(dt);world.setFocus?.(playerPosition());refreshTraffic(playerPosition());
+    updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);updateSpeedometer();refreshRoute(dt);world.setFocus?.(playerPosition());refreshTraffic(playerPosition());
     if(game.toastTime>0){game.toastTime-=dt;if(game.toastTime<=0){const next=toastQueue.shift();if(next)toast(...next);else show('toast',false);}}
     lastHUD+=dt;if(lastHUD>0.2){discoverPlaces();updateHUD();lastHUD=0;}
   }

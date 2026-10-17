@@ -28,30 +28,62 @@ export function moveBody(body, dx, dz, radius, colliders, bounds) {
   return hit;
 }
 
+// Speeds read as metres per second (the HUD shows km/h = units/s × 3.6), tuned for
+// grounded city driving: a hatchback tops out near 100 km/h, an auto-rickshaw near 53.
 export const VEHICLES = {
-  hatchback: { name: 'Deccan Sprint', maxSpeed: 38, acceleration: 17, handling: 1.95, radius: 1.5 },
-  auto: { name: 'Nanded Auto', maxSpeed: 24, acceleration: 12, handling: 2.5, radius: 1.15 },
-  sedan: { name: 'Ambassador Classic', maxSpeed: 32, acceleration: 13, handling: 1.7, radius: 1.6 },
-  police: { name: 'Patrol SUV', maxSpeed: 35, acceleration: 16, handling: 1.8, radius: 1.6 },
+  hatchback: { name: 'Deccan Sprint', maxSpeed: 30, acceleration: 6, brake: 10, reverse: 7, wheelbase: 2.5, steerLock: 0.6, radius: 1.5 },
+  auto: { name: 'Nanded Auto', maxSpeed: 16, acceleration: 3.4, brake: 7, reverse: 4, wheelbase: 1.9, steerLock: 0.7, radius: 1.15 },
+  sedan: { name: 'Ambassador Classic', maxSpeed: 26, acceleration: 4.4, brake: 8.5, reverse: 6, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
+  police: { name: 'Patrol SUV', maxSpeed: 31, acceleration: 6, brake: 10, reverse: 7, wheelbase: 2.8, steerLock: 0.55, radius: 1.6 },
 };
+// Sideways tyre grip (units/s²): no car can turn harder than this at speed.
+const GRIP = 9;
 
-// Optional analog input.throttle and input.steer (-1..1, a touch joystick) override the arrow keys.
+/**
+ * One physics step for the player's car. Input: up/down/left/right/brake/boost flags
+ * (keyboard, arrow pad), optional analog throttle/steer in -1..1 (wheel, joystick,
+ * pedals; throttle < 0 drives in reverse) and footBrake (brake pedal). Holding "down"
+ * brakes to a stop, then reverses. car.steer keeps the eased steering angle and
+ * car.fuel (0-100) runs the engine: an empty tank coasts but still steers and brakes.
+ */
 export function driveStep(car, input, dt) {
-  const specs = VEHICLES[car.kind];
-  const boosting = input.boost && input.up && car.nitro > 1 && car.speed > 8;
-  const limit = specs.maxSpeed * (boosting ? 1.5 : 1);
+  const specs = VEHICLES[car.kind], speed = car.speed, fuel = car.fuel ?? 100;
   const gas = Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : (input.up ? 1 : 0) - (input.down ? 1 : 0);
-  // A partly pushed stick cruises at that share of top speed instead of flooring it.
-  const cruising = gas > 0 && gas < 1 && car.speed > limit * gas;
-  if (gas && !cruising) car.speed += gas * specs.acceleration * dt * (gas * car.speed < 0 ? 2.8 : boosting ? 1.8 : 1);
-  else car.speed *= Math.exp(-0.55 * dt);
-  if (input.brake) car.speed *= Math.exp(-3.8 * dt);
-  car.speed = clamp(car.speed, -specs.maxSpeed * 0.36, limit);
-  if (!gas && Math.abs(car.speed) < 0.12) car.speed = 0;
-  const steer = Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : (input.left ? 1 : 0) - (input.right ? 1 : 0);
-  car.heading += steer * specs.handling * Math.min(Math.abs(car.speed) / 9, 1) * Math.sign(car.speed) * dt * (input.brake ? 1.7 : 1);
+  const boosting = Boolean(input.boost) && gas > 0 && car.nitro > 1 && speed > 8 && fuel > 0;
+  const top = specs.maxSpeed * (boosting ? 1.35 : 1);
+  let force = 0, braking = 0;
+  if (gas > 0) {
+    if (speed < -0.3) braking = specs.brake * gas;
+    // Power fades toward the speed this much pedal or stick can hold.
+    else if (fuel > 0 && speed < top * gas) force = specs.acceleration * (boosting ? 1.7 : 1) * gas * (1 - (Math.max(speed, 0) / (top * gas)) ** 2);
+  } else if (gas < 0) {
+    if (speed > 0.3) braking = specs.brake * -gas;
+    else if (fuel > 0) force = -specs.acceleration * 0.7 * -gas * Math.max(0, 1 - (Math.max(-speed, 0) / (specs.reverse * -gas)) ** 2);
+  }
+  if (input.footBrake) braking = Math.max(braking, specs.brake);
+  if (input.brake) braking = Math.max(braking, specs.brake * 0.6);
+  let next = speed + force * dt;
+  // Brakes, rolling resistance and air drag slow the car without pushing it backwards.
+  const slow = (braking + 0.3 + 0.0011 * next * next) * dt;
+  next = Math.abs(next) <= slow ? 0 : next - Math.sign(next) * slow;
+  if (next > top) next = Math.max(top, next - 6 * dt);
+  next = Math.max(next, -specs.reverse);
+  if (!gas && Math.abs(next) < 0.15) next = 0;
+  car.speed = next;
+  // Keys ease toward full lock and recentre faster; a touch wheel or stick is already smooth.
+  const wanted = Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : (input.left ? 1 : 0) - (input.right ? 1 : 0);
+  let steer = car.steer ?? 0;
+  if (Number.isFinite(input.steer)) steer = wanted;
+  else { const rate = !wanted || (steer && Math.sign(wanted) !== Math.sign(steer)) ? 6 : 3.2; steer += clamp(wanted - steer, -rate * dt, rate * dt); }
+  car.steer = steer;
+  // Bicycle model: tight lock when parking, gentler at speed, never beyond the tyres' grip.
+  // The handbrake swings the tail out for a sharper turn.
+  const angle = steer * specs.steerLock / (1 + Math.abs(next) / 22);
+  const grip = GRIP * (input.brake ? 1.6 : 1), limit = grip / Math.max(Math.abs(next), 1);
+  car.heading += clamp(next * Math.tan(angle) / specs.wheelbase * (input.brake ? 1.5 : 1), -limit, limit) * dt;
+  car.fuel = clamp(fuel - (0.02 + (force ? 0.13 * Math.abs(gas) : 0) + (boosting ? 0.15 : 0)) * dt, 0, 100);
   car.nitro = clamp(car.nitro + (boosting ? -25 : 9) * dt, 0, 100);
-  return { dx: -Math.sin(car.heading) * car.speed * dt, dz: -Math.cos(car.heading) * car.speed * dt, boosting };
+  return { dx: -Math.sin(car.heading) * next * dt, dz: -Math.cos(car.heading) * next * dt, boosting };
 }
 
 function stop(id,label,options={}){
@@ -94,7 +126,7 @@ export const MISSIONS = [
     description:'One easy evening plan: photograph Visava Garden, then walk over to Madhur Bhoj. Look around, take your time and enjoy your city.',reward:550,seconds:null,
     stops:[photo('visava-garden','Photograph Visava Garden'),talk('madhur-bhoj','Meet outside Madhur Bhoj','भूक लागली ना? The garden photo is done. Time to catch up outside Madhur Bhoj.')] },
   { id:'nanded-street-circuit',kind:'race',title:'Nanded circle',label:'08 / STREET CIRCUIT',shortDescription:'Race through Bhagya Nagar, Workshop, ITI and Shivaji Putla.',
-    description:'Five checkpoints, one lap. Take the wheel through Bhagya Nagar, Workshop, ITI and Shivaji Putla, then race back to the finish.',reward:1200,seconds:220,race:true,start:{...circuitStart},startMode:'vehicle',
+    description:'Five checkpoints, one lap. Take the wheel through Bhagya Nagar, Workshop, ITI and Shivaji Putla, then race back to the finish.',reward:1200,seconds:300,race:true,start:{...circuitStart},startMode:'vehicle',
     stops:[raceStop('bhagya-nagar-kaman'),raceStop('workshop-corner'),raceStop('iti-corner'),raceStop('shivaji-putla'),raceStop('bhagya-nagar-kaman','Finish at Bhagya Nagar Kaman')] },
   { id:'lose-the-tail',kind:'chase',title:'Lose the tail',label:'09 / THE GETAWAY',shortDescription:'A fictional arcade pursuit through the Nanded streets.',
     description:'Take the wheel, make your own route and stay ahead of the fictional patrol for 50 seconds. The city is your escape route.',reward:1500,seconds:80,chase:true,survive:50,start:{...SPAWN},startMode:'vehicle',stops:[] },
@@ -104,7 +136,7 @@ export const MISSIONS = [
 });
 
 export function newMission(index = 0) {
-  return { index: ((index % MISSIONS.length) + MISSIONS.length) % MISSIONS.length, stage: 0, elapsed: 0, dwell: 0, status: 'active' };
+  return { index: ((index % MISSIONS.length) + MISSIONS.length) % MISSIONS.length, stage: 0, elapsed: 0, dwell: 0, status: 'active', crashes: 0 };
 }
 
 export function advanceMission(mission, position, speed, inVehicle, dt, action = null) {
