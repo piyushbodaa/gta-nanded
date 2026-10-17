@@ -5,7 +5,7 @@
 ## Coordinates and identities
 
 - Latitude/longitude are left null unless a source or the existing independently researched local reference supplied them. Do not silently present interpolated area positions as exact street addresses.
-- IIB Parnakuti, RCC, Konale NEET, Yeshwant and Pharmacy coordinates reuse the user's existing `counterstrike.nanded.fun/nanded-strike/public/landmark-reference.json` and `district-landmark-reference.json`. The IIB coordinate is an official directions-linked place pin. RCC is a researched frontage rather than the inset Google place pin. Konale is the official map point. Yeshwant is the official campus map centre, not a surveyed gate. Pharmacy is an official geotag.
+- IIB Parnakuti, RCC, Konale NEET, Yeshwant and Pharmacy coordinates reuse the counterstrike.nanded.fun project's `nanded-strike/public/landmark-reference.json` and `district-landmark-reference.json`. The IIB coordinate is an official directions-linked place pin. RCC is a researched frontage rather than the inset Google place pin. Konale is the official map point. Yeshwant is the official campus map centre, not a surveyed gate. Pharmacy is an official geotag.
 - Aakash latitude/longitude are published on its official contact page.
 - N.E.S. Science College and Science College are the same institution. People’s College is separate. Do not create a separate generic N.E.S. college pin.
 - Yeshwant College of Physical Education in CIDCO is separate from Yeshwant Mahavidyalaya on VIP Road.

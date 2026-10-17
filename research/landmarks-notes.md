@@ -37,7 +37,7 @@ The [IWAI survey](https://iwai.nic.in/sites/default/files/7825944126NW-04%20Extn
 
 ## Reused project evidence
 
-Read-only references from the user's separate `/home/piyushbodaa/Projects/counterstrike.nanded.fun/nanded-strike/public/` were consulted; that project was not edited:
+Read-only references from the separate counterstrike.nanded.fun project (`nanded-strike/public/`) were consulted; that project was not edited:
 
 - `map-reference.json`: Workshop Corner coordinate 19.1800057, 77.3041901 is the actual Vazirabad Road junction; nearby OSM node 7635002071 carries Workshop Corner address. Bhagya Nagar road junction is 19.1772071, 77.3093858, with nearby OSM node 7635002096 identifying Bhagya Nagar Kaman.
 - `landmark-reference.json`: Bhagya Nagar Kaman coordinate 19.17722, 77.3093456 agrees with the mapped entrance junction within five metres; actual photographic observations include large Marathi lettering, cream beam, dark central pier and two openings. **Kupi's AI illustration was explicitly rejected** in that earlier visual inspection; do not use it for architecture.

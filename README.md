@@ -26,7 +26,7 @@ Choose **Start Your Story** for an untimed on-foot homecoming: talk to your frie
 
 The entrance and opening feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local conversations in the lane, coaching and college activities.
 
-Your run begins beside the public **Zenda Chowk (झेंडा चौक)** in **Taroda Khurd**, near Chhatrapati Chowk. The starting lane includes a grey-blue home with yellow accents, a striped metal gate and greenery inspired by supplied visual references. It is an illustrative setting, not a claim to identify or locate a private residence.
+Your run begins beside the public **Zenda Chowk (झेंडा चौक)** in **Taroda Khurd**, near Chhatrapati Chowk. The starting lane includes a grey-blue home with yellow accents, a striped metal gate and greenery: an original illustrative home. It is a fictional setting, not a claim to identify or locate a private residence.
 
 Open **Activities** to choose the Zenda homecoming, Taroda foot sprint, Hazur postcards, Godavari frames, college reunion, coaching break, Visava evening, street circuit or arcade getaway. Each card takes you to its starting point. The sprint, race and getaway have timers; the other six activities let you explore at your own pace. **Just roam** leaves the current challenge and returns to free exploration.
 
@@ -92,3 +92,11 @@ Key sources include the [Nanded district administration](https://nanded.gov.in/e
 **Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/).** The OSM snapshots and [downloadable derived street network](public/data/network.json) retain that license and attribution. Original game code and artwork are separate from the map database; the map-data license is not a blanket license for every project asset. Other place evidence retains its recorded source provenance.
 
 Dependencies: Three.js (MIT), Vite (MIT). Interface and sign fonts use Google Fonts Barlow Condensed, DM Sans and Noto Sans Devanagari with local system fallbacks.
+
+## Contributing
+
+GTA Nanded is open source and pull requests are welcome. Clone the repository, run `npm ci` and `npm run dev`, and see [CONTRIBUTING.md](CONTRIBUTING.md) for the checks to run and how to submit a change.
+
+## License
+
+The code, artwork and audio are released under the [MIT License](LICENSE). Street-network data derived from OpenStreetMap is © OpenStreetMap contributors under the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/); see [LICENSE](LICENSE) and [research/COVERAGE.md](research/COVERAGE.md).

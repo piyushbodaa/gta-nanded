@@ -562,8 +562,8 @@ export function createWorld(scene, { viewDistance = 850 } = {}) {
     pbox(p, 'trunk', 0, 3.2, d / 2 + 0.24, w, 2.2, 0.35); psign(p, 0, 3.3, d / 2 + 0.44, w * 0.94, 2.1);
   }
   function startingHome(p) {
-    // Original interpretation of the supplied architectural photograph. The
-    // public junction places the scene; this is not a surveyed private address.
+    // An original illustrative home. The public junction places the scene;
+    // it is not a surveyed private address.
     const { w, d } = p, h = Math.max(4.5, Math.min(5.5, p.h * 0.7));
     const bodyW = w * 0.88, bodyD = d * 0.66, bodyZ = -d * 0.17, front = bodyZ + bodyD / 2;
     pbox(p, 'sidewalk', 0, 0.1, 0, w, 0.2, d);

@@ -40,7 +40,7 @@ The source bounds are **19.07–19.23° N, 77.24–77.425° E**. Hira Ghat, Mata
 
 The starting point uses the public **Zenda Chowk (झेंडा चौक)** listing at **19.1930005° N, 77.291982° E**, on the Chhatrapati Chowk to Kabra Nagar road in **Taroda Khurd**. The game spawn is moved onto a safe nearby road position. These decimals preserve the source pin, not survey-grade precision. Zenda Chowk and Chhatrapati Chowk are separate junction names; the latter is a nearby address reference, not an alias. [Spawn evidence and corroboration](spawn-location-notes.md) preserve the public map listing and official school-bus-route references.
 
-The starting lane's grey-blue house, yellow parapet details, black-and-white gate and surrounding greenery are an original model inspired by supplied visual references. They do not establish a private house's exact address, resident identity or measured layout. The house is scenery attached to the public junction setting, not an additional researched venue.
+The starting lane's grey-blue house, yellow parapet details, black-and-white gate and surrounding greenery are an original illustrative model. They do not represent a private house's exact address, resident identity or measured layout. The house is scenery attached to the public junction setting, not an additional researched venue.
 
 ## Evidence and reproduction
 
