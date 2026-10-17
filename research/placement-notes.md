@@ -13,7 +13,7 @@ All 132 source records have a placement override: **63 mapped points and 69 area
 
 `osm-places.json` and `osm-network.json` are the 2026-10-16 OSM extracts. `coordinateSourceUrl` links to the corresponding OSM node/way where relevant. OSM data requires OpenStreetMap contributor attribution and ODbL compliance.
 
-Read-only prior project evidence: `/home/piyushbodaa/Projects/counterstrike.nanded.fun/nanded-strike/public/place-source.json`, `map-reference.json`, `landmark-reference.json`, and `district-landmark-reference.json`.
+Read-only prior project evidence from the counterstrike.nanded.fun project: `nanded-strike/public/place-source.json`, `map-reference.json`, `landmark-reference.json`, and `district-landmark-reference.json`.
 
 Six exact name-and-address Overture matches were retained: Godavari Sweets, Frespresso, Great Achievers, C Square, Chaiway and Kusum Auditorium. Source feature UUIDs and source pages are recorded per override. The prior source uses Overture release 2026-09-23.1 with provider-level provenance; most of these points originate from Meta under CDLA-Permissive-2.0, and Great Achievers from Microsoft. Do not label Overture confidence scores as measured location accuracy. Amrut Cafe and Grand Tulsi use the prior project's coordinate/photo corroboration.
 

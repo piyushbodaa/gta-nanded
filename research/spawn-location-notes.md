@@ -1,6 +1,6 @@
 # Zenda Chowk spawn reference
 
-Verified 2026-10-16. This record identifies a **public junction**, not a residence or a location inferred from the user's house photograph.
+Verified 2026-10-16. This record identifies a **public junction**, not a residence.
 
 ## Coordinate evidence
 
@@ -12,9 +12,9 @@ The coordinate is the published junction pin. It is not a surveyed road intersec
 
 The [official Podar International School Nanded bus-route chart](https://www.podareducation.org/Uploads/transportbusroutes/podareducationnetworktransportbusroutes_nanded.pdf), page 1, lists **Zhenda Chowk** at the start of route N-5, and **Jhenda Chowk** followed by **Swayamwaar Mangal** in another route. This supports the spelling aliases and nearby venue relationship. The same chart lists **Chhatrapati Chowk** separately at the start of route N-1. Therefore Chhatrapati Chowk is retained as an address/locality reference and **is not added as an alias** for Zenda Chowk.
 
-The [public Trip.com Swayamvar Mangal Karyalaya listing](https://in.trip.com/travel-guide/attraction/nanded/swayamvar-mangal-karyalaya-141792177/) gives its locality as Ashtvinayak Nagar, Taroda Kh., with plus code 57RV+F44. This corroborates the Taroda Khurd setting visible in the user's map reference. It is a nearby public venue, not the coordinate used for the junction.
+The [public Trip.com Swayamvar Mangal Karyalaya listing](https://in.trip.com/travel-guide/attraction/nanded/swayamvar-mangal-karyalaya-141792177/) gives its locality as Ashtvinayak Nagar, Taroda Kh., with plus code 57RV+F44. This corroborates the Taroda Khurd setting. It is a nearby public venue, not the coordinate used for the junction.
 
-Taroda Kh. is normalized to **Taroda Khurd**. It is not Taroda Budruk. No private house label, photograph-derived address, resident name, or contact detail is included in the record.
+Taroda Kh. is normalized to **Taroda Khurd**. It is not Taroda Budruk. No private address, resident name or contact detail is included in the record.
 
 ## Implementation scope
 
