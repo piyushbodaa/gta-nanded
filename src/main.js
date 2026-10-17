@@ -156,7 +156,7 @@ function setup(){
   arrow=new THREE.Mesh(new THREE.ConeGeometry(1.3,2.4,4),new THREE.MeshBasicMaterial({color:'#ffd269'}));arrow.rotation.z=Math.PI;arrow.position.y=8;marker.add(arrow);
   routeLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:'#ffd269',transparent:true,opacity:0.9,depthTest:false}));routeLine.renderOrder=3;scene.add(routeLine);
   guide=createGuide({places:PLACES,onNavigate:setDestination,onTravel:travelTo,onSelect:place=>{mapCenter={...place};mapSpan=1000;drawMap($('full-map'),true);},onClose:()=>{if(game.mapOpen)toggleMap();},getVisited:()=>visited,getPosition:()=>({...playerPosition(),metersPerUnit:1/NETWORK.scale})});
-  adventureMenu=createAdventureMenu({missions:MISSIONS,onMission:playActivity,onVisit:visitLandmark,onRoam:()=>{closeAdventures();setRoam(true);},onClose:closeAdventures,getStamps:()=>stamps});
+  adventureMenu=createAdventureMenu({missions:MISSIONS,onMission:playActivity,onVisit:visitLandmark,onRoam:()=>{closeAdventures();setRoam(true);},onClose:closeAdventures,getStamps:()=>stamps,t});
   clock=new THREE.Clock();
   text('loading-status','THE CITY IS YOURS');$('start-drive').disabled=false;$('start-explore').disabled=false;
   hookUI();updateHUD();requestAnimationFrame(frame);
