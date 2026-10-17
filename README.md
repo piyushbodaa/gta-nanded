@@ -102,4 +102,4 @@ GTA Nanded is open source and pull requests are welcome. Clone the repository, r
 
 ## License
 
-The code, artwork and audio are released under the [MIT License](LICENSE). Street-network data derived from OpenStreetMap is © OpenStreetMap contributors under the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/); see [LICENSE](LICENSE) and [research/COVERAGE.md](research/COVERAGE.md).
+The code, artwork and audio are released under the [MIT License](LICENSE). Street-network data derived from OpenStreetMap is © OpenStreetMap contributors under the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/); see [NOTICE](NOTICE) and [research/COVERAGE.md](research/COVERAGE.md).

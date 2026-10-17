@@ -43,7 +43,7 @@ If you edit anything in `research/` or `research/placement-overrides.json`, rege
 - Art, models, audio and text must be original or under a licence that allows redistribution. Say where any asset came from.
 - Real places must link to a public source, as the existing records in `research/` do. Do not add private homes, people's names or contact details.
 - Stories and activities are fictional; keep them friendly and local.
-- Street data from OpenStreetMap stays under the ODbL (see `LICENSE`).
+- Street data from OpenStreetMap stays under the ODbL (see `NOTICE`).
 
 ## Releases
 

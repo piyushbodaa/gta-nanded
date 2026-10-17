@@ -1,0 +1,14 @@
+GTA Nanded
+Copyright (c) 2026 piyushbodaa and GTA Nanded contributors
+The code, artwork and audio are under the MIT License (see LICENSE).
+
+Third-party data
+
+Street-network and place data derived from OpenStreetMap
+(research/osm-network.json, research/osm-places.json, src/data/network.json,
+public/data/network.json) is © OpenStreetMap contributors and available under
+the Open Data Commons Open Database License 1.0
+(https://opendatacommons.org/licenses/odbl/1-0/), not the MIT License. Keep the
+attribution and that license when redistributing it. See
+https://www.openstreetmap.org/copyright and research/COVERAGE.md. Other place
+records keep the source links listed with each record.
