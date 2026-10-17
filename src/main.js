@@ -32,6 +32,8 @@ const DRIVE_VIEW_KEY = 'nanded-drive-view-v1';
 const DRIVE_MODES = ['wheel', 'joystick', 'arrows'];
 const LANG_KEY = 'nanded-lang-v1';
 const REPUTATION_KEY = 'nanded-reputation-v1';
+// A snack from a roadside stall gives a short walking boost.
+const ENERGY_SECONDS = 30;
 // Each new neighbourhood (locality) visited pays once, which rewards exploring the whole city.
 const LOCALITY_REWARD = 75;
 // Quick Marathi/English switch for the HUD. Only the HUD prompts and buttons are translated so far.
@@ -266,8 +268,8 @@ function nearestVendor(){
 }
 function buyFrom(vendor){
   if(game.cash<vendor.price){toast(t(`Not enough cash for ${vendor.item}.`,`${vendor.mr} घेण्यासाठी पुरेसे पैसे नाहीत.`),3.5);return;}
-  game.cash-=vendor.price;persist();audio.tone(660,0.1);
-  toast(t(`${vendor.item} · −₹${vendor.price} · “${vendor.lineEn}”`,`${vendor.mr} · −₹${vendor.price} · “${vendor.line}”`),4.5);
+  game.cash-=vendor.price;game.energyLeft=ENERGY_SECONDS;persist();audio.tone(660,0.1);
+  toast(t(`${vendor.item} · −₹${vendor.price} · Energy up for ${ENERGY_SECONDS}s · “${vendor.lineEn}”`,`${vendor.mr} · −₹${vendor.price} · ${ENERGY_SECONDS} सेकंद जोश · “${vendor.line}”`),4.5);
 }
 function showPhoto(title){
   renderer.render(scene,camera);
@@ -599,7 +601,7 @@ function updatePlayer(dt){
     if(len){
       game.landmarkView=null;
       // Forward follows the view after looking around, without turning the view with the avatar.
-      const direction=movementForCamera(x,-z,cameraControls.heading),speed=input.boost?9:5;
+      const direction=movementForCamera(x,-z,cameraControls.heading),speed=(input.boost?9:5)*((game.energyLeft||0)>0?1.2:1);
       player.heading=Math.atan2(-direction.x,-direction.z);
       moveBody(player,direction.x*speed*dt,direction.z*speed*dt,0.6,world.colliders,world.bounds);
     }
@@ -858,7 +860,7 @@ function frame(){
   // The full-screen artwork/film needs no background WebGL work or game timers.
   if(!game.started||intro.active)return;
   if(!game.paused){
-    game.time+=dt;game.collisionCooldown=Math.max(0,game.collisionCooldown-dt);
+    game.time+=dt;game.collisionCooldown=Math.max(0,game.collisionCooldown-dt);game.energyLeft=Math.max(0,(game.energyLeft||0)-dt);
     updateTraffic(dt);updatePlayer(dt);updatePedestrians(dt);updateMission(dt);updateCamera(dt);updateSpeedometer();refreshRoute(dt);world.setFocus?.(playerPosition());refreshTraffic(playerPosition());
     lifeSystem?.update(dt,{position:playerPosition(),onFoot:game.onFoot,speed:car.speed,nearShrine:nearShrine(),busy:game.toastTime>0});
     if(game.toastTime>0){game.toastTime-=dt;if(game.toastTime<=0){const next=toastQueue.shift();if(next)toast(...next);else show('toast',false);}}
