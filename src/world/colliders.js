@@ -178,7 +178,8 @@ export class Colliders {
     this.grid.query(minX, minZ, maxX, maxZ, i => {
       if (seen.has(i)) return;
       seen.add(i);
-      if (this.h[i] < 1.2) return;
+      // Only real walls block the view: poles, trunks and low kerbs never do.
+      if (this.h[i] < 1.2 || this.type[i] === SOLID.CIRCLE || Math.min(this.hw[i], this.hd[i]) < 0.3) return;
       const hw = this.hw[i] + pad, hd = this.hd[i] + pad;
       const c = this.c[i], s = this.s[i];
       const ox = ax - this.x[i], oz = az - this.z[i];

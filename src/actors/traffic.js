@@ -387,3 +387,63 @@ export class DynamicDriver {
     return { throttle, brake, steer, handbrake, analog: true };
   }
 }
+
+/**
+ * Parked vehicles along the kerbs near the player: two-wheelers nosed onto the
+ * footpath outside shops, cars on the wider roads. Each street segment decides
+ * deterministically whether it has one, so they're still there when you return.
+ */
+const PARKED_MIX = [['scooter', 30], ['bike', 30], ['hatch', 14], ['auto', 12], ['sedan', 6], ['suv', 5], ['tempo', 3]];
+export class Parked {
+  constructor(game) {
+    this.game = game;
+    this.net = game.net;
+    this.bySeg = new Map();
+    this.t = 0;
+  }
+  update(dt) {
+    this.t -= dt;
+    if (this.t > 0) return;
+    this.t = 0.8;
+    const g = this.game, net = this.net, pos = g.player.pos, R = 140;
+    const max = Math.round(g.quality.settings.traffic * 0.7);
+    // Despawn far ones (unless the player took one).
+    for (const [seg, v] of this.bySeg) {
+      if (!g.vehicles.list.includes(v) || v.role !== 'parked') { this.bySeg.delete(seg); continue; }
+      if (dist(v.x, v.z, pos.x, pos.z) > R + 60) { g.vehicles.remove(v); this.bySeg.delete(seg); }
+    }
+    // Abandoned, crashed and wrecked vehicles are towed once you're well away.
+    for (const v of g.vehicles.list.slice()) {
+      if ((v.role === 'abandoned' || v.wrecked) && !v.keep && v.role !== 'player' && dist(v.x, v.z, pos.x, pos.z) > 280) g.vehicles.remove(v);
+    }
+    if (this.bySeg.size >= max) return;
+    const p = {};
+    net.segmentsIn(pos.x - R, pos.z - R, pos.x + R, pos.z + R, (i, road) => {
+      if (this.bySeg.size >= max || this.bySeg.has(i) || net.bridge[road]) return;
+      const w = net.width[road];
+      if (w < 6) return;
+      const r = rng(hash2(i, 60013));
+      const dens = g.city.densityAt(net.px[i], net.pz[i]);
+      if (!r.chance(dens > 0.45 ? 0.32 : dens > 0.2 ? 0.16 : 0.05)) return;
+      const segLen = Math.hypot(net.px[i + 1] - net.px[i], net.pz[i + 1] - net.pz[i]);
+      if (segLen < 8) return;
+      const s = net.cum[i] + segLen * r.range(0.25, 0.75);
+      if (s < net.trimStart(road) + 4 || s > net.length[road] - net.trimEnd(road) - 4) return;
+      net.pointAt(road, s, p);
+      if (dist(p.x, p.z, pos.x, pos.z) < 35) return; // don't pop in under the player's nose
+      let type = pickWeighted(PARKED_MIX, r);
+      const two = type === 'bike' || type === 'scooter';
+      if (!two && w < 8) type = r.chance(0.5) ? 'scooter' : 'bike';
+      const side = r.chance(0.5) ? 1 : -1;
+      const off = type === 'bike' || type === 'scooter' ? w / 2 + 0.55 : w / 2 - 0.95;
+      const x = p.x + p.dz * off * side, z = p.z - p.dx * off * side;
+      // Two-wheelers park nose-in at an angle; cars along the kerb.
+      const along = Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI);
+      const heading = type === 'bike' || type === 'scooter' ? along + side * 1.2 : along;
+      if (g.vehicles.list.some(o => dist(o.x, o.z, x, z) < 4)) return;
+      if (g.colliders.blocked(x, z, 0.5)) return;
+      const v = g.vehicles.spawn(type, x, z, heading, { role: 'parked', driver: false, seed: hash2(i, 7) });
+      this.bySeg.set(i, v);
+    });
+  }
+}

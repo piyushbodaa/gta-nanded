@@ -160,6 +160,7 @@ export class Game {
       if (this.player.vehicle) this.controls.set(this.player.vehicle, this.player.controls);
       // Everything that drives a vehicle writes its controls before physics reads them.
       this.traffic?.update(dt);
+      this.parked?.update(dt);
       this.police?.update(dt);
       this.missions?.update(dt);
       this.hooks?.forEach(f => f(dt));
