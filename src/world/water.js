@@ -12,8 +12,8 @@ export function createRivers(scene, city, sky) {
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSunColor: { value: new THREE.Color(1, 1, 1) },
       uSky: { value: new THREE.Color(0.6, 0.7, 0.85) },
-      uDeep: { value: new THREE.Color(0.12, 0.27, 0.26) },
-      uShallow: { value: new THREE.Color(0.32, 0.42, 0.34) },
+      uDeep: { value: new THREE.Color(0.07, 0.17, 0.16) },
+      uShallow: { value: new THREE.Color(0.24, 0.3, 0.22) },
       uNight: { value: 0 },
       uRain: { value: 0 },
     },
@@ -56,7 +56,7 @@ export function createRivers(scene, city, sky) {
         vec3 view = normalize(cameraPosition - vWorld);
         float fres = pow(1.0 - max(dot(n, view), 0.0), 3.0);
         vec3 body = mix(uShallow, uDeep, smoothstep(0.0, 0.6, vEdge));
-        vec3 col = mix(body, uSky, 0.12 + fres * 0.6);
+        vec3 col = mix(body, uSky * 0.85, 0.06 + fres * 0.42);
         vec3 h = normalize(uSunDir + view);
         float spec = pow(max(dot(n, h), 0.0), 220.0) * step(0.0, uSunDir.y);
         col += uSunColor * spec * 2.5;
