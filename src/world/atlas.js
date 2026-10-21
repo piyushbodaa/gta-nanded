@@ -623,9 +623,12 @@ function paintTile(g, col, row) {
   g.ctx.restore();
 }
 
-/** Paint the colour+mask atlas (RGBA bytes) and the emissive atlas (canvas). */
-export function paintAtlas() {
-  const W = ATLAS_COLS * T, H = ATLAS_ROWS * T;
+/**
+ * Paint the colour+mask atlas (RGBA bytes) and the emissive atlas (canvas).
+ * scale < 1 paints a smaller atlas (phones keep ~5 MB of texture instead of ~21).
+ */
+export function paintAtlas(scale = 1) {
+  const W = ATLAS_COLS * T * scale, H = ATLAS_ROWS * T * scale;
   const make = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
   const color = make(W, H), mask = make(W, H), emissive = make(W / 2, H / 2);
   const cc = color.getContext('2d', { willReadFrequently: true });
@@ -633,7 +636,8 @@ export function paintAtlas() {
   const ec = emissive.getContext('2d');
   mc.fillStyle = '#000'; mc.fillRect(0, 0, W, H);
   ec.fillStyle = '#000'; ec.fillRect(0, 0, W / 2, H / 2);
-  ec.scale(0.5, 0.5);
+  cc.scale(scale, scale); mc.scale(scale, scale);
+  ec.scale(0.5 * scale, 0.5 * scale);
   const gc = painter(cc, 'color'), gm = painter(mc, 'mask'), ge = painter(ec, 'emissive');
   for (let row = 0; row < ATLAS_ROWS; row++) {
     for (let col = 0; col < ATLAS_COLS; col++) {
@@ -671,14 +675,15 @@ export const SHOP_SIGNS = [
 ];
 
 /** Signboards for shops (first 32 slots) and every researched place with a frontage. */
-export function paintSigns(places) {
+export function paintSigns(places, scale = 1) {
   const canvas = document.createElement('canvas');
-  canvas.width = SIGN_W * SIGN_COLS; canvas.height = SIGN_H * SIGN_ROWS;
+  canvas.width = SIGN_W * SIGN_COLS * scale; canvas.height = SIGN_H * SIGN_ROWS * scale;
   const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
   const emis = document.createElement('canvas');
   emis.width = canvas.width / 2; emis.height = canvas.height / 2;
   const ec = emis.getContext('2d');
-  ec.scale(0.5, 0.5);
+  ec.scale(0.5 * scale, 0.5 * scale);
   const slots = new Map();
   let slot = 0;
   const draw = (mr, en, styleIndex) => {

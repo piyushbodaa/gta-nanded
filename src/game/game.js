@@ -192,7 +192,7 @@ export class Game {
     this.vehicles.night = w.sky.night;
     this.vehicles.render(dt, cam.position);
     this.humans.update(dt, cam.position);
-    this.effects?.update(dt, cam);
+    this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     const q = this.quality.settings;
     if (q.shadows > 0) {
