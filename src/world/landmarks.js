@@ -266,7 +266,9 @@ function ghat(ctx, p, width) {
   for (let k = 0; k < steps; k++) {
     const d0 = startD + ((endD - startD) * k) / steps, d1 = startD + ((endD - startD) * (k + 1)) / steps;
     const y = city.groundHeight(X(0, d0), Z(0, d0)) + 0.05;
-    texBox(g, X, Z, rot, 0, y - 0.6, (d0 + d1) / 2, hw, 0.6, (d1 - d0) / 2 + 0.02, TILE.STONE, 0xffffff, 2);
+    // Sandstone steps, a shade darker every other tread.
+    g.color(k % 2 ? 0xcdb894 : 0xd9c7a3, 0);
+    g.cbox(X(0, (d0 + d1) / 2), y - 0.6, Z(0, (d0 + d1) / 2), hw, 0.6, (d1 - d0) / 2 + 0.02, rot);
   }
   // Side walls with a lamp at each end, and a couple of umbrellas for the pandas.
   for (const sx of [-hw - 0.5, hw + 0.5]) {
