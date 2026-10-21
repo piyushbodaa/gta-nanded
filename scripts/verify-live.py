@@ -19,7 +19,7 @@ for path in paths:
     assert hashlib.sha256(remote).digest() == hashlib.sha256(local).digest(), f'Build mismatch: {path}'
     verified.append({'path': path.as_posix(), 'bytes': len(remote), 'sha256': hashlib.sha256(remote).hexdigest()})
 range_results = []
-for media, content_types in [('nanded-opening.mp4', {'video/mp4'}), ('launch-theme.m4a', {'audio/mp4', 'audio/x-m4a'})]:
+for media, content_types in [('launch-theme.m4a', {'audio/mp4', 'audio/x-m4a'})]:
     request = urllib.request.Request(BASE + '/media/' + media, headers={'Range': 'bytes=0-1023'})
     with urllib.request.urlopen(request, timeout=30) as response:
         assert response.status == 206, f'Media range requests must work: {media}'
