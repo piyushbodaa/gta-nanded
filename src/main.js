@@ -10,6 +10,7 @@ import { PauseMenu } from './ui/menus.js';
 import { Effects } from './game/effects.js';
 import { Traffic, Parked } from './actors/traffic.js';
 import { Peds } from './actors/peds.js';
+import { Animals } from './actors/animals.js';
 import { Police } from './game/police.js';
 import { Missions } from './game/missions.js';
 import { Jobs } from './game/jobs.js';
@@ -38,6 +39,7 @@ async function boot() {
   game.traffic = new Traffic(game);
   game.parked = new Parked(game);
   game.peds = new Peds(game);
+  game.animals = new Animals(game);
   game.police = new Police(game);
   game.missions = new Missions(game, STORY);
   game.jobs = new Jobs(game);

@@ -179,6 +179,37 @@ export function installRules(g) {
     if (saveT > 10) { saveT = 0; g.save.flush(); }
   }];
 
+  // ---------------------------------------------------------------- cheat codes
+  // Type them while playing, GTA style.
+  const CHEATS = {
+    BHAUMONEY: () => { g.addCash(5000); return '₹5,000. Paisa hi paisa!'; },
+    KADAMCHUTTI: () => { g.police.clear(); return 'Inspector Kadam is on leave.'; },
+    JUGAAD: () => { const v = g.player.vehicle; if (v) { v.health = 1000; v.onFire = 0; v.wrecked = false; v.explodeAt = 0; } g.player.health = g.player.maxHealth; return 'Jugaad: everything fixed.'; },
+    LALPARI: () => spawnNear('bus', 'Lal Pari at your service.'),
+    RICKSHAW: () => spawnNear('auto', 'Auto aala!'),
+    POLICEWALA: () => spawnNear('police', 'A jeep, no questions asked.'),
+    PAUSKALA: () => { g.sky.setWeather(g.sky.weather === 'rain' ? 'clear' : 'rain'); return 'Monsoon on demand.'; },
+    RAATRANI: () => { g.sky.hours = (g.sky.hours + 12) % 24; return 'Day for night.'; },
+  };
+  function spawnNear(type, msg) {
+    const P = g.player, pos = P.pos, n = g.net.nearest(pos.x + Math.sin(P.heading) * 8, pos.z + Math.cos(P.heading) * 8, 40, {});
+    if (!n) return null;
+    const v = g.vehicles.spawn(type, n.x, n.z, Math.atan2(n.dx, n.dz), { role: 'parked', driver: false });
+    v.kinematic = true;
+    return msg;
+  }
+  let typed = '';
+  addEventListener('keydown', e => {
+    if (!g.started || g.paused || e.key.length !== 1) return;
+    typed = (typed + e.key.toUpperCase()).slice(-12);
+    for (const code in CHEATS) {
+      if (!typed.endsWith(code)) continue;
+      typed = '';
+      const msg = CHEATS[code]();
+      if (msg) { g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5); g.audio.sfx('checkpoint'); }
+    }
+  });
+
   // ---------------------------------------------------------------- death and arrest
   g.wasted = cause => {
     if (g.player.state === 'dead' || g.respawning) return;
