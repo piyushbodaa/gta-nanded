@@ -47,8 +47,10 @@ export async function createWorld(scene, renderer, { stage = () => {}, focus } =
   await tick();
   stage('Painting shopfronts and signboards', 0.48);
   await loadAtlasFonts();
-  const atlas = paintAtlas();
-  const signs = paintSigns(data.places);
+  // Phones get half-resolution atlases: a quarter of the texture memory.
+  const small = matchMedia('(any-pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
+  const atlas = paintAtlas(small ? 0.5 : 1);
+  const signs = paintSigns(data.places, small ? 0.5 : 1);
   const textures = createAtlasTextures(atlas, signs, renderer);
   const materials = createCityMaterials(textures);
   await tick();
