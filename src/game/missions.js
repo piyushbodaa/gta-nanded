@@ -243,6 +243,7 @@ export const Steps = {
   /** Dialogue; with block, the player waits (cutscene) until it ends. */
   say(lines, { block = false, shot = null } = {}) {
     return {
+      kind: 'say',
       enter(c) {
         c.say(lines);
         if (block) c.g.cutscene = true;
@@ -253,13 +254,14 @@ export const Steps = {
     };
   },
   /** Chatter that plays while the next steps continue. */
-  chat(lines) { return { enter(c) { c.say(lines); }, update() { return 'done'; } }; },
-  call(fn) { return { enter: fn, update() { return 'done'; } }; },
-  wait(seconds) { let t = 0; return { enter() { t = 0; }, update(c, dt) { t += dt; return t >= seconds ? 'done' : null; } }; },
+  chat(lines) { return { kind: 'chat', enter(c) { c.say(lines); }, update() { return 'done'; } }; },
+  call(fn) { return { kind: 'call', enter: fn, update() { return 'done'; } }; },
+  wait(seconds) { let t = 0; return { kind: 'wait', enter() { t = 0; }, update(c, dt) { t += dt; return t >= seconds ? 'done' : null; } }; },
 
   /** Get into a named vehicle. */
   enter(name, text) {
     return {
+      kind: 'enter', vehicle: name,
       enter(c) { const v = c.ent[name]; if (v) { v.arrow = true; v.vital = true; } c.objective(text); },
       update(c) {
         const v = c.ent[name];
@@ -279,6 +281,7 @@ export const Steps = {
     let start = 0;
     const said = new Set();
     return {
+      kind: 'goTo', target, opts,
       enter(c) {
         const t = typeof target === 'function' ? target(c) : target;
         c.m.vars._t = t;
@@ -318,6 +321,7 @@ export const Steps = {
   /** Knock down a group of named enemies. */
   fight(names, text, hits = {}) {
     return {
+      kind: 'fight', names,
       enter(c) {
         c.objective(text);
         for (const n of names) { const p = c.ent[n]; if (p) { p.state = 'fight'; p.t = 60; p.grudge = 3; p.blip = '#ff4d4d'; p.hits = 0; p.needHits = hits[n] ?? 2; } }
@@ -341,6 +345,7 @@ export const Steps = {
   /** Lose the police: sets the level (unless already higher) and waits until clear. */
   escape(level, text = 'Lose the police.') {
     return {
+      kind: 'escape',
       enter(c) { if (c.g.police.level < level) c.g.police.setLevel(level); c.objective(text); c.m.target = null; },
       update(c) { c.m.target = null; return c.g.police.level === 0 ? 'done' : null; },
     };
@@ -353,6 +358,7 @@ export const Steps = {
   race(points, rivals, text = 'Win the race.') {
     let idx = 0;
     return {
+      kind: 'race', points,
       enter(c) {
         idx = 0;
         c.objective(text);
@@ -402,6 +408,7 @@ export const Steps = {
   /** A hostile vehicle that tries to ram the player while the given steps run. */
   hunters(names) {
     return {
+      kind: 'hunters',
       enter(c) { for (const n of names) { const v = c.ent[n]; if (v) { v.kinematic = false; v.role = 'mission'; v.hunt = c.driver(v, { aggression: 0.9, maxSpeed: v.spec.top }); v.blip = '#ff4d4d'; } } },
       update() { return 'done'; },
     };

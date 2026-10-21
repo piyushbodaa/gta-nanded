@@ -303,7 +303,7 @@ export const STORY = [
 /** Run `guard` before a step's own update; a non-null result ends the step. */
 function guarded(step, guard) {
   return {
-    enter: step.enter, exit: step.exit,
+    ...step,
     update(c, dt) { return guard(c, dt) ?? step.update(c, dt); },
   };
 }
