@@ -1,10 +1,10 @@
 # Contributing to GTA Nanded
 
-Thanks for helping build Nanded in the browser. Bug fixes, new places, activities, performance work and better phone controls are all welcome.
+Thanks for helping build Nanded in the browser. Bug fixes, new missions, places, vehicles, performance work and better phone controls are all welcome.
 
-## Get the game running
+## Get it running
 
-You need Node.js 20.19+ or 22.12+ (Python 3 only if you regenerate the city data).
+You need Node.js 20.19+ or 22.12+ (Python 3 only to regenerate the city data).
 
 ```sh
 git clone https://github.com/piyushbodaa/gta-nanded.git
@@ -13,40 +13,42 @@ npm ci
 npm run dev
 ```
 
-Open the URL Vite prints (normally http://localhost:5173). On a phone on the same Wi-Fi network, use your computer's network address; the dev server listens on all interfaces.
+Open the URL Vite prints. `dev.html` is a free-fly camera over the city (WASD, Q/E down/up, Shift fast, drag to look, T to run the clock) — handy for checking buildings and landmarks. In development, `gtaNanded.debugStart('free' | 'new')` in the console starts without the menu and `gtaNanded.simulate(seconds)` fast-forwards the game.
+
+## Where things live
+
+| Folder | What's in it |
+| --- | --- |
+| `src/world/` | road network, city generation, texture atlas, city shader, chunk streaming, landmarks, sky, water, colliders |
+| `src/actors/` | people, vehicles (models, physics, rendering), traffic, pedestrians, the player |
+| `src/game/` | the loop, camera, police, missions and story, side jobs, rules, effects, saves |
+| `src/audio/` | synthesised sound effects, engines and the procedural radio |
+| `src/ui/` | HUD, radar and city map, pause menu, touch controls, cover and intro styles |
+| `scripts/` | data builds (`build-world.mjs`, `build-city-data.py`, `build-buildings.py`) |
+| `research/` | sourced place records, OSM snapshots and notes |
 
 ## Before you open a pull request
 
-Run the same checks the maintainer runs before every release:
-
 ```sh
-npm test                        # unit tests (node --test)
-node scripts/verify-world.mjs   # city geometry and collision smoke test
-npm run build                   # production build
+npm test         # must pass
+npm run build    # must build
 ```
 
-All three must pass. If you changed anything visible, play it in the browser too, on desktop and in a phone-sized window (portrait and landscape), and include a screenshot or short clip in the pull request.
+Then play your change: on desktop, and in a phone-sized window in landscape (the touch UI appears on touch devices). Include a screenshot or short clip.
 
-If you edit anything in `research/` or `research/placement-overrides.json`, regenerate the city data with `python scripts/build-city-data.py` and commit the regenerated files alongside your change.
-
-## Pull request guidelines
-
-- Fork the repository, branch from `master` and keep each pull request to one focused change.
-- Describe what changed and how you tested it. Link the issue if there is one.
-- Add or update tests in `tests/` for game logic (physics, missions, navigation, traffic, controls).
-- Match the surrounding code: its naming, comment density and compact style. Comments explain *why*, not *what*.
-- Keep the game working with only a keyboard, only touch, and with sound off.
-- Never commit secrets, `.env*` files or the `.vercel/` folder.
+- Keep the frame cheap. The city is one draw call per chunk and everything that moves is instanced; new things should follow suit. Check the draw-call count in `dev.html`.
+- Keep it working with keyboard only, touch only and with sound off.
+- Add or update tests in `tests/` for logic (physics, routing, missions, police, saves).
+- Match the surrounding code: small modules, readable names, comments that explain *why*.
+- Data changes: edit `research/`, run `python scripts/build-city-data.py`, then `npm run world`, and commit the regenerated files.
 
 ## Content guidelines
 
-- Art, models, audio and text must be original or under a licence that allows redistribution. Say where any asset came from.
-- Real places must link to a public source, as the existing records in `research/` do. Do not add private homes, people's names or contact details.
-- Stories and activities are fictional; keep them friendly and local.
+- Art, audio and text must be original or under a licence that allows redistribution.
+- Real places need a public source, like the records in `research/`. No private homes, real people's names or contact details.
+- Stories are fictional satire with a light touch: no real people, no graphic violence, and respect around places of worship.
 - Street data from OpenStreetMap stays under the ODbL (see `NOTICE`).
 
 ## Releases
 
-The maintainer reviews and merges pull requests and deploys the live game at https://gta.nanded.fun. Contributors don't need deployment access.
-
-By contributing, you agree that your contribution is licensed under the MIT License in `LICENSE`.
+Every pull request gets a Vercel preview; merging to `master` deploys gta.nanded.fun. The maintainer merges after playing the preview. By contributing you agree your contribution is MIT-licensed (see `LICENSE`).

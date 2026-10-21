@@ -1,123 +1,67 @@
 # GTA NANDED
 
-An original, single-player 3D browser adventure built for **gta.nanded.fun**, set in Nanded, Maharashtra. Start on foot at **Zenda Chowk, Taroda Khurd**, meet a friend, explore your lane and choose from **seventeen optional activities**. Walk, sprint, jump, talk and take landmark photos; pick up a vehicle when you want to drive. The city contains **133 researched places** along compressed OpenStreetMap streets and a **17-landmark passport**.
+**उगं नव्हं मय, नांदेड हाय नांदेड!** — an open-world game of Nanded, Maharashtra, that runs in your browser at **[gta.nanded.fun](https://gta.nanded.fun)**.
 
-The playable vehicles, characters, building illustrations, signage and synthesized audio are made in code. The opening animates original comic artwork in the browser with a newly composed soundtrack. The street network comes from real map data; the game buildings are original illustrations.
+Steal an auto-rickshaw outside Hazur Sahib Nanded station, weave through Shyam Nagar's coaching traffic, outrun Inspector Kadam's jeeps across the Godavari, and drive fares to real places across the city. The street map is the real one (OpenStreetMap); the 67,000 buildings, the traffic, the people, the sound and the music are all generated live in the browser.
 
 ## Play
 
-- **WASD / arrow keys:** drive or walk; walking follows the direction of the camera
-- **Drag the street / swipe the screen:** look around and tilt the camera
-- **C / Center camera button:** return the camera behind your character or vehicle
-- **E:** enter or exit a nearby vehicle; slow down before exiting
-- **Space:** jump on foot / handbrake in a vehicle
-- **Shift:** boost or sprint
-- **Q / Talk or Photo button:** interact at the current activity marker or photograph a nearby landmark
-- **P:** capture the current camera view anywhere; choose **Save this photo** to download it
-- **B / Activities button:** choose an activity or open the landmark passport
-- **H:** horn; enable sound first
-- **M:** open the city guide and map; clicking the minimap also opens it
-- **Escape:** pause or resume
-- **R:** recover and repair your vehicle, costing up to ₹100 of in-game earnings
-- **V / view button:** switch between the low chase camera and the cockpit view while driving
-- **N:** open the activity picker after completion or in free roam; retry a failed activity
-- **T:** cycle the weather between clear skies, a hazy afternoon and monsoon rain
-- **L:** cycle the time of day between daylight, golden dusk and lantern-lit night (the sky otherwise follows your device clock)
-- **G / Graphics button:** cycle graphics quality — Auto adapts resolution, shadows and view distance to your frame rate, or pin High, Balanced or Fast; the choice is remembered on the device
-- **Buy at a roadside stall:** stand beside a vendor and press **Q** for chai, vada-pav, pani-puri, sugarcane juice, jalebi, mirchi bhajiya, poha, Deccani biryani, falooda or Irani chai with an Osmania biscuit
+| | Keyboard & mouse | Gamepad | Touch |
+| --- | --- | --- | --- |
+| Move / steer | `W A S D` / arrows | left stick | floating stick (left thumb) |
+| Look | mouse (click to lock) · drag | right stick | drag the right half |
+| Sprint · Jump · Punch | `Shift` · `Space` · click / `J` | X · A · B | RUN · JUMP · PUNCH |
+| Get in / jack / get out | `F` (or `E`) | Y | ENTER / EXIT |
+| Gas · Brake/reverse · Handbrake | `W` · `S` · `Space` | RT · LT · A | GAS · BRAKE · DRIFT |
+| Horn · Radio · Look back | `H` · `R` · `C` | L3 · RB · — | HORN · 📻 |
+| Buy / talk / photograph | `Q` | X | contextual button |
+| Start a job (in an auto or on a two-wheeler) | `N` | — | START JOB |
+| Map · Pause | `M` · `Esc` | Back · Start | MAP · ❚❚ |
 
-Touch devices have direction, **Jump**, **Run**, enter/exit and map buttons, plus contextual **Talk / Photo** actions and a **PHOTO** button to capture and save the current camera view anywhere in the city. Jump and Run become brake and boost controls in a vehicle. Driving on a phone starts with a **steering wheel and pedals**: turn the wheel with your thumb (it springs back when released), press **GAS** and **BRAKE**, and tap the **D/R** lever to change gear. The switch above the lever cycles **Wheel → Stick → Arrows**; the stick is an analog joystick (push up to accelerate, sideways to steer; a partial push cruises slower). The choice is remembered on the device and the arrow pad always returns on foot. Hold a movement button with one finger and drag the open street with another to look around. Looking around holds its angle while stopped; driving recenters the view after two seconds without a drag. The camera moves closer when a wall, roof or sign would block the character. Both maps stay north-up, and their player arrows show character/vehicle facing. The GPS-card arrow points toward the destination relative to your camera. The mobile minimap starts hidden behind **Mini map**, and activity details start collapsed; tap the chevron to expand them. Use the Controls button to pause. Portrait mode shows a dismissible rotation hint. **Wide view** requests fullscreen and landscape orientation where supported; otherwise, turn the phone sideways. A modern WebGL2-capable browser is required.
+**Story (8 missions).** Sunny "Bhau" Patil comes home from Pune. Pakya picks him up at the station in his auto; Anna at Workshop Corner always has "work"; Priya is late for her NEET mock test; Vicky Deshmukh, the neta's son with the white SUV, wants a race over the Govardhan Ghat bridge; Gurpreet Paaji needs flour at the langar before the evening sangat; and Inspector Kadam is closing in. Contacts appear on the radar and map with their initials — walk into a marker to start.
 
-Choose **Start Your Story** for an untimed on-foot homecoming: talk to your friend at Zenda Chowk, walk around the lane, then take your first photo. **Free Roam** starts on foot without an active challenge. The original **12-second animated comic opening** can be skipped immediately or replayed with **Replay Intro**. Sound starts off; the opening's sound button keeps your choice for later replays on the same page. If the browser blocks sound, the sequence continues silently. Reduced-motion preferences, unavailable animation or failed artwork loading use a still opening with a continue button. Switching to another tab pauses the sequence and its music until you return.
+**Around town.**
+- **Rickshaw fares** — in any auto press `N`: pick up people waving at the kerb and drive them to one of 133 researched real places. Fast, clean rides tip; streaks pay more.
+- **Bhookh Express** — on any bike or scooty press `N`: collect from real restaurants, deliver while it's hot.
+- **Street races** — *Nanded Circle* and *Station to Airport*, against rivals who play dirty.
+- **Landmark passport** — photograph 17 landmarks (Hazur Sahib, the ghats, Nandgiri Fort, Kaleshwar, Vishnupuri Dam…) for stamps.
+- **Roadside snacks** — chai, vada pav, misal at stalls and handcarts heal you and give you a burst of energy.
+- **Anna's Rang Garage** — drive in while wanted: new colour, repairs, stars cleared (₹250).
+- **Wanted level** — crimes the police see (or a witness reports) earn stars. Jeeps path-find to you and ram; officers get out with lathis. Break line of sight and leave the flashing search area on the radar to lose them, or end up **BUSTED** at Vazirabad Police Station. Get hurt too badly and it's **WASTED** — you wake up at SGGS Civil Hospital.
+- **Radio** — three stations composed live: *Radio Godavari 92.7* (dhol-tasha), *Lavani Express 98.3* (dholki and harmonium), *Katta Lo-Fi 101.1*. Every song is new.
+- **Neighbourhoods** — 53 of them; each first visit pays ₹50. A full day passes in about 20 real minutes, and the weather can be clear, hazy or monsoon.
 
-The entrance and opening feature **“उगं नव्हं मय, नांदेड हाय नांदेड!”**, with Marathi welcome messages and fictional local conversations in the lane, coaching and college activities.
+Progress saves automatically on your device. Graphics adapt to your machine (Settings → Graphics to pin Fast / Balanced / High / Ultra).
 
-Your run begins beside the public **Zenda Chowk (झेंडा चौक)** in **Taroda Khurd**, near Chhatrapati Chowk. The starting lane includes a grey-blue home with yellow accents, a striped metal gate and greenery: an original illustrative home. It is a fictional setting, not a claim to identify or locate a private residence.
+## How it's built
 
-Open **Activities** to choose the Zenda homecoming, Taroda foot sprint, Hazur postcards, Godavari frames, college reunion, coaching break, Visava evening, street circuit, arcade getaway, a four-Gurudwara **Darshan Yatra** along the riverfront, an **Old City Bazaar** stroll through Sarafa and Old Mondha, or the cross-city **Airport Run** race from Hazur Sahib Nanded station to Shri Guru Gobind Singh Ji Airport. Each card takes you to its starting point. The sprint, race and getaway have timers; their fastest completion times are saved on the device and shown on the cards. **Reset saved progress** clears these records with the rest of your progress. The other activities let you explore at your own pace. **Just roam** leaves the current challenge and returns to free exploration.
+Everything is plain JavaScript modules on [Three.js](https://threejs.org) with [Vite](https://vite.dev); there is no game engine, physics engine or texture file.
 
-The **Landmark passport** lists 17 places, including Hazur Sahib, Nandgiri Fort, Kaleshwar, Vishnupuri Dam, Mal Tekdi, the riverfront ghats and Old Mondha Clock Tower. Choose **Visit on foot** for free instant travel, or reach a mint photo ring yourself. Press **Q** or tap **Photo** on foot to collect a stamp and a one-time **₹150** reward for that landmark. Stamps persist in browser storage, so returning to an already collected place does not award the stamp again. Each photo preview now has **Save this photo** to download the actual game view as a JPEG named for the place. Activity photos elsewhere, such as the Zenda lane or a college, advance their activity without adding an extra passport landmark.
+- **World data** — `scripts/build-world.mjs` folds the OSM street graph (26k segments) into 17,860 road polylines between 13,372 junctions, plus rivers, rail, 1,185 mapped building footprints and 133 researched places, into `public/data/world.json` (460 KB gzipped).
+- **City generation** (`src/world/citygen.js`) — zones by neighbourhood (old city, coaching hub, markets, residential, Vishnupuri campus, outskirts), lots along every street and infill in block interiors, trees, poles and wires, stalls, shrines and hoardings. Deterministic: the same city on every device.
+- **Rendering** — a procedural texture atlas painted on canvas at load (`src/world/atlas.js`: facades with grilles and chajjas, shopfronts, Marathi/English signboards, roads, kerbs) and one shader for the whole city (`citymat.js`), so each 192 m chunk is a single draw call; chunks stream around you. Landmarks are hand-built (`landmarks.js`). Sky, sun, moon, fog and weather in `sky.js`; the Godavari in `water.js`. Every person and vehicle is instanced: ~40 draw calls for all of them.
+- **Simulation** — a bicycle-model vehicle with tyre slip, weight transfer and a handbrake (`vehicle-physics.js`), impulse collisions against the city and between vehicles, lane-following traffic that keeps left and obeys signals at the big chowks (`traffic.js`), pedestrians who walk, dive, fall, flee or fight (`peds.js`), and police that hunt with A* routes and line-of-sight checks (`police.js`).
+- **Game** — missions as small step scripts (`missions.js`, `story.js`), side jobs (`jobs.js`), consequences (`rules.js`), HUD and maps (`src/ui/`), and synthesised audio and music (`src/audio/`).
 
-Open the city guide to search names, aliases and neighborhoods, filter categories, or find places still to discover. Select **Set destination** for a street-following GPS route, or **Go there · free** for instant travel. Both actions switch to free roam without an activity timer.
+On an Intel Iris Xe laptop a typical street frame costs about 2 ms of CPU and 6 ms of GPU at 1576×863 with shadows and MSAA (~90 draw calls).
 
-Driving is tuned for grounded city speeds: a hatchback reaches about 100 km/h, an auto-rickshaw about 53 km/h, and brakes, steering and grip behave like a real car. Traffic keeps left as on Indian roads, queues behind other vehicles and slows into junctions. Every crash with another vehicle costs a ₹50 fine; in the Street Circuit three crashes end the race and a crash-free lap earns a ₹300 bonus. Each vehicle carries fuel: when it runs low, press **R** or tap **Refill** for a ₹100 roadside top-up. Amber rings mark activity objectives. Talk and photo objectives require an explicit action on foot; race checkpoints require a vehicle and can be taken at speed. Collisions and taking occupied traffic vehicles attract police; evade patrols to lose your wanted level. Rewards and fines use fictional in-game rupees, never real money.
-
-## Included
-
-- 133 places across 53 locality labels: coaching institutes, colleges, schools, landmarks, junctions, transport stops, hospitals, civic buildings, a park, hotels, restaurants, cafés, cinemas and shopping places.
-- Seventeen passport landmarks, including newly added Urvashi Ghat, Ram Ghat, Govardhan Ghat and Old Mondha Clock Tower; familiar junctions, the station, airport and Vishnupuri campuses remain in the city guide.
-- Seventeen repeatable activities, including a second story chapter (Yeshwant admission day, the Mondha auction run and a Gurpurab evening), checkpoint races with three rubber-banding rivals, and a station-to-airport race.
-- A living daily rhythm: school-rush crowds and horns, Friday Mondha market rates at the stalls, slow Sundays — plus working traffic signals that traffic actually stops for, buses and autos dwelling at chowks, one wrong-side two-wheeler, and a train that runs the mapped rail line, pauses at Hazur Sahib Nanded station and horns as it passes.
-- Money that matters: workshop repairs at Workshop Corner (Q, priced by damage), a ₹300 sports-bike hire at the stadium, fuel top-ups and wreck recovery fees alongside the activity rewards.
-- Place-aware sound: market murmur that swells in the bazaar lanes, a harmonium-like drone near shrines, the station announcement chime and a distant train horn, under the synthesized engine, horns, bell and monsoon rain. covering local conversations, a tiffin delivery, ghat photo walks, a foot sprint, a street circuit, a getaway, a Gurudwara yatra, an old-city bazaar stroll and a station-to-airport race. All stories are fictional; inclusion does not imply an institution or business commissioned or endorses them.
-- Hatchbacks, Ambassador-inspired sedans, black-and-yellow Maharashtra auto-rickshaws, two-wheelers, an MSRTC *Lal Pari* bus, highway trucks, a farm tractor with trailer and a Mondha goods tempo — all carrying MH-26 (Nanded RTO) plates; pedestrians dressed by neighbourhood (Sikh dastars near the Gurudwaras, student backpacks in the coaching lanes, Gandhi topis, phetas, saris), cows, buffaloes and street dogs, roadside vendors, road traffic, police pursuit, vehicle damage, boost and recovery.
-- Postcard photo mode with Godavari Golden, Monsoon, Bazaar Vivid and Old City Mono filters and a printed Devanagari place caption; staged loading with progress on the cover; and an installable offline-capable web app (PWA) build.
-- Detailed landmark models for the places people navigate by: Hazur Sahib Nanded station (terminal, platform shelters, foot overbridge and a waiting train), the MSRTC Central Bus Stand with Lal Pari bays, the Takht Sri Hazur Sahib complex (boundary wall, Darshani Deori gate, Langar hall and sarai), Shri Guru Gobind Singh Stadium with four stands, a pavilion, scoreboard, floodlights and the complex swimming pool, Bharat E-Square in its Meera Mall block, Oxford The Global School at Puyni, Yeshwant Mahavidyalaya on VIP Road, and individually coloured frontages with results hoardings for all thirteen coaching institutes.
-- Named-neighbourhood streetscapes: shop rows continuing the frontages of Bhagyanagar, Anand Nagar and the Shyam Nagar coaching lanes; Mondha grain-market stalls with produce piles, sacks and goods tempos at Sarafa, Old Mondha and New Mondha; lived-in chowks at Raj Corner (auto stand) and Workshop Corner (garage sheds and tyre stacks); and Chhatrapati Chowk and Shri Nagar direction boards at their researched address anchors on Purna Road and the Taroda Naka road.
-- A Deccan sense of place: Godavari and Asna road bridges with railings and piers, basalt-and-tile old-city lanes with lane-corner mandirs and mohalla masjids, neem, gulmohar, banyan and flat-topped babool trees, regur black-soil farm plots (tur, soybean, jowar, cotton) and low tekdi ridges beyond the plotted layouts, zebra crossings and speed breakers, green Marathi direction boards, MSEB poles with sagging wires, traffic signals at the big chowks, and parked two-wheeler rows outside coaching classes.
-- Adaptive graphics: the game watches its own frame rate and trades resolution, shadow refresh and view distance to stay smooth on weak devices, with a manual override (G) that persists.
-- A real-clock day: dusk and night light with festival lanterns at the ghats and temples, plus weather that changes with **T**.
-- Ambient street life: passing chatter in Marathi and English, horns from traffic, and temple bells near the ghats and shrines.
-- A **neighbourhood reputation**: each new locality visited pays ₹75 once.
-- A Marathi/English switch beside the sound button. Only the HUD prompts and buttons are translated so far.
-- A searchable city guide, category and neighborhood filters, a north-up map, GPS routes, free quick travel and discovery tracking.
-- Earnings, completed-activity count, discovered places and landmark passport stamps saved in browser local storage.
-
-This is a **researched city interpretation**, not an exhaustive list of everything in Nanded or a surveyed replica. Research dated **16 October 2026** provides **64 mapped locations and 69 neighborhood/area anchors**. The added ghats and Clock Tower all retain approximate area placement. Landmark architecture uses illustrated silhouettes and details; no model or entrance is a measured reconstruction. Frontages can move beside nearby roads to preserve navigation, and the guide labels the coordinate distinction. See [coverage and known gaps](research/COVERAGE.md) and the [complete place catalog](public/data/places.json).
-
-Street distances are compressed to **0.5 scale**. North is up on the map; in world coordinates, `+x` points east and `+z` points south. The game has no multiplayer backend, accounts, purchases, gun combat or building interiors. Saves are local to the device/browser and may be unavailable when storage is blocked.
-
-## Development and verification
+## Develop
 
 ```sh
 npm ci
-python scripts/build-city-data.py
-npm test
-node scripts/verify-world.mjs
-npm run build
-npm run dev
+npm run dev        # http://localhost:5173 — the game
+                   # http://localhost:5173/dev.html — free-fly world viewer
+npm test           # roads, city generation, physics, police, missions, saves
+npm run build      # production build in dist/
+npm run world      # rebuild public/data/world.json from src/data/ after data changes
 ```
 
-The Python script regenerates the playable road graph, illustrated place placements and public data from the checked-in `research/` snapshots. It does not refresh online sources. Run it after changing research records or placement overrides, then run the checks above.
+`src/data/*.json` are generated from `research/` by `scripts/build-city-data.py` and `scripts/build-buildings.py` (Python 3). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Use `npm run preview` to inspect the production build. Vite prints the actual preview port if the default is occupied. Production output is static `dist/`; see [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and DNS details.
+## Sources, licences and disclaimers
 
-## Implementation and sources
+**Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)** — the street network, rivers, rail and footprints in `public/data/world.json` and `src/data/`. Place research (addresses, coordinates, sources) lives in `research/` and [public/data/places.json](public/data/places.json); see [research/COVERAGE.md](research/COVERAGE.md).
 
-- `src/main.js`: game loop, input, traffic, police, camera, discovery and UI
-- `src/quality.js`: adaptive graphics tiers (frame-time tracking, pixel-ratio/shadow/view-distance settings, persisted mode)
-- `src/guide.js`: place search, filters, source details and travel actions
-- `src/adventures.js` and `src/adventures.css`: activity picker, landmark passport, photo-spot eligibility and stamp storage
-- `src/navigation.js`: street-graph navigation and routes
-- `src/mobile.js`: compact layout, minimap/job toggles and best-effort landscape controls
-- `src/camera-controls.js`: touch/mouse orbit, pitch limits, recentering and camera-relative walking
-- `src/joystick.js`: optional analog touch stick for driving
-- `src/steering-wheel.js`: touch steering wheel (turn, clamp, spring back)
-- `src/traffic.js`: keep-left lanes, queueing and junction slowing for traffic
-- `src/map-direction.js`: north-up map headings and camera-relative GPS bearings
-- `src/camera-obstruction.js`: keeps the view clear of buildings along the camera path
-- `src/intro.js`: animated comic opening, replay, opt-in sound, tab visibility handling and static fallback
-- `src/launch.css`: opening panels, typography, transitions and responsive presentation
-- `src/world.js` and `src/world-labels.js`: illustrated city geometry, signs and collision data
-- `src/vehicles.js`, `src/mechanics.js`, `src/audio.js`: original characters and vehicles, physics, activity objectives, saves and synthesized sound
-- `src/data/network.json` and `src/data/city.json`: generated street graph and placed city catalog
-- `scripts/build-city-data.py`: reproducible data conversion and road-clear frontage placement
-- `scripts/render-opening.py`: historical 18-second MP4 export and synthesized soundtrack; rebuild using `--key-art assets/art/nanded-key-art-original.png --lanes assets/art/nanded-lanes-original.png`. The current opening does not play this MP4.
-- `research/art-prompts.json`: artwork generation provenance; original PNGs are preserved in `assets/art/`, with optimized comic artwork and audio in `public/media/`
-- `scripts/verify-live.py`: compare the public domain's build, map data and media byte for byte with `dist/`
-- `tests/` and `scripts/verify-world.mjs`: mechanics, navigation, opening lifecycle and world checks. The opening's Node DOM fixture checks timing, controls and cleanup; it does not replace browser rendering or real audio checks.
-- `research/`: source snapshots, addresses, coordinate overrides, evidence notes and exclusions
+Code, artwork and audio are [MIT](LICENSE) (see [NOTICE](NOTICE)). The cover art is original; fonts are Google Fonts (Anton, Barlow Condensed, DM Sans, Noto Sans Devanagari).
 
-Key sources include the [Nanded district administration](https://nanded.gov.in/en/public-utility-category/colleges/), [Hazur Sahib Board](https://hazursahib.com/web/gurudwara_nagina_ghat), [SRTM University map](https://srtmun.ac.in/srtmun-on-google-map/), [IIB Nanded branch](https://www.iibedu.com/iib-neetcoaching/nanded-branch/), [AAI aerodrome information](https://aim-india.aai.aero/eAIP_Archive/06-08-2026/eAIP/IN-AD%202.1VOND-en-GB.html), and first-party institution and venue pages linked in each catalog record. [Coverage notes](research/COVERAGE.md) explain directory evidence, contradictory addresses and unresolved branches.
-
-**Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/).** The OSM snapshots and [downloadable derived street network](public/data/network.json) retain that license and attribution. Original game code and artwork are separate from the map database; the map-data license is not a blanket license for every project asset. Other place evidence retains its recorded source provenance.
-
-Dependencies: Three.js (MIT), Vite (MIT). Interface and sign fonts use Google Fonts Barlow Condensed, DM Sans and Noto Sans Devanagari with local system fallbacks.
-
-## Contributing
-
-GTA Nanded is open source and pull requests are welcome. Clone the repository, run `npm ci` and `npm run dev`, and see [CONTRIBUTING.md](CONTRIBUTING.md) for the checks to run and how to submit a change.
-
-## License
-
-The code, artwork and audio are released under the [MIT License](LICENSE). Street-network data derived from OpenStreetMap is © OpenStreetMap contributors under the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/); see [NOTICE](NOTICE) and [research/COVERAGE.md](research/COVERAGE.md).
+All characters, stories and businesses' roles in the story are fictional. Real places appear only as public settings; their inclusion implies no endorsement. The city is an illustration on the real street map, not a survey: distances are compressed to half scale and buildings are generated.
