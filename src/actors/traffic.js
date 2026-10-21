@@ -125,6 +125,7 @@ export class Traffic {
     }
     if (g.player.state !== 'driving') consider(g.player.x, g.player.z, 0.6, true);
     g.peds?.forEachNear(v.x, v.z, 20, ped => { if (!ped.onRoadOk) consider(ped.h.x, ped.h.z, 0.5, false); });
+    g.animals?.forEachNear(v.x, v.z, 22, a => consider(a.x, a.z, a.cow ? 1.2 : 0.4, false));
 
     // Desired speed.
     let want = a.cruise;

@@ -167,6 +167,7 @@ export class Game {
       this.vehicles.step(dt, this.controls);
       this.controls.clear();
       this.peds?.update(dt);
+      this.animals?.update(dt);
     }
     this.touch?.update();
     const subject = this.player.vehicle ? { vehicle: this.player.vehicle, groundY: this.player.vehicle.y } : { human: this.player.human, speed: this.player.speed, heading: this.player.heading, sprinting: this.player.sprinting, groundY: this.player.groundY };

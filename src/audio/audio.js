@@ -182,6 +182,17 @@ export class GameAudio {
       case 'wanted': this._tone(988, 0.15, { type: 'square', gain: 0.07 }); this._tone(740, 0.15, { type: 'square', gain: 0.07, at: 0.16 }); break;
     }
   }
+  moo() {
+    if (!this.enabled || !this.ctx) return;
+    this._tone(118, 1.3, { type: 'sawtooth', gain: 0.07, glide: 92, attack: 0.15 });
+    this._tone(236, 1.1, { type: 'triangle', gain: 0.03, glide: 184, attack: 0.2 });
+  }
+  bark(a) {
+    if (!this.enabled || !this.ctx) return;
+    const d = this.listener ? dist(a.x, a.z, this.listener.x, this.listener.z) : 0;
+    const k = clamp(1 / (1 + d / 10), 0, 1);
+    for (let i = 0; i < 2; i++) { this._burst(0.08, { freq: 900, q: 2, gain: 0.12 * k, at: i * 0.18 }); this._tone(520, 0.1, { type: 'square', gain: 0.03 * k, glide: 330, at: i * 0.18 }); }
+  }
   _bell(g) { [880, 1760, 2637, 3520].forEach((f, i) => this._tone(f * (1 + i * 0.002), 2.6 - i * 0.4, { gain: g / (i + 1) })); }
 
   /** Horn from a vehicle; volume falls off with distance from the listener. */
