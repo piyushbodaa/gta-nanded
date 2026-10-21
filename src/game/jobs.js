@@ -58,6 +58,8 @@ export class Jobs {
     } else if (P.state === 'driving' && !g.missions.active) {
       const v = P.vehicle;
       if (this.active) return { key: 'N', label: `Stop ${this.active.label}` };
+      const race = this._raceAt(v);
+      if (race) return { key: 'N', label: `Start race: ${race.name} · ₹${race.reward}` };
       if (v.type === 'auto') return { key: 'N', label: 'Start rickshaw fares' };
       if (v.type === 'scooter' || v.type === 'bike') return { key: 'N', label: 'Start Bhookh Express deliveries' };
     }
@@ -67,16 +69,14 @@ export class Jobs {
   update(dt) {
     const g = this.game, P = g.player;
     if (g.input.pressed('job') && P.state === 'driving' && !g.missions.active) {
+      const race = this._raceAt(P.vehicle);
       if (this.active) this.stop();
+      else if (race) this._startRace(race);
       else if (P.vehicle.type === 'auto') this._startTaxi();
       else if (P.vehicle.type === 'scooter' || P.vehicle.type === 'bike') this._startDelivery();
     }
     // Respray.
     if (g.save.data.garage && P.vehicle && g.police.level > 0 && dist(P.vehicle.x, P.vehicle.z, GARAGE.x, GARAGE.z) < 6 && speedOf(P.vehicle) < 6) this._respray();
-    // Race starts.
-    if (!this.active && !g.missions.active && P.vehicle) {
-      for (const r of this.races) if (dist(P.vehicle.x, P.vehicle.z, r.start.x, r.start.z) < 4 && speedOf(P.vehicle) < 3) this._startRace(r);
-    }
     if (!this.active) return;
     const a = this.active;
     if (a.kind === 'race') return this._race(dt);
@@ -234,6 +234,10 @@ export class Jobs {
   }
 
   // ---------------------------------------------------------------- races
+  _raceAt(v) {
+    if (!v || this.active) return null;
+    return this.races.find(r => dist(v.x, v.z, r.start.x, r.start.z) < 5) || null;
+  }
   _startRace(def) {
     const g = this.game, v = g.player.vehicle;
     const rivals = [];

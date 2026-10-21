@@ -73,7 +73,8 @@ export class Missions {
     }
     const step = m.steps[m.i];
     if (!step) { this.pass(); return; }
-    const r = step.update ? step.update(m.ctx, dt) : 'done';
+    let r;
+    try { r = step.update ? step.update(m.ctx, dt) : 'done'; } catch (err) { this._crash(err); return; }
     if (r === 'done') this._next();
     else if (typeof r === 'string' && r.startsWith('fail:')) this.fail(r.slice(5));
     // Markers and GPS for the current target.
@@ -113,7 +114,13 @@ export class Missions {
     m.target = null;
     const step = m.steps[m.i];
     if (!step) { this.pass(); return; }
-    step.enter?.(m.ctx);
+    try { step.enter?.(m.ctx); } catch (err) { this._crash(err); }
+  }
+
+  /** A scripting error should never strand the player in a half-started mission. */
+  _crash(err) {
+    console.error('Mission script error', err);
+    this.fail('Something went wrong with this mission. Try it again.');
   }
 
   pass() {
