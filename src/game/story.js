@@ -1,7 +1,8 @@
 // The story: "Ghar Wapasi". All characters and events are fictional; real
 // places appear as public settings only and imply no endorsement.
+import * as THREE from 'three';
 import { Steps as S } from './missions.js';
-import { dist } from '../core/math.js';
+import { dist, headingTo } from '../core/math.js';
 
 export const CHARACTERS = {
   YOU: { name: 'Sunny', color: '#ffffff' },
@@ -64,13 +65,32 @@ export const STORY = [
         const a = c.ent.auto;
         nearPed(c, 'pakya', 'man', { x: a.x, z: a.z }, -Math.cos(a.heading) * 1.6, Math.sin(a.heading) * 1.6, { outfit: { shirt: 0x3f88c5, sleeve: 0x3f88c5, pants: 0x2b2b2b }, heading: a.heading + Math.PI / 2 });
         c.ent.pakya.blip = '#7fd1ff';
+        // Sunny turns toward the auto; Pakya turns to greet him.
+        const me = c.g.player;
+        me.heading = headingTo(me.x, me.z, a.x, a.z); me.human.yaw = me.heading;
+        c.ent.pakya.h.yaw = headingTo(c.ent.pakya.h.x, c.ent.pakya.h.z, me.x, me.z);
       }),
       S.say([
         ['PAKYA', 'Sunny Bhau! The Pune-wala hero is back in Nanded!'],
         ['YOU', 'Pakya! You still drive this kachra rickshaw?'],
         ['PAKYA', 'Kachra? This is a Mercedes, bhau. A black-yellow Mercedes.'],
         ['PAKYA', 'My back is finished from passengers. You drive — home to Zenda Chowk. Aai is waiting with poha.'],
-      ], { block: true }),
+      ], {
+        block: true,
+        // A crane shot: high over the station forecourt, settling behind Sunny.
+        shot: c => {
+          const me = c.g.player, a = c.ent.auto;
+          const mx = (me.x + a.x) / 2, mz = (me.z + a.z) / 2;
+          const away = Math.atan2(me.x - 5, me.z + 4); // from the station toward the forecourt
+          const dx = Math.sin(away), dz = Math.cos(away);
+          return {
+            from: new THREE.Vector3(mx + dx * 34 - dz * 12, 19, mz + dz * 34 + dx * 12),
+            to: new THREE.Vector3(mx + dx * 9 - dz * 3, 3.2, mz + dz * 9 + dx * 3),
+            look: new THREE.Vector3(mx - dx * 4, 2.2, mz - dz * 4),
+            duration: 11,
+          };
+        },
+      }),
       S.enter('auto', "Get in Pakya's <b>auto</b>. <i>(F)</i>"),
       S.call(c => {
         const p = c.ent.pakya;
