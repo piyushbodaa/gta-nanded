@@ -4,10 +4,10 @@ export default defineConfig({
   build: {
     target: 'es2022',
     reportCompressedSize: false,
-    // The OSM snapshot is data, cached separately from the small game code bundle.
-    chunkSizeWarningLimit: 3000,
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
-      output: { manualChunks: { three: ['three'], 'street-map': ['./src/data/network.json'], places: ['./src/data/city.json'], buildings: ['./src/data/buildings.json'] } },
+      // Three.js changes less often than the game: cache it separately.
+      output: { manualChunks: { three: ['three'] } },
     },
   },
 });

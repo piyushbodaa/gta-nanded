@@ -1,14 +1,14 @@
 {
-  "name": "GTA Nanded: Street Stories",
+  "name": "GTA Nanded",
   "short_name": "GTA Nanded",
-  "description": "An original 3D browser adventure in Nanded, Maharashtra — walk, drive and photograph 133 researched places.",
+  "description": "An open-world browser game set on the real streets of Nanded, Maharashtra: drive, run fares, race, and outrun Inspector Kadam.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "landscape",
-  "background_color": "#171b1d",
-  "theme_color": "#171b1d",
+  "background_color": "#0b0d0e",
+  "theme_color": "#0b0d0e",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/media/gta-nanded-chase.webp", "sizes": "512x512", "type": "image/webp", "purpose": "any" }

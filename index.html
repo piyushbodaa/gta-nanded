@@ -2,39 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#171b1d" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0b0d0e" />
+    <meta name="description" content="GTA Nanded: an open-world browser game set in Nanded, Maharashtra. Drive autos, Lal Pari buses and police jeeps through the real street map, run fares, outrun Inspector Kadam and take the story from Hazur Sahib station to Nandgiri Fort." />
+    <title>GTA Nanded — उगं नव्हं मय, नांदेड हाय नांदेड!</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
-    <meta name="description" content="GTA Nanded: a free browser game with on-foot adventures, street races, getaways, and famous Nanded landmarks. Start your story at Zenda Chowk, Taroda Khurd." />
-    <title>GTA Nanded — Your city. Your rules.</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23ff7548'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='Arial,sans-serif' font-size='22' font-weight='900' fill='%23171b1d'%3EGTA%3C/text%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;700&family=Noto+Sans+Devanagari:wght@600;700;800&display=swap" />
     <link rel="preload" as="image" href="/media/gta-nanded-chase.webp" fetchpriority="high" />
-    <link rel="stylesheet" href="/src/style.css" />
+    <meta property="og:title" content="GTA Nanded" />
+    <meta property="og:description" content="Your city. Your rules. An open-world game of Nanded in your browser." />
+    <meta property="og:image" content="/media/nanded-key-art.webp" />
   </head>
   <body>
-    <canvas id="game-canvas" tabindex="-1" aria-label="GTA Nanded interactive 3D city"></canvas>
-    <div class="film-grain" aria-hidden="true"></div>
-    <div class="screen-vignette" aria-hidden="true"></div>
+    <canvas id="game-canvas" tabindex="-1" aria-label="GTA Nanded 3D city"></canvas>
 
-    <header class="site-header">
-      <a class="wordmark" href="/" aria-label="GTA Nanded home">
-        <span class="wordmark-icon" aria-hidden="true">GTA</span>
-        <span class="wordmark-type">NANDED<span>MAHARASHTRA</span></span>
-      </a>
-      <nav class="utility-nav" aria-label="Game settings">
-        <button id="sound-toggle" class="utility-button" type="button" aria-label="Toggle game sound" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m16 9 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span id="sound-label">Sound off</span></button>
-        <button id="camera-reset" class="utility-button" type="button" aria-label="Center camera" title="Center camera (C)" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/></svg><span>Center camera</span></button><button id="camera-view" class="utility-button camera-view" type="button" aria-label="Switch to cockpit view" title="Camera view (V)" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M3.8 10.5 10 12m4 0 6.2-1.5M12 14v6.3" stroke="currentColor" stroke-width="1.5"/></svg><span id="camera-view-label">Cockpit view</span></button>
-        <button id="help-toggle" class="utility-button" type="button" aria-controls="pause-menu" aria-label="Controls and pause"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 15h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Controls</span></button>
-        <button id="fullscreen-toggle" class="utility-button icon-only" type="button" aria-label="Toggle fullscreen"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <button id="landscape-toggle" class="utility-button landscape-toggle" type="button" aria-label="Wide view: use fullscreen and landscape when supported"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M17 10v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Wide view</span></button>
-      </nav>
-    </header>
-
-    <main id="welcome" class="welcome front-cover">
+    <main id="welcome" class="front-cover">
       <div class="front-art" aria-hidden="true">
         <div class="front-panel front-panel-city"><img src="/media/gta-nanded-city.webp" alt="" decoding="async" /></div>
         <div class="front-panel front-panel-chase"><img src="/media/gta-nanded-chase.webp" alt="" decoding="async" fetchpriority="high" /></div>
@@ -45,90 +31,127 @@
       <div class="front-content">
         <h1 class="front-title" aria-label="GTA Nanded"><span class="front-title-gta">GTA</span><span class="front-title-city">NANDED</span></h1>
         <p class="front-tagline" lang="mr">उगं नव्हं मय, नांदेड हाय नांदेड!</p>
-        <div class="front-menu" role="group" aria-label="Choose how to play">
-          <button id="start-drive" class="front-option front-option-primary" type="button" disabled><span class="front-option-copy"><small>PLAY</small><strong>START YOUR STORY</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
-          <button id="start-explore" class="front-option" type="button" disabled><span class="front-option-copy"><small>NO TIMER</small><strong>FREE ROAM</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
-          <button id="start-guide" class="front-option" type="button" disabled><span class="front-option-copy"><small><span data-place-total>133</span> PLACES</small><strong>CITY GUIDE</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
-          <button id="intro-replay" class="front-option" type="button" disabled><span class="front-option-copy"><small>WATCH AGAIN</small><strong>REPLAY INTRO</strong></span><span class="front-option-arrow" aria-hidden="true">▷</span></button>
+        <div class="front-menu" role="group" aria-label="Main menu">
+          <button id="menu-continue" class="front-option front-option-primary" type="button" disabled hidden><span class="front-option-copy"><small id="menu-continue-meta">YOUR STORY</small><strong>CONTINUE</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
+          <button id="menu-new" class="front-option front-option-primary" type="button" disabled><span class="front-option-copy"><small>STORY · 8 MISSIONS</small><strong>NEW STORY</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
+          <button id="menu-free" class="front-option" type="button" disabled><span class="front-option-copy"><small>THE WHOLE CITY</small><strong>FREE ROAM</strong></span><span class="front-option-arrow" aria-hidden="true">↗</span></button>
+          <button id="intro-replay" class="front-option" type="button" disabled><span class="front-option-copy"><small>12 SECONDS</small><strong>WATCH INTRO</strong></span><span class="front-option-arrow" aria-hidden="true">▷</span></button>
         </div>
+        <div class="load" aria-hidden="true"><i id="load-bar"></i></div>
         <p id="loading-status" class="front-loading" role="status">LOADING THE STREETS…</p>
       </div>
-      <footer class="front-footer"><span>START · ZENDA CHOWK, TARODA KHURD</span><span class="front-footer-controls"><kbd>WASD</kbd> MOVE <i>·</i> <kbd>E</kbd> ENTER / EXIT <i>·</i> <kbd>M</kbd> MAP</span></footer>
+      <footer class="front-footer"><span>NANDED, MAHARASHTRA · MAP © OPENSTREETMAP CONTRIBUTORS</span><span class="front-footer-controls"><kbd>WASD</kbd> MOVE <i>·</i> <kbd>F</kbd> GET IN <i>·</i> <kbd>M</kbd> MAP <i>·</i> <kbd>ESC</kbd> PAUSE</span></footer>
     </main>
-
-    <main id="hud" class="hud" hidden aria-label="Game heads-up display">
-      <div class="district-marker"><span class="district-line"></span><div><span class="hud-eyebrow">YOU'RE IN</span><strong id="district">Nanded City</strong><span id="discovered-count" class="discovered-count">0 places discovered</span></div></div>
-      <div class="player-status"><div class="cash-readout"><span class="hud-eyebrow">YOUR POCKET</span><strong id="cash">₹0</strong></div><div id="wanted" class="wanted" aria-label="Wanted level">☆☆☆☆☆</div><button id="roam-toggle" class="roam-toggle" type="button" aria-label="Open activities and landmark passport">Activities</button></div>
-
-      <section id="gps-panel" class="gps-panel" aria-label="Your destination" hidden><span id="gps-bearing" class="gps-arrow" aria-hidden="true">↑</span><div class="gps-copy"><span class="hud-eyebrow">ON YOUR WAY TO</span><strong id="gps-title"></strong></div><span id="gps-distance" class="gps-distance"></span><button id="gps-clear" type="button" aria-label="Clear destination">✕</button></section>
-      <div id="nearby-place" class="nearby-place" aria-live="polite"></div>
-
-      <section id="mission-panel" class="mission-panel" aria-label="Current adventure">
-        <div class="mission-topline"><span class="mission-dot" aria-hidden="true"></span><span id="mission-label">YOUR NEXT MOVE</span><span class="mission-corner" aria-hidden="true">↗</span></div>
-        <button id="job-toggle" class="job-toggle" type="button" aria-expanded="false" aria-controls="job-details mission-next" aria-label="Show adventure details"><span aria-hidden="true">⌄</span></button>
-        <h2 id="mission-title">A city full of stories</h2><p id="objective-short" class="objective-short"></p>
-        <div id="job-details"><p id="mission-description">Meet your friend and find your own story.</p><div id="mission-progress" class="mission-progress"></div></div>
-        <div class="mission-metrics"><span id="mission-distance">— m</span><span id="mission-time"></span></div>
-        <button id="mission-next" class="button mission-next" type="button" hidden>Choose activity <span aria-hidden="true">→</span></button>
-      </section>
-
-      <button id="minimap-toggle" class="minimap-toggle" type="button" aria-controls="local-map" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span>Mini map</span></button>
-      <section id="local-map" class="minimap-panel" aria-label="Local map"><div class="map-heading"><span class="hud-eyebrow">THE NEIGHBOURHOOD</span><span class="map-north">N ↑</span></div><canvas id="minimap" width="200" height="200" tabindex="0" role="button" aria-controls="map-overlay" aria-label="Open the city map"></canvas><div class="map-footer"><span id="map-label">NANDED</span><span><kbd>M</kbd> OPEN MAP</span></div></section>
-      <aside id="rotate-hint" class="rotate-hint" role="status" hidden><span id="rotate-hint-text">Rotate your phone for a wider view</span><button id="rotate-hint-dismiss" type="button" aria-label="Dismiss rotation tip">✕</button></aside>
-
-      <section class="vehicle-panel" aria-label="Player and vehicle status"><div class="vehicle-topline"><span class="vehicle-dot" aria-hidden="true"></span><span id="vehicle-name">ON FOOT</span></div><div class="speed-gauge"><svg class="speed-dial" viewBox="0 0 120 68" aria-hidden="true"><path class="dial-track" d="M12 62 A48 48 0 0 1 108 62"/><path class="dial-redline" d="M99.9 35.3 A48 48 0 0 1 108.0 62.0"/><path class="dial-ticks" d="M13.0 62.0L20.0 62.0M13.9 52.8L17.3 53.5M16.6 44.0L19.8 45.4M20.9 35.9L23.8 37.8M26.8 28.8L31.7 33.7M33.9 22.9L35.8 25.8M42.0 18.6L43.4 21.8M50.8 15.9L51.5 19.3M60.0 15.0L60.0 22.0M69.2 15.9L68.5 19.3M78.0 18.6L76.6 21.8M86.1 22.9L84.2 25.8M93.2 28.8L88.3 33.7M99.1 35.9L96.2 37.8M103.4 44.0L100.2 45.4M106.1 52.8L102.7 53.5M107.0 62.0L100.0 62.0"/><g class="dial-labels"><text x="27.0" y="64.5">0</text><text x="36.7" y="41.2">40</text><text x="60.0" y="31.5">80</text><text x="83.3" y="41.2">120</text><text x="93.0" y="64.5">160</text></g><line id="speed-needle" class="dial-needle" x1="60" y1="62" x2="60" y2="23" transform="rotate(-90 60 62)"/><circle class="dial-hub" cx="60" cy="62" r="3.6"/></svg><div class="speed-readout"><strong id="speed">0</strong><span>KM/H</span><b id="gear-readout" class="gear-readout" aria-label="Gear">D</b></div></div><div class="resource-bar"><span>HEALTH</span><div class="bar-track"><div id="health-fill" class="bar-fill health-fill"></div></div></div><div class="resource-bar"><span>BOOST</span><div class="bar-track"><div id="nitro-fill" class="bar-fill nitro-fill"></div></div></div><div class="resource-bar"><span>FUEL</span><div class="bar-track"><div id="fuel-fill" class="bar-fill fuel-fill"></div></div></div></section>
-
-      <div id="interaction" class="interaction"></div>
-      <button id="world-action" class="world-action" type="button" hidden><span id="world-action-label">Talk</span><kbd>Q</kbd></button>
-      <button id="passport-open" class="passport-open" type="button" aria-label="Open landmark passport">◇ <span id="passport-summary">Landmark passport</span></button>
-      <div id="toast" class="toast" role="status" hidden></div>
-      <div class="keyboard-strip" aria-label="Keyboard controls"><span>Drag to look · <kbd>C</kbd> Center</span><span><kbd>W A S D</kbd> Move</span><span><kbd>E</kbd> Enter / exit</span><span><kbd>Q</kbd> Talk / photo</span><span><kbd>P</kbd> Save a view</span><span><kbd>B</kbd> Activities</span><span><kbd>SPACE</kbd> Jump / brake</span><span><kbd>SHIFT</kbd> Boost</span><span><kbd>M</kbd> Map</span><span><kbd>ESC</kbd> Pause</span></div>
-    </main>
-
-    <section id="pause-menu" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
-      <div class="pause-card"><span class="eyebrow">GTA NANDED</span><h2 id="pause-title">Take a<br /><em>breather.</em></h2><p class="pause-description">The streets will be right here.</p><div class="pause-actions"><button id="resume" class="button button-primary" type="button">Back to the streets<span aria-hidden="true">↗</span></button><button id="restart" class="button button-secondary" type="button">Start a new run<span aria-hidden="true">↻</span></button></div><section id="help" class="help"><h3>Know your way around</h3><dl><div><dt>Drag screen / mouse</dt><dd>Look around</dd></div><div><dt><kbd>C</kbd></dt><dd>Center camera</dd></div><div><dt><kbd>W A S D</kbd><span>or arrow keys</span></dt><dd>Drive / walk</dd></div><div><dt><kbd>E</kbd></dt><dd>Enter / exit a vehicle</dd></div><div><dt><kbd>SPACE</kbd></dt><dd>Jump / handbrake</dd></div><div><dt><kbd>SHIFT</kbd></dt><dd>Boost / sprint</dd></div><div><dt><kbd>Q</kbd></dt><dd>Talk / landmark photo</dd></div><div><dt><kbd>P</kbd></dt><dd>Capture and save the current view</dd></div><div><dt><kbd>B</kbd></dt><dd>Choose an activity</dd></div><div><dt><kbd>M</kbd></dt><dd>City map</dd></div><div><dt><kbd>T</kbd></dt><dd>Change the weather</dd></div><div><dt><kbd>L</kbd></dt><dd>Day, dusk or night</dd></div><div><dt><kbd>G</kbd></dt><dd>Graphics quality</dd></div><div><dt><kbd>ESC</kbd></dt><dd>Pause / resume</dd></div></dl><p>Follow the amber marker for your adventure. Mint rings are landmark photo spots. Vehicles are optional.</p></section><button id="reset-save" class="text-button" type="button">Reset saved progress</button></div>
-    </section>
-
-    <section id="map-overlay" class="modal-overlay map-overlay" role="dialog" aria-modal="true" aria-labelledby="map-title" hidden>
-      <div class="full-map-panel city-guide-panel">
-        <div class="full-map-header"><div><span class="eyebrow">EVERY TURN HAS A MEMORY</span><h2 id="map-title">City guide<span class="guide-title-dot">.</span></h2></div><div class="guide-header-meta"><span id="guide-visited-summary">0 of 133 discovered</span><button id="map-close" class="map-close" type="button" aria-label="Close city guide">✕</button></div></div>
-        <div class="guide-mobile-tabs" aria-label="City guide views"><button id="guide-show-places" type="button" aria-pressed="true">Places</button><button id="guide-show-map" type="button" aria-pressed="false">Map</button></div>
-        <div class="guide-body" data-view="places">
-          <section class="guide-map-section" aria-label="Nanded city map">
-            <div class="full-map-canvas-wrap"><canvas id="full-map" width="700" height="700" tabindex="0" aria-label="Nanded city map. Select a place from the guide to see its location."></canvas><div class="guide-map-controls" aria-label="Map view controls"><button id="map-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button><button id="map-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button><button id="map-overview" type="button" aria-label="Show whole city" title="Show whole city">⤢</button></div><span class="full-map-north">N ↑</span><span class="guide-map-caption">NANDED <span>19°09′N / 77°19′E</span></span></div>
-            <div class="map-legend"><span><i class="legend-player"></i>You</span><span><i class="legend-mission"></i>Destination</span><span><i class="legend-landmark"></i>Places</span><span class="map-legend-hint"><kbd>M</kbd> CLOSE</span></div>
-            <p class="map-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">Street map © OpenStreetMap contributors · ODbL</a><br />Buildings are illustrated; some locations are placed by neighbourhood.</p>
-          </section>
-          <section class="guide-directory" aria-label="Find a place in Nanded">
-            <div class="guide-tools">
-              <label class="guide-search"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><input id="guide-search" type="search" placeholder="Find your college, café, coaching…" autocomplete="off" spellcheck="false" aria-label="Search places by name, area or alias"/><button id="guide-clear-search" type="button" aria-label="Clear place search" hidden>✕</button></label>
-              <div class="guide-filters"><label><span>WHAT'S THE PLAN?</span><select id="guide-category" aria-label="Filter by place category"><option value="">Every kind of place</option></select></label><label><span>WHICH PART OF TOWN?</span><select id="guide-area" aria-label="Filter by neighbourhood"><option value="">All neighbourhoods</option></select></label></div>
-              <div class="guide-results-heading"><span id="guide-result-count" role="status">133 places</span><button id="guide-unvisited" type="button" aria-pressed="false">Still to discover</button></div>
-            </div>
-            <div id="guide-results" class="guide-results" aria-label="Places" tabindex="-1"></div>
-            <section id="guide-detail" class="guide-detail" aria-label="Selected place" hidden></section>
-            <p id="guide-pick-hint" class="guide-pick-hint"><span aria-hidden="true">↗</span> Pick a familiar name. Make a new memory.</p>
-          </section>
-        </div>
-      </div>
-    </section>
-
-    <div id="touch-controls" class="touch-controls" hidden aria-label="Touch game controls"><div class="touch-direction"><button type="button" data-control="up" aria-label="Accelerate or move forward">↑</button><button type="button" data-control="left" aria-label="Steer or move left">←</button><button type="button" data-control="down" aria-label="Brake or move backward">↓</button><button type="button" data-control="right" aria-label="Steer or move right">→</button></div><div id="touch-joystick" class="touch-joystick" aria-hidden="true"><span id="touch-joystick-knob" class="touch-joystick-knob"></span></div><div id="touch-wheel" class="touch-wheel" aria-hidden="true"><svg id="touch-wheel-rim" class="touch-wheel-rim" viewBox="0 0 100 100"><circle class="wheel-ring" cx="50" cy="50" r="42"/><path class="wheel-spokes" d="M8 47 L38 50 M62 50 L92 47 M50 62 L50 91"/><circle class="wheel-hub" cx="50" cy="50" r="13"/><path class="wheel-marker" d="M50 4 L50 14"/></svg></div><button id="touch-gear" class="touch-gear" type="button" data-gear="D" aria-label="Gear: drive. Tap for reverse."><span data-gear-option="D">D</span><span data-gear-option="R">R</span></button><div class="touch-pedals"><button type="button" class="touch-pedal touch-pedal-brake" data-pedal="brake" aria-label="Brake pedal">BRAKE</button><button type="button" class="touch-pedal touch-pedal-gas" data-pedal="gas" aria-label="Accelerator pedal">GAS</button></div><button id="touch-drive-mode" class="touch-drive-mode" type="button" aria-label="Driving controls: wheel. Tap to switch."><span aria-hidden="true">◎</span><span id="touch-drive-mode-label">WHEEL</span></button><div class="touch-actions"><button id="touch-map" class="touch-small" type="button" aria-label="Open map">MAP</button><button id="touch-interact" type="button" aria-label="Enter or exit vehicle">E</button><button type="button" id="touch-photo" class="touch-small" aria-label="Capture and save this view">PHOTO</button><button type="button" id="touch-jump" data-control="brake" aria-label="Jump">JUMP</button><button type="button" id="touch-sprint" data-control="boost" aria-label="Boost or sprint">RUN</button></div></div>
-
-    <section id="adventure-menu" class="adventure-overlay" role="dialog" aria-modal="true" aria-labelledby="adventure-title" hidden>
-      <div class="adventure-sheet">
-        <header class="adventure-heading"><div><span class="eyebrow">APLA NANDED / YOUR NEXT MOVE</span><h2 id="adventure-title">Make a little <em>history.</em></h2></div><button id="adventure-close" type="button" aria-label="Close activities">✕</button></header>
-        <div class="adventure-tabs" role="group" aria-label="Choose activities or landmarks"><button type="button" data-adventure-tab="activities" aria-pressed="true">Adventures</button><button type="button" data-adventure-tab="landmarks" aria-pressed="false">Landmark passport <span id="passport-count"></span></button></div>
-        <p id="adventure-description" class="adventure-description"></p>
-        <div id="adventure-grid" class="adventure-grid"></div>
-        <footer class="adventure-footer"><span>Start a story. Collect a memory. Find your own route.</span><button id="adventure-roam" type="button">Just roam →</button></footer>
-      </div>
-    </section>
-    <aside id="photo-memory" class="photo-memory" aria-live="polite" hidden><img id="photo-preview" alt="Your view of Nanded" /><button id="photo-dismiss" class="photo-dismiss" type="button" aria-label="Close photo preview">×</button><span id="photo-memory-label">NANDED / PHOTO CAPTURED</span><strong id="photo-title"></strong><button id="photo-filter" type="button">Filter: none</button><button id="photo-download" type="button">Save this photo ↓</button></aside>
 
     <section id="cinematic-intro" class="cinematic-intro" hidden></section>
 
-    <section id="fatal-error" class="fatal-error" role="alert" hidden><div><span class="eyebrow">A SMALL ROADBLOCK</span><h2>We couldn't start<br />the city.</h2><p id="fatal-error-message">This game needs WebGL. Try a recent browser with hardware acceleration enabled, then reload.</p><button class="button button-primary" type="button" onclick="location.reload()">Try again <span aria-hidden="true">↻</span></button></div></section>
+    <div id="hud" class="hud" hidden>
+      <div class="hud-tr">
+        <div id="hud-clock" class="hud-clock">17:00</div>
+        <div class="hud-cash-wrap"><div id="hud-cash" class="hud-cash">₹0</div><div id="hud-cash-delta" class="cash-delta" hidden></div></div>
+        <div id="hud-stars" class="hud-stars" aria-label="Wanted level"></div>
+      </div>
+      <div class="hud-bl">
+        <div class="radar"><canvas id="radar"></canvas></div>
+        <div class="bars"><div class="bar health"><i id="hud-health"></i></div><div class="bar stamina"><i id="hud-stamina"></i></div></div>
+      </div>
+      <div id="hud-help" class="help-box" hidden></div>
+      <div id="hud-area" class="area-name" hidden></div>
+      <div id="hud-vehicle" class="vehicle-name" hidden></div>
+      <div id="hud-speed" class="speedo" hidden><b id="hud-speed-num">0</b><small>KM/H</small><span id="hud-gear">N</span><i class="hp"></i></div>
+      <div id="hud-timer" class="timer" hidden></div>
+      <div id="hud-objective" class="objective" hidden></div>
+      <div id="hud-subtitle" class="subtitle" hidden></div>
+      <div id="hud-bark" class="bark" hidden></div>
+      <div id="hud-toast" class="toast" hidden></div>
+      <div id="hud-prompt" class="prompt" hidden></div>
+      <div id="hud-big" class="big-message" hidden></div>
+      <div id="hud-radio" class="radio-card" hidden></div>
+      <div id="hud-hint" class="corner-hint"><kbd>ESC</kbd> Pause <kbd>M</kbd> Map</div>
+    </div>
+
+    <div id="touch" class="touch" hidden>
+      <div id="touch-stick-zone" class="stick-zone"><div id="touch-stick" class="stick"><i id="touch-knob"></i></div></div>
+      <div class="touch-top">
+        <button type="button" data-tap="map" aria-label="Map">MAP</button>
+        <button type="button" data-tap="pause" aria-label="Pause">❚❚</button>
+      </div>
+      <div class="touch-right foot-only">
+        <button id="tb-action" type="button" class="tb wide" data-tap="action" hidden>ACT</button>
+        <button id="tb-enter" type="button" class="tb wide accent" data-tap="enter" hidden>ENTER</button>
+        <button type="button" class="tb" data-tap="attack">PUNCH</button>
+        <button type="button" class="tb" data-hold="sprint">RUN</button>
+        <button type="button" class="tb big" data-tap="jump">JUMP</button>
+        <button type="button" class="tb small" data-tap="photo">📷</button>
+      </div>
+      <div class="touch-right drive-only">
+        <button id="tb-job" type="button" class="tb wide" data-tap="job" hidden>JOB</button>
+        <button type="button" class="tb small" data-tap="radio">📻</button>
+        <button type="button" class="tb small" data-tap="camera">🎥</button>
+        <button type="button" class="tb" data-hold="horn">HORN</button>
+        <button type="button" class="tb" data-hold="handbrake">DRIFT</button>
+        <button type="button" class="tb pedal brake" data-hold="brake">BRAKE</button>
+        <button type="button" class="tb pedal gas" data-hold="gas">GAS</button>
+      </div>
+      <div id="rotate" class="rotate">Turn your phone sideways for the full city ↻</div>
+    </div>
+
+    <section id="pause" class="pause" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <header class="pause-head">
+        <h2 id="pause-title"><span>GTA</span> NANDED</h2>
+        <nav class="tabs" role="tablist">
+          <button type="button" data-tab="map" role="tab">Map</button>
+          <button type="button" data-tab="story" role="tab">Story</button>
+          <button type="button" data-tab="jobs" role="tab">Activities</button>
+          <button type="button" data-tab="passport" role="tab">Passport</button>
+          <button type="button" data-tab="stats" role="tab">Stats</button>
+          <button type="button" data-tab="settings" role="tab">Settings</button>
+          <button type="button" data-tab="help" role="tab">Controls</button>
+        </nav>
+        <button id="pause-resume" type="button" class="resume">Resume ↵</button>
+      </header>
+      <div class="pause-body">
+        <div class="tab" data-pane="map">
+          <canvas id="city-map"></canvas>
+          <div class="map-side">
+            <input id="map-search" type="search" placeholder="Search 133 real places — Hazur Sahib, Chate Classes…" autocomplete="off" />
+            <div id="map-results" class="map-results"></div>
+            <p class="map-tip">Click the map to set a waypoint. Drag to pan, scroll to zoom.</p>
+            <div class="map-actions"><button id="map-zoom-in" type="button">＋</button><button id="map-zoom-out" type="button">－</button><button id="map-me" type="button">◎ Me</button><button id="map-clear" type="button">Clear waypoint</button></div>
+          </div>
+        </div>
+        <div class="tab" data-pane="story"><div id="story-list" class="card-list"></div></div>
+        <div class="tab" data-pane="jobs"><div id="jobs-list" class="card-list"></div></div>
+        <div class="tab" data-pane="passport"><div id="passport-list" class="card-list stamps"></div></div>
+        <div class="tab" data-pane="stats"><div id="stats-list" class="stats"></div></div>
+        <div class="tab" data-pane="settings">
+          <div class="settings">
+            <label>Graphics <button id="set-quality" type="button"></button></label>
+            <label>Sound <button id="set-sound" type="button"></button></label>
+            <label>Music volume <input id="set-music" type="range" min="0" max="1" step="0.05" /></label>
+            <label>Effects volume <input id="set-sfx" type="range" min="0" max="1" step="0.05" /></label>
+            <label>Mouse sensitivity <input id="set-sens" type="range" min="0.3" max="2.5" step="0.1" /></label>
+            <label>Time of day <button id="set-time" type="button">Advance 3 hours</button></label>
+            <label>Weather <button id="set-weather" type="button"></button></label>
+            <label>Save <button id="set-reset" type="button" class="danger">Start over (erase progress)</button></label>
+            <p class="small">Progress saves automatically on this device. Map data © OpenStreetMap contributors (ODbL). All characters and stories are fictional.</p>
+          </div>
+        </div>
+        <div class="tab" data-pane="help">
+          <div class="help-grid">
+            <section><h3>On foot</h3><p><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump<br /><kbd>Click</kbd>/<kbd>J</kbd> punch · <kbd>F</kbd> get in / jack a vehicle<br /><kbd>Q</kbd> buy, talk, photograph · <kbd>X</kbd> photo</p></section>
+            <section><h3>Driving</h3><p><kbd>W</kbd> gas · <kbd>S</kbd> brake / reverse · <kbd>A D</kbd> steer<br /><kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio<br /><kbd>C</kbd> look back · <kbd>N</kbd> start a job · <kbd>F</kbd> get out</p></section>
+            <section><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepads work too: sticks, triggers, A jump/handbrake, Y enter.</p></section>
+            <section><h3>Wanted</h3><p>Crimes the police see raise your stars. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.</p></section>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside id="photo" class="photo" hidden><img id="photo-img" alt="Your photo of Nanded" /><div class="photo-bar"><strong id="photo-title"></strong><button id="photo-save" type="button">Save ↓</button><button id="photo-close" type="button">✕</button></div></aside>
+
+    <section id="fatal" class="fatal" hidden role="alert"><div><h2>We couldn't start the city.</h2><p id="fatal-msg">GTA Nanded needs WebGL 2. Use a current browser with hardware acceleration on, then reload.</p><button type="button" onclick="location.reload()">Try again ↻</button></div></section>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

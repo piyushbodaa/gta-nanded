@@ -1,7 +1,9 @@
-/* GTA Nanded offline shell: cache-first for static game files, network for
-   everything else. Range requests (media seeking) always go to network so
-   206 responses keep working. Bump VERSION to invalidate after a release. */
-const VERSION = 'nanded-v3';
+/* GTA Nanded offline shell.
+   - Pages and world data: network first, so a new release shows up on the next
+     visit; the cached copy is only a fallback for flaky connections.
+   - Hashed build assets and media: cache first (their names change when they do).
+   Range requests (audio seeking) always go to the network. */
+const VERSION = 'gta-nanded-v2-2026-10-21';
 const CORE = ['/', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', event => {
@@ -16,21 +18,23 @@ self.addEventListener('activate', event => {
   );
 });
 
+const put = (request, response) => {
+  if (response.ok && response.status === 200) {
+    const copy = response.clone();
+    caches.open(VERSION).then(cache => cache.put(request, copy));
+  }
+  return response;
+};
+
 self.addEventListener('fetch', event => {
   const { request } = event;
   if (request.method !== 'GET' || request.headers.has('range')) return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  event.respondWith(
-    caches.match(request).then(cached => {
-      const network = fetch(request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(VERSION).then(cache => cache.put(request, copy));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || network;
-    }),
-  );
+  const immutable = url.pathname.startsWith('/assets/') || url.pathname.startsWith('/media/');
+  if (immutable) {
+    event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(res => put(request, res))));
+    return;
+  }
+  event.respondWith(fetch(request).then(res => put(request, res)).catch(() => caches.match(request).then(hit => hit || caches.match('/'))));
 });
