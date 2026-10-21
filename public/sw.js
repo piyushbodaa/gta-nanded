@@ -11,11 +11,17 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== VERSION).map(key => caches.delete(key))))
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil((async () => {
+    const stale = (await caches.keys()).filter(key => key !== VERSION);
+    await Promise.all(stale.map(key => caches.delete(key)));
+    await self.clients.claim();
+    // The first edition's worker served its cached page first, so a returning
+    // player still sees the old game: reload those pages once into this one.
+    if (stale.some(key => key.startsWith('nanded-v'))) {
+      const pages = await self.clients.matchAll({ type: 'window' });
+      await Promise.all(pages.map(page => page.navigate(page.url).catch(() => null)));
+    }
+  })());
 });
 
 const put = (request, response) => {
