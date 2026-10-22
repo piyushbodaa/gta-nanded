@@ -20,7 +20,14 @@ export class Colliders {
     this._build();
   }
 
+  /** Double the arrays when full (a busy city outgrows any fixed estimate). */
+  _grow() {
+    const cap = this.type.length * 2;
+    for (const k of ['type', 'x', 'z', 'hw', 'hd', 'c', 's', 'h']) { const a = new this[k].constructor(cap); a.set(this[k]); this[k] = a; }
+  }
+
   addBox(x, z, hw, hd, rot, h) {
+    if (this.n >= this.type.length) this._grow();
     const i = this.n++;
     this.type[i] = SOLID.OBB; this.x[i] = x; this.z[i] = z; this.hw[i] = hw; this.hd[i] = hd;
     this.c[i] = Math.cos(rot); this.s[i] = Math.sin(rot); this.h[i] = h;
@@ -29,6 +36,7 @@ export class Colliders {
     return i;
   }
   addCircle(x, z, r, h) {
+    if (this.n >= this.type.length) this._grow();
     const i = this.n++;
     this.type[i] = SOLID.CIRCLE; this.x[i] = x; this.z[i] = z; this.hw[i] = r; this.hd[i] = r; this.c[i] = 1; this.s[i] = 0; this.h[i] = h;
     this.grid.insertRect(i, x - r, z - r, x + r, z + r);
@@ -45,13 +53,15 @@ export class Colliders {
       // The raised platform along a shop front (too high to drive or walk through).
       const ota = city.shopPlatform(i);
       if (ota > 0) { const [x, z] = front(-L.hd[i], ota); this.addBox(x, z, L.hw[i] - 0.05, ota / 2, L.rot[i], 0.35); }
-      // Compound wall in front of a house, with the gate gap in the middle.
+      // Compound wall in front of a house, and its gate (drawn shut, so it is solid too).
       if (city.compoundWall(i)) {
         const f = -L.hd[i] - 1.6 + 0.1, half = (L.hw[i] - 0.8) / 2;
         for (const side of [-1, 1]) {
           const lx = side * (0.8 + half);
           this.addBox(L.x[i] + lx * c + f * s, L.z[i] - lx * s + f * c, half, 0.12, L.rot[i], 1.25);
         }
+        const fg = -L.hd[i] - 1.6; // the gate hangs on the wall's outer face
+        this.addBox(L.x[i] + fg * s, L.z[i] + fg * c, 0.8, 0.06, L.rot[i], 1.2);
       }
     }
     for (const p of city.places) for (const b of placeColliders(p)) this.addBox(b.x, b.z, b.hw, b.hd, b.rot, b.h);
@@ -193,8 +203,8 @@ export class Colliders {
     this.grid.query(minX, minZ, maxX, maxZ, i => {
       if (seen.has(i)) return;
       seen.add(i);
-      // Only real walls block the view: poles, trunks and low kerbs never do.
-      if (this.h[i] < 1.2 || this.type[i] === SOLID.CIRCLE || Math.min(this.hw[i], this.hd[i]) < 0.3) return;
+      // Only walls block the view (thin compound walls included): poles, trunks and low kerbs never do.
+      if (this.h[i] < 1.2 || this.type[i] === SOLID.CIRCLE) return;
       const hw = this.hw[i] + pad, hd = this.hd[i] + pad;
       const c = this.c[i], s = this.s[i];
       const ox = ax - this.x[i], oz = az - this.z[i];
