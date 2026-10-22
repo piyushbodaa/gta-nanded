@@ -4,6 +4,7 @@
 // from the street, and that every college and coaching class has its board up.
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2 } from '../core/math.js';
+import { LEAF } from './foliage.js';
 
 const FLOOR = 3.2;
 const GOLD = 0xe2a93b, MARBLE = 0xf4f1ea, SAFFRON = 0xff8c1a, STONE = 0x6a635b;
@@ -132,8 +133,8 @@ function texBox(g, X, Z, rot, lx, y0, lz, hw, h, hd, tile, tint = 0xffffff, scal
 }
 
 function onionDome(g, x, y, z, r, gold = GOLD) {
-  g.color(gold, 0);
-  g.lathe(x, y, z, [[r * 0.82, 0], [r * 1.0, r * 0.35], [r * 1.08, r * 0.7], [r * 0.95, r * 1.05], [r * 0.62, r * 1.38], [r * 0.25, r * 1.62], [r * 0.08, r * 1.8], [0.02, r * 1.84]], 14);
+  if (gold === GOLD) g.gilt(gold); else g.color(gold, 0);
+  g.lathe(x, y, z, [[r * 0.82, 0], [r * 0.93, r * 0.16], [r * 1.0, r * 0.35], [r * 1.06, r * 0.54], [r * 1.08, r * 0.7], [r * 1.04, r * 0.88], [r * 0.95, r * 1.05], [r * 0.8, r * 1.22], [r * 0.62, r * 1.38], [r * 0.42, r * 1.51], [r * 0.25, r * 1.62], [r * 0.08, r * 1.8], [0.02, r * 1.84]], r > 2 ? 32 : 16, true);
   // Kalash finial.
   g.cyl(x, y + r * 1.8, z, r * 0.07, r * 0.5, 6, r * 0.03);
   g.blob(x, y + r * 2.1, z, r * 0.12, r * 0.14, r * 0.12, 3);
@@ -202,12 +203,12 @@ function hazurSahib(ctx, p) {
     for (let i = -1; i <= 1; i++) archFace(g, F.X, F.Z, i * 3.6, -6.25, 1.8, 3.2, 11.1, 0x3d3a36);
   }
   // Gold band and parapet domelets.
-  g.color(GOLD, 0); g.cbox(p.x, 9.9, p.z, 9.8, 0.5, 9.8, rot);
-  for (let i = -3; i <= 3; i++) for (const lz of [-9.6, 9.6]) { g.color(GOLD, 0); g.blob(X(i * 2.8, lz), 10.7, Z(i * 2.8, lz), 0.45, 0.6, 0.45, i); }
-  for (let i = -3; i <= 3; i++) for (const lx of [-9.6, 9.6]) { g.color(GOLD, 0); g.blob(X(lx, i * 2.8), 10.7, Z(lx, i * 2.8), 0.45, 0.6, 0.45, i + 9); }
+  g.gilt(GOLD); g.cbox(p.x, 9.9, p.z, 9.8, 0.5, 9.8, rot);
+  for (let i = -3; i <= 3; i++) for (const lz of [-9.6, 9.6]) { g.gilt(GOLD); g.blob(X(i * 2.8, lz), 10.7, Z(i * 2.8, lz), 0.45, 0.6, 0.45, i); }
+  for (let i = -3; i <= 3; i++) for (const lx of [-9.6, 9.6]) { g.gilt(GOLD); g.blob(X(lx, i * 2.8), 10.7, Z(lx, i * 2.8), 0.45, 0.6, 0.45, i + 9); }
   for (const [lx, lz] of [[-9.5, -9.5], [9.5, -9.5], [9.5, 9.5], [-9.5, 9.5]]) chhatri(g, X(lx, lz), 10.4, Z(lx, lz), 1.5);
   texBox(g, X, Z, rot, 0, 10.4, 0, 6.2, 4.6, 6.2, TILE.MARBLE, 0xffffff, 4);
-  g.color(GOLD, 0); g.cbox(p.x, 15, p.z, 6.4, 0.4, 6.4, rot);
+  g.gilt(GOLD); g.cbox(p.x, 15, p.z, 6.4, 0.4, 6.4, rot);
   for (const [lx, lz] of [[-6, -6], [6, -6], [6, 6], [-6, 6]]) chhatri(g, X(lx, lz), 15.4, Z(lx, lz), 1.2);
   // The golden dome on its drum.
   g.color(MARBLE, 0); g.cyl(cx, 15.4, cz, 4.2, 1.6, 14);
@@ -227,7 +228,7 @@ function gurudwara(ctx, p, s = 0.7) {
   texBox(g, X, Z, rot, 0, 0.9, 0, hw, 6.5 * s + 2, hw, TILE.MARBLE, 0xffffff, 4);
   const top = 0.9 + 6.5 * s + 2;
   for (let i = -1; i <= 1; i++) archFace(g, X, Z, i * hw * 0.62, -hw - 0.05, hw * 0.36, 3.6 * s + 1, 1.3, i ? 0x3d3a36 : 0x5b3a1e);
-  g.color(GOLD, 0); g.cbox(p.x, top, p.z, hw + 0.2, 0.35, hw + 0.2, rot);
+  g.gilt(GOLD); g.cbox(p.x, top, p.z, hw + 0.2, 0.35, hw + 0.2, rot);
   for (const [lx, lz] of [[-hw, -hw], [hw, -hw], [hw, hw], [-hw, hw]]) chhatri(g, X(lx, lz), top + 0.35, Z(lx, lz), 1.0 * s + 0.3);
   g.color(MARBLE, 0); g.cyl(p.x, top + 0.35, p.z, hw * 0.45, 1.0, 12);
   onionDome(g, p.x, top + 1.35, p.z, hw * 0.5);
@@ -296,7 +297,7 @@ function smallTemple(ctx, p, lx, lz) {
   const x = X(lx, lz), z = Z(lx, lz);
   g.color(0xf2efe6, 0); g.cbox(x, 0, z, 2.2, 3.2, 2.2);
   g.color(0xe0773a, 0); g.lathe(x, 3.2, z, [[2.2, 0], [1.9, 1.6], [1.2, 3.2], [0.4, 4.2], [0.05, 4.6]], 4);
-  g.color(GOLD, 0); g.cyl(x, 7.8, z, 0.12, 0.6, 5);
+  g.gilt(GOLD); g.cyl(x, 7.8, z, 0.12, 0.6, 5);
   g.color(SAFFRON, 0);
   const a = g.v(x, 9.6, z), b = g.v(x + 1.8, 9.1, z), c2 = g.v(x, 8.4, z);
   g.tri(a, b, c2); g.tri(a, c2, b);
@@ -441,7 +442,7 @@ function templeShikhara(ctx, p, s = 1) {
   g.color(0xefe4cc, 0); g.cbox(X(0, 4 * s), 1.2, Z(0, 4 * s), 5 * s, 6 * s, 5 * s, rot);
   g.color(0xe9dcc0, 0);
   g.lathe(X(0, 4 * s), 1.2 + 6 * s, Z(0, 4 * s), [[5.4 * s, 0], [5.0 * s, 3 * s], [4.1 * s, 6.5 * s], [2.8 * s, 9.5 * s], [1.4 * s, 11.6 * s], [0.6 * s, 12.4 * s], [0.05, 12.8 * s]], 8);
-  g.color(GOLD, 0); g.cyl(X(0, 4 * s), 1.2 + 18.8 * s, Z(0, 4 * s), 0.25, 1.4, 6, 0.06);
+  g.gilt(GOLD); g.cyl(X(0, 4 * s), 1.2 + 18.8 * s, Z(0, 4 * s), 0.25, 1.4, 6, 0.06);
   g.color(SAFFRON, 0);
   const x = X(0, 4 * s), z = Z(0, 4 * s), y = 1.2 + 20.4 * s;
   const a = g.v(x, y + 1.6, z), b = g.v(x + 2.2, y + 1.0, z), c = g.v(x, y + 0.2, z);
@@ -519,8 +520,9 @@ function garden(ctx, p) {
     const lx = r.range(-hw + 2, hw - 2), lz = r.range(-hd + 2, hd - 2);
     if (Math.abs(lx) < 3 || Math.abs(lz) < 3) continue;
     const x = X(lx, lz), z = Z(lx, lz);
-    g.color(0x6b5440, 0); g.cyl(x, 0, z, 0.18, 2.4, 5, 0.12);
-    g.color(r.pick([0x4f7a3a, 0x5d8a44, 0xd9482b]), 0); g.blob(x, 3.6, z, 1.8, 1.4, 1.8, k);
+    g.color(0x5c4a3a, 0); g.cyl(x, 0, z, 0.18, 2.6, 7, 0.12);
+    if (ctx.fg) ctx.fg.crown(x, 3.9, z, 2.0, 1.4, 2.0, 22, 1.8, r.pick([LEAF.NEEM, LEAF.GULMOHAR, LEAF.BUSH]), 0xffffff, hash2(k, Math.round(p.x)), 0.4);
+    else { g.color(r.pick([0x4f7a3a, 0x5d8a44, 0xd9482b]), 0); g.blob(x, 3.6, z, 1.8, 1.4, 1.8, k); }
   }
   // Compound wall with a painted gate.
   g.setTint(0xe8dcc4, 0).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
@@ -581,7 +583,7 @@ function kaman(ctx, p, style) {
     for (const sx of [-span, span]) { g.cbox(X(sx, 0), 0, Z(sx, 0), 0.9, 8, 0.9, rot); onionDome(g, X(sx, 0), 8, Z(sx, 0), 1.0, 0xe0773a); }
     g.color(0xd8c8a8, 0); g.cbox(X(0, 0), 6.4, Z(0, 0), span, 1.4, 0.7, rot);
     g.color(0xc0392b, 0); g.cbox(X(0, 0), 7.8, Z(0, 0), span * 0.6, 0.9, 0.5, rot);
-    g.color(GOLD, 0); onionDome(g, X(0, 0), 8.7, Z(0, 0), 1.2);
+    g.gilt(GOLD); onionDome(g, X(0, 0), 8.7, Z(0, 0), 1.2);
   }
   pool(pg, X(-span, 0), Z(-span, 0), 5); pool(pg, X(span, 0), Z(span, 0), 5);
 }

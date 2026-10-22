@@ -1,12 +1,14 @@
 // Builds and streams the city around the player, one 192 m chunk at a time.
 // Each chunk becomes: one city mesh (everything opaque), one signboard mesh,
-// one additive light-pool mesh for the night and one line mesh for the wires.
+// one foliage mesh (leaf cards), one additive light-pool mesh for the night
+// and one line mesh for the wires.
 import * as THREE from 'three';
 import { Geo } from './geo.js';
 import { CHUNK, STYLE, PROP, ZONE } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
-import { rng, hash2, clamp, hashFloat } from '../core/math.js';
+import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { buildPlace } from './landmarks.js';
+import { FoliageGeo, LEAF } from './foliage.js';
 
 const FLOOR = 3.2;
 const ROAD_Y = [0.07, 0.068, 0.066, 0.064, 0.062, 0.06];
@@ -83,9 +85,9 @@ export class ChunkManager {
 
   _build(key, cx, cz) {
     const t0 = performance.now();
-    const g = new Geo(16384), sg = new Geo(512), pg = new Geo(512);
+    const g = new Geo(16384), sg = new Geo(512), pg = new Geo(512), fg = new FoliageGeo(4096);
     const wires = [];
-    const ctx = { g, sg, pg, wires, city: this.city, net: this.net, signSlots: this.signSlots, cx, cz };
+    const ctx = { g, sg, pg, fg, wires, city: this.city, net: this.net, signSlots: this.signSlots, cx, cz };
     const data = this.city.chunk(cx, cz);
     buildGround(ctx);
     if (data) {
@@ -101,6 +103,7 @@ export class ChunkManager {
     city.matrixAutoUpdate = false;
     meshes.push(city);
     if (!sg.empty) { const m = new THREE.Mesh(sg.build(), this.mat.signs); m.receiveShadow = true; m.matrixAutoUpdate = false; meshes.push(m); }
+    if (!fg.empty) { const m = new THREE.Mesh(fg.build(), this.mat.foliage); m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; meshes.push(m); }
     let pools = null;
     if (!pg.empty) { pools = new THREE.Mesh(pg.build(), this.mat.pools); pools.matrixAutoUpdate = false; pools.renderOrder = 2; pools.visible = this.mat.pools.opacity > 0.02; meshes.push(pools); }
     if (wires.length) {
@@ -122,11 +125,27 @@ function groundTint(city, x, z) {
   const h = hashFloat((Math.floor(x / 23) * 73856093) ^ (Math.floor(z / 23) * 19349663));
   const h2 = hashFloat((Math.floor(x / 9) * 83492791) ^ (Math.floor(z / 9) * 2654435761));
   let r, g, b;
-  if (dens > 0.35) { r = 0.9; g = 0.82; b = 0.68; } // town dust
-  else if (dens > 0.12) { r = 0.8; g = 0.76; b = 0.56; } // dry suburban scrub
+  if (dens > 0.35) { r = 0.8; g = 0.71; b = 0.58; } // town dust
+  else if (dens > 0.12) { r = 0.72; g = 0.67; b = 0.5; } // dry suburban scrub
   else if (h < 0.45) { r = 0.42; g = 0.35; b = 0.29; } // regur black soil
   else if (h < 0.75) { r = 0.56; g = 0.64; b = 0.36; } // standing crops
   else { r = 0.78; g = 0.72; b = 0.48; } // dry grass
+  // Patches of dry grass and weeds on open ground, fewer where the town is dense.
+  const gx = x / 37, gz = z / 37, ix = Math.floor(gx), iz = Math.floor(gz), fx = gx - ix, fz = gz - iz;
+  const hv = (a, b2) => hashFloat((a * 73856093) ^ (b2 * 19349663) ^ 0x5bd1e995);
+  const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  const nv = (hv(ix, iz) * (1 - sx) + hv(ix + 1, iz) * sx) * (1 - sz) + (hv(ix, iz + 1) * (1 - sx) + hv(ix + 1, iz + 1) * sx) * sz;
+  const grass = clamp((nv - 0.5) * 3.2, 0, 1) * (dens > 0.6 ? 0.35 : dens > 0.35 ? 0.65 : 0.85);
+  r = r * (1 - grass) + 0.5 * grass; g = g * (1 - grass) + 0.56 * grass; b = b * (1 - grass) + 0.3 * grass;
+  // Built-up blocks: concrete yards and packed grey earth between the dust.
+  if (dens > 0.3) {
+    const hc = (a, b2) => hashFloat((a * 2654435761) ^ (b2 * 40503) ^ 0x27d4eb2d);
+    const cx = x / 21, cz = z / 21, jx = Math.floor(cx), jz = Math.floor(cz), ux = cx - jx, uz = cz - jz;
+    const qx = ux * ux * (3 - 2 * ux), qz = uz * uz * (3 - 2 * uz);
+    const cv = (hc(jx, jz) * (1 - qx) + hc(jx + 1, jz) * qx) * (1 - qz) + (hc(jx, jz + 1) * (1 - qx) + hc(jx + 1, jz + 1) * qx) * qz;
+    const conc = clamp((cv - 0.42) * 2.6, 0, 1) * smoothstep(0.3, 0.6, dens) * (1 - grass);
+    r = r * (1 - conc) + 0.64 * conc; g = g * (1 - conc) + 0.62 * conc; b = b * (1 - conc) + 0.58 * conc;
+  }
   const rd = city.riverDistance(x, z, groundTint._rd || (groundTint._rd = {}));
   if (rd.d < 40) { const t = 1 - rd.d / 40; r = r * (1 - t) + 0.5 * t; g = g * (1 - t) + 0.6 * t; b = b * (1 - t) + 0.38 * t; }
   if (rd.d < 4) { r = 0.46; g = 0.42; b = 0.34; }
@@ -488,6 +507,11 @@ function buildLot(ctx, i) {
     }
     g.color(r.pick([0x2d5d8a, 0x7d2f2f, 0x2f6b3a, 0x333333]), 0);
     g.cbox(X(0, f), 0, Z(0, f), gap / 2, 1.2, 0.04, rot);
+    // Bougainvillea spilling over the wall beside the gate.
+    if (r.chance(0.6)) {
+      const side = r.chance(0.5) ? 1 : -1, bx = side * r.range(gap / 2 + 0.9, Math.max(gap / 2 + 1, hw - 0.8));
+      ctx.fg.crown(X(bx, f + 0.3), 1.5, Z(bx, f + 0.3), 1.3, 0.85, 0.75, 12, 1.3, LEAF.BOUGAIN, 0xffffff, seed + 3, 0.4);
+    }
   }
   // Rooftop hoarding on commercial blocks.
   if (flags & 128) {
@@ -505,6 +529,10 @@ function buildShed(ctx, x, z, hw, hd, rot, h, color, sb, style, r) {
   const { g } = ctx;
   const c = Math.cos(rot), s = Math.sin(rot);
   const X = (lx, lz) => x + lx * c + lz * s, Z = (lx, lz) => z - lx * s + lz * c;
+  if (style === STYLE.HUT && r.chance(0.35)) {
+    const side = r.chance(0.5) ? 1 : -1;
+    for (let k = 0; k < r.int(1, 3); k++) banana(ctx, X(side * (hw + 1.2 + k * 0.4), -hd + 1 + k * 1.6), Z(side * (hw + 1.2 + k * 0.4), -hd + 1 + k * 1.6), hash2(Math.round(x * 7) + k, 77));
+  }
   const wallH = style === STYLE.HUT ? 2.7 : h * 0.72;
   const P = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
   g.setTint(color, sb).setTile(0, style === STYLE.HUT ? ROW.GROUND : ROW.BLANK, style === STYLE.HUT ? 8 : 2, 1);
@@ -548,60 +576,73 @@ function buildShed(ctx, x, z, hw, hd, rot, h, color, sb, style, r) {
 }
 
 // ------------------------------------------------------------------ trees
-const LEAF = [0x4f7a3a, 0x5d8a44, 0x466f35, 0x6b9449, 0x3d6430];
+// Leaf tints vary a little from tree to tree; crowns are leaf cards (foliage.js).
+const LEAF_TINT = [0xffffff, 0xeef5e4, 0xe2ecd6, 0xfff8ea, 0xd8e4cc, 0xf4f0dc];
 function buildTree(ctx, i) {
-  const { g, city } = ctx;
+  const { g, fg, city } = ctx;
   const T = city.trees;
   const x = T.x[i], z = T.z[i], kind = T.kind[i], sc = T.scale[i];
   const seed = hash2(Math.round(x * 10), Math.round(z * 10));
   const r = rng(seed);
   const y0 = city.groundHeight(x, z);
+  const tint = LEAF_TINT[seed % LEAF_TINT.length];
   if (kind === 3) {
-    // Coconut palm: leaning trunk, a crown of fronds.
+    // Coconut palm: a leaning, slightly curved trunk and a crown of drooping fronds.
     const lean = r.range(-0.6, 0.6), h = 7 * sc;
-    const tx = x + lean, tz = z + lean * 0.4;
-    g.color(0x8a7458, 0); g.beam(x, y0, z, tx, y0 + h, tz, 0.17 * sc);
-    g.color(0x4c8a3a, 0);
-    for (let k = 0; k < 7; k++) {
-      const a = (k / 7) * Math.PI * 2 + r() * 0.4;
-      g.beam(tx, y0 + h, tz, tx + Math.cos(a) * 3.2 * sc, y0 + h - 1.2 * sc, tz + Math.sin(a) * 3.2 * sc, 0.16 * sc);
+    const mx = x + lean * 0.35, mz = z + lean * 0.12, tx = x + lean, tz = z + lean * 0.4;
+    g.color(0x7d6a52, 0);
+    g.beam(x, y0 - 0.1, z, mx, y0 + h * 0.5, mz, 0.19 * sc);
+    g.beam(mx, y0 + h * 0.5, mz, tx, y0 + h, tz, 0.16 * sc);
+    g.color(0x5a4a2a, 0); g.blob(tx, y0 + h - 0.1, tz, 0.42 * sc, 0.35 * sc, 0.42 * sc, seed);
+    g.color(0x6f7d2c, 0);
+    for (let k = 0; k < 4; k++) { const a = k * 1.7 + r(); g.blob(tx + Math.cos(a) * 0.3, y0 + h - 0.35, tz + Math.sin(a) * 0.3, 0.16, 0.18, 0.16, seed + k); }
+    const n = 12;
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2 + r() * 0.45;
+      fg.frond(tx, y0 + h, tz, a, r.range(3.3, 4.3) * sc, 1.25 * sc, r.range(0.55, 1.0), LEAF.PALM, tint, 4, r.range(0.25, 0.6));
     }
-    g.color(0x6b5a2a, 0); g.blob(tx, y0 + h - 0.2, tz, 0.5, 0.4, 0.5, seed);
     return;
   }
-  const trunkH = (kind === 2 ? 2.8 : kind === 4 ? 2.2 : 2.4) * sc;
-  const trunkR = (kind === 2 ? 0.55 : 0.2) * sc;
-  g.color(kind === 4 ? 0x5e4b3a : 0x6b5440, 0); g.cyl(x, y0 - 0.1, z, trunkR, trunkH + 0.6, 5, trunkR * 0.65, false);
+  if (kind === 5) {
+    // Yard shrub: hibiscus, tulsi or curry-leaf bush.
+    fg.crown(x, y0 + 0.75 * sc, z, 1.15 * sc, 0.8 * sc, 1.1 * sc, 12, 1.25 * sc, r.chance(0.25) ? LEAF.BOUGAIN : LEAF.BUSH, tint, seed, 0.3);
+    return;
+  }
+  const trunkH = (kind === 2 ? 2.8 : kind === 4 ? 2.2 : 2.5) * sc;
+  const trunkR = (kind === 2 ? 0.55 : kind === 4 ? 0.15 : 0.21) * sc;
+  g.color(kind === 4 ? 0x463a2f : 0x4a3f36, 0); g.cyl(x, y0 - 0.1, z, trunkR, trunkH + 0.7, 7, trunkR * 0.62, false);
   const cy = y0 + trunkH;
+  // Main limbs forking up into the crown.
+  const limbs = kind === 2 ? 5 : 3;
+  for (let k = 0; k < limbs; k++) {
+    const a = (k / limbs) * Math.PI * 2 + r() * 0.8, spread = (kind === 2 ? 2.6 : kind === 1 ? 1.8 : 1.1) * sc;
+    g.beam(x, cy - 0.3 * sc, z, x + Math.cos(a) * spread, cy + (kind === 4 ? 0.4 : 0.9) * sc, z + Math.sin(a) * spread, trunkR * 0.22);
+  }
   if (kind === 1) {
-    // Gulmohar: a wide umbrella of flame-red flowers over feathery green.
-    g.color(0x5d8a44, 0); g.blob(x, cy + 1.1 * sc, z, 3.0 * sc, 1.1 * sc, 3.0 * sc, seed);
-    g.color(r.chance(0.5) ? 0xd9482b : 0xe8622e, 0); g.blob(x + 0.4, cy + 1.6 * sc, z - 0.3, 2.5 * sc, 0.9 * sc, 2.4 * sc, seed + 1);
+    // Gulmohar: a wide umbrella of feathery leaves and flame-red flowers.
+    fg.crown(x, cy + 1.5 * sc, z, 3.5 * sc, 1.35 * sc, 3.3 * sc, 50, 2.4 * sc, LEAF.GULMOHAR, tint, seed, 0.9);
   } else if (kind === 4) {
     // Babool: flat-topped thorny acacia of the dry fields.
-    g.color(0x7a8a4a, 0); g.blob(x, cy + 0.8 * sc, z, 2.6 * sc, 0.7 * sc, 2.4 * sc, seed);
+    fg.crown(x, cy + 0.9 * sc, z, 2.8 * sc, 0.75 * sc, 2.6 * sc, 26, 2.1 * sc, LEAF.BABOOL, tint, seed, 1.3);
   } else if (kind === 2) {
-    // Banyan: huge, dark and wide, with hanging roots.
-    g.color(0x3d6430, 0);
-    g.blob(x, cy + 2.4 * sc, z, 4.6 * sc, 2.4 * sc, 4.4 * sc, seed);
-    g.color(0x4f7a3a, 0); g.blob(x + 2 * sc, cy + 2 * sc, z + 1.2 * sc, 3 * sc, 1.8 * sc, 3 * sc, seed + 2);
+    // Banyan: huge, dark and wide, with aerial roots dropping from its limbs.
+    fg.crown(x, cy + 2.7 * sc, z, 5.0 * sc, 2.8 * sc, 4.8 * sc, 84, 3.0 * sc, LEAF.BROAD, mix(tint, 0xc8d8bc, 0.5), seed, 0.35);
     g.color(0x6b5440, 0);
-    for (let k = 0; k < 5; k++) { const a = r() * 6.28, d = r.range(1.5, 3.5) * sc; g.beam(x + Math.cos(a) * d, y0, z + Math.sin(a) * d, x + Math.cos(a) * d, cy + 1.2 * sc, z + Math.sin(a) * d, 0.06 * sc); }
+    for (let k = 0; k < 7; k++) { const a = r() * 6.28, d = r.range(1.5, 3.8) * sc; g.beam(x + Math.cos(a) * d, y0, z + Math.sin(a) * d, x + Math.cos(a) * d, cy + 1.3 * sc, z + Math.sin(a) * d, 0.05 * sc); }
   } else {
-    // Neem: a dense, rounded crown built from several lobes, darker underneath.
-    g.color(0x3d6430, 0); g.blob(x, cy + 1.2 * sc, z, 2.1 * sc, 1.25 * sc, 2.1 * sc, seed);
-    const n = 4 + (seed % 3);
-    for (let k = 0; k < n; k++) {
-      const a = (k / n) * Math.PI * 2 + r() * 0.6, d = r.range(0.7, 1.4) * sc;
-      g.color(LEAF[(seed + k) % LEAF.length], 0);
-      g.blob(x + Math.cos(a) * d, cy + (1.6 + r() * 0.7) * sc, z + Math.sin(a) * d, (1.1 + r() * 0.35) * sc, (0.95 + r() * 0.3) * sc, (1.1 + r() * 0.35) * sc, seed + k);
-    }
-    g.color(0x6b9449, 0); g.blob(x + r.range(-0.4, 0.4), cy + 2.5 * sc, z + r.range(-0.4, 0.4), 1.1 * sc, 0.8 * sc, 1.1 * sc, seed + 9);
-    // Two forks in the trunk.
-    g.color(0x6b5440, 0);
-    g.beam(x, cy - 0.4 * sc, z, x + 0.7 * sc, cy + 1.0 * sc, z + 0.3 * sc, 0.09 * sc);
-    g.beam(x, cy - 0.4 * sc, z, x - 0.5 * sc, cy + 0.9 * sc, z - 0.5 * sc, 0.08 * sc);
+    // Neem: a dense, rounded crown of drooping compound leaves.
+    fg.crown(x, cy + 1.6 * sc, z, 2.6 * sc, 1.85 * sc, 2.6 * sc, 54, 2.4 * sc, LEAF.NEEM, tint, seed, 0.25);
   }
+}
+
+/** Banana plants: a green pseudo-stem with big arching leaves. */
+function banana(ctx, x, z, seed) {
+  const { g, fg } = ctx;
+  const r = rng(seed);
+  const h = r.range(1.6, 2.4);
+  g.color(0x6f8a3a, 0); g.cyl(x, 0, z, 0.13, h, 6, 0.09, false);
+  const n = r.int(5, 7);
+  for (let k = 0; k < n; k++) fg.frond(x, h, z, (k / n) * Math.PI * 2 + r(), r.range(1.6, 2.2), 0.9, r.range(0.4, 0.8), LEAF.BANANA, 0xffffff, 3, r.range(0.5, 0.9));
 }
 
 // ------------------------------------------------------------------ props
@@ -643,6 +684,15 @@ function buildProp(ctx, i) {
         if (Math.hypot(nx - x, nz - z) < 45) wire(ctx.wires, x, z, nx, nz, c, s);
       }
       if (r.chance(0.12)) { g.color(0x666a6b, 0); g.cbox(x, 5.2, z, 0.35, 0.8, 0.3, rot); } // transformer box
+      // Every other pole carries a street light on a short arm over the lane.
+      const near = r.chance(0.55) && net.nearest(x, z, 20, ctx._near || (ctx._near = {}));
+      if (near) {
+        const l = Math.hypot(near.x - x, near.z - z) || 1;
+        const ax = x + (near.x - x) / l * 1.3, az = z + (near.z - z) / l * 1.3;
+        g.color(0x6f7779, 0); g.beam(x, 6.6, z, ax, 6.9, az, 0.04);
+        g.color(0x3a3f40, 0); g.cbox(ax, 6.75, az, 0.26, 0.14, 0.14, rot);
+        lightPool(pg, ax, az, 7, 6.72);
+      }
       break;
     }
     case PROP.STALL: {

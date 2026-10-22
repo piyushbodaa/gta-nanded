@@ -26,7 +26,9 @@ export class Geo {
     this.k[0] = col; this.k[1] = row; this.k[2] = variants; this.k[3] = mode;
     return this;
   }
-  color(rgb, seed = 0) { this.setTint(rgb, seed); this.k[3] = 0; return this; }
+  color(rgb, seed = 0) { this.setTint(rgb, seed); this.k[0] = 0; this.k[1] = 0; this.k[2] = 1; this.k[3] = 0; return this; }
+  /** Plain colour as polished metal (gilded domes, brass finials). */
+  gilt(rgb) { this.setTint(rgb, 0); this.k[0] = 1; this.k[1] = 0; this.k[2] = 1; this.k[3] = 0; return this; }
   _grow() {
     const cap = this.cap * 2;
     const g = (a, n) => { const b = new a.constructor(cap * n); b.set(a); return b; };
@@ -135,12 +137,25 @@ export class Geo {
     }
     for (let i = 0; i < ICO_F.length; i += 3) this.tri(base + ICO_F[i], base + ICO_F[i + 1], base + ICO_F[i + 2]);
   }
-  /** Surface of revolution around the y axis: profile = [[r, y], ...] bottom to top. */
-  lathe(cx, y0, cz, profile, sides = 12) {
+  /**
+   * Surface of revolution around the y axis: profile = [[r, y], ...] bottom to top.
+   * `smooth` stores true normals (octahedral, in the uv slot plain colours leave
+   * free) so domes shade round instead of faceted.
+   */
+  lathe(cx, y0, cz, profile, sides = 12, smooth = false) {
     const base = this.n;
-    for (const [r, y] of profile) {
-      for (let i = 0; i < sides; i++) { const a = (i / sides) * Math.PI * 2; this.v(cx + Math.cos(a) * r, y0 + y, cz + Math.sin(a) * r); }
-    }
+    if (smooth) this.k[1] = 1;
+    profile.forEach(([r, y], k) => {
+      const [r0, yA] = profile[Math.max(0, k - 1)], [r1, yB] = profile[Math.min(profile.length - 1, k + 1)];
+      let nr = yB - yA, ny = -(r1 - r0);
+      const nl = Math.hypot(nr, ny) || 1; nr /= nl; ny /= nl;
+      for (let i = 0; i < sides; i++) {
+        const a = (i / sides) * Math.PI * 2;
+        const [u, w] = smooth ? octEncode(Math.cos(a) * nr, ny, Math.sin(a) * nr) : [0, 0];
+        this.v(cx + Math.cos(a) * r, y0 + y, cz + Math.sin(a) * r, u, w);
+      }
+    });
+    if (smooth) this.k[1] = 0;
     for (let k = 0; k < profile.length - 1; k++) {
       for (let i = 0; i < sides; i++) {
         const j = (i + 1) % sides;
@@ -162,6 +177,14 @@ export class Geo {
     g.computeBoundingBox();
     return g;
   }
+}
+
+/** Octahedral encoding of a unit normal into two numbers (decoded in citymat.js). */
+export function octEncode(x, y, z) {
+  const l = Math.abs(x) + Math.abs(y) + Math.abs(z) || 1;
+  let u = x / l, v = z / l;
+  if (y < 0) { const ou = u; u = (1 - Math.abs(v)) * (ou >= 0 ? 1 : -1); v = (1 - Math.abs(ou)) * (v >= 0 ? 1 : -1); }
+  return [u, v];
 }
 
 // Unit icosahedron.

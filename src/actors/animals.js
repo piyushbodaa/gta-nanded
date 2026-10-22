@@ -15,7 +15,7 @@ export class Animals {
     this.game = game;
     this.list = [];
     this.seed = 1;
-    const mat = new THREE.MeshLambertMaterial();
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
     const mk = (geo, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.setColorAt(0, _c.set(0xffffff)); m.count = 0; m.frustumCulled = false; m.castShadow = true; game.scene.add(m); return m; };
     // Unit parts, scaled per species.
     this.parts = {

@@ -1,9 +1,10 @@
 // Developer harness: free-fly camera over the generated city.
 import * as THREE from 'three';
 import { createWorld } from './world/world.js';
+import { Post } from './world/post.js';
 
 const hud = document.getElementById('hud');
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -22,7 +23,11 @@ let yaw = Number(params.get('yaw') ?? 0), pitch = Number(params.get('pitch') ?? 
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 const world = await createWorld(scene, renderer, { stage: (l, f) => (hud.textContent = `${l} ${(f * 100) | 0}%`), focus: start });
-window.world = world; window.camera = camera; window.renderer = renderer; window.scene = scene;
+const post = new Post(renderer, world.sky);
+post.setDetail(world.textures.detail);
+world.sky.useSceneFog(!post.enabled);
+renderer.info.autoReset = false;
+window.world = world; window.camera = camera; window.renderer = renderer; window.scene = scene; window.post = post;
 if (params.get('h')) world.sky.hours = Number(params.get('h'));
 if (params.get('w')) world.sky.setWeather(params.get('w'));
 const keys = new Set();
@@ -55,9 +60,12 @@ function frame() {
   world.sky.placeDome(camera);
   world.rivers.update(dt);
   world.cityUniforms.uNight.value = world.sky.night;
+  world.cityUniforms.uTime.value += dt;
+  world.cityUniforms.uWet.value = world.sky.wet;
   world.chunks.setNight(world.sky.night);
   if (shadowAt.distanceTo(camera.position) > 8) { renderer.shadowMap.needsUpdate = true; shadowAt.copy(camera.position); }
-  renderer.render(scene, camera);
+  renderer.info.reset();
+  post.render(scene, camera, dt);
   const info = renderer.info.render;
   hud.textContent = `fps ${fps.toFixed(0)}  calls ${info.calls}  tris ${(info.triangles / 1000).toFixed(0)}k  chunks ${world.chunks.chunks.size}  built ${world.chunks.stats.built} avg ${(world.chunks.stats.ms / Math.max(1, world.chunks.stats.built)).toFixed(1)}ms\n` +
     `pos ${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}  time ${world.sky.clockText()}  gen ${world.city.genTime.toFixed(0)}ms lots ${world.city.lots.count}`;
