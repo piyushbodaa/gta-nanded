@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { VEHICLE_TYPES, TYPE_KEYS } from './vehicle-types.js';
 import { vehicleModel } from './vehicle-models.js';
 import { createBody, stepBody, collideStatic, collidePair, speedOf } from './vehicle-physics.js';
-import { makeOutfit } from './humans.js';
+import { makeOutfit, inShadowBox } from './humans.js';
 import { radialTexture } from '../world/citymat.js';
 import { clamp, rng } from '../core/math.js';
 
@@ -39,10 +39,17 @@ export class Vehicles {
         scene.add(m);
         return m;
       };
-      this.meshes[type] = { paint: mk(model.geos.paint, lambert), glass: mk(model.geos.glass, glass), fixed: mk(model.geos.fixed, vcol), lights: mk(model.geos.lights, lit), n: 0, model, cap };
-      this.meshes[type].lights.castShadow = false;
+      const M = (this.meshes[type] = { paint: mk(model.geos.paint, lambert), glass: mk(model.geos.glass, glass), fixed: mk(model.geos.fixed, vcol), lights: mk(model.geos.lights, lit), n: 0, nShadow: 0, model, cap });
+      M.lights.castShadow = false;
+      for (const k of ['paint', 'glass', 'fixed']) {
+        M[k].onBeforeShadow = () => { M[k].count = M.nShadow; };
+        M[k].onAfterShadow = () => { M[k].count = M.n; };
+      }
     }
     this.wheels = new THREE.InstancedMesh(wheelGeometry(), vcol, 900);
+    this.wheelsShadow = 0; this.wheelsN = 0;
+    this.wheels.onBeforeShadow = () => { this.wheels.count = this.wheelsShadow; };
+    this.wheels.onAfterShadow = () => { this.wheels.count = this.wheelsN; };
     this.wheels.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.wheels.count = 0; this.wheels.castShadow = true; this.wheels.frustumCulled = false;
     scene.add(this.wheels);
@@ -178,67 +185,72 @@ export class Vehicles {
   }
 
   /** Write instance transforms; also syncs drivers and passengers into their seats. */
-  render(dt, cam) {
+  render(dt, cam, shadowBox) {
     this.time += dt;
     for (const t of TYPE_KEYS) this.meshes[t].n = 0;
     let wn = 0, bn = 0, hn = 0;
     const night = this.night;
     const maxD2 = this.drawDistance * this.drawDistance;
-    for (const v of this.list) {
-      const dx = v.x - cam.x, dz = v.z - cam.z;
-      const near = dx * dx + dz * dz < maxD2;
-      const M = this.meshes[v.type];
-      // Body transform with suspension pitch/roll and two-wheeler lean.
-      const lean = v.spec.two ? -v.lean : v.roll;
-      _e.set(v.pitch, v.heading, lean, 'YXZ');
-      _q.setFromEuler(_e);
-      const bob = v.kinematic ? 0 : Math.sin(this.time * 18 + v.id) * 0.006 * Math.min(1, speedOf(v) / 8);
-      const sink = v.sinking ? Math.min(2.5, v.sinking * 0.8) : 0;
-      _p.set(v.x, v.y + bob - sink, v.z);
-      _s.set(1, 1, 1);
-      _m.compose(_p, _q, _s);
-      // Seat people even when the body is far (they're culled by their own distance check).
-      this._seat(v, _m);
-      if (!near || !v.visible || M.n >= M.cap) continue;
-      const i = M.n++;
-      M.paint.setMatrixAt(i, _m); M.glass.setMatrixAt(i, _m); M.fixed.setMatrixAt(i, _m); M.lights.setMatrixAt(i, _m);
-      M.paint.setColorAt(i, _c.setHex(v.wrecked ? WRECK : v.color));
-      M.fixed.setColorAt(i, v.wrecked ? _c.setHex(0x444444) : _c.setHex(0xffffff));
-      // Lamps: brighter at night and when braking; light bars flash.
-      let lamp = 0.55 + night * 0.9 + (v.braking ? 0.5 : 0);
-      if (v.wrecked) lamp = 0.15;
-      if (v.sirenOn) {
-        const ph = Math.floor(this.time * 7 + v.id) % 2;
-        _c.setRGB(ph ? 2.4 : 0.25, 0.45, ph ? 0.25 : 2.6);
-      } else _c.setRGB(lamp, lamp, lamp);
-      M.lights.setColorAt(i, _c);
-      // Wheels.
-      const model = v.model;
-      for (const [wx, wz, r, front, width] of model.wheels) {
-        if (wn >= this.wheels.instanceMatrix.count) break;
-        _e.set(v.wheelSpin || 0, front ? v.steer : 0, 0, 'YXZ');
+    // Vehicles inside the sun's shadow map first: the shadow pass draws only those.
+    for (let pass = 0; pass < 2; pass++) {
+      if (pass === 1) { for (const t of TYPE_KEYS) this.meshes[t].nShadow = this.meshes[t].n; this.wheelsShadow = wn; }
+      for (const v of this.list) {
+        const dx = v.x - cam.x, dz = v.z - cam.z;
+        if ((pass === 0) !== inShadowBox(shadowBox, v.x, v.y, v.z, 8)) continue;
+        const near = dx * dx + dz * dz < maxD2;
+        const M = this.meshes[v.type];
+        // Body transform with suspension pitch/roll and two-wheeler lean.
+        const lean = v.spec.two ? -v.lean : v.roll;
+        _e.set(v.pitch, v.heading, lean, 'YXZ');
         _q.setFromEuler(_e);
-        _p.set(wx, r, wz);
-        _s.set(width, r, r);
-        _t.compose(_p, _q, _s);
-        _w.multiplyMatrices(_m, _t);
-        this.wheels.setMatrixAt(wn++, _w);
-      }
-      // Contact shadow.
-      if (bn < this.blobs.instanceMatrix.count) {
-        _e.set(0, v.heading, 0); _q.setFromEuler(_e);
-        _p.set(v.x, v.y + 0.03, v.z); _s.set(v.spec.W * 1.5, 1, v.spec.L * 1.25);
-        _t.compose(_p, _q, _s);
-        this.blobs.setMatrixAt(bn++, _t);
-      }
-      // Headlight pool ahead at night.
-      if (night > 0.05 && !v.wrecked && hn < this.beams.instanceMatrix.count) {
-        const ahead = v.hd + 5;
-        _e.set(0, v.heading, 0); _q.setFromEuler(_e);
-        _p.set(v.x + Math.sin(v.heading) * ahead, v.y + 0.09, v.z + Math.cos(v.heading) * ahead);
-        _s.set(v.spec.two ? 4 : 7, 1, 11);
-        _t.compose(_p, _q, _s);
-        this.beams.setMatrixAt(hn++, _t);
+        const bob = v.kinematic ? 0 : Math.sin(this.time * 18 + v.id) * 0.006 * Math.min(1, speedOf(v) / 8);
+        const sink = v.sinking ? Math.min(2.5, v.sinking * 0.8) : 0;
+        _p.set(v.x, v.y + bob - sink, v.z);
+        _s.set(1, 1, 1);
+        _m.compose(_p, _q, _s);
+        // Seat people even when the body is far (they're culled by their own distance check).
+        this._seat(v, _m);
+        if (!near || !v.visible || M.n >= M.cap) continue;
+        const i = M.n++;
+        M.paint.setMatrixAt(i, _m); M.glass.setMatrixAt(i, _m); M.fixed.setMatrixAt(i, _m); M.lights.setMatrixAt(i, _m);
+        M.paint.setColorAt(i, _c.setHex(v.wrecked ? WRECK : v.color));
+        M.fixed.setColorAt(i, v.wrecked ? _c.setHex(0x444444) : _c.setHex(0xffffff));
+        // Lamps: brighter at night and when braking; light bars flash.
+        let lamp = 0.55 + night * 0.9 + (v.braking ? 0.5 : 0);
+        if (v.wrecked) lamp = 0.15;
+        if (v.sirenOn) {
+          const ph = Math.floor(this.time * 7 + v.id) % 2;
+          _c.setRGB(ph ? 2.4 : 0.25, 0.45, ph ? 0.25 : 2.6);
+        } else _c.setRGB(lamp, lamp, lamp);
+        M.lights.setColorAt(i, _c);
+        // Wheels.
+        const model = v.model;
+        for (const [wx, wz, r, front, width] of model.wheels) {
+          if (wn >= this.wheels.instanceMatrix.count) break;
+          _e.set(v.wheelSpin || 0, front ? v.steer : 0, 0, 'YXZ');
+          _q.setFromEuler(_e);
+          _p.set(wx, r, wz);
+          _s.set(width, r, r);
+          _t.compose(_p, _q, _s);
+          _w.multiplyMatrices(_m, _t);
+          this.wheels.setMatrixAt(wn++, _w);
+        }
+        // Contact shadow.
+        if (bn < this.blobs.instanceMatrix.count) {
+          _e.set(0, v.heading, 0); _q.setFromEuler(_e);
+          _p.set(v.x, v.y + 0.03, v.z); _s.set(v.spec.W * 1.5, 1, v.spec.L * 1.25);
+          _t.compose(_p, _q, _s);
+          this.blobs.setMatrixAt(bn++, _t);
+        }
+        // Headlight pool ahead at night.
+        if (night > 0.05 && !v.wrecked && hn < this.beams.instanceMatrix.count) {
+          const ahead = v.hd + 5;
+          _e.set(0, v.heading, 0); _q.setFromEuler(_e);
+          _p.set(v.x + Math.sin(v.heading) * ahead, v.y + 0.09, v.z + Math.cos(v.heading) * ahead);
+          _s.set(v.spec.two ? 4 : 7, 1, 11);
+          _t.compose(_p, _q, _s);
+          this.beams.setMatrixAt(hn++, _t);
+        }
       }
     }
     for (const t of TYPE_KEYS) {
@@ -250,7 +262,7 @@ export class Vehicles {
         M[k].visible = M.n > 0;
       }
     }
-    this.wheels.count = wn; this.wheels.instanceMatrix.needsUpdate = true;
+    this.wheels.count = this.wheelsN = wn; this.wheels.instanceMatrix.needsUpdate = true;
     this.blobs.count = bn; this.blobs.instanceMatrix.needsUpdate = true;
     this.beams.count = hn; this.beams.instanceMatrix.needsUpdate = true;
     this.beams.material.opacity = clamp(night * 0.55, 0, 0.55);

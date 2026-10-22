@@ -5,6 +5,7 @@
 // the wind. All foliage in a chunk is one draw call.
 import * as THREE from 'three';
 import { rng } from '../core/math.js';
+import { setBounds } from './geo.js';
 
 const T = 256, COLS = 4, ROWS = 2;
 export const LEAF = { NEEM: 0, BROAD: 1, GULMOHAR: 2, PALM: 3, BABOOL: 4, BOUGAIN: 5, BANANA: 6, BUSH: 7 };
@@ -356,13 +357,14 @@ export class FoliageGeo {
 
   build() {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, this.n * 3), 3));
+    const pos = this.pos.slice(0, this.n * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(this.nrm.slice(0, this.n * 3), 3));
     g.setAttribute('uv', new THREE.BufferAttribute(this.uv.slice(0, this.n * 2), 2));
     g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, this.n * 3), 3, true));
     g.setAttribute('wind', new THREE.BufferAttribute(this.wind.slice(0, this.n), 1, true));
-    g.setIndex(new THREE.BufferAttribute(this.n > 65535 ? this.idx.slice(0, this.ni) : Uint16Array.from(this.idx.subarray(0, this.ni)), 1));
-    g.computeBoundingSphere();
+    g.setIndex(new THREE.BufferAttribute(this.n > 65535 ? this.idx.slice(0, this.ni) : new Uint16Array(this.idx.subarray(0, this.ni)), 1));
+    setBounds(g, pos);
     return g;
   }
 }

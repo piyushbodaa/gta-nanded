@@ -78,6 +78,8 @@ export class Sky {
     this.sun.shadow.normalBias = 0.0;
     this.sun.target = new THREE.Object3D();
     scene.add(this.sun, this.sun.target);
+    // The shadow map's footprint as the sun sees it (see inShadowBox); everything casts until placed.
+    this.shadowBox = { half: Infinity, cx: 0, cz: 0, xx: 1, xz: 0, yx: 0, yy: 1, yz: 0 };
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
     scene.add(this.hemi);
     // Linear fog is only used when post-processing is unavailable (see useSceneFog).
@@ -300,6 +302,11 @@ export class Sky {
       this.sun.position.set(fx + lightDir.x * 200, lightDir.y * 200, fz + lightDir.z * 200);
       this.sun.target.position.set(fx, 0, fz);
       this.sun.target.updateMatrixWorld();
+      // The sun camera's right and up axes, so actors outside its view can skip the shadow pass.
+      const b = this.shadowBox, L = Math.hypot(lightDir.x, lightDir.z) || 1e-6;
+      b.half = this.sun.shadow.camera.right; b.cx = fx; b.cz = fz;
+      b.xx = lightDir.z / L; b.xz = -lightDir.x / L;
+      b.yx = -lightDir.y * lightDir.x / L; b.yy = L; b.yz = -lightDir.y * lightDir.z / L;
       this.dome.position.copy(focus.camera || focus);
     }
   }

@@ -252,6 +252,15 @@ export function makeOutfit(kind, seed) {
 }
 
 // ------------------------------------------------------------------ renderer
+/**
+ * Whether something at (x, y, z), give or take `margin` metres, falls inside the sun's shadow
+ * map (Sky.shadowBox: its centre and the sun camera's axes). With no box, everything does.
+ */
+export function inShadowBox(b, x, y, z, margin) {
+  if (!b) return true;
+  const rx = x - b.cx, rz = z - b.cz, lim = b.half + margin;
+  return Math.abs(rx * b.xx + rz * b.xz) <= lim && Math.abs(rx * b.yx + y * b.yy + rz * b.yz) <= lim;
+}
 const _m = new THREE.Matrix4(), _root = new THREE.Matrix4(), _hip = new THREE.Matrix4(), _torso = new THREE.Matrix4();
 const _a = new THREE.Matrix4(), _b = new THREE.Matrix4(), _e = new THREE.Euler(), _c = new THREE.Color();
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
@@ -284,7 +293,9 @@ export class Humans {
       mesh.frustumCulled = false;
       mesh.name = `human-${p.key}`;
       scene.add(mesh);
-      this.meshes[p.key] = { mesh, part: p, n: 0 };
+      const entry = (this.meshes[p.key] = { mesh, part: p, n: 0, nShadow: 0 });
+      mesh.onBeforeShadow = () => { mesh.count = entry.nShadow; };
+      mesh.onAfterShadow = () => { mesh.count = entry.n; };
     }
     this.drawDistance = 140;
   }
@@ -300,20 +311,25 @@ export class Humans {
   remove(h) { const i = this.list.indexOf(h); if (i >= 0) this.list.splice(i, 1); }
 
   /** Advance walk phases and write every visible body part's instance. */
-  update(dt, cam) {
+  update(dt, cam, shadowBox) {
     for (const k in this.meshes) this.meshes[k].n = 0;
     const maxD2 = this.drawDistance * this.drawDistance;
     let drawn = 0;
-    for (const h of this.list) {
-      if (!h.visible) continue;
-      const dx = h.x - cam.x, dz = h.z - cam.z, d2 = dx * dx + dz * dz;
-      if (d2 > maxD2) continue;
-      if (drawn >= this.capacity) break;
-      drawn++;
-      // Stride ~1.35 m per cycle walking, longer running.
-      const stride = h.speed > 3.2 ? 2.4 : 1.35;
-      h.phase += (h.speed / stride) * Math.PI * 2 * dt;
-      this._pose(h, d2 > 3600);
+    // People inside the sun's shadow map are written first; the shadow pass then draws only
+    // that leading run of each part's instances instead of everyone in view.
+    for (let pass = 0; pass < 2; pass++) {
+      for (const h of this.list) {
+        if (!h.visible) continue;
+        const dx = h.x - cam.x, dz = h.z - cam.z, d2 = dx * dx + dz * dz;
+        if (d2 > maxD2 || (pass === 0) !== inShadowBox(shadowBox, h.x, h.y, h.z, 2.5)) continue;
+        if (drawn >= this.capacity) break;
+        drawn++;
+        // Stride ~1.35 m per cycle walking, longer running.
+        const stride = h.speed > 3.2 ? 2.4 : 1.35;
+        h.phase += (h.speed / stride) * Math.PI * 2 * dt;
+        this._pose(h, d2 > 3600);
+      }
+      if (pass === 0) for (const k in this.meshes) this.meshes[k].nShadow = this.meshes[k].n;
     }
     for (const k in this.meshes) {
       const m = this.meshes[k];
