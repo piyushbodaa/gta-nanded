@@ -341,15 +341,10 @@ function paintBalcony(g, v, seed) {
 }
 
 function paintOld(g, v, seed) {
-  // Lime-wash over stone; patches where the plaster has fallen off.
+  // Lime-wash over stone. Fallen plaster is not painted here, where it would repeat in every bay:
+  // the city shader breaks it out along each whole wall (citymat.js).
   wallBase(g, seed, 2.2);
   g.streaks(0, 0, T, T, seed + 2, 0.12);
-  const r = rng(seed + 4);
-  for (let i = 0; i < 2; i++) {
-    const px = r() * 200, py = r() * 200, pw = 30 + r() * 40, ph = 20 + r() * 30;
-    g.rect(px, py, pw, ph, '#a5634a');
-    for (let by = py + 2; by < py + ph; by += 8) g.rect(px, by, pw, 1.5, '#d0c0b0');
-  }
   const wood = ['#5b3a24', '#3f5e4b', '#3f5d7a', '#6e2e2e'][v % 4];
   if (v < 4) {
     // Arched window with wooden shutters and a carved frame.

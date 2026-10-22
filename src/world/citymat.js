@@ -156,6 +156,34 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               diffuseColor.rgb *= mix(vec3(1.0), vec3(0.7, 0.68, 0.6), damp * 0.85);
               diffuseColor.rgb *= 0.9 + macro * 0.18;
               diffuseColor.rgb *= 0.86 + 0.28 * wallDetail;
+              ${signs ? '' : `
+              // Fallen plaster: placed along the whole wall rather than per bay, so it never
+              // repeats; most on old lime-washed houses and old buildings, none on glass-and-ACP
+              // blocks; likeliest at the damp foot of the wall and under each slab. Only on the
+              // plain wall: windows, frames and lettering stay whole.
+              float rowWear = vTile.y < 0.5 ? 0.5 : vTile.y < 1.5 ? 0.4 : vTile.y < 2.5 ? 1.0 : vTile.y < 3.5 ? 0.0 : vTile.y < 4.5 ? 0.25 : 0.6;
+              float wear = rowWear * (0.25 + 0.75 * age);
+              if (wear > 0.05 && tex.a > 0.5) {
+                vec3 wn = normalize(cross(dFdx(vCityWorld), dFdy(vCityWorld)));
+                vec2 wc = coord + vTint.a * vec2(37.1, 11.3) + wn.xz * 17.3;
+                float n = texture2D(cityDetail, wc * vec2(0.24, 0.34)).b * 0.72 + texture2D(cityDetail, wc * vec2(1.9, 2.6)).g * 0.28;
+                float foot = 1.0 - smoothstep(0.3, 1.8, vCityWorld.y);
+                float slab = smoothstep(0.8, 0.97, fract(vCityWorld.y / 3.2));
+                float t = 0.8 - wear * (0.15 + 0.1 * foot + 0.05 * slab);
+                float spall = smoothstep(t, t + 0.02, n);
+                float halo = (smoothstep(t - 0.06, t, n) - spall) * wear;
+                // A grey scratch coat at the edge of the break, brick inside it.
+                vec2 bc = coord * vec2(15.0, 42.0);
+                bc.x += 0.5 * mod(floor(bc.y), 2.0);
+                vec2 bq = fract(bc), bw = fwidth(bc);
+                float joint = (1.0 - smoothstep(0.0, 0.14, min(bq.y, 1.0 - bq.y))) + (1.0 - smoothstep(0.0, 0.07, min(bq.x, 1.0 - bq.x)));
+                joint = mix(min(joint, 1.0), 0.24, smoothstep(0.2, 0.55, max(bw.x, bw.y)));
+                vec3 brick = vec3(0.45, 0.25, 0.18) * (0.75 + 0.4 * cityHash(floor(bc) + vTint.a * 3.3));
+                vec3 core = mix(brick, vec3(0.55, 0.52, 0.47), joint);
+                vec3 broken = mix(vec3(0.56, 0.54, 0.5), core, smoothstep(t + 0.008, t + 0.03, n));
+                diffuseColor.rgb *= 1.0 - halo * 0.3;
+                diffuseColor.rgb = mix(diffuseColor.rgb, broken, spall);
+              }`}
               cityAO = mix(0.5, 1.0, smoothstep(0.0, 3.2, vCityWorld.y));
               // Window glass (not the open fronts of shops) is smooth and reflects the sky.
               float glass = (vTile.y > 3.5 && vTile.y < 4.5) ? 0.0 : smoothstep(0.12, 0.45, e.g);
@@ -248,7 +276,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += cityGlow;`);
   };
-  material.customProgramCacheKey = () => (signs ? 'city-signs-v5' : 'city-v5');
+  material.customProgramCacheKey = () => (signs ? 'city-signs-v6' : 'city-v6');
   return material;
 }
 
