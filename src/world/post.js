@@ -235,6 +235,7 @@ export class Post {
     r.getDrawingBufferSize(this.size);
     const w = Math.max(1, this.size.x), h = Math.max(1, this.size.y);
     if (this.rt && this.rt.width === w && this.rt.height === h) return;
+    this._dispose(); // the old size's target and bloom chain
     // EXT_color_buffer_float (behind R11G11B10) also makes half floats renderable.
     const formats = this.format === 'r11g11b10' ? ['r11g11b10', 'half'] : [this.format];
     const msaa = this.msaa;
