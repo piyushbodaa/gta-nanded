@@ -35,6 +35,8 @@ const PALETTES = {
 
 export const CHUNK = 192;
 export const chunkKey = (cx, cz) => `${cx},${cz}`;
+// Paved footpath along the busy roads; buildings keep behind it.
+export const FOOTPATH_W = 1.9;
 
 export class City {
   constructor(world, net) {
@@ -94,6 +96,60 @@ export class City {
     const d = this.density, nx = this.dNx;
     const a = d[z0 * nx + x0], b = d[z0 * nx + x0 + 1], c = d[(z0 + 1) * nx + x0], e = d[(z0 + 1) * nx + x0 + 1];
     return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + e * tx) * tz;
+  }
+
+  /** Busy roads through built-up streets get a raised footpath on each side. */
+  footpathRoad(road, x, z) {
+    return this.net.width[road] >= 8 && !this.net.bridge[road] && this.densityAt(x, z) > 0.2;
+  }
+
+  /** The same, for one polyline segment (judged at its midpoint). */
+  footpathAt(seg) {
+    const net = this.net;
+    return this.footpathRoad(net.ptRoad[seg], (net.px[seg] + net.px[seg + 1]) / 2, (net.pz[seg] + net.pz[seg + 1]) / 2);
+  }
+
+  /**
+   * Free depth in front of a street-front lot before the road or its footpath
+   * (shared by the renderer and the colliders, so what you see is what you hit).
+   */
+  frontRoom(i) {
+    const cache = this._frontRoom || (this._frontRoom = new Float32Array(this.lots.cap).fill(NaN));
+    if (!Number.isNaN(cache[i])) return cache[i];
+    const L = this.lots, s = Math.sin(L.rot[i]), c = Math.cos(L.rot[i]);
+    const fx = L.x[i] - s * L.hd[i], fz = L.z[i] - c * L.hd[i];
+    const n = this.net.nearest(fx, fz, 20, this._frontN || (this._frontN = {}));
+    const room = n ? n.dist - this.net.width[n.road] / 2 - (this.footpathRoad(n.road, n.x, n.z) ? FOOTPATH_W : 0) - 0.2 : 2;
+    cache[i] = room;
+    return room;
+  }
+
+  /** Depth of the raised platform (ota) along a shop front; 0 when there is none. */
+  shopPlatform(i) {
+    if (!(this.lots.flags[i] & 1) || this.lots.style[i] === STYLE.SHED || this.lots.style[i] === STYLE.HUT) return 0;
+    // Leave the kerb-side walking line (0.45 m from the road edge) clear.
+    const d = Math.min(0.9, this.frontRoom(i) - 0.65);
+    return d > 0.25 ? d : 0;
+  }
+
+  /** A compound wall stands 1.6 m in front of the house, only where it leaves the kerb free. */
+  compoundWall(i) {
+    const L = this.lots;
+    return Boolean(L.flags[i] & 32) && L.style[i] !== STYLE.SHED && L.style[i] !== STYLE.HUT && this.frontRoom(i) >= 2.4;
+  }
+
+  /** True when (x, z) lies inside (or within `pad` of) a building lot or reserved landmark. */
+  builtAt(x, z, pad = 0) {
+    const L = this.lots;
+    return Boolean(this.lotGrid.query(x - pad, z - pad, x + pad, z + pad, id => {
+      if (id <= -100000) return false; // trees and props
+      let cx, cz, hw, hd, rot;
+      if (id < 0) { const r = this.reserved[-1 - id]; cx = r.x; cz = r.z; hw = r.hw; hd = r.hd; rot = r.rot; }
+      else { cx = L.x[id]; cz = L.z[id]; hw = L.hw[id]; hd = L.hd[id]; rot = L.rot[id]; }
+      const c = Math.cos(rot), s = Math.sin(rot), dx = x - cx, dz = z - cz;
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      return Math.abs(lx) <= hw + pad && Math.abs(lz) <= hd + pad;
+    }));
   }
 
   district(x, z) {
@@ -285,7 +341,8 @@ export class City {
         : style === STYLE.INSTITUTION ? PALETTES.institution : PALETTES.house;
     L.color[i] = r.pick(pal);
     // Feature flags: 1 shops below, 2 parapet, 4 water tank, 8 stair room, 16 balconies,
-    // 32 compound wall, 64 awning, 128 rooftop sign/banner, 256 dish, 512 side ad.
+    // 32 compound wall, 64 awning, 128 rooftop sign/banner, 256 dish, 512 side ad,
+    // 1024 street front (set by the street-row placement).
     let flags = 0;
     if (style === STYLE.SHOPHOUSE || (style === STYLE.OLD && r.chance(0.55)) || (style === STYLE.COMMERCIAL && r.chance(0.6))) flags |= 1;
     if (style !== STYLE.SHED && style !== STYLE.HUT) flags |= 2;
@@ -332,7 +389,7 @@ export class City {
     let blocked = false;
     net.grid.query(x - ext, z - ext, x + ext, z + ext, i => {
       const r = net.ptRoad[i];
-      const rad = net.width[r] / 2 + margin;
+      const rad = net.width[r] / 2 + margin + (this.footpathAt(i) ? FOOTPATH_W : 0);
       if (segBoxDist(net.px[i], net.pz[i], net.px[i + 1], net.pz[i + 1], x, z, hw, hd, c, s) < rad) { blocked = true; return true; }
     });
     if (blocked) return false;
@@ -364,7 +421,7 @@ export class City {
           // Left of the polyline direction (dx, dz) is (dz, -dx).
           const nx = q.dz * side, nz = -q.dx * side;
           const depth = r.range(prm.d0, prm.d1);
-          const setback = w / 2 + r.range(prm.s0, prm.s1);
+          const setback = w / 2 + r.range(prm.s0, prm.s1) + (this.footpathRoad(road, q.x, q.z) ? FOOTPATH_W : 0);
           const cx = q.x + nx * (setback + depth / 2), cz = q.z + nz * (setback + depth / 2);
           const rot = Math.atan2(nx, nz);
           if (r.chance(prm.prob)) this._tryLot(cx, cz, fw / 2, depth / 2, rot, zone, dens, type, r, nx, nz);
@@ -380,7 +437,8 @@ export class City {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (hd > 2.2 && this._clearOfStreets(cx, cz, hw, hd, rot, 0.6) && !this._overlapsLots(cx, cz, hw, hd, rot)) {
         const { style, floors } = pickStyle(zone, dens, roadType, hw, hd, r);
-        this._addLot(cx, cz, hw, hd, rot, floors, style, (r() * 4294967296) >>> 0, -1, zone, roadType);
+        const lot = this._addLot(cx, cz, hw, hd, rot, floors, style, (r() * 4294967296) >>> 0, -1, zone, roadType);
+        this.lots.flags[lot] |= 1024; // first row: its front is on the street
         if (zone !== ZONE.RURAL && dens > 0.35 && r.chance(0.55)) {
           const d2 = r.range(4, 8);
           const bx = cx + nx * (hd + 0.8 + d2), bz = cz + nz * (hd + 0.8 + d2);

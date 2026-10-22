@@ -85,8 +85,8 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
           return normalize(n);
         }`)
       .replace('#include <map_fragment>', `
-        vec3 cityGlow = vec3(0.0);
-        float cityRough = 0.85, cityMetal = 0.0, cityAO = 1.0, citySmooth = 0.0;
+        vec3 cityGlow = vec3(0.0), roomLight = vec3(0.0);
+        float cityRough = 0.85, cityMetal = 0.0, cityAO = 1.0, citySmooth = 0.0, roomGlass = 0.0;
         {
           float mode = floor(vTile.w + 0.5);
           vec3 paint = vTint.rgb;
@@ -137,16 +137,61 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
             vec3 e = vec3(0.0);
             if (mode < 2.5) e = textureGrad(cityEmissive, auv, gx, gy).rgb;
             if (mode < 1.5) {
-              // Walls: rain-splash grime at the foot, soft occlusion, weathering.
-              float foot = 1.0 - smoothstep(0.0, 1.1, vCityWorld.y);
-              diffuseColor.rgb *= mix(vec3(1.0), vec3(0.72, 0.66, 0.58), foot * 0.85);
+              // Walls: each building has its own age, from fresh paint to decades of monsoons.
+              float age = fract(vTint.a * 7.31 + 0.17);
+              float wallDetail = texture2D(cityDetail, vTUv * 1.3).b;
+              // Sun-bleached paint.
+              float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum) * 1.06, age * 0.28 * tex.a);
+              // Rain run-off below every ledge, darker on older buildings.
+              float streak = texture2D(cityDetail, vec2(vTUv.x * 2.7, vCityWorld.y * 0.07 + vTint.a)).g;
+              diffuseColor.rgb *= 1.0 - max(streak - 0.45, 0.0) * 0.5 * age * tex.a;
+              // Damp, splashed band at the foot of the wall.
+              float dampTop = mix(0.35, 1.15, age) + (wallDetail - 0.5) * 0.35;
+              float damp = 1.0 - smoothstep(dampTop - 0.12, dampTop + 0.08, vCityWorld.y);
+              diffuseColor.rgb *= mix(vec3(1.0), vec3(0.7, 0.68, 0.6), damp * 0.85);
               diffuseColor.rgb *= 0.9 + macro * 0.18;
-              diffuseColor.rgb *= 0.86 + 0.28 * texture2D(cityDetail, vTUv * 1.3).b;
+              diffuseColor.rgb *= 0.86 + 0.28 * wallDetail;
               cityAO = mix(0.5, 1.0, smoothstep(0.0, 3.2, vCityWorld.y));
               // Window glass (not the open fronts of shops) is smooth and reflects the sky.
               float glass = (vTile.y > 3.5 && vTile.y < 4.5) ? 0.0 : smoothstep(0.12, 0.45, e.g);
               cityRough = mix(0.9, 0.08, glass);
-              diffuseColor.rgb *= 1.0 - glass * 0.35;
+              // Behind dark glass there is a room: walk the view ray into a box the size
+              // of the bay and storey and shade whichever wall, floor or ceiling it meets.
+              roomGlass = glass * (1.0 - smoothstep(0.1, 0.22, dot(tex.rgb, vec3(0.3, 0.59, 0.11))));
+              if (roomGlass > 0.01) {
+                vec3 wn = normalize(cross(dFdx(vCityWorld), dFdy(vCityWorld)));
+                vec3 wt = vec3(wn.z, 0.0, -wn.x);
+                vec3 vd = normalize(vCityWorld - cameraPosition);
+                vec3 rd = vec3(dot(vd, wt), vd.y, dot(vd, wn));
+                rd.z = min(rd.z, -0.05);
+                vec2 cellR = floor(coord);
+                float roomSeed = cityHash(cellR * 3.17 + vTint.a * 53.1);
+                const float depth = 0.85;
+                vec2 tw = (step(0.0, rd.xy) - f) / max(abs(rd.xy), vec2(1e-4)) * sign(rd.xy + 1e-6);
+                float tb = depth / -rd.z;
+                float t = min(min(tw.x, tw.y), tb);
+                vec3 hit = vec3(f, 0.0) + rd * t;
+                vec3 paintR = mix(vec3(0.62, 0.72, 0.62), vec3(0.78, 0.66, 0.68), fract(roomSeed * 3.7));
+                paintR = mix(paintR, vec3(0.72, 0.76, 0.86), step(0.66, fract(roomSeed * 7.1)));
+                vec3 roomCol;
+                if (t == tb) {
+                  roomCol = paintR;
+                  // A door or a steel almirah against the back wall.
+                  vec2 q = hit.xy;
+                  float furn = step(abs(q.x - (0.25 + 0.5 * fract(roomSeed * 5.3))), 0.11) * step(q.y, 0.62);
+                  roomCol = mix(roomCol, mix(vec3(0.32, 0.22, 0.15), vec3(0.55, 0.56, 0.58), step(0.5, fract(roomSeed * 9.1))), furn);
+                } else if (t == tw.y) roomCol = rd.y < 0.0 ? vec3(0.42, 0.36, 0.3) : vec3(0.85, 0.84, 0.8);
+                else roomCol = paintR * 0.8;
+                float deep = clamp(-hit.z / depth, 0.0, 1.0);
+                vec3 dayRoom = roomCol * mix(0.09, 0.035, deep);
+                float hue = cityHash(cellR * 5.13 + vTint.a * 7.0);
+                vec3 bulb = mix(vec3(1.0, 0.74, 0.42), vec3(0.85, 0.94, 1.0), step(0.62, hue));
+                float tube = rd.y > 0.0 && t == tw.y ? smoothstep(0.12, 0.0, abs(hit.z + depth * 0.75)) * 2.5 : 0.0;
+                vec3 nightRoom = litChance > 0.0 ? roomCol * bulb * (1.1 - deep * 0.45) + bulb * tube : roomCol * 0.012;
+                roomLight = mix(dayRoom, nightRoom, uNight);
+              }
+              diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - glass * 0.35), vec3(0.012), roomGlass);
             } else if (mode < 2.5) {
               cityRough = ${signs ? '0.5' : '0.6'};
             } else if (mode < 3.5) {
@@ -181,6 +226,8 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               ${signs ? 'lamp = vec3(1.0);' : ''}
               cityGlow = e * lamp * litChance * uNight * ${signs ? '1.9' : '1.8'};
             }
+            // Rooms seen through the glass replace the flat glow there.
+            cityGlow = mix(cityGlow, roomLight * 1.6, roomGlass);
           }
         }`)
       // Sky reflections only where the surface is smooth enough to show them.
@@ -197,7 +244,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += cityGlow;`);
   };
-  material.customProgramCacheKey = () => (signs ? 'city-signs-v3' : 'city-v3');
+  material.customProgramCacheKey = () => (signs ? 'city-signs-v4' : 'city-v4');
   return material;
 }
 

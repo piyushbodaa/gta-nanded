@@ -68,9 +68,10 @@ export class Geo {
   }
   /**
    * Oriented box (local x = width, local z = depth, y up), vertex-coloured or with
-   * world-scaled UVs (uvScale units per tile). Skips the bottom face.
+   * world-scaled UVs (uvScale units per tile). The bottom face only on request
+   * (slabs and canopies seen from below).
    */
-  box(cx, y0, cz, hw, h, hd, rot, uvScale = 0, top = true) {
+  box(cx, y0, cz, hw, h, hd, rot, uvScale = 0, top = true, bottom = false) {
     const c = Math.cos(rot), s = Math.sin(rot);
     const X = (lx, lz) => cx + lx * c + lz * s, Z = (lx, lz) => cz - lx * s + lz * c;
     const p = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
@@ -82,6 +83,12 @@ export class Geo {
       this.wall(X(p[i][0], p[i][1]), Z(p[i][0], p[i][1]), X(p[j][0], p[j][1]), Z(p[j][0], p[j][1]), y0, y1, 0, u1, 0, v1);
     }
     if (top) this.flat(X(-hw, -hd), Z(-hw, -hd), X(hw, -hd), Z(hw, -hd), X(hw, hd), Z(hw, hd), X(-hw, hd), Z(-hw, hd), y1, uvScale, cx, cz);
+    if (bottom) {
+      const s2 = uvScale || 1;
+      const a = this.v(X(-hw, -hd), y0, Z(-hw, -hd), 0, 0), b = this.v(X(hw, -hd), y0, Z(hw, -hd), (2 * hw) / s2, 0);
+      const c2 = this.v(X(hw, hd), y0, Z(hw, hd), (2 * hw) / s2, (2 * hd) / s2), d = this.v(X(-hw, hd), y0, Z(-hw, hd), 0, (2 * hd) / s2);
+      this.quad(a, b, c2, d);
+    }
   }
   /** Shared-vertex box for plain coloured props (8 verts). */
   cbox(cx, y0, cz, hw, h, hd, rot = 0) {
@@ -165,6 +172,8 @@ export class Geo {
     }
   }
   get empty() { return this.ni === 0; }
+  /** Start over, keeping the grown buffers (builders are reused chunk after chunk). */
+  reset() { this.n = 0; this.ni = 0; return this; }
 
   build() {
     const g = new THREE.BufferGeometry();

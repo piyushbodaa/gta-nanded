@@ -208,7 +208,7 @@ export function makeOutfit(kind, seed) {
   const r = rng(seed);
   const o = {
     skin: r.pick(SKIN), hair: r.pick(HAIR), shirt: r.pick(SHIRTS), pants: r.pick(PANTS), shoes: r.pick([0x2b1d14, 0x3b2a1e, 0x111111, 0x6b4a2b]),
-    extra: 0, cap: 0xf2f2f2, flags: new Set(), scale: r.range(0.94, 1.06), kind, brow: 0x1a120c,
+    extra: 0, cap: 0xf2f2f2, flags: new Set(), scale: r.range(0.88, 0.98), kind, brow: 0x1a120c,
   };
   o.sleeve = o.shirt; o.legs = o.pants;
   // A Marathwada moustache is the rule, not the exception.
@@ -240,7 +240,7 @@ export function makeOutfit(kind, seed) {
       o.shirt = r.pick([0x111111, 0xffffff, 0x8e1b1b]); o.sleeve = o.shirt; o.pants = r.pick([0x111111, 0x1b2631]); o.legs = o.pants;
       break;
     case 'player':
-      o.skin = 0xa0672c; o.hair = 0x16110d; o.shirt = 0xe8652e; o.sleeve = 0xe8652e; o.pants = 0x1f3a5f; o.legs = o.pants; o.shoes = 0xf2f2f2; o.scale = 1.02;
+      o.skin = 0xa0672c; o.hair = 0x16110d; o.shirt = 0xe8652e; o.sleeve = 0xe8652e; o.pants = 0x1f3a5f; o.legs = o.pants; o.shoes = 0xf2f2f2; o.scale = 0.96;
       o.flags.delete('moustache'); o.flags.add('stubble');
       break;
     default:
