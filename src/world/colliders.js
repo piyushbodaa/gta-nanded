@@ -38,7 +38,22 @@ export class Colliders {
   _build() {
     const { city } = this;
     const L = city.lots;
-    for (let i = 0; i < L.count; i++) this.addBox(L.x[i], L.z[i], L.hw[i], L.hd[i], L.rot[i], L.h[i] + 1);
+    for (let i = 0; i < L.count; i++) {
+      this.addBox(L.x[i], L.z[i], L.hw[i], L.hd[i], L.rot[i], L.h[i] + 1);
+      const c = Math.cos(L.rot[i]), s = Math.sin(L.rot[i]);
+      const front = (lz, d) => [L.x[i] + (lz - d / 2) * s, L.z[i] + (lz - d / 2) * c];
+      // The raised platform along a shop front (too high to drive or walk through).
+      const ota = city.shopPlatform(i);
+      if (ota > 0) { const [x, z] = front(-L.hd[i], ota); this.addBox(x, z, L.hw[i] - 0.05, ota / 2, L.rot[i], 0.35); }
+      // Compound wall in front of a house, with the gate gap in the middle.
+      if (city.compoundWall(i)) {
+        const f = -L.hd[i] - 1.6 + 0.1, half = (L.hw[i] - 0.8) / 2;
+        for (const side of [-1, 1]) {
+          const lx = side * (0.8 + half);
+          this.addBox(L.x[i] + lx * c + f * s, L.z[i] - lx * s + f * c, half, 0.12, L.rot[i], 1.25);
+        }
+      }
+    }
     for (const p of city.places) for (const b of placeColliders(p)) this.addBox(b.x, b.z, b.hw, b.hd, b.rot, b.h);
     const T = city.trees;
     for (let i = 0; i < T.count; i++) this.addCircle(T.x[i], T.z[i], T.kind[i] === 2 ? 0.75 : T.kind[i] === 5 ? 0.6 : 0.32, T.kind[i] === 5 ? 1.2 : 2.5);

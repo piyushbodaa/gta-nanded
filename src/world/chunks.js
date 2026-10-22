@@ -4,7 +4,7 @@
 // and one line mesh for the wires.
 import * as THREE from 'three';
 import { Geo } from './geo.js';
-import { CHUNK, STYLE, PROP, ZONE } from './citygen.js';
+import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { buildPlace } from './landmarks.js';
@@ -79,13 +79,15 @@ export class ChunkManager {
   }
 
   setNight(n) {
-    this.mat.pools.opacity = clamp(n * 1.1, 0, 0.9);
+    this.mat.pools.opacity = clamp(n * 0.9, 0, 0.72);
     for (const ch of this.chunks.values()) if (ch.pools) ch.pools.visible = n > 0.02;
   }
 
   _build(key, cx, cz) {
     const t0 = performance.now();
-    const g = new Geo(16384), sg = new Geo(512), pg = new Geo(512), fg = new FoliageGeo(4096);
+    // Builders are reused: their buffers grow once to the size of a busy chunk.
+    const B = this._builders || (this._builders = { g: new Geo(65536), sg: new Geo(1024), pg: new Geo(1024), fg: new FoliageGeo(16384) });
+    const g = B.g.reset(), sg = B.sg.reset(), pg = B.pg.reset(), fg = B.fg.reset();
     const wires = [];
     const ctx = { g, sg, pg, fg, wires, city: this.city, net: this.net, signSlots: this.signSlots, cx, cz };
     const data = this.city.chunk(cx, cz);
@@ -212,7 +214,7 @@ function buildRoads(ctx, data) {
       // a,b at s0 (left, right), c,d at s1 (right, left): this order faces up.
       g.quad(a, b, c, d);
       if (net.bridge[road]) buildBridgeSpan(ctx, p, q, off0, off1, hw);
-      else if (w >= 8 && city.densityAt(p.x, p.z) > 0.2) buildFootpaths(ctx, p, q, off0, off1, hw);
+      else if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw);
       if (w >= 11.5 && !net.bridge[road]) buildMedian(ctx, p, q, off0, off1);
       // Zebra crossing just before a big junction.
       if (w >= 8 && s1 >= len - net.trimEnd(road) - 0.01 && net.jRoads[net.rb[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, q, off1, hw, -1, s1);
@@ -265,7 +267,7 @@ function zebra(ctx, p, off, hw, dir, s) {
 
 function buildFootpaths(ctx, p, q, o0, o1, hw) {
   const { g } = ctx;
-  const width = 1.9;
+  const width = FOOTPATH_W;
   for (const side of [1, -1]) {
     const i0 = hw * side, i1 = (hw + width) * side;
     const ax = p.x + o0.nx * i0, az = p.z + o0.nz * i0, bx = q.x + o1.nx * i0, bz = q.z + o1.nz * i0;
@@ -361,12 +363,92 @@ function buildJunction(ctx, j) {
   }
 }
 
+
+// ------------------------------------------------------------------ facade relief
+// Depth on the faces that front open ground: a plinth the building stands on,
+// slab edges at every floor, chajja sunshades over the windows, corner
+// pilasters and a projecting roof slab. Party walls against a neighbour stay
+// flat. Original illustration of the common Marathwada RCC street building,
+// not a survey of any particular facade.
+const PLINTH = 0.45;
+// Local box corners and walls (front faces local -z); n = outward normal.
+const CORNERS = (hw, hd) => [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
+const WALLS = [[1, 0, 'front', 0, -1], [0, 3, 'side', -1, 0], [3, 2, 'back', 0, 1], [2, 1, 'side', 1, 0]];
+
+/** True when a wall looks onto open ground (street, yard) rather than a neighbour 1 m away. */
+function wallOpen(city, X, Z, A, B, nx, nz) {
+  for (const t of [0.3, 0.7]) {
+    const lx = A[0] + (B[0] - A[0]) * t + nx * 1.3, lz = A[1] + (B[1] - A[1]) * t + nz * 1.3;
+    if (city.builtAt(X(lx, lz), Z(lx, lz), 0.25)) return false;
+  }
+  return true;
+}
+
+/**
+ * A horizontal band standing `out` proud of the walls flagged in `on`, from y0 to y1:
+ * outer face, top, and underside when raised. Mitred where two banded walls meet,
+ * capped where a band stops; `trim` shortens each run (chajjas between pilasters).
+ */
+function band(g, X, Z, hw, hd, on, y0, y1, out, trim = 0, under = true) {
+  const P = CORNERS(hw, hd);
+  for (let k = 0; k < 4; k++) {
+    if (!on[k]) continue;
+    const [a, b, , nx, nz] = WALLS[k];
+    const prevOn = !trim && on[(k + 3) % 4], nextOn = !trim && on[(k + 1) % 4];
+    const A = P[a], B = P[b], len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    const dx = (B[0] - A[0]) / len, dz = (B[1] - A[1]) / len;
+    const a0 = prevOn ? -out : trim, b0 = nextOn ? -out : trim;
+    // Wall-line and outer-line end points (local).
+    const wA = [A[0] + dx * trim, A[1] + dz * trim], wB = [B[0] - dx * trim, B[1] - dz * trim];
+    const oA = [A[0] + dx * a0 + nx * out, A[1] + dz * a0 + nz * out], oB = [B[0] - dx * b0 + nx * out, B[1] - dz * b0 + nz * out];
+    const W = q => [X(q[0], q[1]), Z(q[0], q[1])];
+    const [wAx, wAz] = W(wA), [wBx, wBz] = W(wB), [oAx, oAz] = W(oA), [oBx, oBz] = W(oB);
+    const olen = Math.hypot(oBx - oAx, oBz - oAz);
+    g.wall(oAx, oAz, oBx, oBz, y0, y1, 0, olen / FLOOR, y0 / FLOOR, y1 / FLOOR);
+    g.flat(oBx, oBz, oAx, oAz, wAx, wAz, wBx, wBz, y1, FLOOR, 0, 0);
+    if (under && y0 > 0.05) {
+      // Underside, facing down: the part of a chajja you see from the street.
+      const v0 = g.v(wBx, y0, wBz, 0, 0), v1 = g.v(wAx, y0, wAz, 1, 0), v2 = g.v(oAx, y0, oAz, 1, 0.1), v3 = g.v(oBx, y0, oBz, 0, 0.1);
+      g.quad(v0, v3, v2, v1);
+    }
+    if (!prevOn) g.wall(wAx, wAz, oAx, oAz, y0, y1, 0, out / FLOOR, y0 / FLOOR, y1 / FLOOR);
+    if (!nextOn) g.wall(oBx, oBz, wBx, wBz, y0, y1, 0, out / FLOOR, y0 / FLOOR, y1 / FLOOR);
+  }
+}
+
+/** A thin vertical bar as two back-to-back quads (railing balusters, terrace railings). */
+function slat(g, x, z, y0, y1, ux, uz, w = 0.022) {
+  const ax = x - ux * w, az = z - uz * w, bx = x + ux * w, bz = z + uz * w;
+  g.wall(ax, az, bx, bz, y0, y1, 0, 1, 0, 1);
+  g.wall(bx, bz, ax, az, y0, y1, 0, 1, 0, 1);
+}
+
+/** Contact shadow where walls meet bare ground: ground-textured strips, darker at the wall. */
+function skirt(ctx, X, Z, hw, hd, on, width = 1.1) {
+  const { g, city } = ctx;
+  const P = CORNERS(hw, hd);
+  g.setTile(TILE.DIRT[0], TILE.DIRT[1], 1, 4);
+  for (let k = 0; k < 4; k++) {
+    if (!on[k]) continue;
+    const [a, b, , nx, nz] = WALLS[k];
+    const A = P[a], B = P[b];
+    const pts = [[A[0], A[1], 0.56], [B[0], B[1], 0.56], [B[0] + nx * width, B[1] + nz * width, 1], [A[0] + nx * width, A[1] + nz * width, 1]];
+    const ids = pts.map(([lx, lz, k2]) => {
+      const x = X(lx, lz), z = Z(lx, lz), t = groundTint(city, x, z);
+      g.setTint(mix(0, t, k2), 0);
+      return g.v(x, 0.035, z);
+    });
+    // Up-facing (the wall runs A->B with the outside on its right).
+    g.quad(ids[0], ids[3], ids[2], ids[1]);
+  }
+}
+
 // ------------------------------------------------------------------ buildings
 const RES_ROWS = { [STYLE.HOUSE]: ROW.RES, [STYLE.SHOPHOUSE]: ROW.RES, [STYLE.APARTMENT]: ROW.BALCONY, [STYLE.OLD]: ROW.OLD, [STYLE.COMMERCIAL]: ROW.MODERN, [STYLE.INSTITUTION]: ROW.MODERN, [STYLE.SHED]: ROW.BLANK, [STYLE.HUT]: ROW.BLANK, [STYLE.UNFINISHED]: ROW.BLANK };
 const AWNINGS = [0x2f6fb5, 0x2e8b57, 0xe67e22, 0xc0392b, 0x1f9aa8, 0xf1c40f, 0x7d3c98];
 
 function buildLot(ctx, i) {
-  const { g, sg, city } = ctx;
+  const { g, sg, pg, city } = ctx;
   const L = city.lots;
   const x = L.x[i], z = L.z[i], hw = L.hw[i], hd = L.hd[i], rot = L.rot[i];
   const h = L.h[i], floors = L.floors[i], style = L.style[i], color = L.color[i], seed = L.seed[i], flags = L.flags[i];
@@ -382,12 +464,16 @@ function buildLot(ctx, i) {
   const shops = flags & 1;
   const groundRow = shops ? ROW.SHOP : style === STYLE.OLD ? ROW.OLD : style === STYLE.COMMERCIAL || style === STYLE.INSTITUTION ? ROW.MODERN : ROW.GROUND;
   const unfinished = style === STYLE.UNFINISHED;
-  const P = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
-  const walls = [[1, 0, 'front'], [0, 3, 'side'], [3, 2, 'back'], [2, 1, 'side']];
-  for (const [a, b, kind] of walls) {
+  const P = CORNERS(hw, hd);
+  // Faces that look onto a street or yard get windows and relief; party walls stay blank.
+  const open = WALLS.map(([a, b, kind, nx, nz]) => kind === 'front' || wallOpen(city, X, Z, P[a], P[b], nx, nz));
+  const windows = [false, false, false, false];
+  for (let k = 0; k < 4; k++) {
+    const [a, b, kind] = WALLS[k];
     const ax = X(P[a][0], P[a][1]), az = Z(P[a][0], P[a][1]), bx = X(P[b][0], P[b][1]), bz = Z(P[b][0], P[b][1]);
     const len = Math.hypot(bx - ax, bz - az);
     const bays = Math.max(1, Math.round(len / FLOOR));
+    g.setTint(color, sb);
     if (unfinished) {
       g.setTile(TILE.BRICK[0], TILE.BRICK[1], 1, 1);
       g.wall(ax, az, bx, bz, 0, h, 0, len / FLOOR, 0, h / FLOOR);
@@ -395,22 +481,50 @@ function buildLot(ctx, i) {
     }
     let row = upperRow, gRow = groundRow, variants = 8;
     if (kind === 'side') {
-      // Party walls in dense rows stay blank; corners and free-standing houses get windows.
-      const blank = style === STYLE.OLD ? r.chance(0.5) : r.chance(0.6);
-      if (blank) { row = ROW.BLANK; gRow = ROW.BLANK; }
+      if (!open[k]) { row = ROW.BLANK; gRow = ROW.BLANK; variants = 2; }
+      // Some open flanks carry painted ads and posters instead of windows.
+      else if (r.chance(style === STYLE.OLD ? 0.3 : 0.2)) { row = ROW.BLANK; gRow = ROW.BLANK; }
       else gRow = row === ROW.OLD ? ROW.OLD : ROW.RES;
-    } else if (kind === 'back') { gRow = row === ROW.OLD ? ROW.OLD : ROW.RES; if (row === ROW.BALCONY) row = ROW.RES; }
-    if (row === ROW.BLANK) variants = flags & 512 ? 8 : 2;
-    if (floors >= 2 || (kind === 'front' && shops)) {
+    } else if (kind === 'back') {
+      if (!open[k] && r.chance(0.6)) { row = ROW.BLANK; gRow = ROW.BLANK; variants = 2; }
+      else { gRow = row === ROW.OLD ? ROW.OLD : ROW.RES; if (row === ROW.BALCONY) row = ROW.RES; }
+    }
+    windows[k] = row === ROW.RES || row === ROW.BALCONY;
+    const groundTop = floors >= 2 || (kind === 'front' && shops) ? FLOOR : h;
+    if (kind === 'front') frontage(ctx, i, ax, az, bx, bz, len, groundRow, groundTop, r);
+    else {
       g.setTile(0, gRow, gRow === ROW.BLANK ? variants : 8, 1);
-      g.wall(ax, az, bx, bz, 0, FLOOR, 0, bays, 0, 1);
-      if (h > FLOOR + 0.01) {
-        g.setTile(0, row, row === ROW.BLANK ? variants : 8, 1);
-        g.wall(ax, az, bx, bz, FLOOR, h, 0, bays, 1, h / FLOOR);
+      g.wall(ax, az, bx, bz, 0, groundTop, 0, bays, 0, groundTop / FLOOR);
+    }
+    if (h > groundTop + 0.01) {
+      g.setTile(0, row, row === ROW.BLANK ? variants : 8, 1);
+      g.wall(ax, az, bx, bz, groundTop, h, 0, bays, groundTop / FLOOR, h / FLOOR);
+    }
+  }
+  // Relief: plinth (shops stand on their platform instead) and roof slab edge on every
+  // open face; slab edges, chajjas and pilasters only where the building fronts a street.
+  const street = flags & 1024;
+  if (!unfinished) {
+    g.setTint(mix(color, 0x6b6359, 0.5), sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
+    band(g, X, Z, hw, hd, open.map((o, k) => o && !(k === 0 && shops)), 0, PLINTH, 0.06);
+  }
+  if (!unfinished && street) {
+    g.setTint(mix(color, 0xffffff, 0.2), sb);
+    band(g, X, Z, hw, hd, open, h - 0.14, h + 0.03, 0.11, 0, false);
+    const edge = style === STYLE.OLD ? 0.12 : 0.07;
+    for (let f = 1; f < floors; f++) band(g, X, Z, hw, hd, open, f * FLOOR - 0.07, f * FLOOR + 0.09, edge, 0, false);
+    if (style !== STYLE.OLD && style !== STYLE.COMMERCIAL && style !== STYLE.INSTITUTION) {
+      const on = open.map((o, k) => o && windows[k] && !(k === 0 && flags & 16));
+      for (let f = 1; f < floors; f++) band(g, X, Z, hw, hd, on, f * FLOOR + 2.42, f * FLOOR + 2.5, 0.42, 0.32);
+    }
+    if (floors >= 2) {
+      g.setTint(mix(color, 0xffffff, 0.12), sb);
+      const pr = style === STYLE.OLD ? 0.2 : 0.15;
+      for (const [cx2, cz2, k1] of [[-hw, -hd, 0], [hw, -hd, 0]]) {
+        const sx = Math.sign(cx2), sz = Math.sign(cz2);
+        const lx = cx2 - sx * (pr - 0.05), lz = cz2 - sz * (pr - 0.05);
+        g.box(X(lx, lz), shops && k1 === 0 ? 0 : PLINTH, Z(lx, lz), pr, h - (shops && k1 === 0 ? 0 : PLINTH) - 0.14, pr, rot, FLOOR, false);
       }
-    } else {
-      g.setTile(0, kind === 'front' ? groundRow === ROW.GROUND ? (r.chance(0.6) ? ROW.GROUND : ROW.RES) : groundRow : row, row === ROW.BLANK ? variants : 8, 1);
-      g.wall(ax, az, bx, bz, 0, h, 0, bays, 0, h / FLOOR);
     }
   }
   // Parapet and roof.
@@ -418,26 +532,40 @@ function buildLot(ctx, i) {
   g.setTile(TILE.ROOF[0], TILE.ROOF[1], 1, 1).setTint(0xffffff, sb);
   g.flat(X(-hw, -hd), Z(-hw, -hd), X(hw, -hd), Z(hw, -hd), X(hw, hd), Z(hw, hd), X(-hw, hd), Z(-hw, hd), h, FLOOR, x, z);
   if (parapet) {
+    // Low wall with an MS railing on some terraces, a full solid parapet on most.
+    const railing = !unfinished && street && r.chance(0.25);
+    const ph = railing ? 0.5 : parapet;
     g.setTint(color, sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
     const t = 0.22;
-    for (const [a, b] of walls) {
+    for (const [a, b] of WALLS) {
       const ax = X(P[a][0], P[a][1]), az = Z(P[a][0], P[a][1]), bx = X(P[b][0], P[b][1]), bz = Z(P[b][0], P[b][1]);
       const len = Math.hypot(bx - ax, bz - az);
-      g.wall(ax, az, bx, bz, h, h + parapet, 0, len / FLOOR, 0.7, 1);
+      g.wall(ax, az, bx, bz, h, h + ph, 0, len / FLOOR, 0.7, 1);
     }
-    // Inner faces (reverse direction, inset) and the coping on top.
+    // Inner faces (reverse direction, inset) and the coping on top, a little proud of the wall.
     const Q = [[-hw + t, -hd + t], [hw - t, -hd + t], [hw - t, hd - t], [-hw + t, hd - t]];
-    for (const [a, b] of walls) {
+    for (const [a, b] of WALLS) {
       const ax = X(Q[b][0], Q[b][1]), az = Z(Q[b][0], Q[b][1]), bx = X(Q[a][0], Q[a][1]), bz = Z(Q[a][0], Q[a][1]);
-      g.wall(ax, az, bx, bz, h, h + parapet, 0, Math.hypot(bx - ax, bz - az) / FLOOR, 0.7, 0.95);
+      g.wall(ax, az, bx, bz, h, h + ph, 0, Math.hypot(bx - ax, bz - az) / FLOOR, 0.7, 0.95);
     }
     g.color(mix(color, 0xffffff, 0.35), sb);
-    for (const [a, b] of walls) {
+    for (const [a, b] of WALLS) {
       const o0x = X(P[a][0], P[a][1]), o0z = Z(P[a][0], P[a][1]), o1x = X(P[b][0], P[b][1]), o1z = Z(P[b][0], P[b][1]);
       const i0x = X(Q[a][0], Q[a][1]), i0z = Z(Q[a][0], Q[a][1]), i1x = X(Q[b][0], Q[b][1]), i1z = Z(Q[b][0], Q[b][1]);
-      const y = h + parapet;
+      const y = h + ph;
       const v0 = g.v(o0x, y, o0z), v1 = g.v(o1x, y, o1z), v2 = g.v(i1x, y, i1z), v3 = g.v(i0x, y, i0z);
       g.quad(v0, v1, v2, v3);
+    }
+    if (railing) {
+      g.color(r.pick([0x2b2d2e, 0x3b4a57, 0x5a3a2a]), 0);
+      for (const [k, [a, b]] of WALLS.entries()) {
+        if (!open[k]) continue;
+        const ax = P[a][0] * 0.98, az = P[a][1] * 0.98, bx = P[b][0] * 0.98, bz = P[b][1] * 0.98;
+        g.beam(X(ax, az), h + ph + 0.85, Z(ax, az), X(bx, bz), h + ph + 0.85, Z(bx, bz), 0.025);
+        const len2 = Math.hypot(bx - ax, bz - az), n = Math.max(2, Math.round(len2 / 1.8));
+        const ux = (X(bx, bz) - X(ax, az)) / len2, uz = (Z(bx, bz) - Z(ax, az)) / len2;
+        for (let k = 0; k < n; k++) { const t2 = k / n, px = ax + (bx - ax) * t2, pz = az + (bz - az) * t2; slat(g, X(px, pz), Z(px, pz), h + ph, h + ph + 0.85, ux, uz); }
+      }
     }
   }
   if (unfinished) {
@@ -465,28 +593,47 @@ function buildLot(ctx, i) {
     g.color(0x777b7c, 0); g.cbox(X(dx, dz), h, Z(dx, dz), 0.04, 1.0, 0.04, rot);
     g.color(0xd9d9d6, 0); g.cyl(X(dx, dz), h + 0.9, Z(dx, dz), 0.4, 0.15, 7, 0.05);
   }
-  // Balconies on the street face.
+  // Balconies on the street face: a thin slab with an MS railing or a concrete balustrade.
   if (flags & 16 && floors >= 2 && style !== STYLE.COMMERCIAL) {
-    const bw = Math.min(hw * 0.75, 3.4), bd = 1.0;
+    const bw = Math.min(hw * 0.7, 3.2), bd = 0.95;
+    const concrete = style !== STYLE.OLD && r.chance(0.6);
+    const rail = style === STYLE.OLD ? 0x4a3020 : r.pick([0x26292b, 0x2d4b66, 0x5e2a24, 0xd9d9d4]);
     for (let f = 1; f < floors; f++) {
       const y = f * FLOOR;
-      g.color(mix(color, 0xffffff, 0.25), sb);
-      g.cbox(X(0, -hd - bd / 2), y - 0.12, Z(0, -hd - bd / 2), bw, 0.16, bd / 2, rot);
-      g.color(style === STYLE.OLD ? 0x5b3a24 : r.pick([0x222222, 0xe8e8e8, 0x2d5d8a, 0x7d2f2f]), 0);
-      g.cbox(X(0, -hd - bd + 0.04), y + 0.04, Z(0, -hd - bd + 0.04), bw, 0.95, 0.04, rot);
-      g.cbox(X(-bw + 0.04, -hd - bd / 2), y + 0.04, Z(-bw + 0.04, -hd - bd / 2), 0.04, 0.95, bd / 2, rot);
-      g.cbox(X(bw - 0.04, -hd - bd / 2), y + 0.04, Z(bw - 0.04, -hd - bd / 2), 0.04, 0.95, bd / 2, rot);
+      g.setTint(mix(color, 0xffffff, 0.22), sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
+      g.box(X(0, -hd - bd / 2), y - 0.14, Z(0, -hd - bd / 2), bw, 0.14, bd / 2, rot, FLOOR, true, true);
+      if (concrete) {
+        g.setTint(color, sb);
+        g.box(X(0, -hd - bd + 0.06), y, Z(0, -hd - bd + 0.06), bw, 0.9, 0.06, rot, FLOOR);
+        for (const sx2 of [-1, 1]) g.box(X(sx2 * (bw - 0.06), -hd - bd / 2), y, Z(sx2 * (bw - 0.06), -hd - bd / 2), 0.06, 0.9, bd / 2 - 0.06, rot, FLOOR);
+      } else {
+        g.color(rail, 0);
+        const fz = -hd - bd + 0.04;
+        g.beam(X(-bw, fz), y + 0.92, Z(-bw, fz), X(bw, fz), y + 0.92, Z(bw, fz), 0.03);
+        g.beam(X(-bw, fz), y + 0.1, Z(-bw, fz), X(bw, fz), y + 0.1, Z(bw, fz), 0.02);
+        for (const sx2 of [-bw, bw]) g.beam(X(sx2, fz), y + 0.92, Z(sx2, fz), X(sx2, -hd), y + 0.92, Z(sx2, -hd), 0.03);
+        const n = Math.max(3, Math.round(bw / 0.4));
+        for (let k = 0; k <= n; k++) { const px = -bw + (2 * bw * k) / n; slat(g, X(px, fz), Z(px, fz), y, y + 0.92, c, -s, 0.014); }
+      }
     }
   }
-  // Shopfront: awning and signboard.
+  // Shopfront: awning on brackets, signboard, and light spilling onto the street at night.
   if (shops) {
     const sw = hw - 0.3;
     if (flags & 64) {
-      g.color(r.pick(AWNINGS), 0);
-      const y0 = 2.95, y1 = 2.35, out = 1.5;
-      const a = g.v(X(-sw, -hd), y0, Z(-sw, -hd)), b = g.v(X(sw, -hd), y0, Z(sw, -hd));
-      const c2 = g.v(X(sw, -hd - out), y1, Z(sw, -hd - out)), d = g.v(X(-sw, -hd - out), y1, Z(-sw, -hd - out));
-      g.quad(a, b, c2, d); g.quad(a, d, c2, b);
+      const cloth = mix(r.pick(AWNINGS), 0x8a8a84, 0.3);
+      const y0 = 3.0, y1 = 2.66, out = 1.1;
+      const A0 = [X(-sw, -hd), Z(-sw, -hd)], B0 = [X(sw, -hd), Z(sw, -hd)], C0 = [X(sw, -hd - out), Z(sw, -hd - out)], D0 = [X(-sw, -hd - out), Z(-sw, -hd - out)];
+      g.color(cloth, 0);
+      g.quad(g.v(A0[0], y0, A0[1]), g.v(B0[0], y0, B0[1]), g.v(C0[0], y1, C0[1]), g.v(D0[0], y1, D0[1]));
+      // Underside a little lighter: sun through the cloth.
+      g.color(mix(cloth, 0xfff2d8, 0.35), 0);
+      g.quad(g.v(A0[0], y0 - 0.01, A0[1]), g.v(D0[0], y1 - 0.01, D0[1]), g.v(C0[0], y1 - 0.01, C0[1]), g.v(B0[0], y0 - 0.01, B0[1]));
+      g.color(cloth, 0);
+      // Valance along the front edge and two steel brackets.
+      g.box(X(0, -hd - out), y1 - 0.16, Z(0, -hd - out), sw, 0.16, 0.012, rot);
+      g.color(0x3a3d3f, 0);
+      for (const bx2 of [-sw + 0.3, sw - 0.3]) g.beam(X(bx2, -hd), y0 - 0.55, Z(bx2, -hd), X(bx2, -hd - out * 0.6), y0 - (y0 - y1) * 0.6 - 0.03, Z(bx2, -hd - out * 0.6), 0.018);
     }
     const slot = (seed >>> 8) % 32;
     const col = slot % SIGN_COLS, row = Math.floor(slot / SIGN_COLS);
@@ -494,9 +641,10 @@ function buildLot(ctx, i) {
     const y0 = 3.0, y1 = 3.75, f = -hd - 0.14;
     sg.wall(X(sw, f), Z(sw, f), X(-sw, f), Z(-sw, f), y0, y1, 0, 1, 0, 1);
     g.color(0x2a2a2a, 0); g.cbox(X(0, -hd - 0.07), y0, Z(0, -hd - 0.07), sw, y1 - y0, 0.07, rot);
+    lightPool(pg, X(0, -hd - 1.6), Z(0, -hd - 1.6), Math.min(3.6, hw + 0.8));
   }
-  // Compound wall with a gate gap.
-  if (flags & 32) {
+  // Compound wall with a gate gap (only where it keeps off the road).
+  if (city.compoundWall(i)) {
     const f = -hd - 1.6, gap = 1.6;
     g.setTint(color, sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
     for (const [l0, l1] of [[-hw, -gap / 2], [gap / 2, hw]]) {
@@ -522,6 +670,47 @@ function buildLot(ctx, i) {
     g.cbox(X(bw - 0.3, -hd + 0.6), h, Z(bw - 0.3, -hd + 0.6), 0.08, y1 - h, 0.08, rot);
     g.setTint(0xffffff, 0).setTile(tile[0], tile[1], 1, 2);
     g.wall(X(bw, -hd + 0.5), Z(bw, -hd + 0.5), X(-bw, -hd + 0.5), Z(-bw, -hd + 0.5), y0, y1, 0, 1, 0, 1);
+  }
+  // Ground contact: darker earth along walls that stand on open ground.
+  if (!unfinished) skirt(ctx, X, Z, hw + 0.06, hd + 0.06, open.map((o, k) => o && !(k === 0 && shops)));
+}
+
+/**
+ * The ground floor of the street face, bay by bay with chosen tiles, so the
+ * geometry knows where the door is: homes get a door with a step and a canopy,
+ * shops a raised platform (ota) along the shutters.
+ */
+function frontage(ctx, i, ax, az, bx, bz, len, groundRow, top, r) {
+  const { g, city } = ctx;
+  const L = city.lots;
+  const hw = L.hw[i], hd = L.hd[i], rot = L.rot[i], x = L.x[i], z = L.z[i];
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const X = (lx, lz) => x + lx * c + lz * s, Z = (lx, lz) => z - lx * s + lz * c;
+  const bays = Math.max(1, Math.round(len / FLOOR)), bw = len / bays;
+  const shop = groundRow === ROW.SHOP;
+  const door = shop ? -1 : r.int(0, bays - 1);
+  const dx = (bx - ax) / len, dz = (bz - az) / len;
+  for (let k = 0; k < bays; k++) {
+    let col, row = groundRow;
+    if (shop) col = r.chance(0.14) ? 7 : r.int(0, 6);
+    else if (k === door) { row = ROW.GROUND; col = 0; }
+    else if (groundRow === ROW.GROUND) col = r.pick([3, 3, 3, 3, 2, 4, 7]);
+    else col = r.int(0, 7);
+    g.setTile(col, row, 1, 1);
+    const x0 = ax + dx * bw * k, z0 = az + dz * bw * k, x1 = ax + dx * bw * (k + 1), z1 = az + dz * bw * (k + 1);
+    g.wall(x0, z0, x1, z1, 0, top, k, k + 1, 0, top / FLOOR);
+  }
+  if (!shop && !(L.flags[i] & 1024)) return;
+  g.setTint(mix(L.color[i], 0x6b6359, 0.5), L.seed[i] & 255).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
+  if (shop) {
+    const depth = city.shopPlatform(i);
+    if (depth > 0) g.box(X(0, -hd - depth / 2), 0, Z(0, -hd - depth / 2), hw - 0.05, 0.3, depth / 2, rot, FLOOR);
+  } else {
+    const room = city.frontRoom(i);
+    // Door bay: a step up to the threshold and a small canopy over it.
+    const t = (door + 0.5) / bays, lx = hw - 2 * hw * t; // front runs from +hw to -hw
+    if (room > 0.3) g.box(X(lx, -hd - 0.22), 0, Z(lx, -hd - 0.22), 0.7, 0.12, 0.22, rot, FLOOR);
+    g.box(X(lx, -hd - 0.27), 2.62, Z(lx, -hd - 0.27), 0.8, 0.08, 0.27, rot, FLOOR, true, true);
   }
 }
 

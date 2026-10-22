@@ -292,6 +292,7 @@ export class FoliageGeo {
     this.idx.set([a, b, c, a, c, d], this.ni); this.ni += 6;
   }
   get empty() { return this.ni === 0; }
+  reset() { this.n = 0; this.ni = 0; return this; }
 
   /**
    * A crown of `count` leaf cards in an ellipsoid (centre o, radii r). `up` tilts
