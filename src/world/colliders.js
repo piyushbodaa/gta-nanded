@@ -17,6 +17,7 @@ export class Colliders {
     this.c = new Float32Array(cap); this.s = new Float32Array(cap);
     this.h = new Float32Array(cap);
     this.n = 0;
+    this._q = 0; // resolveCircle's query number
     this._build();
   }
 
@@ -24,6 +25,7 @@ export class Colliders {
   _grow() {
     const cap = this.type.length * 2;
     for (const k of ['type', 'x', 'z', 'hw', 'hd', 'c', 's', 'h']) { const a = new this[k].constructor(cap); a.set(this[k]); this[k] = a; }
+    this._mark = null;
   }
 
   addBox(x, z, hw, hd, rot, h) {
@@ -109,40 +111,54 @@ export class Colliders {
   resolveCircle(pos, r, out, maxH = Infinity) {
     let hit = false;
     out.nx = 0; out.nz = 0;
-    const seen = this._seen || (this._seen = new Set());
-    seen.clear();
-    this.grid.query(pos.x - r, pos.z - r, pos.x + r, pos.z + r, i => {
-      if (seen.has(i)) return;
-      seen.add(i);
-      if (this.h[i] < 0.3 || this.h[i] > maxH + 100) return;
-      if (this.type[i] === SOLID.CIRCLE) {
-        const dx = pos.x - this.x[i], dz = pos.z - this.z[i];
-        const rr = r + this.hw[i], d2 = dx * dx + dz * dz;
-        if (d2 >= rr * rr) return;
-        const d = Math.sqrt(d2) || 1e-4;
-        const push = rr - d;
-        pos.x += (dx / d) * push; pos.z += (dz / d) * push;
-        out.nx += dx / d; out.nz += dz / d; hit = true;
-        return;
+    // Walks the grid cells itself, marking each collider with this query's number so one that
+    // spans several cells is resolved once: no closure or set per call, as every walker,
+    // vehicle and the player call this each frame.
+    const mark = this._mark || (this._mark = new Uint32Array(this.type.length));
+    let q = (this._q + 1) >>> 0;
+    if (q === 0) { mark.fill(0); q = 1; }
+    this._q = q;
+    const G = this.grid, C = G.cell;
+    const x0 = Math.floor((pos.x - r) / C), x1 = Math.floor((pos.x + r) / C), z0 = Math.floor((pos.z - r) / C), z1 = Math.floor((pos.z + r) / C);
+    for (let gx = x0; gx <= x1; gx++) {
+      for (let gz = z0; gz <= z1; gz++) {
+        const list = G.map.get(G.key(gx, gz));
+        if (!list) continue;
+        for (let k = 0; k < list.length; k++) {
+          const i = list[k];
+          if (mark[i] === q) continue;
+          mark[i] = q;
+          if (this.h[i] < 0.3 || this.h[i] > maxH + 100) continue;
+          if (this.type[i] === SOLID.CIRCLE) {
+            const dx = pos.x - this.x[i], dz = pos.z - this.z[i];
+            const rr = r + this.hw[i], d2 = dx * dx + dz * dz;
+            if (d2 >= rr * rr) continue;
+            const d = Math.sqrt(d2) || 1e-4;
+            const push = rr - d;
+            pos.x += (dx / d) * push; pos.z += (dz / d) * push;
+            out.nx += dx / d; out.nz += dz / d; hit = true;
+            continue;
+          }
+          const c = this.c[i], s = this.s[i];
+          const dx = pos.x - this.x[i], dz = pos.z - this.z[i];
+          const lx = dx * c - dz * s, lz = dx * s + dz * c;
+          const hw = this.hw[i], hd = this.hd[i];
+          const cx = clamp(lx, -hw, hw), cz = clamp(lz, -hd, hd);
+          const ex = lx - cx, ez = lz - cz;
+          const d2 = ex * ex + ez * ez;
+          if (d2 >= r * r) continue;
+          let nlx, nlz, depth;
+          if (d2 > 1e-10) { const d = Math.sqrt(d2); nlx = ex / d; nlz = ez / d; depth = r - d; }
+          else {
+            const px = hw - Math.abs(lx), pz = hd - Math.abs(lz);
+            if (px < pz) { nlx = lx < 0 ? -1 : 1; nlz = 0; depth = px + r; } else { nlx = 0; nlz = lz < 0 ? -1 : 1; depth = pz + r; }
+          }
+          const nx = nlx * c + nlz * s, nz = -nlx * s + nlz * c;
+          pos.x += nx * depth; pos.z += nz * depth;
+          out.nx += nx; out.nz += nz; hit = true;
+        }
       }
-      const c = this.c[i], s = this.s[i];
-      const dx = pos.x - this.x[i], dz = pos.z - this.z[i];
-      const lx = dx * c - dz * s, lz = dx * s + dz * c;
-      const hw = this.hw[i], hd = this.hd[i];
-      const cx = clamp(lx, -hw, hw), cz = clamp(lz, -hd, hd);
-      let ex = lx - cx, ez = lz - cz;
-      const d2 = ex * ex + ez * ez;
-      if (d2 >= r * r) return;
-      let nlx, nlz, depth;
-      if (d2 > 1e-10) { const d = Math.sqrt(d2); nlx = ex / d; nlz = ez / d; depth = r - d; }
-      else {
-        const px = hw - Math.abs(lx), pz = hd - Math.abs(lz);
-        if (px < pz) { nlx = lx < 0 ? -1 : 1; nlz = 0; depth = px + r; } else { nlx = 0; nlz = lz < 0 ? -1 : 1; depth = pz + r; }
-      }
-      const nx = nlx * c + nlz * s, nz = -nlx * s + nlz * c;
-      pos.x += nx * depth; pos.z += nz * depth;
-      out.nx += nx; out.nz += nz; hit = true;
-    });
+    }
     if (hit) { const l = Math.hypot(out.nx, out.nz) || 1; out.nx /= l; out.nz /= l; }
     return hit;
   }

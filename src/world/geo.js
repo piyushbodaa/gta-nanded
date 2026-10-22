@@ -177,15 +177,33 @@ export class Geo {
 
   build() {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, this.n * 3), 3));
+    const pos = this.pos.slice(0, this.n * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('uv', new THREE.BufferAttribute(this.uv.slice(0, this.n * 2), 2));
     g.setAttribute('tint', new THREE.BufferAttribute(this.tint.slice(0, this.n * 4), 4, true));
     g.setAttribute('tile', new THREE.BufferAttribute(this.tile.slice(0, this.n * 4), 4, false));
-    g.setIndex(new THREE.BufferAttribute(this.n > 65535 ? this.idx.slice(0, this.ni) : Uint16Array.from(this.idx.subarray(0, this.ni)), 1));
-    g.computeBoundingSphere();
-    g.computeBoundingBox();
+    g.setIndex(new THREE.BufferAttribute(this.n > 65535 ? this.idx.slice(0, this.ni) : new Uint16Array(this.idx.subarray(0, this.ni)), 1));
+    setBounds(g, pos);
     return g;
   }
+}
+
+/**
+ * Bounding box in one tight pass, and the sphere around it: what computeBoundingBox and
+ * computeBoundingSphere give (the sphere a touch looser), in a third of the time, which
+ * matters when a chunk is assembled between frames.
+ */
+export function setBounds(g, pos) {
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+    if (z < z0) z0 = z; if (z > z1) z1 = z;
+  }
+  if (!pos.length) { g.boundingBox = new THREE.Box3(); g.boundingSphere = new THREE.Sphere(); return; }
+  g.boundingBox = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1));
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 2);
 }
 
 /** Octahedral encoding of a unit normal into two numbers (decoded in citymat.js). */

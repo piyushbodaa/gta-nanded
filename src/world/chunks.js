@@ -3,7 +3,7 @@
 // one foliage mesh (leaf cards), one additive light-pool mesh for the night
 // and one line mesh for the wires.
 import * as THREE from 'three';
-import { Geo } from './geo.js';
+import { Geo, setBounds } from './geo.js';
 import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
@@ -14,6 +14,10 @@ const FLOOR = 3.2;
 const ROAD_Y = [0.07, 0.068, 0.066, 0.064, 0.062, 0.06];
 const PAD_Y = 0.074;
 const WALK_Y = 0.2;
+// Chunks within this many metres of the player are built at once, budget or not.
+const RUSH = 48;
+// A build slice hands control back after about this long (between buildings, trees or props).
+const SLICE_MS = 0.75;
 
 export class ChunkManager {
   constructor(scene, city, materials, signSlots) {
@@ -29,15 +33,27 @@ export class ChunkManager {
     this.group.name = 'city-chunks';
     scene.add(this.group);
     this.stats = { built: 0, triangles: 0, ms: 0 };
+    this.lastMs = 0; // time the last update took
   }
 
   setRadius(r) { this.radius = r; }
 
-  /** Queue chunks near (x, z); build some within the time budget; drop far ones. */
+  /**
+   * Queue chunks near (x, z), build within the time budget, drop far ones. A chunk is
+   * built in slices of under a millisecond (ground and roads, then a handful of buildings,
+   * trees or props at a time, each landmark, the meshes) that can span frames, so streaming
+   * never stalls a frame for a whole chunk; its meshes appear only once it is complete, so
+   * nothing shows up half-built.
+   */
   update(x, z, budgetMs = 5) {
-    const r = this.radius, C = CHUNK;
+    const r = this.radius, C = CHUNK, t0 = performance.now();
+    // Everything here was built last time and the player has hardly moved: nothing to do.
+    const idle = this._idle;
+    if (idle && !this.job && idle.r === r && Math.abs(x - idle.x) < 8 && Math.abs(z - idle.z) < 8) { this.lastMs = 0; return 0; }
     const cx0 = Math.floor((x - r) / C), cx1 = Math.floor((x + r) / C);
     const cz0 = Math.floor((z - r) / C), cz1 = Math.floor((z + r) / C);
+    // How far (x, z) is from a chunk's square (0 standing on it).
+    const gap = (cx, cz) => Math.hypot(Math.max(cx * C - x, 0, x - (cx + 1) * C), Math.max(cz * C - z, 0, z - (cz + 1) * C));
     const want = [];
     for (let cx = cx0; cx <= cx1; cx++) {
       for (let cz = cz0; cz <= cz1; cz++) {
@@ -45,20 +61,40 @@ export class ChunkManager {
         const d = Math.hypot(mx - x, mz - z) - C * 0.7;
         if (d > r) continue;
         const key = `${cx},${cz}`;
-        if (!this.chunks.has(key)) want.push({ key, cx, cz, d });
+        if (!this.chunks.has(key)) want.push({ key, cx, cz, d, rush: gap(cx, cz) < RUSH });
       }
     }
-    want.sort((a, b) => a.d - b.d);
-    const t0 = performance.now();
-    for (const w of want) {
-      if (performance.now() - t0 > budgetMs && this.chunks.size > 0) break;
-      this._build(w.key, w.cx, w.cz);
+    // Nearest first. The ground right around the player jumps the queue and ignores the
+    // budget, so a teleport or a respawn never leaves a hole underfoot.
+    want.sort((a, b) => (b.rush - a.rush) || a.d - b.d);
+    const job = this.job;
+    if (job) {
+      job.rush = gap(job.cx, job.cz) < RUSH;
+      // A half-built chunk the player has left far behind, or one holding up the ground here, is dropped.
+      const far = Math.hypot((job.cx + 0.5) * C - x, (job.cz + 0.5) * C - z) - C * 0.7 > r + C;
+      if (far || (want.length && want[0].rush && !job.rush)) this.job = null;
+    }
+    // Falling behind (a fast drive on a slow machine): catch up at the full rate.
+    const deadline = t0 + (want.length && want[0].d < r * 0.6 ? Math.max(budgetMs, 4) : budgetMs);
+    let next = 0;
+    while (this.job || next < want.length) {
+      if (!this.job) {
+        const w = want[next++];
+        if (this.chunks.has(w.key)) continue;
+        this.job = { key: w.key, cx: w.cx, cz: w.cz, rush: w.rush, steps: this._steps(w.key, w.cx, w.cz) };
+      }
+      if (this.job.steps.next().done) this.job = null;
+      // Out of time, unless what comes next is the ground right here.
+      const rush = this.job ? this.job.rush : next < want.length && want[next].rush;
+      if (!rush && performance.now() > deadline && this.chunks.size > 0) break;
     }
     // Drop chunks well outside the radius.
     for (const [key, ch] of this.chunks) {
       const d = Math.hypot((ch.cx + 0.5) * C - x, (ch.cz + 0.5) * C - z) - C * 0.7;
       if (d > r + C * 1.2) this._dispose(key, ch);
     }
+    this._idle = !this.job && next >= want.length ? { x, z, r } : null;
+    this.lastMs = performance.now() - t0;
     return want.length;
   }
 
@@ -83,8 +119,18 @@ export class ChunkManager {
     for (const ch of this.chunks.values()) if (ch.pools) ch.pools.visible = n > 0.02;
   }
 
+  /** Build one chunk at once (loading screen, tools). */
   _build(key, cx, cz) {
-    const t0 = performance.now();
+    this.job = null; // its shared builders are about to be reused
+    for (const _ of this._steps(key, cx, cz));
+  }
+
+  /** The chunk build as resumable slices; yields (naming the work just done) between them. */
+  *_steps(key, cx, cz) {
+    let ms = 0, t0 = performance.now();
+    const pause = () => { ms += performance.now() - t0; };
+    const resume = () => { t0 = performance.now(); };
+    const due = () => performance.now() - t0 > SLICE_MS;
     // Builders are reused: their buffers grow once to the size of a busy chunk.
     const B = this._builders || (this._builders = { g: new Geo(65536), sg: new Geo(1024), pg: new Geo(1024), fg: new FoliageGeo(16384) });
     const g = B.g.reset(), sg = B.sg.reset(), pg = B.pg.reset(), fg = B.fg.reset();
@@ -94,16 +140,20 @@ export class ChunkManager {
     buildGround(ctx);
     if (data) {
       buildRoads(ctx, data);
-      for (const i of data.lots) buildLot(ctx, i);
-      for (const i of data.trees) buildTree(ctx, i);
-      for (const i of data.props) buildProp(ctx, i);
-      for (const i of data.places) buildPlace(ctx, this.city.places[i], i);
+      pause(); yield 'ground'; resume();
+      for (const i of data.lots) { buildLot(ctx, i); if (due()) { pause(); yield 'lots'; resume(); } }
+      for (const i of data.trees) { buildTree(ctx, i); if (due()) { pause(); yield 'trees'; resume(); } }
+      for (const i of data.props) { buildProp(ctx, i); if (due()) { pause(); yield 'props'; resume(); } }
+      let done = 'props';
+      for (const i of data.places) { pause(); yield done; resume(); buildPlace(ctx, this.city.places[i], i); done = 'place'; }
+      pause(); yield done; resume();
     }
     const meshes = [];
     const city = new THREE.Mesh(g.build(), this.mat.city);
     city.castShadow = true; city.receiveShadow = true;
     city.matrixAutoUpdate = false;
     meshes.push(city);
+    pause(); yield 'city mesh'; resume();
     if (!sg.empty) { const m = new THREE.Mesh(sg.build(), this.mat.signs); m.receiveShadow = true; m.matrixAutoUpdate = false; meshes.push(m); }
     if (!fg.empty) { const m = new THREE.Mesh(fg.build(), this.mat.foliage); m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; meshes.push(m); }
     let pools = null;
@@ -111,11 +161,12 @@ export class ChunkManager {
     if (wires.length) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3));
+      setBounds(geo, geo.attributes.position.array);
       const l = new THREE.LineSegments(geo, this.mat.wires); l.matrixAutoUpdate = false; meshes.push(l);
     }
     for (const m of meshes) { m.updateMatrix(); this.group.add(m); }
     this.chunks.set(key, { cx, cz, meshes, pools });
-    const ms = performance.now() - t0;
+    pause();
     this.stats.built++; this.stats.ms += ms;
   }
 }

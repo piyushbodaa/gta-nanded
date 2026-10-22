@@ -55,3 +55,17 @@ test('colliders added after the city still collide once the arrays have grown', 
   assert.ok(Math.abs(Math.abs(lz) - 0.5) < 1e-5, `left ${Math.abs(lz).toFixed(4)} m from the wall's centre line`);
   assert.ok(Number.isFinite(pos.x) && Number.isFinite(pos.z));
 });
+
+test('the reused query marks stay right after the arrays grow and when the counter wraps', () => {
+  const { city } = world();
+  const c = new Colliders(city), o = {};
+  c.resolveCircle({ x: 0, z: 0 }, 0.3, o); // marks sized to the first arrays
+  for (let k = 0, extra = c.type.length - c.n + 10; k < extra; k++) c.addCircle(9000 + (k % 300) * 3, 9000 + Math.floor(k / 300) * 3, 0.5, 2);
+  const i = c.addBox(-9000, -9000, 30, 0.2, 0.3, 2); // beyond the first arrays, across several grid cells
+  const push = () => { const p = { x: -9000, z: -9000 }; assert.ok(c.resolveCircle(p, 0.3, o)); return Math.abs((p.x + 9000) * Math.sin(0.3) + (p.z + 9000) * Math.cos(0.3)); };
+  assert.ok(Math.abs(push() - 0.5) < 1e-5);
+  assert.ok(c._mark.length >= c.type.length && c._mark[i] === c._q, 'the new wall was marked in the regrown marks');
+  c._q = 0xffffffff; // the next query wraps the counter and clears the marks
+  assert.ok(Math.abs(push() - 0.5) < 1e-5);
+  assert.equal(c._q, 1);
+});

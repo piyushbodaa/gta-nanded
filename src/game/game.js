@@ -34,6 +34,7 @@ export class Game {
     this.started = false;
     this.controls = new Map();
     this.shadowAt = new THREE.Vector3(1e9, 0, 0);
+    this._frameMs = 0;
     this.energy = 0;
     addEventListener('resize', () => this.resize());
     addEventListener('blur', () => { if (this.started && !this.paused && !this.respawning) this.pause?.openMenu(this.pause.tab); });
@@ -142,6 +143,7 @@ export class Game {
 
   // ---------------------------------------------------------------- frame
   frame(fixedDt, skipRender = false) {
+    this._frameStart = performance.now();
     const raw = fixedDt ?? this.clock.getDelta();
     const dt = Math.min(raw, 1 / 20);
     if (fixedDt === undefined) this.quality.sample(raw, this);
@@ -188,7 +190,8 @@ export class Game {
   renderWorld(dt) {
     const w = this.world, cam = this.camera3;
     const focus = this.player.pos;
-    w.chunks.update(focus.x, focus.z, this.started ? 4 : 30);
+    // Stream with what the frame can spare: up to 4 ms, less when frames are already long.
+    w.chunks.update(focus.x, focus.z, this.started ? clamp(13 - this._frameMs, 1, 4) : 30);
     w.sky.update(dt, focus);
     w.sky.placeDome(cam);
     w.rivers.update(dt);
@@ -197,8 +200,8 @@ export class Game {
     w.cityUniforms.uTime.value += dt;
     w.chunks.setNight(w.sky.night);
     this.vehicles.night = w.sky.night;
-    this.vehicles.render(dt, cam.position);
-    this.humans.update(dt, cam.position);
+    this.vehicles.render(dt, cam.position, w.sky.shadowBox);
+    this.humans.update(dt, cam.position, w.sky.shadowBox);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     const q = this.quality.settings;
@@ -211,5 +214,7 @@ export class Game {
     }
     this.hud?.update(dt);
     this.post.render(this.scene, cam, dt);
+    // How long a frame takes besides streaming (smoothed), for the streaming budget.
+    if (this._frameStart) this._frameMs += (performance.now() - this._frameStart - w.chunks.lastMs - this._frameMs) * 0.1;
   }
 }

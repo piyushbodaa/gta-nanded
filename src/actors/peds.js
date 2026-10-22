@@ -5,6 +5,12 @@ import { makeOutfit } from './humans.js';
 import { speedOf } from './vehicle-physics.js';
 import { ZONE } from '../world/citygen.js';
 
+// Body radius against walls and posts, and the clear space a new person needs around them.
+const PED_R = 0.28, SPAWN_CLEAR = 0.5;
+// Closest two people stand, centre to centre, and how near someone ahead makes a walker step aside.
+const PERSONAL = 0.46, GIVE_WAY = 1.3;
+// States in which people keep out of each other (not the fallen, nor mission actors).
+const SOLID = new Set(['walk', 'idle', 'phone', 'hail', 'cower', 'flee', 'fight']);
 const SIKH_AREAS = new Set(['Hazur Sahib', 'Old City', 'Godavari riverfront', 'Riverfront', 'Old Mondha', 'Vazirabad', 'Old Nanded']);
 export const BARKS = {
   hit: ['अरे! काय करतोयस?', 'Aye! Andha hai kya?', 'अरे देवा!', 'Bhau, gaadi baghun chalav!', 'Police la phone karto!'],
@@ -58,7 +64,11 @@ export class Peds {
   }
 
   _make(h, x, z, road) {
-    const p = { h, road, dir: 1, s: 0, side: 1, speed: 0, state: 'walk', t: 0, after: null, vx: 0, vz: 0, hits: 0, grudge: 0, cool: 0, onRoadOk: false, id: this.seed++ };
+    const p = {
+      h, road, dir: 1, s: 0, side: 1, speed: 0, state: 'walk', t: 0, after: null, vx: 0, vz: 0, hits: 0, grudge: 0, cool: 0, onRoadOk: false, id: this.seed++,
+      lat: 0, latHold: 0, stuck: 0, shoveX: 0, shoveZ: 0, // sidestep off the walking line, and how long they've been held up
+      fx: 0, fz: 0, nx: 0, nz: 0, // walking direction and the outward normal of their footpath
+    };
     h.x = x; h.z = z;
     this.list.push(p);
     return p;
@@ -78,6 +88,45 @@ export class Peds {
     }
     this.panic = Math.max(0, this.panic - dt * 0.1);
     for (const p of this.list) this._update(p, dt);
+    this._separate(dt);
+  }
+
+  /**
+   * People keep out of each other: a walker with someone just ahead steps across the footpath
+   * (round them, or to the left when dead ahead, as on Indian streets), and bodies that still
+   * touch are eased apart. A few hundred distance checks at most.
+   */
+  _separate(dt) {
+    const L = this.list, G2 = GIVE_WAY * GIVE_WAY;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i];
+      if (!SOLID.has(a.state)) continue;
+      for (let j = i + 1; j < L.length; j++) {
+        const b = L[j];
+        if (!SOLID.has(b.state)) continue;
+        const dx = b.h.x - a.h.x, dz = b.h.z - a.h.z, d2 = dx * dx + dz * dz;
+        if (d2 > G2) continue;
+        if (a.state === 'walk') this._giveWay(a, dx, dz, dt);
+        if (b.state === 'walk') this._giveWay(b, -dx, -dz, dt);
+        if (d2 < PERSONAL * PERSONAL) {
+          const d = Math.sqrt(d2);
+          // Exactly on top of each other: part along a fixed direction.
+          const ux = d > 1e-3 ? dx / d : 1, uz = d > 1e-3 ? dz / d : 0, k = (PERSONAL - d) * 0.5;
+          a.h.x -= ux * k; a.h.z -= uz * k; b.h.x += ux * k; b.h.z += uz * k;
+        }
+      }
+    }
+  }
+
+  /** Someone is (dx, dz) from walker p: if they're in the way ahead, sidestep. */
+  _giveWay(p, dx, dz, dt) {
+    if (p.road == null || dx * p.fx + dz * p.fz <= 0.05) return;
+    const across = dx * p.nx + dz * p.nz;
+    if (Math.abs(across) > PERSONAL + 0.1) return;
+    // Away from them across the footpath; dead ahead, to the walker's own left.
+    const away = Math.abs(across) > 0.05 ? -Math.sign(across) : Math.sign(p.fz * p.nx - p.fx * p.nz) || 1;
+    p.lat = clamp(p.lat + away * 1.5 * dt, -(this._offset(p.road) - this.net.width[p.road] / 2) - 0.2, 1.1);
+    p.latHold = Math.max(p.latHold, 0.5);
   }
 
   _spawn(focus, minD, maxD) {
@@ -89,7 +138,10 @@ export class Peds {
     const road = n.road, side = r.chance(0.5) ? 1 : -1;
     const off = this._offset(road);
     const x = n.x + n.dz * off * side, z = n.z - n.dx * off * side;
-    if (g.colliders.blocked(x, z, 0.3)) return false;
+    // Never appear inside or against a wall, post, stall or platform, in a vehicle or in someone.
+    if (g.colliders.blocked(x, z, SPAWN_CLEAR)) return false;
+    if (this._inVehicle(x, z, 0.6)) return false;
+    for (const o of this.list) if (Math.abs(o.h.x - x) < 0.8 && Math.abs(o.h.z - z) < 0.8) return false;
     if (dist(x, z, focus.x, focus.z) < minD * 0.7) return false;
     const h = g.humans.add(this.outfitFor(x, z, r), x, z);
     const p = this._make(h, x, z, road);
@@ -100,6 +152,17 @@ export class Peds {
     if (r.chance(0.12)) { p.state = 'idle'; p.t = r.range(4, 14); }
     if (r.chance(0.05)) { p.state = 'phone'; p.t = r.range(6, 16); }
     return true;
+  }
+
+  /** True when (x, z) is within `margin` of any vehicle's footprint. */
+  _inVehicle(x, z, margin) {
+    for (const v of this.game.vehicles.list) {
+      const dx = x - v.x, dz = z - v.z;
+      if (dx * dx + dz * dz > (v.hd + margin + 1) ** 2) continue;
+      const c = Math.cos(v.heading), s = Math.sin(v.heading);
+      if (Math.abs(dx * c - dz * s) < v.hw + margin && Math.abs(dx * s + dz * c) < v.hd + margin) return true;
+    }
+    return false;
   }
 
   _offset(road) {
@@ -147,9 +210,10 @@ export class Peds {
             this.knock(p, v.vx * 0.9 + lx * 1.5, v.vz * 0.9, 2.5 + Math.random() * 2, 'vehicle');
             g.onPedHitByVehicle?.(p, v, spd);
           } else {
-            // Shoved aside by a crawling car.
+            // Shoved aside by a crawling or parked car; walkers then step round it.
             const push = (v.hw + 0.3 - Math.abs(lx)) * Math.sign(lx || 1);
             h.x += c * push; h.z -= s * push;
+            p.shoveX += c * push; p.shoveZ -= s * push;
           }
         } else if (spd > 8 && v.role === 'player' && lz > 0 && lz < 14 && Math.abs(lx) < v.hw + 1.2 && p.state !== 'dive') {
           // Leap aside.
@@ -227,7 +291,8 @@ export class Peds {
     }
     // Global panic: wanted chases and crashes scatter people.
     if ((p.state === 'walk' || p.state === 'idle' || p.state === 'phone') && g.police?.level >= 2 && dPlayer < 14 && player.state === 'foot') { p.state = 'flee'; p.t = 6; }
-    // Stay out of buildings.
+    // Stay out of buildings (walkers do this in _walk, stepping round what they meet).
+    if (p.state !== 'walk') p.shoveX = p.shoveZ = 0;
     if (p.state !== 'walk' && p.state !== 'scripted') {
       const c = this._c; c.x = h.x; c.z = h.z;
       if (g.colliders.resolveCircle(c, 0.3, this._o)) { h.x = c.x; h.z = c.z; if (p.state === 'flee') h.yaw += 0.8; }
@@ -241,7 +306,7 @@ export class Peds {
   }
 
   _walk(p, dt) {
-    const net = this.net, h = p.h;
+    const net = this.net, h = p.h, g = this.game;
     if (p.road === null || p.road === undefined) { this._resnap(p); if (p.road === null) return; }
     const len = net.length[p.road];
     p.s += p.speed * dt;
@@ -258,8 +323,12 @@ export class Peds {
       return;
     }
     const pt = net.pointAt(p.road, p.dir > 0 ? p.s : len - p.s, this._p);
-    const off = this._offset(p.road) * p.side;
-    const tx = pt.x + pt.dz * off, tz = pt.z - pt.dx * off;
+    // Outward (away from the road) and forward (the way they walk).
+    const nx = pt.dz * p.side, nz = -pt.dx * p.side;
+    const fx = p.dir > 0 ? pt.dx : -pt.dx, fz = p.dir > 0 ? pt.dz : -pt.dz;
+    p.fx = fx; p.fz = fz; p.nx = nx; p.nz = nz;
+    const off = this._offset(p.road) + p.lat;
+    const tx = pt.x + nx * off, tz = pt.z + nz * off;
     const dx = tx - h.x, dz = tz - h.z, d = Math.hypot(dx, dz);
     // Ease toward the walking line (smooth corners and re-joins).
     if (d > 0.01) {
@@ -268,6 +337,32 @@ export class Peds {
       h.yaw = dampAngle(h.yaw, Math.atan2(dx, dz), 8, dt);
     }
     if (d > 3) p.s -= p.speed * dt * 0.8; // let them catch up to the line
+    // Bump into the world (posts, stalls, platforms, walls, a parked car): the push becomes a
+    // sidestep, and they drift back to their line as soon as it is clear a stride ahead (so
+    // nobody lingers at the road edge in front of traffic).
+    const c = this._c; c.x = h.x; c.z = h.z;
+    let px = p.shoveX, pz = p.shoveZ;
+    p.shoveX = p.shoveZ = 0;
+    if (g.colliders.resolveCircle(c, PED_R, this._o)) { px += c.x - h.x; pz += c.z - h.z; h.x = c.x; h.z = c.z; }
+    if (px * px + pz * pz > 1e-6) {
+      const side = px * nx + pz * nz;
+      const step = (Math.abs(side) > 0.005 ? Math.sign(side) : -1) * Math.min(0.25, 0.08 + Math.hypot(px, pz) * 2);
+      // At most a step onto the road edge to pass a post; more room on the building side.
+      p.lat = clamp(p.lat + step, -(this._offset(p.road) - net.width[p.road] / 2) - 0.2, 1.1);
+      p.latHold = 0.4;
+      // Pushed back against the way they are walking: held up.
+      if (px * fx + pz * fz < -0.004) p.stuck += dt; else p.stuck = Math.max(0, p.stuck - dt * 0.5);
+    } else {
+      p.latHold -= dt;
+      if (p.latHold <= 0 && p.lat !== 0) {
+        const lat = Math.abs(p.lat) < 0.02 ? 0 : p.lat * Math.exp(-dt * 2.5), o = this._offset(p.road) + lat;
+        if (!g.colliders.blocked(pt.x + nx * o + fx * 0.7, pt.z + nz * o + fz * 0.7, PED_R)) p.lat = lat;
+        else p.latHold = 0.25;
+      }
+      p.stuck = Math.max(0, p.stuck - dt);
+    }
+    // Truly blocked (a stall across a narrow kerb, a corner): turn back the way they came.
+    if (p.stuck > 1.2) { p.dir = -p.dir; p.s = Math.max(0.5, len - p.s); p.stuck = 0; p.lat = 0; p.latHold = 0; }
     h.pose = 'walk'; h.speed = p.speed;
     p.onRoadOk = false;
   }
@@ -275,7 +370,7 @@ export class Peds {
   _resnap(p) {
     const n = this.net.nearest(p.h.x, p.h.z, 30, this._q);
     if (!n) { p.road = null; return; }
-    p.road = n.road; p.dir = Math.random() < 0.5 ? 1 : -1;
+    p.road = n.road; p.dir = Math.random() < 0.5 ? 1 : -1; p.lat = 0; p.stuck = 0;
     p.s = p.dir > 0 ? n.s : this.net.length[n.road] - n.s;
     const lx = p.h.x - n.x, lz = p.h.z - n.z;
     p.side = lx * n.dz - lz * n.dx >= 0 ? 1 : -1;
