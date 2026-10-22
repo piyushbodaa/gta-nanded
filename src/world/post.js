@@ -225,12 +225,33 @@ export class Post {
       : { format: THREE.RGBAFormat, type: THREE.HalfFloatType };
   }
 
+  /**
+   * The HDR target and bloom chain at the drawing-buffer size. Each is checked with the GPU:
+   * if a driver refuses the format or its multisampling, fall back to the same without MSAA,
+   * then half floats, and finally to drawing straight to the screen, rather than showing black.
+   */
   _ensure() {
     const r = this.renderer;
     r.getDrawingBufferSize(this.size);
     const w = Math.max(1, this.size.x), h = Math.max(1, this.size.y);
     if (this.rt && this.rt.width === w && this.rt.height === h) return;
-    this._dispose();
+    // EXT_color_buffer_float (behind R11G11B10) also makes half floats renderable.
+    const formats = this.format === 'r11g11b10' ? ['r11g11b10', 'half'] : [this.format];
+    const msaa = this.msaa;
+    for (const format of formats) {
+      for (const samples of msaa ? [msaa, 0] : [0]) {
+        this.format = format; this.msaa = samples;
+        this._create(w, h);
+        if (this._complete()) return;
+        this._dispose();
+      }
+    }
+    console.warn('GTA Nanded: the GPU cannot render to an HDR target; drawing without post-processing.');
+    this.enabled = this.supported = false;
+    this.sky.useSceneFog(true);
+  }
+
+  _create(w, h) {
     const opts = this._targetOptions();
     this.rt = new THREE.WebGLRenderTarget(w, h, {
       ...opts, samples: this.msaa, depthBuffer: true, stencilBuffer: false,
@@ -243,6 +264,19 @@ export class Post {
       this.mips.push(new THREE.WebGLRenderTarget(mw, mh, { ...opts, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false }));
     }
     this.final.uniforms.uResolution.value.set(w, h);
+  }
+
+  /** Whether the GPU can draw into the HDR target (multisampled if asked) and the bloom chain. */
+  _complete() {
+    const r = this.renderer, gl = r.getContext(), prev = r.getRenderTarget();
+    let ok = true;
+    for (const t of [this.rt, this.mips[0]]) {
+      if (!t) continue;
+      r.setRenderTarget(t);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { ok = false; break; }
+    }
+    r.setRenderTarget(prev);
+    return ok;
   }
 
   _blit(material, target) {
@@ -271,8 +305,8 @@ export class Post {
 
   render(scene, camera, dt = 0) {
     const r = this.renderer;
+    if (this.enabled) this._ensure();
     if (!this.enabled) { r.setRenderTarget(null); r.render(scene, camera); return; }
-    this._ensure();
     r.setRenderTarget(this.rt);
     r.render(scene, camera);
     const autoClear = r.autoClear;
