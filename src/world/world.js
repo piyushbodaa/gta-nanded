@@ -3,12 +3,13 @@
 import * as THREE from 'three';
 import { RoadNet } from './roadnet.js';
 import { City } from './citygen.js';
-import { loadAtlasFonts, paintAtlas, paintSigns } from './atlas.js';
+import { loadAtlasFonts, paintAtlas, paintSigns, paintDetail } from './atlas.js';
 import { createAtlasTextures, createCityMaterials, cityUniforms } from './citymat.js';
 import { ChunkManager } from './chunks.js';
 import { Sky } from './sky.js';
 import { createRivers } from './water.js';
 import { Colliders } from './colliders.js';
+import { createFoliageTexture, createFoliageMaterial } from './foliage.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -51,13 +52,15 @@ export async function createWorld(scene, renderer, { stage = () => {}, focus } =
   const small = matchMedia('(any-pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
   const atlas = paintAtlas(small ? 0.5 : 1);
   const signs = paintSigns(data.places, small ? 0.5 : 1);
-  const textures = createAtlasTextures(atlas, signs, renderer);
+  const textures = createAtlasTextures(atlas, signs, renderer, paintDetail(small ? 128 : 256));
   const materials = createCityMaterials(textures);
   await tick();
   stage('Mapping walls and kerbs', 0.6);
   const colliders = new Colliders(city);
   await tick();
   const sky = new Sky(scene, renderer);
+  textures.foliage = createFoliageTexture(small ? 0.5 : 1);
+  materials.foliage = createFoliageMaterial(textures.foliage, { uTime: cityUniforms.uTime, uSunDir: sky.uniforms.uSunDir, uSunColor: sky.uniforms.uSunColor });
   const rivers = createRivers(scene, city, sky);
   const chunks = new ChunkManager(scene, city, materials, signs.slots);
   if (focus) {

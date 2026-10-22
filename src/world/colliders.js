@@ -41,7 +41,7 @@ export class Colliders {
     for (let i = 0; i < L.count; i++) this.addBox(L.x[i], L.z[i], L.hw[i], L.hd[i], L.rot[i], L.h[i] + 1);
     for (const p of city.places) for (const b of placeColliders(p)) this.addBox(b.x, b.z, b.hw, b.hd, b.rot, b.h);
     const T = city.trees;
-    for (let i = 0; i < T.count; i++) this.addCircle(T.x[i], T.z[i], T.kind[i] === 2 ? 0.75 : 0.32, 2.5);
+    for (let i = 0; i < T.count; i++) this.addCircle(T.x[i], T.z[i], T.kind[i] === 2 ? 0.75 : T.kind[i] === 5 ? 0.6 : 0.32, T.kind[i] === 5 ? 1.2 : 2.5);
     const P = city.props;
     for (let i = 0; i < P.count; i++) {
       const k = P.kind[i], x = P.x[i], z = P.z[i], rot = P.rot[i];

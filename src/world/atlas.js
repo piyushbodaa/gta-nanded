@@ -38,6 +38,32 @@ export async function loadAtlasFonts() {
   ]);
 }
 
+// ------------------------------------------------------------------ noise
+/** Periodic value noise on a cells x cells lattice; (u, v) in [0, 1) wraps seamlessly. */
+function periodicNoise(cells, seed) {
+  const r = rng(seed);
+  const lat = new Float32Array(cells * cells);
+  for (let i = 0; i < lat.length; i++) lat[i] = r();
+  return (u, v) => {
+    const fx = u * cells, fy = v * cells;
+    const ix = Math.floor(fx), iy = Math.floor(fy);
+    let tx = fx - ix, ty = fy - iy;
+    tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+    const x0 = ((ix % cells) + cells) % cells, y0 = ((iy % cells) + cells) % cells;
+    const x1 = (x0 + 1) % cells, y1 = (y0 + 1) % cells;
+    const a = lat[y0 * cells + x0], b = lat[y0 * cells + x1], c = lat[y1 * cells + x0], d = lat[y1 * cells + x1];
+    const top = a + (b - a) * tx, bot = c + (d - c) * tx;
+    return top + (bot - top) * ty;
+  };
+}
+
+/** Sum of periodic noises: octaves = [[cells, weight], ...]; returns 0..1. */
+function fbm(seed, octaves) {
+  const fns = octaves.map(([c, w], i) => [periodicNoise(c, seed + i * 101), w]);
+  const total = octaves.reduce((t, [, w]) => t + w, 0);
+  return (u, v) => { let n = 0; for (const [f, w] of fns) n += f(u, v) * w; return n / total; };
+}
+
 // ------------------------------------------------------------------ painter
 // kind: 'wall' paints (tinted) wall; 'stain' darkens wall but stays paintable;
 // 'detail' is unpainted; 'glass' is unpainted and glows at night; 'light' always glows.
@@ -125,6 +151,44 @@ function painter(ctx, mode) {
         g.addColorStop(1, 'rgba(40,36,30,0)');
         ctx.fillStyle = g;
         ctx.fillRect(sx, y, sw, len);
+      }
+    },
+    /**
+     * Per-pixel pass over a region of the colour canvas: fn(u, v, rgb) edits the
+     * 0..255 rgb array in place, with (u, v) in [0, 1) across the region.
+     */
+    pixels(x, y, w, h, fn) {
+      if (mode !== 'color') return;
+      const m = ctx.getTransform();
+      const px = Math.round(m.e + x * m.a), py = Math.round(m.f + y * m.d);
+      const pw = Math.max(1, Math.round(w * m.a)), ph = Math.max(1, Math.round(h * m.d));
+      const img = ctx.getImageData(px, py, pw, ph);
+      const d = img.data, c = [0, 0, 0];
+      for (let j = 0; j < ph; j++) {
+        for (let i = 0; i < pw; i++) {
+          const k = (j * pw + i) * 4;
+          c[0] = d[k]; c[1] = d[k + 1]; c[2] = d[k + 2];
+          fn(i / pw, j / ph, c);
+          d[k] = c[0]; d[k + 1] = c[1]; d[k + 2] = c[2];
+        }
+      }
+      ctx.putImageData(img, px, py);
+    },
+    /** Thin jagged cracks, drawn twice a tile apart so they wrap with the tile. */
+    cracks(n, seed, alpha = 0.35, wrap = true) {
+      if (mode !== 'color') return;
+      const r = rng(seed);
+      ctx.strokeStyle = `rgba(20,18,16,${alpha})`;
+      ctx.lineWidth = 1.1;
+      for (let k = 0; k < n; k++) {
+        const pts = [[r() * T, r() * T]];
+        let a = r() * Math.PI * 2;
+        for (let i = 0; i < 9; i++) { a += (r() - 0.5) * 1.2; const [px, py] = pts[pts.length - 1]; pts.push([px + Math.cos(a) * 9, py + Math.sin(a) * 9]); }
+        for (const oy of wrap ? [-T, 0, T] : [0]) {
+          ctx.beginPath();
+          pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py + oy) : ctx.moveTo(px, py + oy)));
+          ctx.stroke();
+        }
       }
     },
     blotch(x, y, w, h, seed, alpha = 0.08, color = '40,34,28') {
@@ -484,34 +548,66 @@ function paintBlank(g, v, seed) {
   if (v === 7) { g.rect(0, 180, T, 76, '#c9a227', 'wall'); }
 }
 
-function asphalt(g, seed, base = '#6a6d6c') {
+function asphalt(g, seed, base = '#5c5f60') {
   g.rect(0, 0, T, T, base);
-  g.speckle(0, 0, T, T, 2600, ['#575a5a', '#7a7d7b', '#858885', '#5f6261'], 2, 'detail', seed);
-  g.blotch(0, 0, T, T, seed + 1, 0.12, '20,20,20');
-  // Tyre polish in the wheel tracks.
-  if (g.mode === 'color') { g.rect(40, 0, 40, T, 'rgba(0,0,0,0.06)'); g.rect(176, 0, 40, T, 'rgba(0,0,0,0.06)'); }
+  // Sun-faded binder: broad stains plus a fine grain, periodic along the road.
+  const stain = fbm(seed, [[3, 0.5], [6, 0.3], [12, 0.2]]);
+  const chips = periodicNoise(96, seed + 5);
+  const r = rng(seed + 9);
+  g.pixels(0, 0, T, T, (u, v, c) => {
+    const k = 0.86 + stain(u, v) * 0.26 + (chips(u, v) - 0.5) * 0.14 + (r() - 0.5) * 0.1;
+    c[0] *= k; c[1] *= k; c[2] *= k;
+  });
+  // Pale stone chips where the binder has worn off.
+  g.speckle(0, 0, T, T, 700, ['rgba(170,166,156,0.28)', 'rgba(25,25,25,0.25)', 'rgba(140,136,128,0.3)'], 1.1, 'detail', seed);
+  // Tyre-polished wheel tracks and oil dripped down the middle of each lane.
+  if (g.mode === 'color') {
+    g.rect(34, 0, 46, T, 'rgba(0,0,0,0.08)'); g.rect(176, 0, 46, T, 'rgba(0,0,0,0.08)');
+    g.rect(98, 0, 18, T, 'rgba(10,8,6,0.07)'); g.rect(140, 0, 18, T, 'rgba(10,8,6,0.07)');
+  }
+  g.cracks(3, seed + 2, 0.32);
+}
+
+/** Painted road marking with the paint worn through in patches. */
+function marking(g, x, y, w, h, seed, color = '#e4dfcf') {
+  g.rect(x, y, w, h, color);
+  const wear = fbm(seed, [[8, 0.6], [24, 0.4]]);
+  const r = rng(seed + 1);
+  g.pixels(x, y, w, h, (u, v, c) => {
+    const k = wear(u * w / T, v * h / T + y / T);
+    if (k + (r() - 0.5) * 0.25 < 0.42) { c[0] = c[0] * 0.45 + 30; c[1] = c[1] * 0.45 + 30; c[2] = c[2] * 0.45 + 30; }
+    else { const d = 0.88 + r() * 0.12; c[0] *= d; c[1] *= d; c[2] *= d; }
+  });
 }
 
 function paintSurface(g, c, row, seed) {
   if (row === ROW.SURF) {
     switch (c) {
-      case 0: // roof slab
-        g.rect(0, 0, T, T, '#b9b4ab');
-        g.speckle(0, 0, T, T, 1400, ['#a8a39a', '#c9c4bb', '#9a958c'], 2, 'detail', seed);
-        g.blotch(0, 0, T, T, seed, 0.2, '60,55,48');
-        g.line(0, 128, T, 132, 'rgba(0,0,0,0.15)', 2);
-        g.line(128, 0, 126, T, 'rgba(0,0,0,0.12)', 2);
+      case 0: { // roof slab: weathered concrete with tar-sealed joints
+        g.rect(0, 0, T, T, '#b4afa6');
+        const n = fbm(seed, [[4, 0.5], [8, 0.3], [24, 0.2]]);
+        const r = rng(seed);
+        g.pixels(0, 0, T, T, (u, v, c) => { const k = 0.8 + n(u, v) * 0.34 + (r() - 0.5) * 0.08; c[0] *= k; c[1] *= k; c[2] *= k * 0.98; });
+        g.blotch(0, 0, T, T, seed, 0.2, '50,48,40');
+        g.line(0, 128, T, 132, 'rgba(30,26,20,0.3)', 2);
+        g.line(128, 0, 126, T, 'rgba(30,26,20,0.25)', 2);
+        g.cracks(2, seed + 4, 0.25);
         break;
+      }
       case 1: asphalt(g, seed); break;
-      case 2: asphalt(g, seed); g.rect(124, 0, 8, 128, '#e9e4d4'); break;
-      case 3: asphalt(g, seed, '#636665'); g.rect(10, 0, 7, T, '#ece7d8'); g.rect(239, 0, 7, T, '#ece7d8'); g.rect(124, 0, 8, 150, '#e9e4d4'); break;
-      case 4: // CC road
-        g.rect(0, 0, T, T, '#a9a8a2');
-        g.speckle(0, 0, T, T, 1800, ['#9a9993', '#b8b7b0', '#8f8e88'], 2, 'detail', seed);
-        g.blotch(0, 0, T, T, seed, 0.15, '50,48,44');
-        g.rect(0, 0, T, 3, '#77766f'); g.rect(127, 0, 2, T, '#86857e');
-        g.rect(46, 0, 30, T, 'rgba(0,0,0,0.07)'); g.rect(180, 0, 30, T, 'rgba(0,0,0,0.07)');
+      case 2: asphalt(g, seed); marking(g, 124, 0, 8, 128, seed + 11); break;
+      case 3: asphalt(g, seed, '#585b5c'); marking(g, 10, 0, 7, T, seed + 12); marking(g, 239, 0, 7, T, seed + 13); marking(g, 124, 0, 8, 150, seed + 14); break;
+      case 4: { // CC road: cement concrete slabs with sawn joints and tyre grime
+        g.rect(0, 0, T, T, '#a8a69e');
+        const n = fbm(seed, [[4, 0.5], [8, 0.3], [16, 0.2]]);
+        const r = rng(seed);
+        g.pixels(0, 0, T, T, (u, v, c) => { const k = 0.84 + n(u, v) * 0.28 + (r() - 0.5) * 0.09; c[0] *= k; c[1] *= k; c[2] *= k; });
+        g.speckle(0, 0, T, T, 500, ['rgba(80,78,72,0.3)', 'rgba(230,228,220,0.25)'], 1.2, 'detail', seed);
+        g.rect(0, 0, T, 3, '#6f6e67'); g.rect(127, 0, 2, T, '#7f7e77');
+        g.rect(40, 0, 40, T, 'rgba(20,18,14,0.1)'); g.rect(176, 0, 40, T, 'rgba(20,18,14,0.1)');
+        g.cracks(2, seed + 3, 0.3);
         break;
+      }
       case 5: // interlocking pavers
         g.rect(0, 0, T, T, '#9c9a94');
         for (let y = 0; y < T; y += 32) for (let x = (y / 32) % 2 ? -16 : 0; x < T; x += 32) g.rect(x + 1.5, y + 1.5, 29, 29, ((x + y) / 32) % 3 === 0 ? '#a65d4a' : '#b3b0a8');
@@ -521,11 +617,18 @@ function paintSurface(g, c, row, seed) {
         for (let x = 0; x < T; x += 64) { g.rect(x, 0, 32, T, '#1d1d1d'); g.rect(x + 32, 0, 32, T, '#f2c230'); }
         g.blotch(0, 0, T, T, seed, 0.2, '60,50,40');
         break;
-      default: // dusty ground (paintable so each zone tints it)
-        g.rect(0, 0, T, T, '#d9d3c7', 'wall');
-        g.speckle(0, 0, T, T, 3200, ['rgba(0,0,0,0.08)', 'rgba(255,255,255,0.12)', 'rgba(80,60,40,0.1)'], 2.5, 'stain', seed);
-        g.blotch(0, 0, T, T, seed, 0.1);
-        for (let i = 0; i < 30; i++) g.circle((i * 97) % T, (i * 61) % T, 2 + (i % 3), 'rgba(90,80,70,0.25)', 'stain');
+      default: { // dusty ground (paintable so each zone tints it)
+        g.rect(0, 0, T, T, '#d6cfc2', 'wall');
+        const n = fbm(seed, [[3, 0.35], [6, 0.3], [12, 0.2], [32, 0.15]]);
+        const r = rng(seed);
+        g.pixels(0, 0, T, T, (u, v, c) => {
+          const k = 0.78 + n(u, v) * 0.42 + (r() - 0.5) * 0.12;
+          c[0] *= k; c[1] *= k * 0.99; c[2] *= k * 0.97;
+        });
+        // Pebbles, clods and dry footprints.
+        g.speckle(0, 0, T, T, 900, ['rgba(80,68,52,0.3)', 'rgba(255,250,238,0.28)', 'rgba(50,42,34,0.25)'], 1.6, 'stain', seed);
+        g.cracks(4, seed + 6, 0.16);
+      }
     }
   } else if (row === ROW.SURF2) {
     switch (c) {
@@ -534,7 +637,7 @@ function paintSurface(g, c, row, seed) {
         for (let x = 0; x < T; x += 16) { g.rect(x, 0, 8, T, 'rgba(255,255,255,0.18)', 'stain'); g.rect(x + 8, 0, 3, T, 'rgba(0,0,0,0.18)', 'stain'); }
         g.blotch(0, 0, T, T, seed, 0.25, '120,60,30');
         break;
-      case 1: asphalt(g, seed); for (let x = 12; x < T; x += 48) g.rect(x, 0, 26, T, '#ecebe4'); break;
+      case 1: asphalt(g, seed); for (let x = 12; x < T; x += 48) marking(g, x, 0, 26, T, seed + x, '#ecebe4'); break;
       case 2: // crop rows
         g.rect(0, 0, T, T, '#5a4636');
         for (let x = 4; x < T; x += 22) { g.rect(x, 0, 12, T, '#cfd8b8', 'wall'); g.speckle(x, 0, 12, T, 80, ['rgba(0,0,0,0.2)'], 3, 'stain', seed + x); }
@@ -651,6 +754,34 @@ export function paintAtlas(scale = 1) {
   const d = rgba.data;
   for (let i = 3; i < d.length; i += 4) d[i] = m[i - 3];
   return { data: d, width: W, height: H, emissive };
+}
+
+/**
+ * Detail texture, tiled in world space over the city at close range so the
+ * atlas repeats disappear: R = asphalt grain, G = soil clumps, B = plaster.
+ * All three channels average 0.5.
+ */
+export function paintDetail(size = 256) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const r = rng(4242);
+  const chips = periodicNoise(64, 11), clumps = fbm(21, [[8, 0.45], [16, 0.35], [48, 0.2]]), plaster = fbm(31, [[6, 0.4], [16, 0.35], [40, 0.25]]);
+  for (let j = 0; j < size; j++) {
+    for (let i = 0; i < size; i++) {
+      const u = i / size, v = j / size, k = (j * size + i) * 4;
+      const grain = 0.5 + (chips(u, v) - 0.5) * 0.7 + (r() - 0.5) * 0.45;
+      const soil = 0.5 + (clumps(u, v) - 0.5) * 1.3 + (r() - 0.5) * 0.25;
+      const wall = 0.5 + (plaster(u, v) - 0.5) * 0.9 + (r() - 0.5) * 0.12;
+      img.data[k] = Math.max(0, Math.min(255, grain * 255));
+      img.data[k + 1] = Math.max(0, Math.min(255, soil * 255));
+      img.data[k + 2] = Math.max(0, Math.min(255, wall * 255));
+      img.data[k + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
 }
 
 // ------------------------------------------------------------------ signboards

@@ -1,10 +1,10 @@
 // Graphics tiers and an automatic governor that trades resolution, shadows and
 // density for a steady frame rate. The player's manual choice is remembered.
 const TIERS = {
-  low: { name: 'Fast', pr: 0.75, msaa: false, shadows: 0, dynamicShadows: false, viewDistance: 340, traffic: 14, peds: 20 },
-  medium: { name: 'Balanced', pr: 1, msaa: true, shadows: 1024, dynamicShadows: false, viewDistance: 440, traffic: 24, peds: 32 },
-  high: { name: 'High', pr: 1.25, msaa: true, shadows: 2048, dynamicShadows: true, viewDistance: 540, traffic: 32, peds: 44 },
-  ultra: { name: 'Ultra', pr: 2, msaa: true, shadows: 2048, dynamicShadows: true, viewDistance: 680, traffic: 42, peds: 60 },
+  low: { name: 'Fast', pr: 0.75, msaa: false, bloom: false, shadows: 0, dynamicShadows: false, viewDistance: 340, traffic: 14, peds: 20 },
+  medium: { name: 'Balanced', pr: 1, msaa: true, bloom: true, shadows: 1024, dynamicShadows: false, viewDistance: 440, traffic: 24, peds: 32 },
+  high: { name: 'High', pr: 1.25, msaa: true, bloom: true, shadows: 2048, dynamicShadows: true, viewDistance: 540, traffic: 32, peds: 44 },
+  ultra: { name: 'Ultra', pr: 2, msaa: true, bloom: true, shadows: 2048, dynamicShadows: true, viewDistance: 680, traffic: 42, peds: 60 },
 };
 const ORDER = ['low', 'medium', 'high', 'ultra'];
 const KEY = 'gta-nanded-quality-v2';

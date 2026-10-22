@@ -22,8 +22,11 @@ export class Vehicles {
     this.city = city;
     this.list = [];
     this.meshes = {};
-    const lambert = new THREE.MeshLambertMaterial({ flatShading: true });
-    const vcol = new THREE.MeshLambertMaterial({ flatShading: true, vertexColors: true });
+    // Glossy clear-coated paint, dark mirror-smooth glass, and a vertex-coloured
+    // material for trim, tyres and canopies.
+    const lambert = new THREE.MeshPhysicalMaterial({ roughness: 0.4, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.06 });
+    const vcol = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x0e1418, roughness: 0.04, metalness: 0.3 });
     const lit = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
     for (const type of TYPE_KEYS) {
       const model = vehicleModel(type);
@@ -36,19 +39,10 @@ export class Vehicles {
         scene.add(m);
         return m;
       };
-      this.meshes[type] = { paint: mk(model.geos.paint, lambert), fixed: mk(model.geos.fixed, vcol), lights: mk(model.geos.lights, lit), n: 0, model, cap };
+      this.meshes[type] = { paint: mk(model.geos.paint, lambert), glass: mk(model.geos.glass, glass), fixed: mk(model.geos.fixed, vcol), lights: mk(model.geos.lights, lit), n: 0, model, cap };
       this.meshes[type].lights.castShadow = false;
     }
-    const wheelGeo = new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2);
-    const hub = new THREE.CylinderGeometry(0.55, 0.55, 1.02, 6).rotateZ(Math.PI / 2);
-    const wg = new THREE.BufferGeometry();
-    const flat = g2 => (g2.index ? g2.toNonIndexed() : g2).attributes.position;
-    const merged = [...flat(wheelGeo).array, ...flat(hub).array];
-    wg.setAttribute('position', new THREE.Float32BufferAttribute(merged, 3));
-    const cols = []; const nt = flat(wheelGeo).count;
-    for (let i = 0; i < merged.length / 3; i++) { const c = i < nt ? 0.09 : 0.62; cols.push(c, c, c * 1.02); }
-    wg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-    this.wheels = new THREE.InstancedMesh(wg, vcol, 900);
+    this.wheels = new THREE.InstancedMesh(wheelGeometry(), vcol, 900);
     this.wheels.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.wheels.count = 0; this.wheels.castShadow = true; this.wheels.frustumCulled = false;
     scene.add(this.wheels);
@@ -207,7 +201,7 @@ export class Vehicles {
       this._seat(v, _m);
       if (!near || !v.visible || M.n >= M.cap) continue;
       const i = M.n++;
-      M.paint.setMatrixAt(i, _m); M.fixed.setMatrixAt(i, _m); M.lights.setMatrixAt(i, _m);
+      M.paint.setMatrixAt(i, _m); M.glass.setMatrixAt(i, _m); M.fixed.setMatrixAt(i, _m); M.lights.setMatrixAt(i, _m);
       M.paint.setColorAt(i, _c.setHex(v.wrecked ? WRECK : v.color));
       M.fixed.setColorAt(i, v.wrecked ? _c.setHex(0x444444) : _c.setHex(0xffffff));
       // Lamps: brighter at night and when braking; light bars flash.
@@ -249,7 +243,7 @@ export class Vehicles {
     }
     for (const t of TYPE_KEYS) {
       const M = this.meshes[t];
-      for (const k of ['paint', 'fixed', 'lights']) {
+      for (const k of ['paint', 'glass', 'fixed', 'lights']) {
         M[k].count = M.n;
         M[k].instanceMatrix.needsUpdate = true;
         if (M[k].instanceColor) M[k].instanceColor.needsUpdate = true;
@@ -279,3 +273,32 @@ export class Vehicles {
 }
 
 const IDLE = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+
+/**
+ * Unit wheel (radius 1, width 1, axle along x): a tyre with rounded shoulders and
+ * a five-spoke silver rim on both faces. Instances scale it per vehicle.
+ */
+function wheelGeometry() {
+  const pos = [], col = [];
+  const push = (g, c) => { const p = (g.index ? g.toNonIndexed() : g).attributes.position.array; pos.push(...p); for (let i = 0; i < p.length / 3; i++) col.push(c[0], c[1], c[2]); };
+  const tyre = new THREE.LatheGeometry([[0.6, -0.5], [0.9, -0.5], [1, -0.3], [1, 0.3], [0.9, 0.5], [0.6, 0.5]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
+  tyre.rotateZ(Math.PI / 2);
+  push(tyre, [0.05, 0.05, 0.055]);
+  for (const side of [1, -1]) {
+    const dish = new THREE.CylinderGeometry(0.62, 0.62, 0.04, 12, 1, true).rotateZ(Math.PI / 2).translate(side * 0.42, 0, 0);
+    const face = new THREE.CircleGeometry(0.62, 12).rotateY(side * Math.PI / 2).translate(side * 0.4, 0, 0);
+    push(face, [0.16, 0.16, 0.17]);
+    push(dish, [0.2, 0.2, 0.21]);
+    const hub = new THREE.CylinderGeometry(0.16, 0.18, 0.08, 6).rotateZ(Math.PI / 2).translate(side * 0.46, 0, 0);
+    push(hub, [0.75, 0.76, 0.78]);
+    for (let k = 0; k < 5; k++) {
+      const spoke = new THREE.BoxGeometry(0.06, 0.46, 0.12).translate(0, 0.33, 0).rotateX((k / 5) * Math.PI * 2).translate(side * 0.45, 0, 0);
+      push(spoke, [0.7, 0.71, 0.73]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}

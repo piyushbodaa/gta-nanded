@@ -10,6 +10,9 @@
 // Modes: 0 vertex colour only · 1 repeating facade, random variant per cell ·
 //        2 single tile clamped · 3 road (clamped across, repeating along) ·
 //        4 tile projected in world space (ground, junction pads)
+// The material is physically based: each mode sets its own roughness (glass in
+// the facades, wet asphalt in the monsoon), and a cheap ambient occlusion
+// darkens the sky light near the ground, where walls and streets meet.
 import * as THREE from 'three';
 import { ATLAS_COLS, ATLAS_ROWS, TILE_PX, SIGN_COLS, SIGN_ROWS } from './atlas.js';
 
@@ -19,7 +22,7 @@ export const cityUniforms = {
   uWet: { value: 0 }, // monsoon: darker, glossier streets
 };
 
-export function createAtlasTextures(atlas, signs, renderer) {
+export function createAtlasTextures(atlas, signs, renderer, detailCanvas) {
   const map = new THREE.DataTexture(atlas.data, atlas.width, atlas.height, THREE.RGBAFormat);
   map.colorSpace = THREE.SRGBColorSpace;
   map.magFilter = THREE.LinearFilter;
@@ -38,7 +41,10 @@ export function createAtlasTextures(atlas, signs, renderer) {
   const signEmissive = new THREE.CanvasTexture(signs.emissive);
   signEmissive.colorSpace = THREE.SRGBColorSpace;
   signEmissive.flipY = false;
-  return { map, emissive, signMap, signEmissive };
+  const detail = new THREE.CanvasTexture(detailCanvas);
+  detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
+  detail.anisotropy = map.anisotropy;
+  return { map, emissive, signMap, signEmissive, detail };
 }
 
 const common = /* glsl */`
@@ -48,10 +54,11 @@ const common = /* glsl */`
   varying vec3 vCityWorld;
 `;
 
-function patch(material, { map, emissive, cols, rows, pad, signs = false }) {
+function patch(material, { map, emissive, detail, cols, rows, pad, signs = false }) {
   material.onBeforeCompile = shader => {
     shader.uniforms.cityAtlas = { value: map };
     shader.uniforms.cityEmissive = { value: emissive };
+    shader.uniforms.cityDetail = { value: detail };
     shader.uniforms.uNight = cityUniforms.uNight;
     shader.uniforms.uWet = cityUniforms.uWet;
     shader.vertexShader = shader.vertexShader
@@ -67,19 +74,34 @@ function patch(material, { map, emissive, cols, rows, pad, signs = false }) {
       .replace('#include <common>', `#include <common>
         uniform sampler2D cityAtlas;
         uniform sampler2D cityEmissive;
+        uniform sampler2D cityDetail;
         uniform float uNight;
         uniform float uWet;
         ${common}
-        float cityHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
+        float cityHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+        vec3 cityOctDecode(vec2 e) {
+          vec3 n = vec3(e.x, 1.0 - abs(e.x) - abs(e.y), e.y);
+          if (n.y < 0.0) n.xz = (1.0 - abs(n.zx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.z >= 0.0 ? 1.0 : -1.0);
+          return normalize(n);
+        }`)
       .replace('#include <map_fragment>', `
         vec3 cityGlow = vec3(0.0);
+        float cityRough = 0.85, cityMetal = 0.0, cityAO = 1.0, citySmooth = 0.0;
         {
           float mode = floor(vTile.w + 0.5);
           vec3 paint = vTint.rgb;
+          // Large, soft variation in grime and sun-bleaching hides the repeats.
+          float macro = clamp(texture2D(cityDetail, vCityWorld.xz * 0.0105).g * 0.6 + texture2D(cityDetail, vCityWorld.xz * 0.047 + 0.31).g * 0.4, 0.0, 1.0);
+          float puddle = 0.0;
+          if (uWet > 0.0) puddle = smoothstep(0.5, 0.7, texture2D(cityDetail, vCityWorld.xz * 0.071 + 0.57).g * 0.65 + macro * 0.35);
           if (mode < 0.5) {
             diffuseColor.rgb *= paint;
-            // Props: light ambient occlusion near the ground.
-            diffuseColor.rgb *= mix(0.72, 1.0, smoothstep(0.0, 1.2, vCityWorld.y));
+            // Props: soft occlusion near the ground.
+            cityAO = mix(0.6, 1.0, smoothstep(0.0, 1.2, vCityWorld.y));
+            cityRough = 0.8;
+            // Gilded metal (domes, finials) and true normals on lathed shapes.
+            if (vTile.x > 0.5) { cityMetal = 1.0; cityRough = 0.24; }
+            citySmooth = step(0.5, vTile.y);
           } else {
             vec2 origin = vTile.xy;
             vec2 coord = vTUv;
@@ -112,30 +134,79 @@ function patch(material, { map, emissive, cols, rows, pad, signs = false }) {
             vec3 painted = mix(tex.rgb, tex.rgb * paint * 1.12, tex.a);
             ${signs ? 'painted = tex.rgb;' : ''}
             diffuseColor.rgb *= painted;
-            if (mode < 1.5) diffuseColor.rgb *= mix(0.58, 1.0, smoothstep(0.0, 2.6, vCityWorld.y));
-            if (mode > 2.5 && uWet > 0.0) diffuseColor.rgb *= 1.0 - 0.35 * uWet;
+            vec3 e = vec3(0.0);
+            if (mode < 2.5) e = textureGrad(cityEmissive, auv, gx, gy).rgb;
+            if (mode < 1.5) {
+              // Walls: rain-splash grime at the foot, soft occlusion, weathering.
+              float foot = 1.0 - smoothstep(0.0, 1.1, vCityWorld.y);
+              diffuseColor.rgb *= mix(vec3(1.0), vec3(0.72, 0.66, 0.58), foot * 0.85);
+              diffuseColor.rgb *= 0.9 + macro * 0.18;
+              diffuseColor.rgb *= 0.86 + 0.28 * texture2D(cityDetail, vTUv * 1.3).b;
+              cityAO = mix(0.5, 1.0, smoothstep(0.0, 3.2, vCityWorld.y));
+              // Window glass (not the open fronts of shops) is smooth and reflects the sky.
+              float glass = (vTile.y > 3.5 && vTile.y < 4.5) ? 0.0 : smoothstep(0.12, 0.45, e.g);
+              cityRough = mix(0.9, 0.08, glass);
+              diffuseColor.rgb *= 1.0 - glass * 0.35;
+            } else if (mode < 2.5) {
+              cityRough = ${signs ? '0.5' : '0.6'};
+            } else if (mode < 3.5) {
+              // Roads: dust blown in along both edges, darker tyre-polished lanes.
+              float edge = min(f.x, 1.0 - f.x);
+              float dust = (1.0 - smoothstep(0.02, 0.2, edge)) * (0.55 + 0.45 * macro);
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.54, 0.45) * (0.85 + macro * 0.3), dust * 0.6);
+              diffuseColor.rgb *= 0.86 + macro * 0.22;
+              diffuseColor.rgb *= 0.74 + 0.52 * texture2D(cityDetail, vCityWorld.xz * 0.55).r;
+              cityRough = 0.9;
+            } else {
+              vec4 det = texture2D(cityDetail, vCityWorld.xz * 0.23);
+              diffuseColor.rgb *= 0.84 + macro * 0.3;
+              diffuseColor.rgb *= 0.7 + 0.6 * mix(det.g, texture2D(cityDetail, vCityWorld.xz * 0.61).r, 0.35);
+              cityRough = 0.96;
+            }
+            // Monsoon: everything darkens; flat ground turns glossy with standing water.
+            if (uWet > 0.0) {
+              if (mode > 2.5) {
+                bool asphalt = mode < 3.5 || (abs(vTile.x - 1.0) < 0.5 && abs(vTile.y - 7.0) < 0.5);
+                float wet = min(1.0, uWet * 1.25) * (0.7 + 0.3 * puddle);
+                diffuseColor.rgb *= 1.0 - (asphalt ? 0.55 : 0.4) * wet;
+                cityRough = mix(cityRough, asphalt ? mix(0.18, 0.02, puddle) : mix(0.45, 0.08, puddle), wet);
+              } else {
+                diffuseColor.rgb *= 1.0 - 0.18 * uWet;
+                cityRough = mix(cityRough, 0.5, uWet * 0.5);
+              }
+            }
             if (uNight > 0.01 && litChance > 0.0) {
-              vec3 e = textureGrad(cityEmissive, auv, gx, gy).rgb;
               float hue = cityHash(floor(coord) * 5.13 + vTint.a * 7.0);
               vec3 lamp = mix(vec3(1.0, 0.72, 0.38), vec3(0.82, 0.93, 1.0), step(0.62, hue));
               ${signs ? 'lamp = vec3(1.0);' : ''}
-              cityGlow = e * lamp * litChance * uNight * ${signs ? '1.15' : '1.05'};
+              cityGlow = e * lamp * litChance * uNight * ${signs ? '1.9' : '1.8'};
             }
           }
         }`)
+      // Sky reflections only where the surface is smooth enough to show them.
+      .replace('#include <lights_fragment_maps>', THREE.ShaderChunk.lights_fragment_maps.replace(
+        'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );',
+        'radiance += cityRough < 0.7 ? getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) : iblIrradiance * RECIPROCAL_PI;'))
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (citySmooth > 0.5) normal = normalize((viewMatrix * vec4(cityOctDecode(vTUv), 0.0)).xyz);`)
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = cityRough;')
+      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = cityMetal;')
+      .replace('#include <aomap_fragment>', `#include <aomap_fragment>
+        reflectedLight.indirectDiffuse *= cityAO;
+        reflectedLight.indirectSpecular *= cityAO * cityAO;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += cityGlow;`);
   };
-  material.customProgramCacheKey = () => (signs ? 'city-signs-v1' : 'city-v1');
+  material.customProgramCacheKey = () => (signs ? 'city-signs-v3' : 'city-v3');
   return material;
 }
 
 export function createCityMaterials(tex) {
-  const city = patch(new THREE.MeshLambertMaterial({ flatShading: true }), {
-    map: tex.map, emissive: tex.emissive, cols: ATLAS_COLS, rows: ATLAS_ROWS, pad: 3 / TILE_PX,
+  const city = patch(new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.85, metalness: 0 }), {
+    map: tex.map, emissive: tex.emissive, detail: tex.detail, cols: ATLAS_COLS, rows: ATLAS_ROWS, pad: 3 / TILE_PX,
   });
-  const signs = patch(new THREE.MeshLambertMaterial({ flatShading: true }), {
-    map: tex.signMap, emissive: tex.signEmissive, cols: SIGN_COLS, rows: SIGN_ROWS, pad: 0.004, signs: true,
+  const signs = patch(new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.5, metalness: 0 }), {
+    map: tex.signMap, emissive: tex.signEmissive, detail: tex.detail, cols: SIGN_COLS, rows: SIGN_ROWS, pad: 0.004, signs: true,
   });
   // Night: pools of sodium light on the road under every street lamp.
   const glowTex = radialTexture();

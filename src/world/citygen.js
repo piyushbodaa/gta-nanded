@@ -460,19 +460,21 @@ export class City {
         }
       }
     }
-    // Scattered trees in yards, fields and block interiors.
+    // Scattered trees in yards, fields and block interiors: Nanded's neighbourhoods
+    // are greener from above than from the street. Shrubs (kind 5) fill the yards.
     const b = this.bounds;
-    const step = 22;
+    const step = 16;
     for (let gx = b.minX; gx < b.maxX; gx += step) {
       for (let gz = b.minZ; gz < b.maxZ; gz += step) {
         const r = rng(hash2(Math.round(gx), Math.round(gz)));
         const x = gx + r() * step, z = gz + r() * step;
         const dens = this.densityAt(x, z);
-        if (dens < 0.02 && r.chance(0.85)) continue;
-        const prob = dens > 0.6 ? 0.18 : dens > 0.3 ? 0.3 : 0.22;
+        if (dens < 0.02 && r.chance(0.9)) continue;
+        const prob = dens > 0.6 ? 0.26 : dens > 0.3 ? 0.36 : dens > 0.12 ? 0.3 : 0.16;
         if (!r.chance(prob)) continue;
         if (!ok(x, z, 1.2)) continue;
         const zone = dens < 0.18 ? ZONE.RURAL : ZONE.RESIDENTIAL;
+        if (zone !== ZONE.RURAL && r.chance(0.3)) { add(x, z, 5, r.range(0.8, 1.3)); continue; }
         add(x, z, zone === ZONE.RURAL ? (r.chance(0.55) ? 4 : r.chance(0.2) ? 2 : 0) : r.chance(0.12) ? 1 : r.chance(0.1) ? 3 : 0, r.range(0.85, 1.35));
       }
     }

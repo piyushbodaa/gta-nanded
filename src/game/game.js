@@ -9,13 +9,15 @@ import { Input } from '../core/input.js';
 import { speedOf } from '../actors/vehicle-physics.js';
 import { clamp, dist, rng, hash2 } from '../core/math.js';
 import { Quality } from '../core/quality.js';
+import { Post } from '../world/post.js';
 
 export class Game {
   constructor(canvas) {
     this.canvas = canvas;
     this.input = new Input(canvas);
     this.quality = new Quality();
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality.settings.msaa, powerPreference: 'high-performance', stencil: false });
+    // Anti-aliasing happens in the post-processing buffer, where tiers can switch it on and off.
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
     this.renderer.setPixelRatio(this.quality.pixelRatio());
     this.renderer.setSize(innerWidth, innerHeight, false);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -50,6 +52,9 @@ export class Game {
     this.world = await createWorld(this.scene, this.renderer, { stage, focus: spawn });
     const w = this.world;
     this.city = w.city; this.net = w.net; this.colliders = w.colliders; this.sky = w.sky;
+    this.post = new Post(this.renderer, this.sky);
+    this.post.setDetail(w.textures.detail);
+    this.sky.useSceneFog(!this.post.enabled);
     this.applyQuality();
     this.humans = new Humans(this.scene, 220);
     this.vehicles = new Vehicles(this.scene, this.humans, this.colliders, this.city);
@@ -65,6 +70,7 @@ export class Game {
     this.renderer.setSize(innerWidth, innerHeight, false);
     this.world.chunks.setRadius(q.viewDistance);
     this.world.sky.setViewDistance(q.viewDistance);
+    this.post.configure({ msaa: q.msaa, bloom: q.bloom });
     this.camera3.far = q.viewDistance + 150;
     this.camera3.updateProjectionMatrix();
     const sun = this.world.sky.sun;
@@ -187,7 +193,8 @@ export class Game {
     w.sky.placeDome(cam);
     w.rivers.update(dt);
     w.cityUniforms.uNight.value = w.sky.night;
-    w.cityUniforms.uWet.value = w.sky.w.grey;
+    w.cityUniforms.uWet.value = w.sky.wet;
+    w.cityUniforms.uTime.value += dt;
     w.chunks.setNight(w.sky.night);
     this.vehicles.night = w.sky.night;
     this.vehicles.render(dt, cam.position);
@@ -196,11 +203,13 @@ export class Game {
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     const q = this.quality.settings;
     if (q.shadows > 0) {
-      if (q.dynamicShadows || this.shadowAt.distanceToSquared(cam.position) > 36 || (this._sunTick = (this._sunTick || 0) + dt) > 2) {
+      // Moving shadows refresh every other frame: half the cost, and nobody can tell.
+      this._shadowFrame = !this._shadowFrame;
+      if ((q.dynamicShadows && this._shadowFrame) || this.shadowAt.distanceToSquared(cam.position) > 36 || (this._sunTick = (this._sunTick || 0) + dt) > 2) {
         this.renderer.shadowMap.needsUpdate = true; this.shadowAt.copy(cam.position); this._sunTick = 0;
       }
     }
     this.hud?.update(dt);
-    this.renderer.render(this.scene, cam);
+    this.post.render(this.scene, cam, dt);
   }
 }

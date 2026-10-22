@@ -58,7 +58,7 @@ export class Effects {
       rp.set([x, y, z, x + 0.06, y - 1.3, z + 0.04], i * 6);
     }
     rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
-    this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xd2dde4, transparent: true, opacity: 0.6, fog: false, depthWrite: false }));
+    this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xb4c2cc, transparent: true, opacity: 0.4, fog: false, depthWrite: false }));
     this.rain.frustumCulled = false; this.rain.visible = false;
     scene.add(this.rain);
     this.rainY = 0;
@@ -145,7 +145,7 @@ export class Effects {
     if (rainOn) {
       this.rainY = (this.rainY - dt * 22) % 30;
       this.rain.position.set(camera.position.x, camera.position.y - 8 + ((this.rainY + 30) % 30) - 15, camera.position.z);
-      this.rain.material.opacity = 0.35 + weather.rain * 0.35;
+      this.rain.material.opacity = 0.16 + weather.rain * 0.22;
     }
     this.markers.update(dt);
   }

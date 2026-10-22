@@ -5,7 +5,9 @@ import * as THREE from 'three';
 import { rng, clamp } from '../core/math.js';
 
 // ------------------------------------------------------------------ part geometry
-// Smooth, low-poly body parts. Limbs hang from their joint at y = 0.
+// Sculpted, smooth-shaded body parts built from lofted rings: a chest wider than
+// the waist, sloping shoulders, calves, hands and shoes. Limbs hang from their
+// joint at y = 0; the skeleton below poses them.
 function merge(...geos) {
   const pos = [], nrm = [];
   for (const g of geos) {
@@ -19,81 +21,176 @@ function merge(...geos) {
   out.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   return out;
 }
-function ellipsoid(rx, ry, rz, cy = 0, cz = 0, w = 10, h = 8) {
+function ellipsoid(rx, ry, rz, cy = 0, cz = 0, w = 10, h = 7) {
   const g = new THREE.SphereGeometry(1, w, h);
   g.scale(rx, ry, rz); g.translate(0, cy, cz);
   return g;
 }
-function box(w, h, d, x = 0, y = 0, z = 0) { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g; }
-/** A limb hanging down from its joint: tapered cylinder with a ball at the joint. */
-function limb(rTop, rBot, len, flat = 1, sides = 8) {
-  const c = new THREE.CylinderGeometry(rTop, rBot, len, sides, 1, true);
-  c.translate(0, -len / 2, 0);
-  const j = new THREE.SphereGeometry(rTop, sides, 5);
-  const e = new THREE.SphereGeometry(rBot, sides, 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-  e.translate(0, -len, 0);
-  const g = merge(c, j, e);
-  g.scale(1, 1, flat);
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/**
+ * Loft through elliptical rings [y, half-width, front depth, back depth, z shift],
+ * bottom to top, with smooth normals and optional end caps.
+ */
+function loft(rings, seg = 18, capBottom = true, capTop = true) {
+  const pos = [], idx = [];
+  for (const [y, rx, rf, rb, oz = 0] of rings) {
+    for (let i = 0; i < seg; i++) {
+      const a = (i / seg) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      pos.push(c * rx, y, oz + s * (s > 0 ? rf : rb));
+    }
+  }
+  const R = rings.length;
+  for (let k = 0; k < R - 1; k++) {
+    for (let i = 0; i < seg; i++) {
+      const j = (i + 1) % seg, a = k * seg + i, b = k * seg + j, c = (k + 1) * seg + j, d = (k + 1) * seg + i;
+      idx.push(a, d, c, a, c, b);
+    }
+  }
+  if (capBottom) { const ci = pos.length / 3; pos.push(0, rings[0][0], rings[0][4] || 0); for (let i = 0; i < seg; i++) idx.push(ci, i, (i + 1) % seg); }
+  if (capTop) {
+    const ci = pos.length / 3, top = rings[R - 1], base = (R - 1) * seg;
+    pos.push(0, top[0], top[4] || 0);
+    for (let i = 0; i < seg; i++) idx.push(ci, base + (i + 1) % seg, base + i);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
   return g;
 }
+
+/** A limb hanging from its joint: radius profile [[t, r], ...] over `len`, rounded at both ends. */
+function limb(len, profile, flat = 0.92, seg = 9) {
+  const r0 = profile[0][1], r1 = profile[profile.length - 1][1], rings = [];
+  const ring = (y, r) => rings.push([y, Math.max(0.002, r), Math.max(0.002, r * flat), Math.max(0.002, r * flat)]);
+  // Rounded end, the profile from the far end back up to the joint, then the joint ball.
+  for (let k = 0; k <= 2; k++) { const a = (k / 2) * Math.PI / 2; ring(-len - Math.cos(a) * r1 * 0.9, Math.sin(a) * r1); }
+  for (let k = profile.length - 2; k >= 1; k--) ring(-profile[k][0] * len, profile[k][1]);
+  for (let k = 0; k <= 2; k++) { const a = Math.PI / 2 - (k / 2) * Math.PI / 2; ring(Math.cos(a) * r0 * 0.85, Math.sin(a) * r0); }
+  return loft(rings, seg, false, false);
+}
+
 function torso() {
-  // Chest tapering to the waist, with rounded shoulders.
-  const c = new THREE.CylinderGeometry(0.19, 0.155, 0.46, 12, 1, true);
-  c.translate(0, 0.23, 0);
-  const sh = ellipsoid(0.2, 0.085, 0.118, 0.46, 0, 12, 6);
-  const base = new THREE.CircleGeometry(0.155, 12).rotateX(Math.PI / 2);
-  const g = merge(c, base);
-  g.scale(1, 1, 0.62);
-  return merge(g, sh);
+  // From the shirt hem over the belt, up through waist, chest and shoulders, to the collar.
+  return loft([
+    [-0.08, 0.168, 0.112, 0.106], [0.02, 0.157, 0.103, 0.098], [0.14, 0.161, 0.108, 0.1, 0.004],
+    [0.26, 0.175, 0.121, 0.104, 0.01], [0.36, 0.187, 0.125, 0.106, 0.008], [0.43, 0.197, 0.112, 0.106],
+    [0.48, 0.172, 0.092, 0.096, -0.005], [0.52, 0.104, 0.072, 0.076, -0.008], [0.545, 0.06, 0.057, 0.057, -0.005],
+    [0.565, 0.056, 0.053, 0.053, -0.005],
+  ], 14);
+}
+function hips() {
+  return loft([
+    [-0.16, 0.06, 0.05, 0.06], [-0.12, 0.15, 0.095, 0.108], [-0.03, 0.171, 0.104, 0.114],
+    [0.05, 0.163, 0.1, 0.1], [0.09, 0.158, 0.098, 0.098],
+  ], 14);
 }
 function head() {
-  const neck = new THREE.CylinderGeometry(0.048, 0.055, 0.1, 8, 1, true).translate(0, 0.045, 0);
-  const skull = ellipsoid(0.104, 0.122, 0.112, 0.175, 0, 14, 10);
-  const nose = new THREE.ConeGeometry(0.022, 0.05, 5).rotateX(Math.PI / 2).translate(0, 0.165, 0.112);
-  const ears = [ellipsoid(0.018, 0.03, 0.012, 0.17, 0, 6, 4).translate(0.103, 0, -0.005), ellipsoid(0.018, 0.03, 0.012, 0.17, 0, 6, 4).translate(-0.103, 0, -0.005)];
-  return merge(neck, skull, nose, ...ears);
+  // A skull with a narrower jaw and a forward chin, then neck, nose and ears.
+  const g = new THREE.SphereGeometry(1, 16, 12);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    let X = x * 0.093, Y = y * 0.12, Z = z * 0.104;
+    const low = smooth(-0.1, -0.95, y);
+    X *= 1 - 0.32 * low; // jaw narrows to the chin
+    Z += z > 0 ? 0.014 * low * z : 0; // chin and jaw come forward
+    Z *= z < 0 && y > -0.4 ? 1.05 : 1; // fuller back of the head
+    if (z > 0.55 && y > -0.3 && y < 0.55) Z -= 0.006 * (z - 0.55); // flatter face
+    p.setXYZ(i, X, Y, Z);
+  }
+  g.translate(0, 0.175, 0.004);
+  g.computeVertexNormals();
+  const neck = new THREE.CylinderGeometry(0.046, 0.052, 0.13, 8, 1, true).translate(0, 0.05, -0.006);
+  const nose = ellipsoid(0.016, 0.03, 0.02, 0.163, 0.1, 8, 6);
+  const ears = [ellipsoid(0.013, 0.027, 0.008, 0.17, -0.006, 8, 5).translate(0.092, 0, 0), ellipsoid(0.013, 0.027, 0.008, 0.17, -0.006, 8, 5).translate(-0.092, 0, 0)];
+  return merge(neck, g, nose, ...ears);
 }
 function face() {
-  // Eyes and brows: the smallest details that make a crowd feel alive.
-  const eyes = [ellipsoid(0.016, 0.012, 0.008, 0.195, 0.104, 6, 4).translate(0.038, 0, 0), ellipsoid(0.016, 0.012, 0.008, 0.195, 0.104, 6, 4).translate(-0.038, 0, 0)];
-  const brows = [box(0.045, 0.011, 0.012, 0.038, 0.222, 0.103), box(0.045, 0.011, 0.012, -0.038, 0.222, 0.103)];
-  return merge(...eyes, ...brows);
+  // Eyes, brows and lips: the smallest details that make a crowd feel alive.
+  const eye = x => ellipsoid(0.0145, 0.008, 0.006, 0.19, 0.096, 8, 5).translate(x, 0, 0);
+  const brow = x => new THREE.BoxGeometry(0.038, 0.008, 0.01).rotateZ(x > 0 ? -0.12 : 0.12).translate(x, 0.21, 0.098);
+  return merge(eye(0.034), eye(-0.034), brow(0.035), brow(-0.035), ellipsoid(0.021, 0.0045, 0.006, 0.128, 0.096, 8, 4));
 }
-function hairCap() {
-  // Covers the crown and the back of the head, leaving the forehead clear.
-  const g = new THREE.SphereGeometry(0.118, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.56);
-  g.rotateX(-0.42); g.scale(1, 0.98, 1.03); g.translate(0, 0.186, -0.012);
+/** Hair as a shell over the skull, tucked inside the head below a hairline that rises to the forehead. */
+function hairShell(front = 0.34, back = -0.55, puff = 1.075) {
+  const g = new THREE.SphereGeometry(1, 16, 12);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const line = back + (front - back) * smooth(-0.35, 0.75, z);
+    const k = y > line ? puff + (y > 0.2 ? 0.02 : 0) : 0.9;
+    p.setXYZ(i, x * 0.093 * k, y * 0.12 * k, z * 0.104 * k);
+  }
+  g.translate(0, 0.177, 0.002);
+  g.computeVertexNormals();
   return merge(g);
 }
 function turban() {
-  const g = ellipsoid(0.132, 0.1, 0.136, 0.245, -0.012, 14, 8);
-  const peak = ellipsoid(0.08, 0.075, 0.05, 0.27, 0.065, 8, 6);
-  return merge(g, peak);
+  const g = ellipsoid(0.128, 0.09, 0.134, 0.248, -0.01, 16, 10);
+  const wrap = ellipsoid(0.122, 0.05, 0.128, 0.215, -0.006, 16, 6);
+  const peak = ellipsoid(0.07, 0.07, 0.045, 0.268, 0.07, 10, 6);
+  return merge(g, wrap, peak);
 }
 function skirt(len = 0.86, r0 = 0.18, r1 = 0.27) {
-  const g = new THREE.CylinderGeometry(r0, r1, len, 12, 1, true);
+  // Gathered folds: the hem ripples.
+  const g = new THREE.CylinderGeometry(r0, r1, len, 18, 2, true);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const a = Math.atan2(z, x), t = (len / 2 - y) / len;
+    const f = 1 + Math.sin(a * 9) * 0.035 * t;
+    p.setXYZ(i, x * f, y, z * f);
+  }
   g.translate(0, -len / 2 + 0.04, 0);
-  const t = merge(g); t.scale(1, 1, 0.8); return t;
+  g.computeVertexNormals();
+  const t = merge(g); t.scale(1, 1, 0.8);
+  return t;
+}
+function hand() {
+  // Forearm with the hand at the wrist: palm, curled fingers and a thumb.
+  const arm = limb(0.25, [[0, 0.043], [0.22, 0.046], [0.65, 0.039], [1, 0.031]], 0.88);
+  const palm = ellipsoid(0.037, 0.05, 0.019, -0.295, 0.004, 10, 7);
+  const fingers = ellipsoid(0.034, 0.042, 0.016, -0.355, 0.012, 10, 7);
+  const thumb = ellipsoid(0.012, 0.03, 0.012, -0.285, 0.026, 7, 5);
+  return merge(arm, palm, fingers, thumb);
+}
+function shoe() {
+  const g = new THREE.SphereGeometry(1, 10, 7);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const Y = Math.max(y, -0.55);
+    p.setXYZ(i, x * (z > 0 ? 0.05 : 0.044), Y * 0.045 - 0.032 + (z > 0.7 ? 0.004 : 0), z * 0.128 + 0.05);
+  }
+  g.computeVertexNormals();
+  return merge(g);
+}
+function pack() {
+  return merge(loft([[0.08, 0.13, 0.05, 0.06], [0.2, 0.145, 0.06, 0.07], [0.38, 0.14, 0.055, 0.065], [0.44, 0.1, 0.045, 0.05]], 14).translate(0, 0, -0.17));
 }
 
 const PARTS = [
-  { key: 'head', geo: head, color: 'skin' },
-  { key: 'face', geo: face, color: 'brow' },
-  { key: 'hair', geo: hairCap, color: 'hair' },
-  { key: 'bun', geo: () => ellipsoid(0.058, 0.055, 0.05, 0.15, -0.115), color: 'hair', flag: 'bun' },
+  { key: 'head', geo: head, color: 'skin', mat: 'skin' },
+  { key: 'face', geo: face, color: 'brow', mat: 'skin' },
+  { key: 'hair', geo: () => hairShell(), color: 'hair', mat: 'hair' },
+  { key: 'long', geo: () => merge(ellipsoid(0.088, 0.15, 0.045, 0.1, -0.088, 12, 8)), color: 'hair', mat: 'hair', flag: 'long' },
+  { key: 'bun', geo: () => merge(ellipsoid(0.056, 0.052, 0.048, 0.16, -0.12)), color: 'hair', mat: 'hair', flag: 'bun' },
   { key: 'turban', geo: turban, color: 'extra', flag: 'turban' },
-  { key: 'cap', geo: () => merge(new THREE.CylinderGeometry(0.1, 0.108, 0.075, 12).translate(0, 0.285, -0.01)), color: 'cap', flag: 'cap' },
-  { key: 'beard', geo: () => ellipsoid(0.088, 0.085, 0.07, 0.105, 0.045, 10, 6), color: 'hair', flag: 'beard' },
+  { key: 'cap', geo: () => merge(ellipsoid(0.072, 0.05, 0.122, 0.272, -0.01, 12, 6)), color: 'cap', flag: 'cap' },
+  { key: 'beard', geo: () => merge(ellipsoid(0.084, 0.072, 0.07, 0.11, 0.045, 12, 7)), color: 'hair', mat: 'hair', flag: 'beard' },
+  { key: 'moustache', geo: () => merge(ellipsoid(0.031, 0.008, 0.012, 0.141, 0.1, 10, 5)), color: 'hair', mat: 'hair', flag: 'moustache' },
   { key: 'torso', geo: torso, color: 'shirt' },
-  { key: 'hips', geo: () => { const g = merge(new THREE.CylinderGeometry(0.16, 0.172, 0.2, 12).translate(0, -0.02, 0)); g.scale(1, 1, 0.66); return g; }, color: 'pants' },
-  { key: 'skirt', geo: () => skirt(0.86, 0.18, 0.27), color: 'extra', flag: 'skirt' },
+  { key: 'hips', geo: hips, color: 'pants' },
+  { key: 'skirt', geo: () => skirt(0.86, 0.18, 0.28), color: 'extra', flag: 'skirt' },
   { key: 'kurta', geo: () => skirt(0.44, 0.19, 0.235), color: 'shirt', flag: 'kurta' },
-  { key: 'pack', geo: () => merge(box(0.28, 0.34, 0.13, 0, 0.27, -0.17)), color: 'extra', flag: 'pack' },
-  { key: 'upperArm', geo: () => limb(0.056, 0.046, 0.29, 0.95), color: 'sleeve', count: 2 },
-  { key: 'lowerArm', geo: () => merge(limb(0.044, 0.036, 0.25, 0.95), ellipsoid(0.04, 0.05, 0.026, -0.29, 0.005, 7, 5)), color: 'skin', count: 2 },
-  { key: 'thigh', geo: () => limb(0.078, 0.06, 0.43, 0.95), color: 'pants', count: 2 },
-  { key: 'shin', geo: () => limb(0.058, 0.044, 0.42, 0.95), color: 'legs', count: 2 },
-  { key: 'foot', geo: () => merge(ellipsoid(0.05, 0.04, 0.12, -0.03, 0.05, 8, 5)), color: 'shoes', count: 2 },
+  { key: 'pack', geo: pack, color: 'extra', flag: 'pack' },
+  { key: 'upperArm', geo: () => limb(0.29, [[0, 0.058], [0.3, 0.054], [0.65, 0.048], [1, 0.043]], 0.94), color: 'sleeve', count: 2 },
+  { key: 'lowerArm', geo: hand, color: 'skin', mat: 'skin', count: 2 },
+  { key: 'thigh', geo: () => limb(0.43, [[0, 0.086], [0.3, 0.079], [0.72, 0.063], [1, 0.055]], 0.95), color: 'pants', count: 2 },
+  { key: 'shin', geo: () => limb(0.42, [[0, 0.054], [0.25, 0.059], [0.7, 0.045], [1, 0.039]], 0.95), color: 'legs', count: 2 },
+  { key: 'foot', geo: shoe, color: 'shoes', count: 2 },
 ];
 
 // ------------------------------------------------------------------ outfits
@@ -114,9 +211,11 @@ export function makeOutfit(kind, seed) {
     extra: 0, cap: 0xf2f2f2, flags: new Set(), scale: r.range(0.94, 1.06), kind, brow: 0x1a120c,
   };
   o.sleeve = o.shirt; o.legs = o.pants;
+  // A Marathwada moustache is the rule, not the exception.
+  if ((kind === 'man' || kind === 'elder' || kind === 'farmer' || kind === 'police' || kind === 'goon') && r.chance(0.6)) o.flags.add('moustache');
   switch (kind) {
     case 'woman':
-      o.flags.add('skirt'); o.flags.add('bun'); o.extra = r.pick(SARIS); o.shirt = r.chance(0.6) ? o.extra : r.pick(SARIS); o.sleeve = o.shirt;
+      o.flags.add('skirt'); o.flags.add(r.chance(0.6) ? 'bun' : 'long'); o.extra = r.pick(SARIS); o.shirt = r.chance(0.6) ? o.extra : r.pick(SARIS); o.sleeve = o.shirt;
       o.pants = o.extra; o.legs = o.skin; o.scale *= 0.94; o.hair = 0x16110d;
       if (r.chance(0.35)) { o.flags.delete('skirt'); o.flags.add('kurta'); o.pants = r.pick([0xf2f2f2, 0x2c3e50, o.extra]); o.legs = o.pants; }
       break;
@@ -142,6 +241,7 @@ export function makeOutfit(kind, seed) {
       break;
     case 'player':
       o.skin = 0xa0672c; o.hair = 0x16110d; o.shirt = 0xe8652e; o.sleeve = 0xe8652e; o.pants = 0x1f3a5f; o.legs = o.pants; o.shoes = 0xf2f2f2; o.scale = 1.02;
+      o.flags.delete('moustache'); o.flags.add('stubble');
       break;
     default:
       if (r.chance(0.25)) { o.flags.add('kurta'); o.pants = r.pick([0xf2f2f2, o.pants]); o.legs = o.pants; }
@@ -168,10 +268,14 @@ export class Humans {
     this.capacity = capacity;
     this.list = [];
     this.meshes = {};
-    const mat = new THREE.MeshLambertMaterial();
+    const mats = {
+      cloth: new THREE.MeshStandardMaterial({ roughness: 0.86, metalness: 0 }),
+      skin: new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0 }),
+      hair: new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0 }),
+    };
     for (const p of PARTS) {
       const n = capacity * (p.count || 1);
-      const mesh = new THREE.InstancedMesh(p.geo(), mat, n);
+      const mesh = new THREE.InstancedMesh(p.geo(), mats[p.mat || 'cloth'], n);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.setColorAt(0, _c.set(0xffffff));
       mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
@@ -230,7 +334,7 @@ export class Humans {
   _pose(h, far) {
     const o = h.outfit, f = o.flags, sc = o.scale;
     // Joint angles for the current pose.
-    let hipL = 0, hipR = 0, kneeL = 0.04, kneeR = 0.04, shL = 0, shR = 0, abL = 0.08, abR = -0.08, elL = -0.15, elR = -0.15;
+    let hipL = 0, hipR = 0, kneeL = 0.04, kneeR = 0.04, shL = 0.05, shR = 0.05, abL = 0.13, abR = -0.13, elL = -0.3, elR = -0.3;
     let lean = 0, bob = 0, pelvisY = 0.93, twist = 0, headYaw = h.lookYaw || 0;
     const ph = h.phase, sp = h.speed;
     switch (h.pose) {
@@ -266,9 +370,10 @@ export class Humans {
       case 'phone':
         shR = -0.4; abR = -0.2; elR = -2.3;
         break;
-      default: { // idle
+      default: { // idle: breathing, weight on one leg
         const br = Math.sin(h.t * 1.7 + ph) * 0.02;
-        shL = br; shR = -br; bob = br * 0.3;
+        shL = 0.05 + br; shR = 0.05 - br; bob = br * 0.3;
+        hipL = 0.05; kneeL = 0.12; hipR = -0.03;
       }
     }
     if (h.punch > 0) {
@@ -297,8 +402,9 @@ export class Humans {
     this._emit('head', _m, o.skin);
     this._emit('face', _m, o.brow);
     if (f.has('turban')) this._emit('turban', _m, o.extra);
-    else { this._emit('hair', _m, o.hair); if (f.has('bun')) this._emit('bun', _m, o.hair); }
+    else { this._emit('hair', _m, o.hair); if (f.has('bun')) this._emit('bun', _m, o.hair); if (f.has('long')) this._emit('long', _m, o.hair); }
     if (f.has('beard')) this._emit('beard', _m, o.hair);
+    if (f.has('moustache') && !f.has('beard')) this._emit('moustache', _m, o.hair);
     if (f.has('cap')) this._emit('cap', _m, o.cap);
     if (far) return; // limbs are a few pixels at range: skip them
     // Arms.
