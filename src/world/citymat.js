@@ -69,7 +69,11 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <uv_vertex>', `#include <uv_vertex>
         vTUv = uv; vTint = tint; vTile = tile;`)
       .replace('#include <project_vertex>', `#include <project_vertex>
-        vCityWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+        vCityWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`)
+      // No normal attribute here (flat shading derives one per pixel), but three's shadow lookup
+      // still normalizes the vertex normal: a zero one turns the shadow coordinates into NaN and
+      // the city never receives a shadow. Any unit vector will do (the normal bias is zero).
+      .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform sampler2D cityAtlas;
@@ -244,7 +248,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += cityGlow;`);
   };
-  material.customProgramCacheKey = () => (signs ? 'city-signs-v4' : 'city-v4');
+  material.customProgramCacheKey = () => (signs ? 'city-signs-v5' : 'city-v5');
   return material;
 }
 

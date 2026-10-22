@@ -1,7 +1,7 @@
 // The game: owns the renderer, the world and every system, and runs the frame loop.
 import * as THREE from 'three';
 import { createWorld } from '../world/world.js';
-import { Humans, makeOutfit } from '../actors/humans.js';
+import { Humans, makeOutfit, NO_SHADOW_BOX } from '../actors/humans.js';
 import { Vehicles } from '../actors/vehicles.js';
 import { Player } from '../actors/player.js';
 import { GameCamera } from './camera.js';
@@ -76,6 +76,8 @@ export class Game {
     this.camera3.updateProjectionMatrix();
     const sun = this.world.sky.sun;
     sun.castShadow = q.shadows > 0;
+    // The bounce fill lights cast shade; without a shadow map it would only flatten the picture.
+    this.world.sky.bounceOn = q.shadows > 0;
     if (q.shadows > 0 && sun.shadow.mapSize.x !== q.shadows) {
       sun.shadow.mapSize.set(q.shadows, q.shadows);
       sun.shadow.map?.dispose(); sun.shadow.map = null;
@@ -200,11 +202,13 @@ export class Game {
     w.cityUniforms.uTime.value += dt;
     w.chunks.setNight(w.sky.night);
     this.vehicles.night = w.sky.night;
-    this.vehicles.render(dt, cam.position, w.sky.shadowBox);
-    this.humans.update(dt, cam.position, w.sky.shadowBox);
+    // People and vehicles cast only into a shadow map that refreshes with them (High and up);
+    // a static one would leave their shadows behind as they move.
+    const q = this.quality.settings, casters = q.dynamicShadows ? w.sky.shadowBox : NO_SHADOW_BOX;
+    this.vehicles.render(dt, cam.position, casters);
+    this.humans.update(dt, cam.position, casters);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
-    const q = this.quality.settings;
     if (q.shadows > 0) {
       // Moving shadows refresh every other frame: half the cost, and nobody can tell.
       this._shadowFrame = !this._shadowFrame;

@@ -45,6 +45,9 @@ const KEYS = [
   { el: 90, zen: C(0.22, 0.48, 0.88), hor: C(0.8, 0.85, 0.88), sun: C(1.0, 0.96, 0.88), sunI: 4.6, sky: C(0.66, 0.8, 0.98), gnd: C(0.56, 0.5, 0.4), ambI: 1.05, fog: C(0.82, 0.84, 0.84),
     exp: 0.72, sat: 1.1, con: 1.06, sh: C(0.95, 0.99, 1.04), hi: C(1.03, 1.01, 0.96), bloom: 0.06 },
 ];
+// Albedo of the town's sunlit dust (chunks.js groundTint), the colour of the light it bounces,
+// and how much of the sunlight comes back into the shade that way.
+const DUST = new THREE.Color(0.8, 0.71, 0.58), BOUNCE = 0.16;
 // fogNear/fogFar drive the fallback linear fog; fogDensity the haze in post-processing.
 const WEATHER = {
   clear: { fogNear: 0.32, fogFar: 1.0, grey: 0, clouds: 0.32, light: 1, fogDensity: 0.0013 },
@@ -82,6 +85,11 @@ export class Sky {
     this.shadowBox = { half: Infinity, cx: 0, cz: 0, xx: 1, xz: 0, yx: 0, yy: 1, yz: 0 };
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
     scene.add(this.hemi);
+    // Sunlight bounced off the dusty ground and sunlit walls into the shade. Without it (and with
+    // no global illumination) open shade reads near-black and teal under the blue sky alone.
+    this.bounce = new THREE.AmbientLight(0xffffff, 0);
+    this.bounceOn = true; // only wanted where there are cast shadows to fill
+    scene.add(this.bounce);
     // Linear fog is only used when post-processing is unavailable (see useSceneFog).
     this.fog = new THREE.Fog(0xcccccc, 150, 600);
     scene.fog = this.fog;
@@ -282,6 +290,8 @@ export class Sky {
     if (this.sunDir.y <= -0.02) this._moon.copy(this.sunDir).negate().setY(Math.abs(this.sunDir.y) + 0.35).normalize();
     this.sun.color.copy(K.sun);
     this.sun.intensity = sunI * this.w.light;
+    this.bounce.color.copy(K.sun).multiply(DUST);
+    this.bounce.intensity = this.bounceOn ? sunI * this.w.light * BOUNCE : 0;
     this.hemi.color.copy(K.sky);
     this.hemi.groundColor.copy(K.gnd);
     // Daylight ambient comes from the sky cube map; the hemisphere fills in moonlight.

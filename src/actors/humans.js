@@ -252,6 +252,9 @@ export function makeOutfit(kind, seed) {
 }
 
 // ------------------------------------------------------------------ renderer
+/** A shadow box nothing falls inside: for a shadow map that doesn't refresh with moving actors. */
+export const NO_SHADOW_BOX = { half: -Infinity, cx: 0, cz: 0, xx: 1, xz: 0, yx: 0, yy: 1, yz: 0 };
+
 /**
  * Whether something at (x, y, z), give or take `margin` metres, falls inside the sun's shadow
  * map (Sky.shadowBox: its centre and the sun camera's axes). With no box, everything does.
