@@ -451,6 +451,7 @@ export class RoadNet {
     const segLen = Math.hypot(bx - ax, bz - az) || 1;
     out.road = road;
     out.s = this.cum[found] + segLen * bestT;
+    out.seg = found;
     out.x = ax + (bx - ax) * bestT;
     out.z = az + (bz - az) * bestT;
     out.dx = (bx - ax) / segLen;

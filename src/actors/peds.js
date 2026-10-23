@@ -303,7 +303,9 @@ export class Peds {
       const k = (0.7 - dPlayer) / Math.max(dPlayer, 0.05);
       h.x += dpx * k * 0.5; h.z += dpz * k * 0.5;
     }
-    if (p.state !== 'down') h.y = g.city.groundHeight(h.x, h.z);
+    // The ground, or the footpath they walk (and stop on to chat or check a phone).
+    const onLine = p.state === 'walk' || p.state === 'idle' || p.state === 'phone';
+    if (p.state !== 'down') h.y = Math.max(g.city.groundHeight(h.x, h.z), onLine ? p.pave || 0 : 0);
   }
 
   _walk(p, dt) {
@@ -337,6 +339,8 @@ export class Peds {
       h.x += dx * k; h.z += dz * k;
       h.yaw = dampAngle(h.yaw, Math.atan2(dx, dz), 8, dt);
     }
+    // Up on the footpath where the street has one (feet sank 20 cm into it before).
+    p.pave = g.city.pavementAt(pt.seg, off);
     if (d > 3) p.s -= p.speed * dt * 0.8; // let them catch up to the line
     // Bump into the world (posts, stalls, platforms, walls, a parked car): the push becomes a
     // sidestep, and they drift back to their line as soon as it is clear a stride ahead (so

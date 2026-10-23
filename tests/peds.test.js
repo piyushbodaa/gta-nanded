@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { world } from './helpers.js';
 import { Colliders } from '../src/world/colliders.js';
 import { Peds } from '../src/actors/peds.js';
+import { WALK_Y } from '../src/world/citygen.js';
 
 // A minimal game around the real city, colliders and pedestrian system.
 function crowd(x, z, seed) {
@@ -98,4 +99,33 @@ test('the same seed gives the same crowd', () => {
     return peds.list.map(p => `${p.h.x.toFixed(4)},${p.h.z.toFixed(4)},${p.state}`).join('|');
   };
   assert.equal(run(), run());
+});
+
+test('walkers on a street with a footpath walk on top of it, not 20 cm inside it', () => {
+  const { city, net } = world();
+  // The footpath band of a street that has one: on the paving, then out on the road.
+  let seg = -1;
+  for (let i = 0; i < net.px.length - 1 && seg < 0; i++) if (net.ptRoad[i] === net.ptRoad[i + 1] && city.footpathAt(i)) seg = i;
+  const hw = net.width[net.ptRoad[seg]] / 2;
+  assert.equal(city.pavementAt(seg, hw + 0.95), WALK_Y, 'the middle of the footpath');
+  assert.equal(city.pavementAt(seg, hw - 1), 0, 'the road');
+  // A crowd on Station Road: whoever walks the footpath is up on it.
+  const { g, peds, restore } = crowd(159.8, 375.2, 7);
+  let onPath = 0, sunk = 0;
+  try {
+    for (let f = 0; f < 300; f++) {
+      g.time += 1 / 30;
+      peds.update(1 / 30);
+      if (f < 30) continue;
+      for (const p of peds.list) {
+        if (p.state !== 'walk') continue;
+        const n = net.nearest(p.h.x, p.h.z, 14, {});
+        if (!n || city.pavementAt(n.seg, n.dist) === 0) continue;
+        onPath++;
+        if (p.h.y < WALK_Y - 0.01) sunk++;
+      }
+    }
+  } finally { restore(); }
+  assert.ok(onPath > 100, `${onPath} walker-frames on footpaths`);
+  assert.ok(sunk <= onPath * 0.02, `${sunk} of ${onPath} walker-frames sunk into the footpath`);
 });

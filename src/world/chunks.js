@@ -4,7 +4,7 @@
 // and one line mesh for the wires.
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
-import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W, PUMP_HW, PUMP_HD } from './citygen.js';
+import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
@@ -15,7 +15,6 @@ import { FoliageGeo, LEAF } from './foliage.js';
 const FLOOR = 3.2;
 const ROAD_Y = [0.07, 0.068, 0.066, 0.064, 0.062, 0.06];
 const PAD_Y = 0.074;
-const WALK_Y = 0.2;
 // Chunks within this many metres of the player are built at once, budget or not.
 const RUSH = 48;
 // A build slice hands control back after about this long (between buildings, trees or props).
@@ -1112,7 +1111,7 @@ function buildProp(ctx, i) {
       // Vada-pav / fruit handcart with a big umbrella.
       g.color(0x8a6a3a, 0); g.cbox(x, 0.7, z, 0.9, 0.25, 0.55, rot);
       g.color(0x2b2b2b, 0);
-      for (const [lx, lz] of [[-0.6, -0.5], [0.6, -0.5], [-0.6, 0.5], [0.6, 0.5]]) g.cyl(x + lx * c + lz * s, 0, z - lx * s + lz * c, 0.32, 0.08, 6);
+      for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) g.wheel(x + lx * c + lz * s, 0.32, z - lx * s + lz * c, 0.32, 0.07, s, c);
       const goods = r.pick([0xe67e22, 0xf1c40f, 0xc0392b, 0x27ae60]);
       g.color(goods, 0); g.blob(x, 1.05, z, 0.7, 0.18, 0.4, i);
       g.color(0x555555, 0); g.cyl(x, 0.95, z, 0.03, 1.6, 4);
@@ -1135,7 +1134,8 @@ function buildProp(ctx, i) {
       const pile = (lx, lz, y, rx, rz) => { g.color(r.pick(piles), 0); g.blob(x + lx * c + lz * s, y, z - lx * s + lz * c, rx, 0.2, rz, i + lx * 7); };
       if (kind === 0) {
         g.color(0x7a5a34, 0); g.cbox(x, 0.75, z, 1.0, 0.18, 0.6, rot);
-        g.color(0x2b2b2b, 0); for (const lx of [-0.75, 0.75]) g.cyl(x + lx * c, 0, z - lx * s, 0.36, 0.1, 8);
+        g.color(0x2b2b2b, 0);
+        for (const [lx, lz] of [[-0.7, -0.66], [0.7, -0.66], [-0.7, 0.66], [0.7, 0.66]]) g.wheel(x + lx * c + lz * s, 0.36, z - lx * s + lz * c, 0.36, 0.07, s, c);
         g.color(0x5a4630, 0); g.beam(x + 1.0 * c, 0.85, z - 1.0 * s, x + 1.7 * c, 0.65, z - 1.7 * s, 0.04);
         for (const lx of [-0.55, 0, 0.55]) pile(lx, 0, 1.05, 0.38, 0.45);
       } else if (kind === 1) {

@@ -95,6 +95,8 @@ export class Game {
     sun.castShadow = q.shadows > 0;
     // The bounce fill lights cast shade; without a shadow map it would only flatten the picture.
     this.world.sky.bounceOn = q.shadows > 0;
+    // A wider filter on the coarser map: soft edges instead of stair-steps, for the same 17 taps.
+    sun.shadow.radius = q.shadows >= 2048 ? 1.3 : 1.8;
     if (q.shadows > 0 && sun.shadow.mapSize.x !== q.shadows) {
       sun.shadow.mapSize.set(q.shadows, q.shadows);
       sun.shadow.map?.dispose(); sun.shadow.map = null;
@@ -289,6 +291,7 @@ export class Game {
     // People and vehicles cast only into a shadow map that refreshes with them (High and up);
     // a static one would leave their shadows behind as they move.
     const q = this.quality.settings, casters = q.dynamicShadows ? w.sky.shadowBox : NO_SHADOW_BOX;
+    this.humans.blobsOn = !q.dynamicShadows;
     this.vehicles.render(dt, cam.position, casters);
     this.humans.update(dt, cam.position, casters);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });

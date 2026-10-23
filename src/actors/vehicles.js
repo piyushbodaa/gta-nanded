@@ -240,7 +240,7 @@ export class Vehicles {
         // Contact shadow.
         if (bn < this.blobs.instanceMatrix.count) {
           _e.set(0, v.heading, 0); _q.setFromEuler(_e);
-          _p.set(v.x, v.y + 0.03, v.z); _s.set(v.spec.W * 1.5, 1, v.spec.L * 1.25);
+          _p.set(v.x, v.y + 0.09, v.z); _s.set(v.spec.W * 1.5, 1, v.spec.L * 1.25); // above the road surface (6-7 cm)
           _t.compose(_p, _q, _s);
           this.blobs.setMatrixAt(bn++, _t);
         }
