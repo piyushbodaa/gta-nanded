@@ -18,6 +18,7 @@ import { Save } from './game/save.js';
 import { STORY, HOME } from './game/story.js';
 import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
+import { track } from './core/analytics.js';
 
 const $ = id => document.getElementById(id);
 const status = (text, f) => { $('loading-status').textContent = text.toUpperCase(); if (f !== undefined) $('load-bar').style.width = `${Math.round(f * 100)}%`; };
@@ -91,6 +92,7 @@ async function boot() {
 }
 
 function startGame(game, mode) {
+  track('game_start', { mode });
   const P = game.player;
   game.save.data.started = true;
   if (mode === 'new') {
