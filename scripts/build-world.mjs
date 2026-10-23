@@ -3,7 +3,9 @@
 //   node scripts/build-world.mjs
 //
 // Input:  src/data/network.json (OSM street graph, 0.5 scale), src/data/city.json
-//         (researched places), src/data/buildings.json (OSM footprints).
+//         (researched places), src/data/buildings.json (OSM footprints),
+//         research/osm-airport.json (OSM runway, taxiways, aprons, terminal),
+//         research/osm-places.json (OSM petrol pumps).
 // Output: public/data/world.json, fetched by the game at startup.
 //
 // The OSM graph stores one edge per mapped segment. The game wants roads: one
@@ -21,6 +23,8 @@ const read = file => JSON.parse(readFileSync(join(root, file), 'utf8'));
 const network = read('src/data/network.json');
 const city = read('src/data/city.json');
 const buildings = read('src/data/buildings.json');
+const airport = read('research/osm-airport.json');
+const osmPlaces = read('research/osm-places.json');
 
 const TYPES = ['trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential'];
 const typeIndex = type => {
@@ -147,7 +151,21 @@ for (let i = 0; i < liveEdges.length; i++) {
   addRoad(pts, template);
 }
 
-// --- 4. Places: keep what the game uses at runtime; the full catalog stays in public/data/places.json.
+// --- 4. The airfield, projected like the streets: runway and taxiway centre lines, apron outlines.
+const { lat: LAT, lon: LON } = network.origin;
+const project = ({ lat, lon }) => [q((lon - LON) * 111320 * Math.cos((LAT * Math.PI) / 180) * network.scale), q((LAT - lat) * 111320 * network.scale)];
+const airfield = { runways: [], taxiways: [], aprons: [] };
+for (const w of airport.elements) {
+  const pts = w.geometry.flatMap(project), kind = w.tags.aeroway;
+  if (kind === 'runway') airfield.runways.push({ ref: w.tags.ref || '', p: pts });
+  else if (kind === 'taxiway') airfield.taxiways.push(pts);
+  else if (kind === 'apron') airfield.aprons.push(pts);
+}
+
+// Petrol pumps mapped in OSM (the city fills in more along the highways).
+const fuel = osmPlaces.elements.filter(e => e.tags?.amenity === 'fuel').map(e => project(e.center || e));
+
+// --- 5. Places: keep what the game uses at runtime; the full catalog stays in public/data/places.json.
 const places = city.places.map(p => ({
   id: p.id, name: p.name, shortName: p.shortName, category: p.category, area: p.area,
   x: q(p.x), z: q(p.z), rot: Math.round((p.rotation || 0) * 1000) / 1000,
@@ -175,6 +193,8 @@ const world = {
   districts: city.districts.map(d => [d.name, q(d.x), q(d.z)]),
   spawn: city.spawn,
   footprints: buildings.buildings.map(b => b.map((v, i) => (i < 5 ? q(v) : i === 5 ? Math.round(v * 1000) / 1000 : v))),
+  airfield,
+  fuel,
 };
 
 mkdirSync(join(root, 'public/data'), { recursive: true });

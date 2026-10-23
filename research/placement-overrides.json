@@ -700,11 +700,11 @@
     "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
   },
   "nanded-airport": {
-    "lat": 19.18111111111111,
-    "lon": 77.32249999999999,
-    "coordinateSourceUrl": "https://aim-india.aai.aero/eAIP_Archive/06-08-2026/eAIP/IN-AD%202.1VOND-en-GB.html",
+    "lat": 19.18342,
+    "lon": 77.33509,
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/496501749",
     "locationPrecision": "mapped",
-    "note": "Retained explicitly sourced original research coordinate; see the associated research notes."
+    "note": "The passenger terminal (OpenStreetMap aeroway=terminal, way 496501749) at the east end of runway 10/28, so the building stands where travellers arrive; the AAI aerodrome reference point it replaced lies on the airfield itself. Runway, aprons and taxiways come from research/osm-airport.json."
   },
   "govardhan-ghat-bridge": {
     "lat": 19.1455357632,

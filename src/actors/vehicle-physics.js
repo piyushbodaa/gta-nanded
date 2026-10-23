@@ -165,7 +165,7 @@ export function stepBody(v, ctl, dt, assist = 1) {
 export function collideStatic(v, colliders, contact) {
   let worst = 0;
   for (let iter = 0; iter < 3; iter++) {
-    const c = colliders.boxContact(v.x, v.z, v.hw, v.hd, v.heading, contact);
+    const c = colliders.boxContact(v.x, v.z, v.hw, v.hd, v.heading, contact, v.y);
     if (!c) break;
     // Push out.
     v.x += c.nx * (c.depth + 0.002);

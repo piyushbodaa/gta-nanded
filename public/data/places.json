@@ -2120,8 +2120,8 @@
     "category": "transport",
     "area": "Sangvi",
     "address": "Sangvi (Bk), Old Hingoli Road, Nanded",
-    "lat": 19.18111111111111,
-    "lon": 77.32249999999999,
+    "lat": 19.18342,
+    "lon": 77.33509,
     "sourceUrl": "https://aim-india.aai.aero/eAIP_Archive/06-08-2026/eAIP/IN-AD%202.1VOND-en-GB.html",
     "sourceTitle": "Airports Authority of India — VOND aerodrome information",
     "verifiedAt": "2026-10-16",
@@ -2132,23 +2132,23 @@
       "VOND",
       "नांदेड विमानतळ"
     ],
-    "coordinateSourceUrl": "https://aim-india.aai.aero/eAIP_Archive/06-08-2026/eAIP/IN-AD%202.1VOND-en-GB.html",
+    "coordinateSourceUrl": "https://www.openstreetmap.org/way/496501749",
     "locationPrecision": "mapped",
-    "note": "Retained explicitly sourced original research coordinate; see the associated research notes.",
-    "geoX": 657.21,
-    "geoZ": -1175.04,
-    "x": 683.69,
-    "z": -1090.1,
-    "rotation": -1.35671,
+    "note": "The passenger terminal (OpenStreetMap aeroway=terminal, way 496501749) at the east end of runway 10/28, so the building stands where travellers arrive; the AAI aerodrome reference point it replaced lies on the airfield itself. Runway, aprons and taxiways come from research/osm-airport.json.",
+    "geoX": 1319.15,
+    "geoZ": -1303.56,
+    "x": 1381.56,
+    "z": -1353.94,
+    "rotation": -1.76497,
     "w": 36,
     "d": 20,
     "h": 12,
     "approach": {
-      "x": 659.27,
-      "z": -1084.79
+      "x": 1357.04,
+      "z": -1358.76
     },
-    "roadEdge": 9217,
-    "frontageShiftMetres": 178
+    "roadEdge": 22916,
+    "frontageShiftMetres": 160
   },
   {
     "id": "govardhan-ghat-bridge",

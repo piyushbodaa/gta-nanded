@@ -150,3 +150,24 @@ test('signals stand at the chowks where main roads cross, and crossing roads nev
     assert.deepEqual([...states].sort(), ['amber', 'green', 'red']);
   }
 });
+
+test('a car parked in the lane is squeezed past, not queued behind for ever', () => {
+  const { net } = world();
+  // A long two-way street with one lane each way.
+  let road = -1;
+  for (let r = 0; r < net.count; r++) if (!net.oneway[r] && !net.bridge[r] && net.width[r] >= 6 && net.width[r] < 9 && net.length[r] > 160) { road = r; break; }
+  const p = net.pointAt(road, net.length[road] / 2, {});
+  const { g, traffic } = streets(p.x, p.z);
+  g.quality.settings.traffic = 0;
+  // Parked at the kerb, sticking into the lane.
+  const parkedOff = net.width[road] / 2 - 0.95, spot = net.pointAt(road, net.length[road] / 2, {});
+  const parked = g.vehicles.spawn('hatch', spot.x + spot.dz * parkedOff, spot.z - spot.dx * parkedOff, Math.atan2(spot.dx, spot.dz), { role: 'parked' });
+  // A car coming up behind it in the same lane.
+  const s = net.length[road] / 2 - 40, q = net.lanePoint(road, 1, s, net.laneOffset(road, 0, s), {});
+  const car = g.vehicles.spawn('sedan', q.x, q.z, q.heading, { role: 'traffic' });
+  car.ai = { road, dir: 1, s, lane: 0, speed: 8, cruise: 10, turn: null, wait: 0, blocked: 0, honk: 9, weave: 0, dodge: 0, dodgeWant: 0 };
+  traffic.cars.push(car);
+  for (let f = 0; f < 30 * 12 && car.ai.road === road; f++) { g.time += 1 / 30; traffic.update(1 / 30); }
+  assert.ok(car.ai.road !== road || car.ai.s > net.length[road] / 2 + 6, `the car got past (s ${car.ai.s.toFixed(1)} of ${net.length[road].toFixed(0)})`);
+  void parked;
+});

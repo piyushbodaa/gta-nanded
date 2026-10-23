@@ -230,7 +230,7 @@ export class Missions {
       },
       /** A kerbside spot near (x, z), facing the way traffic flows there (side +1: left of the road's a->b). */
       roadPoint(x, z, side = 1, out = {}) {
-        const net = g.net, n = net.nearest(x, z, 80, {});
+        const net = g.net, n = net.nearest(x, z, 80, {}, r => !net.raised[r]);
         if (!n) return { x, z, heading: 0 };
         side = net.kerbSide(n.road) || side;
         const off = net.width[n.road] / 2 - 1.2, flow = net.oneway[n.road] || side;

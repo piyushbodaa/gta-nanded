@@ -3,6 +3,7 @@
 // the city is identical on every visit and on every device.
 import { SpatialGrid, rng, clamp, pointSegDist2, obbOverlap, hash2, smoothstep } from '../core/math.js';
 import { MEDIAN_W } from './roadnet.js';
+import { airfieldPieces } from './airfield.js';
 
 // Building styles. The renderer maps each to facade rows in the texture atlas.
 export const STYLE = {
@@ -48,6 +49,7 @@ export class City {
     this.places = world.places;
     this.rivers = world.rivers.map(r => ({ name: r.name, w: r.w, p: Float32Array.from(r.p) }));
     this.rails = world.rails.map(p => Float32Array.from(p));
+    this.raisedAreas = [];
     this._buildDensity();
     this._buildWaterIndex();
   }
@@ -221,6 +223,13 @@ export class City {
 
   /** Ground height: flat city, with the river valleys cut into it. */
   groundHeight(x, z) {
+    // Raised ground: the station's platforms.
+    for (const a of this.raisedAreas) {
+      const dx = x - a.x, dz = z - a.z;
+      if (dx * dx + dz * dz > a.r2) continue;
+      const u = dx * a.ux + dz * a.uz, v = dx * a.vx + dz * a.vz;
+      if (Math.abs(u) <= a.hu && Math.abs(v) <= a.hv) return a.h;
+    }
     const r = this.riverDistance(x, z, this._rd || (this._rd = {}));
     if (r.d > 14) return 0;
     if (r.d > 0) return -3.2 * (1 - smoothstep(0, 14, r.d));
@@ -259,6 +268,180 @@ export class City {
     return lo;
   }
 
+  /**
+   * The station building stands beside the railway, not square to the street: turn it to
+   * run along the nearest track with its back to the line, and move it so Platform 1 fits
+   * between them (the platform's edge 1.7 m from the track). p.station keeps the frame.
+   */
+  _alignStation(p) {
+    let best = null;
+    this.rails.forEach(line => {
+      for (let i = 0; i + 3 < line.length; i += 2) {
+        const len = Math.hypot(line[i + 2] - line[i], line[i + 3] - line[i + 1]);
+        const mx = (line[i] + line[i + 2]) / 2, mz = (line[i + 1] + line[i + 3]) / 2;
+        if (len > 20 && Math.hypot(mx - p.x, mz - p.z) < 120 && (!best || len > best.len)) best = { len, dx: (line[i + 2] - line[i]) / len, dz: (line[i + 3] - line[i + 1]) / len };
+      }
+    });
+    if (!best) return;
+    // The side the tracks are on: n points from the street toward the railway.
+    let nx = best.dz, nz = -best.dx, near = Infinity;
+    const lat = (x, z) => (x - p.x) * nx + (z - p.z) * nz;
+    if (lat(p.ax, p.az) > 0) { nx = -nx; nz = -nz; }
+    // The nearest track beside the building (sampled along each segment: some run for hundreds of metres).
+    this.rails.forEach(line => {
+      for (let i = 0; i + 3 < line.length; i += 2) {
+        const n = Math.ceil(Math.hypot(line[i + 2] - line[i], line[i + 3] - line[i + 1]) / 4);
+        for (let k = 0; k <= n; k++) {
+          const x = line[i] + ((line[i + 2] - line[i]) * k) / n, z = line[i + 1] + ((line[i + 3] - line[i + 1]) * k) / n;
+          const along = (x - p.x) * best.dx + (z - p.z) * best.dz, l = lat(x, z);
+          if (Math.abs(along) < 40 && l > 0) near = Math.min(near, l);
+        }
+      }
+    });
+    if (!Number.isFinite(near)) return;
+    const half = STATION_HD, shift = near - 1.7 - half;
+    p.x += nx * shift; p.z += nz * shift;
+    // Local +z (the back) toward the tracks; place rotations are turned half round.
+    p.rot = Math.atan2(nx, nz) - Math.PI;
+    p.station = { dx: best.dx, dz: best.dz, nx, nz, track: near - shift };
+    this._stationLayout(p);
+  }
+
+  /**
+   * Platforms between the tracks, a foot overbridge across them and a train at a platform,
+   * in station coordinates: a along the line, b from the street (front, b < 0) toward the tracks.
+   */
+  _stationLayout(p) {
+    const S = p.station, PLAT = 0.84; // Indian high-level platforms stand 840 mm above the rails
+    const toAB = (x, z) => [(x - p.x) * S.dx + (z - p.z) * S.dz, (x - p.x) * S.nx + (z - p.z) * S.nz];
+    // Every 2 m of track near the station, as (a, b).
+    const pts = [];
+    this.rails.forEach(line => {
+      for (let i = 0; i + 3 < line.length; i += 2) {
+        const n = Math.ceil(Math.hypot(line[i + 2] - line[i], line[i + 3] - line[i + 1]) / 2);
+        for (let k = 0; k <= n; k++) {
+          const [a, b] = toAB(line[i] + ((line[i + 2] - line[i]) * k) / n, line[i + 1] + ((line[i + 3] - line[i + 1]) * k) / n);
+          if (Math.abs(a) < 70 && b > 0 && b < 80) pts.push([a, b]);
+        }
+      }
+    });
+    // Tracks: offsets where the line runs the length of the platforms (a crossover between
+    // two tracks only grazes each offset, so it never counts as one).
+    const BIN = 0.6, bins = [];
+    for (const [a, b] of pts) {
+      const k = Math.floor(b / BIN), bin = bins[k] || (bins[k] = { n: 0, sum: 0, lo: a, hi: a });
+      bin.n++; bin.sum += b; bin.lo = Math.min(bin.lo, a); bin.hi = Math.max(bin.hi, a);
+    }
+    // A track lying a little askew spreads over neighbouring bins: merge runs of busy bins.
+    const long = [];
+    let run = null;
+    const close = () => { if (run && run.n >= 40 && run.lo < -40 && run.hi > 40) long.push(run.sum / run.n); run = null; };
+    for (let k = 0; k <= bins.length; k++) {
+      const bin = bins[k];
+      if (!bin || bin.n < 6) { close(); continue; }
+      if (!run) run = { n: 0, sum: 0, lo: Infinity, hi: -Infinity };
+      run.n += bin.n; run.sum += bin.sum; run.lo = Math.min(run.lo, bin.lo); run.hi = Math.max(run.hi, bin.hi);
+    }
+    const free = (b0, b1) => {
+      // The stretch around the middle with no track (a crossover) across the platform.
+      let lo = -48, hi = 48;
+      for (const [a, b] of pts) if (b > b0 && b < b1) { if (a < 0) lo = Math.max(lo, a + 2); else hi = Math.min(hi, a - 2); }
+      return hi - lo >= 40 ? [lo, hi] : null;
+    };
+    const platforms = [{ a0: -48, a1: 48, b0: 4.25, b1: S.track - 1.7, n: 1 }];
+    for (let i = 0; i + 1 < long.length; i++) {
+      const b0 = long[i] + 1.7, b1 = long[i + 1] - 1.7;
+      if (b1 - b0 < 7 || b0 < S.track) continue;
+      const span = free(b0, b1);
+      if (span) platforms.push({ a0: span[0], a1: span[1], b0, b1, n: platforms.length + 1 });
+    }
+    // (At half scale the yard's tracks lie a few metres apart, too close for island platforms.)
+    S.platforms = platforms;
+    S.tracks = long;
+    // The foot overbridge climbs from Platform 1 and spans every track to the far side.
+    const far = long.length ? long[long.length - 1] + 4 : S.track + 6;
+    S.fob = { a: -30, b0: 6, b1: far };
+    // A train waits at Platform 1.
+    S.train = { b: S.track, a0: -46, a1: 46 };
+    const r = Math.hypot(48, 40);
+    for (const pl of platforms) {
+      const am = (pl.a0 + pl.a1) / 2, bm = (pl.b0 + pl.b1) / 2;
+      this.raisedAreas.push({
+        x: p.x + S.dx * am + S.nx * bm, z: p.z + S.dz * am + S.nz * bm, h: PLAT,
+        ux: S.dx, uz: S.dz, vx: S.nx, vz: S.nz, hu: (pl.a1 - pl.a0) / 2, hv: (pl.b1 - pl.b0) / 2, r2: r * r,
+      });
+    }
+  }
+
+  /** A turboprop on the apron nearest the terminal, nose towards the building: p.plane = { x, z, heading }. */
+  /**
+   * Petrol pumps: forecourts beside the road at the pumps mapped in OSM, then along the
+   * highways every kilometre or so where a forecourt fits. this.pumps = [{ x, z, rot, look }]
+   * with local -z toward the road.
+   */
+  _sitePetrolPumps() {
+    const net = this.net, pumps = (this.pumps = []), p = {}, ov = {};
+    const ok = r => !net.bridge[r] && !net.raised[r] && net.width[r] >= 6;
+    const tryAt = (road, s, side, k, spacing) => {
+      const len = net.length[road];
+      if (s < net.trimStart(road) + 16 * k || s > len - net.trimEnd(road) - 16 * k) return false;
+      net.pointAt(road, s, p);
+      const hw = PUMP_HW * k, hd = PUMP_HD * k;
+      const off = net.width[road] / 2 + 1 + (this.footpathRoad(road, p.x, p.z) ? FOOTPATH_W : 0) + hd;
+      const x = p.x + p.dz * off * side, z = p.z - p.dx * off * side;
+      // Local -z faces the road: the forecourt's front toward (p.x, p.z).
+      const rot = Math.atan2(x - p.x, z - p.z);
+      if (pumps.some(q => Math.hypot(q.x - x, q.z - z) < spacing)) return false;
+      if (!this._clearOfStreets(x, z, hw, hd, rot, 0.3)) return false;
+      if (this.reserved.some(q => obbOverlap(x, z, hw + 2, hd + 2, rot, q.x, q.z, q.hw, q.hd, q.rot, ov))) return false;
+      pumps.push({ x, z, rot, k, look: pumps.length % 3 });
+      this.reserved.push({ x, z, hw: hw + 1, hd: hd + 1, rot, place: -1 });
+      return true;
+    };
+    // At each pump mapped in OSM: the best frontage on a road within 80 m.
+    for (const [fx, fz] of this.world.fuel || []) {
+      const roads = new Map();
+      net.segmentsIn(fx - 80, fz - 80, fx + 80, fz + 80, (i, r) => {
+        if (!ok(r)) return;
+        const d = Math.hypot((net.px[i] + net.px[i + 1]) / 2 - fx, (net.pz[i] + net.pz[i + 1]) / 2 - fz);
+        if (!roads.has(r) || d < roads.get(r)) roads.set(r, d);
+      });
+      const order = [...roads.entries()].sort((a, b) => net.type[a[0]] - net.type[b[0]] || a[1] - b[1]).map(([r]) => r);
+      let done = false;
+      for (const k of [1, 0.8]) for (const road of order) {
+        if (done) break;
+        const n = net.nearest(fx, fz, 120, {}, r => r === road);
+        if (!n) continue;
+        const sides = net.kerbSide(road) ? [net.kerbSide(road)] : [1, -1];
+        for (let ds = 0; ds <= 60 && !done; ds += 10) for (const sg of [1, -1]) for (const side of sides) if (!done && tryAt(road, n.s + ds * sg, side, k, 150)) done = true;
+      }
+    }
+    // Along the highways and main roads, about one every 1.2 km.
+    for (let r = 0; r < net.count && pumps.length < 22; r++) {
+      if (net.type[r] > 1 || !ok(r) || net.length[r] < 90) continue;
+      const sides = net.kerbSide(r) ? [net.kerbSide(r)] : [1, -1];
+      for (let s = 45; s < net.length[r] - 45 && pumps.length < 22; s += 45) {
+        if (sides.some(side => tryAt(r, s, side, 1, 600) || tryAt(r, s, side, 0.8, 600))) s += 300;
+      }
+    }
+  }
+
+  _parkPlane(p) {
+    let best = null;
+    for (const a of this.world.airfield?.aprons || []) {
+      let x = 0, z = 0;
+      for (let i = 0; i < a.length; i += 2) { x += a[i]; z += a[i + 1]; }
+      x /= a.length / 2; z /= a.length / 2;
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (!best || d < best.d) best = { d, x, z };
+    }
+    if (!best) return;
+    p.plane = { x: best.x, z: best.z, heading: Math.atan2(p.x - best.x, p.z - best.z) };
+    // The airside between the terminal and the apron stays open ground.
+    const dx = best.x - p.x, dz = best.z - p.z, len = Math.hypot(dx, dz);
+    this.reserved.push({ x: p.x + dx / 2, z: p.z + dz / 2, hw: 34, hd: len / 2, rot: Math.atan2(dx, dz), place: -1 });
+  }
+
   /** Places, landmarks and mapped OSM footprints claim their ground first. */
   _reserve() {
     this.lotGrid = new SpatialGrid(24);
@@ -269,9 +452,12 @@ export class City {
     });
     this._growLots(65536);
     this.reserved = [];
+    this._hazur = this.places.find(p => p.id === 'hazur-sahib');
     const net = this.net;
     for (let i = 0; i < this.places.length; i++) {
       const p = this.places[i];
+      if (p.id === 'nanded-station') this._alignStation(p);
+      if (p.id === 'nanded-airport') this._parkPlane(p);
       // Researched places face their approach point; our buildings face local -z.
       const rot = p.rot + Math.PI;
       const big = BIG_PLACES[p.id];
@@ -283,6 +469,24 @@ export class City {
         this.reserved.push({ x: p.x, z: p.z, hw: p.w / 2 + 2, hd: p.d / 2 + 2, rot, place: i });
       }
     }
+    // The airfield: nothing is built on the runway strip, the taxiways or the aprons.
+    const af = this.world.airfield;
+    if (af) {
+      const strip = (pts, hw) => {
+        for (let i = 0; i + 3 < pts.length; i += 2) {
+          const dx = pts[i + 2] - pts[i], dz = pts[i + 3] - pts[i + 1], len = Math.hypot(dx, dz);
+          if (len > 0.5) this.reserved.push({ x: pts[i] + dx / 2, z: pts[i + 1] + dz / 2, hw, hd: len / 2 + hw * 0.5, rot: Math.atan2(dx, dz), place: -1 });
+        }
+      };
+      for (const r of af.runways) strip(r.p, AIRSTRIP_HW);
+      for (const t of af.taxiways) strip(t, 16);
+      for (const a of af.aprons) {
+        let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+        for (let i = 0; i < a.length; i += 2) { x0 = Math.min(x0, a[i]); x1 = Math.max(x1, a[i]); z0 = Math.min(z0, a[i + 1]); z1 = Math.max(z1, a[i + 1]); }
+        this.reserved.push({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, hw: (x1 - x0) / 2 + 8, hd: (z1 - z0) / 2 + 8, rot: 0, place: -1 });
+      }
+    }
+    this._sitePetrolPumps();
     for (const r of this.reserved) {
       const id = -1 - this.reserved.indexOf(r);
       const ext = Math.max(r.hw, r.hd) * 1.42;
@@ -333,6 +537,8 @@ export class City {
     if (L.count === L.cap) this._growLots(L.cap * 2);
     const i = L.count++;
     const r = rng(seed);
+    // Around Hazur Sahib the old town stays low, so the gurudwara stands clear above it.
+    if (place < 0 && this._hazur && (x - this._hazur.x) ** 2 + (z - this._hazur.z) ** 2 < HERITAGE_R * HERITAGE_R) floors = Math.min(floors, 2);
     L.x[i] = x; L.z[i] = z; L.hw[i] = hw; L.hd[i] = hd; L.rot[i] = rot;
     L.floors[i] = floors; L.style[i] = style; L.seed[i] = seed; L.place[i] = place;
     const floorH = style === STYLE.SHED ? 4.2 : style === STYLE.HUT ? 3 : 3.2;
@@ -561,9 +767,11 @@ export class City {
   _placeProps() {
     // Street lamps on the big roads, MSEB poles with sagging wires on the lanes,
     // and the odd tea stall, handcart or shrine near busy corners.
-    const P = (this.props = { x: [], z: [], rot: [], kind: [], road: [] });
+    const P = (this.props = { x: [], z: [], rot: [], kind: [], road: [], y: [] });
     const net = this.net, p = {};
-    const add = (x, z, rot, kind, road) => { P.x.push(x); P.z.push(z); P.rot.push(rot); P.kind.push(kind); P.road.push(road); };
+    const add = (x, z, rot, kind, road, y = 0) => { P.x.push(x); P.z.push(z); P.rot.push(rot); P.kind.push(kind); P.road.push(road); P.y.push(y); };
+    // Nothing stands on the street under a flyover's deck.
+    const clear = (x, z) => net.deckOver(x, z) < 0.3;
     for (let road = 0; road < net.count; road++) {
       const len = net.length[road], w = net.width[road], type = net.type[road];
       const r = rng(hash2(road, 15485863));
@@ -571,10 +779,11 @@ export class City {
       const dens = this.densityAt(p.x, p.z);
       // A carriageway of a divided road has the median on one side and the kerb on the other.
       const kerb = net.kerbSide(road), ow = net.oneway[road];
-      if (net.bridge[road]) {
+      if (net.bridge[road] || net.raised[road]) {
+        // Along a bridge, or a flyover's deck and ramps: lamps on the parapets, standing on the deck.
         for (let s = 6; s < len - 6; s += 24) {
           net.pointAt(road, s, p);
-          for (const side of kerb ? [kerb] : [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI), PROP.LAMP, road);
+          for (const side of kerb ? [kerb] : [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI), PROP.LAMP, road, net.deckAt(road, s));
         }
         continue;
       }
@@ -582,7 +791,7 @@ export class City {
         // Twin-arm lamps down the median of the wide roads.
         for (let s = net.trimStart(road) + 8; s < len - net.trimEnd(road) - 8; s += 34) {
           net.pointAt(road, s, p);
-          add(p.x, p.z, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
+          if (clear(p.x, p.z)) add(p.x, p.z, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
         }
       } else if (w >= 12 && kerb) {
         // On a divided road they stand on the median between the carriageways; the one
@@ -594,7 +803,7 @@ export class City {
           const inner = net.innerAt(road, s);
           if (inner > w / 2 - 0.05) continue;
           const m = inner + MEDIAN_W / 2;
-          add(p.x - fz * m, p.z + fx * m, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
+          if (clear(p.x - fz * m, p.z + fx * m)) add(p.x - fz * m, p.z + fx * m, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
         }
       } else if (w >= 8 || (dens > 0.5 && type <= 4)) {
         let side = 1;
@@ -603,7 +812,7 @@ export class City {
           const off = w / 2 + 0.7;
           if (kerb) side = kerb;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
-          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road);
+          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road);
           side = -side;
         }
       } else if (dens > 0.12) {
@@ -612,7 +821,7 @@ export class City {
           net.pointAt(road, s, p);
           const off = w / 2 + 0.55;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
-          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0)) add(x, z, Math.atan2(p.dx, p.dz), PROP.POLE, road);
+          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z)) add(x, z, Math.atan2(p.dx, p.dz), PROP.POLE, road);
         }
       }
       // Life at the corners: tea stalls, vada-pav carts, shrines, hoardings.
@@ -628,16 +837,57 @@ export class City {
           const off = w / 2 + (kind === PROP.HOARDING ? 3.5 : 1.8);
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           const rad = kind === PROP.HOARDING ? 3 : 1.4;
-          if (net.roadClearance(x, z, 10) < (kind === PROP.HOARDING ? 1.2 : 0.4) || this._overlapsLots(x, z, rad, rad * 0.6, 0, 0)) continue;
+          if (net.roadClearance(x, z, 10) < (kind === PROP.HOARDING ? 1.2 : 0.4) || this._overlapsLots(x, z, rad, rad * 0.6, 0, 0) || !clear(x, z)) continue;
           add(x, z, Math.atan2(-p.dz * side, p.dx * side), kind, road);
           this.lotGrid.insertRect(-200000 - P.x.length, x - rad, z - rad, x + rad, z + rad);
         }
       }
     }
-    for (const k of ['x', 'z', 'rot']) P[k] = Float32Array.from(P[k]);
+    this._placeMarkets(add, clear);
+    for (const k of ['x', 'z', 'rot', 'y']) P[k] = Float32Array.from(P[k]);
     P.kind = Uint8Array.from(P.kind);
     P.road = Int32Array.from(P.road);
     P.count = P.x.length;
+  }
+
+  /**
+   * Sabzi markets: on busy old-town and market streets, vendors line the kerb with handcarts
+   * and mats of vegetables and fruit. this.markets = [{ x, z, vendors: [prop index] }].
+   */
+  _placeMarkets(add, clear) {
+    const net = this.net, P = this.props, p = {}, markets = (this.markets = []);
+    const known = ['sarafa-bazar', 'old-mondha-clock-tower', 'hazur-sahib', 'shivaji-putla'].map(id => this.places.find(q => q.id === id)).filter(Boolean);
+    const cands = [];
+    for (let road = 0; road < net.count; road++) {
+      if (net.type[road] < 3 || net.bridge[road] || net.raised[road] || net.width[road] < 4.8 || net.length[road] < 60) continue;
+      net.pointAt(road, net.length[road] / 2, p);
+      const zone = this.zoneAt(p.x, p.z), dens = this.densityAt(p.x, p.z);
+      if ((zone !== ZONE.MARKET && zone !== ZONE.OLD) || dens < 0.45) continue;
+      const nearKnown = known.some(q => Math.hypot(q.x - p.x, q.z - p.z) < 260);
+      cands.push({ road, x: p.x, z: p.z, score: dens + (nearKnown ? 1 : 0) + (hash2(road, 7717) % 100) / 400 });
+    }
+    cands.sort((a, b) => b.score - a.score);
+    for (const c of cands) {
+      if (markets.length >= 14) break;
+      if (markets.some(m => Math.hypot(m.x - c.x, m.z - c.z) < 550)) continue;
+      const road = c.road, w = net.width[road], len = net.length[road], r = rng(hash2(road, 424243));
+      const s0 = Math.max(net.trimStart(road) + 5, len / 2 - 36), s1 = Math.min(len - net.trimEnd(road) - 5, len / 2 + 36);
+      const vendors = [];
+      const sides = net.kerbSide(road) ? [net.kerbSide(road)] : [1, -1];
+      for (const side of sides) {
+        for (let s = s0 + r.range(0, 1.5); s < s1; s += r.range(2.8, 3.8)) {
+          net.pointAt(road, s, p);
+          const off = w / 2 + 0.95;
+          const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
+          if (!clear(x, z) || this._overlapsLots(x, z, 1.1, 0.9, Math.atan2(p.dx, p.dz), 0) || net.roadClearance(x, z, 10) < 0.25) continue;
+          // Local +z toward the road: the goods face the street.
+          add(x, z, Math.atan2(-p.dz * side, p.dx * side), PROP.VENDOR, road);
+          vendors.push(P.x.length - 1);
+          this.lotGrid.insertRect(-200000 - P.x.length, x - 1.2, z - 1.2, x + 1.2, z + 1.2);
+        }
+      }
+      if (vendors.length >= 8) markets.push({ x: c.x, z: c.z, road, vendors });
+    }
   }
 
   _indexChunks() {
@@ -652,6 +902,7 @@ export class City {
     for (let i = 0; i < L.count; i++) get(L.x[i], L.z[i]).lots.push(i);
     for (let i = 0; i < this.trees.count; i++) get(this.trees.x[i], this.trees.z[i]).trees.push(i);
     for (let i = 0; i < this.props.count; i++) get(this.props.x[i], this.props.z[i]).props.push(i);
+    for (const pump of this.pumps) (get(pump.x, pump.z).pumps ||= []).push(pump);
     for (let i = 0; i < this.places.length; i++) get(this.places[i].x, this.places[i].z).places.push(i);
     // Each road segment belongs to the chunk holding its midpoint.
     const net = this.net;
@@ -663,21 +914,39 @@ export class City {
         (c.segs || (c.segs = [])).push(i);
       }
     }
-    // Junction pads belong to the chunk holding the junction.
+    // Junction pads belong to the chunk holding the junction, railway segments to the one holding their middle.
     for (let j = 0; j < net.junctionCount; j++) (get(net.jx[j], net.jz[j]).junctions ||= []).push(j);
+    this.rails.forEach((line, l) => {
+      for (let i = 0; i + 3 < line.length; i += 2) (get((line[i] + line[i + 2]) / 2, (line[i + 1] + line[i + 3]) / 2).rails ||= []).push(l, i);
+    });
+    for (const piece of airfieldPieces(this.world.airfield)) (get(piece.x, piece.z).airfield ||= []).push(piece);
   }
 
   chunk(cx, cz) { return this.chunkIndex.get(chunkKey(cx, cz)); }
 }
 
+// Half the width of the cleared strip along a runway: the 45 m runway and its grass shoulders.
+export const AIRSTRIP_HW = 46;
+
+// A petrol pump's forecourt: [half along the road, half deep].
+export const PUMP_HW = 14, PUMP_HD = 9.5;
+
+// Lots this close to Hazur Sahib keep to two storeys.
+const HERITAGE_R = 140;
+
+// The station's ground: its building (16 m deep) and Platform 1 (7.5 m) between the street and the line.
+export const STATION_HD = 11.75;
+// The bus stand's: [half width, half depth] for its bays, shed and building.
+export const BUS_STAND = [26, 13];
+
 // Landmarks that need more ground than their catalogue footprint: [half width, half depth, min scale].
 export const BIG_PLACES = {
-  'hazur-sahib': [26, 26, 0.42], 'sggs-stadium': [21, 17.5], 'nanded-station': [17, 13], 'nandgiri-fort': [34, 14],
-  'visava-garden': [18.5, 17], 'nanded-bus-stand': [17, 6], 'kaleshwar-temple': [10, 13, 0.6], 'nanded-airport': [22, 12],
+  'hazur-sahib': [26, 26, 0.42], 'sggs-stadium': [21, 17.5], 'nanded-station': [34, STATION_HD], 'nandgiri-fort': [34, 14],
+  'visava-garden': [18.5, 17], 'nanded-bus-stand': BUS_STAND, 'kaleshwar-temple': [10, 13, 0.6], 'nanded-airport': [22, 12],
   'langar-sahib': [12, 14], 'nagina-ghat': [8, 8], 'sangat-sahib': [8, 8], 'mata-sahib': [8, 8], 'old-mondha-clock-tower': [3.4, 3.4],
 };
 
-export const PROP = { LAMP: 0, MEDIAN_LAMP: 1, POLE: 2, STALL: 3, CART: 4, SHRINE: 5, HOARDING: 6, SIGNAL: 7 };
+export const PROP = { LAMP: 0, MEDIAN_LAMP: 1, POLE: 2, STALL: 3, CART: 4, SHRINE: 5, HOARDING: 6, SIGNAL: 7, VENDOR: 8 };
 
 function lotParams(zone, dens, roadType, r) {
   const major = roadType <= 3;

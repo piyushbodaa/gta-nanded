@@ -115,6 +115,7 @@ export class Game {
 
   pushOutOfVehicles(actor, r) {
     for (const v of this.vehicles.list) {
+      if (Math.abs((actor.y ?? 0) - v.y) > 2) continue; // one of us is up on a flyover
       const dx = actor.x - v.x, dz = actor.z - v.z;
       if (dx * dx + dz * dz > (v.hd + r + 1) ** 2) continue;
       const c = Math.cos(v.heading), s = Math.sin(v.heading);
@@ -171,6 +172,8 @@ export class Game {
       // Everything that drives a vehicle writes its controls before physics reads them.
       this.traffic?.update(dt);
       this.parked?.update(dt);
+      this.stands?.update(dt);
+      this.markets?.update(dt);
       this.police?.update(dt);
       this.missions?.update(dt);
       this.hooks?.forEach(f => f(dt));

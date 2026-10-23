@@ -194,7 +194,7 @@ export function installRules(g) {
     RAATRANI: () => { g.sky.hours = (g.sky.hours + 12) % 24; return 'Day for night.'; },
   };
   function spawnNear(type, msg) {
-    const P = g.player, pos = P.pos, n = g.net.nearest(pos.x + Math.sin(P.heading) * 8, pos.z + Math.cos(P.heading) * 8, 40, {});
+    const P = g.player, pos = P.pos, n = g.net.nearest(pos.x + Math.sin(P.heading) * 8, pos.z + Math.cos(P.heading) * 8, 40, {}, r => !g.net.raised[r]);
     if (!n) return null;
     const v = g.vehicles.spawn(type, n.x, n.z, Math.atan2(n.dx, n.dz) + (g.net.oneway[n.road] < 0 ? Math.PI : 0), { role: 'parked', driver: false });
     v.kinematic = true;
@@ -254,7 +254,7 @@ export function installRules(g) {
     const fine = Math.min(fee, g.save.cash);
     if (fine) g.addCash(-fine);
     P.health = P.maxHealth;
-    const n = g.net.nearest(at.x, at.z, 50, {});
+    const n = g.net.nearest(at.x, at.z, 50, {}, r => !g.net.raised[r]);
     const off = n ? (g.net.width[n.road] / 2 + 1) * (g.net.kerbSide(n.road) || 1) : 0;
     P.teleport(n ? n.x + n.dz * off : at.x, n ? n.z - n.dx * off : at.z, n ? Math.atan2(n.dx, n.dz) : 0);
     g.respawning = false;

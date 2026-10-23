@@ -42,7 +42,7 @@ export class Animals {
     const g = this.game, net = g.net;
     const r = rng(hash2(this.seed++, 9091));
     const ang = r() * Math.PI * 2, d = r.range(50, 130);
-    const n = net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 40, {});
+    const n = net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 40, {}, r => !net.raised[r] && !net.bridge[r]);
     if (!n || net.bridge[n.road]) return;
     const cow = r.chance(0.6);
     const side = net.kerbSide(n.road) || (r.chance(0.5) ? 1 : -1), off = net.width[n.road] / 2 + (cow ? 0.6 : 1.0);
@@ -68,7 +68,7 @@ export class Animals {
         a.state = r < 0.45 ? 'walk' : r < 0.75 ? 'graze' : 'sit';
         if (a.state === 'sit' && Math.random() < 0.5) {
           // Wander onto the road to sit, as cows do.
-          const n = g.net.nearest(a.x, a.z, 12, {});
+          const n = g.net.nearest(a.x, a.z, 12, {}, r => !g.net.raised[r]);
           if (n && !g.player.vehicle || (n && dist(n.x, n.z, P.pos.x, P.pos.z) > 25)) { a.tx = n.x; a.tz = n.z; a.state = 'toRoad'; }
         }
         a.t = 6 + Math.random() * 14;
@@ -99,7 +99,7 @@ export class Animals {
     // Vehicles: cows are immovable and unbothered; dogs scatter.
     for (const v of g.vehicles.list) {
       const dx = a.x - v.x, dz = a.z - v.z, rr = v.hd + (a.cow ? 1.1 : 0.5);
-      if (dx * dx + dz * dz > rr * rr) continue;
+      if (v.y > 1.5 || dx * dx + dz * dz > rr * rr) continue;
       const c2 = Math.cos(v.heading), s2 = Math.sin(v.heading);
       const lx = dx * c2 - dz * s2, lz = dx * s2 + dz * c2;
       const ew = v.hw + (a.cow ? 0.55 : 0.3), ed = v.hd + (a.cow ? 1.0 : 0.4);
