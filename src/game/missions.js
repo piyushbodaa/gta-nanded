@@ -228,11 +228,13 @@ export class Missions {
         m.ent[name] = p;
         return p;
       },
+      /** A kerbside spot near (x, z), facing the way traffic flows there (side +1: left of the road's a->b). */
       roadPoint(x, z, side = 1, out = {}) {
-        const n = g.net.nearest(x, z, 80, {});
+        const net = g.net, n = net.nearest(x, z, 80, {});
         if (!n) return { x, z, heading: 0 };
-        const off = g.net.width[n.road] / 2 - 1.2;
-        out.x = n.x + n.dz * off * side; out.z = n.z - n.dx * off * side; out.heading = Math.atan2(n.dx, n.dz) + (side > 0 ? 0 : Math.PI);
+        side = net.kerbSide(n.road) || side;
+        const off = net.width[n.road] / 2 - 1.2, flow = net.oneway[n.road] || side;
+        out.x = n.x + n.dz * off * side; out.z = n.z - n.dx * off * side; out.heading = Math.atan2(n.dx, n.dz) + (flow > 0 ? 0 : Math.PI);
         return out;
       },
       driver: (v, opts) => new DynamicDriver(g, v, opts),

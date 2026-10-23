@@ -195,6 +195,7 @@ export class Game {
     // Stream with what the frame can spare: up to 4 ms, less when frames are already long.
     w.chunks.update(focus.x, focus.z, this.started ? clamp(13 - this._frameMs, 1, 4) : 30);
     w.sky.update(dt, focus);
+    this.signals?.update(dt, this.time);
     w.sky.placeDome(cam);
     w.rivers.update(dt);
     w.cityUniforms.uNight.value = w.sky.night;

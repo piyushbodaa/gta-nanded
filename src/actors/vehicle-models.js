@@ -207,8 +207,9 @@ function lampsAndPlates(b, { front, rear, y, hw, commercial = false, lampW = 0.3
     b.box('lights', s * (hw - 0.14), y + 0.02, rear, 0.22, 0.14, 0.05, TAIL);
     b.box('lights', s * (hw - 0.05), y - 0.02, front - 0.05, 0.06, 0.06, 0.06, AMBER);
   }
+  // Indian plates: white front and back on private vehicles, yellow on commercial ones.
   b.box('fixed', 0, y - 0.22, front + 0.02, 0.5, 0.12, 0.02, commercial ? PLATE_Y : PLATE_W);
-  b.box('fixed', 0, y - 0.18, rear - 0.02, 0.5, 0.12, 0.02, commercial ? PLATE_Y : PLATE_Y);
+  b.box('fixed', 0, y - 0.18, rear - 0.02, 0.5, 0.12, 0.02, commercial ? PLATE_Y : PLATE_W);
 }
 
 // Each builder returns { geos, wheels: [[x, z, r, front, width]], seat: {x, y, z, pose}, siren? }

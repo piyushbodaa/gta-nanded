@@ -2,6 +2,7 @@
 // bridge railing and median as an oriented box or a circle on the ground plane.
 import { SpatialGrid, clamp } from '../core/math.js';
 import { PROP } from './citygen.js';
+import { MEDIAN_W } from './roadnet.js';
 import { placeColliders } from './landmarks.js';
 
 export const SOLID = { OBB: 0, CIRCLE: 1 };
@@ -83,20 +84,26 @@ export class Colliders {
     const net = city.net, p = {};
     for (let r = 0; r < net.count; r++) {
       const w = net.width[r];
-      const bridge = net.bridge[r], median = w >= 11.5 && !bridge;
-      if (!bridge && !median) continue;
+      // A carriageway of a divided road has its half of the median on its right (ms: +1 left of a->b, -1 right).
+      const ms = net.oneway[r] ? -net.oneway[r] : 0;
+      const bridge = net.bridge[r], median = w >= 11.5 && !bridge && !ms;
+      if (!bridge && !median && !ms) continue;
       const s0 = net.trimStart(r), s1 = net.length[r] - net.trimEnd(r);
       for (let s = s0; s < s1 - 0.5; s += 8) {
-        const e = Math.min(s + 8, s1);
-        net.pointAt(r, (s + e) / 2, p);
+        const e = Math.min(s + 8, s1), sm = (s + e) / 2;
+        net.pointAt(r, sm, p);
         const rot = Math.atan2(p.dx, p.dz);
         const half = (e - s) / 2;
+        const inner = ms ? net.innerAt(r, sm) : w / 2, divided = inner < w / 2 - 0.05;
         if (bridge) {
           for (const side of [1, -1]) {
-            const off = w / 2 + 0.2;
-            this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, 0.2, half + 0.3, rot, 1.0);
+            const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2;
+            this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, 1.0);
           }
-        } else this.addBox(p.x, p.z, 0.35, half, rot, 0.35);
+        } else if (divided) {
+          const off = inner + MEDIAN_W / 4;
+          this.addBox(p.x + p.dz * off * ms, p.z - p.dx * off * ms, MEDIAN_W / 4, half, rot, 0.35);
+        } else if (median) this.addBox(p.x, p.z, 0.35, half, rot, 0.35);
       }
     }
   }

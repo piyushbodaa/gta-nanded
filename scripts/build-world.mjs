@@ -9,7 +9,9 @@
 // The OSM graph stores one edge per mapped segment. The game wants roads: one
 // polyline per stretch between junctions, so lanes, meshes and AI can follow a
 // street without re-walking the graph. Degree-2 nodes are folded into the
-// polylines; a stretch also breaks where its width, class or bridge flag changes.
+// polylines; a stretch also breaks where its width, class, bridge flag or
+// one-way direction changes. One-way roads (each carriageway of a dual
+// carriageway, roundabouts) keep their direction of travel.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,7 +47,7 @@ for (const e of network.edges) {
   const k = a < b ? `${a}-${b}` : `${b}-${a}`;
   if (edgeSeen.has(k)) continue;
   edgeSeen.add(k);
-  edges.push({ a, b, width: e.width, type: typeIndex(e.type), name: e.name || '', bridge: Boolean(e.bridge) });
+  edges.push({ a, b, width: e.width, type: typeIndex(e.type), name: e.name || '', bridge: Boolean(e.bridge), oneway: e.oneway || 0 });
 }
 
 // --- 2. Keep the largest connected component so every road is reachable.
@@ -77,10 +79,14 @@ liveEdges.forEach((e, i) => {
 
 // --- 3. Fold degree-2 chains into roads between junctions.
 const sameRoad = (e, f) => e.width === f.width && e.type === f.type && e.bridge === f.bridge && e.name === f.name;
+// Traffic on edge e at its end n: 1 flows only into n, -1 only out of n, 0 both ways.
+const flowAt = (e, n) => (e.oneway ? ((e.oneway > 0) === (e.b === n) ? 1 : -1) : 0);
 const isJunction = n => {
   const list = liveAdj.get(n);
   if (list.length !== 2) return true;
-  return !sameRoad(liveEdges[list[0]], liveEdges[list[1]]);
+  const e = liveEdges[list[0]], f = liveEdges[list[1]];
+  // A road runs on through n only if what flows in on one side flows out on the other.
+  return !sameRoad(e, f) || flowAt(e, n) !== -flowAt(f, n);
 };
 const used = new Uint8Array(liveEdges.length);
 const junctionId = new Map();
@@ -119,7 +125,9 @@ function addRoad(pts, template) {
   const flat = [];
   for (const p of pts) flat.push(nodes[p].x, nodes[p].z);
   const id = roads.length;
-  roads.push({ a, b, w: template.width, t: template.type, n: nameOf(template.name), br: template.bridge ? 1 : 0, p: flat });
+  // Direction of a one-way road in its own a -> b terms: 1 when traffic leaves pts[0].
+  const ow = template.oneway ? -flowAt(template, pts[0]) : 0;
+  roads.push({ a, b, w: template.width, t: template.type, n: nameOf(template.name), br: template.bridge ? 1 : 0, ow, p: flat });
   junctions[a].roads.push(id);
   if (b !== a) junctions[b].roads.push(id);
 }
@@ -159,6 +167,8 @@ const world = {
   names,
   junctions: junctions.map(j => [j.x, j.z, ...j.roads]),
   roads: roads.map(r => [r.a, r.b, r.w, r.t, r.n, r.br, ...r.p]),
+  // One-way roads by index: traffic goes only from junction a to b (forward) or b to a (backward).
+  oneway: { forward: roads.flatMap((r, i) => (r.ow > 0 ? [i] : [])), backward: roads.flatMap((r, i) => (r.ow < 0 ? [i] : [])) },
   rivers: network.rivers.map(r => ({ name: r.name, w: r.width, p: r.points.flatMap(p => [q(p.x), q(p.z)]) })),
   rails: network.rails.map(line => line.flatMap(p => [q(p.x), q(p.z)])),
   places,
@@ -174,4 +184,4 @@ const degree = new Map();
 for (const j of junctions) degree.set(j.roads.length, (degree.get(j.roads.length) || 0) + 1);
 console.log(`world.json: ${(out.length / 1024).toFixed(0)} KB · ${roads.length} roads · ${junctions.length} junctions · ` +
   `${liveEdges.length}/${edges.length} edges kept · degrees ${JSON.stringify([...degree].sort((a, b) => a[0] - b[0]))} · ` +
-  `${places.length} places · ${world.footprints.length} footprints`);
+  `${world.oneway.forward.length + world.oneway.backward.length} one-way · ${places.length} places · ${world.footprints.length} footprints`);

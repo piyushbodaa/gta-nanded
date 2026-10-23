@@ -127,7 +127,7 @@ export class Jobs {
       const ang = r() * 6.28, d = r.range(60, 260);
       const n = g.net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 40, {});
       if (!n || g.net.bridge[n.road]) continue;
-      const off = g.net.width[n.road] / 2 + 0.6;
+      const off = (g.net.width[n.road] / 2 + 0.6) * (g.net.kerbSide(n.road) || 1);
       const x = n.x + n.dz * off, z = n.z - n.dx * off;
       if (g.colliders.blocked(x, z, 0.3)) continue;
       const h = g.humans.add(g.peds.outfitFor(x, z, r), x, z);

@@ -2,6 +2,7 @@
 // along the mapped streets. Everything is deterministic (seeded per road), so
 // the city is identical on every visit and on every device.
 import { SpatialGrid, rng, clamp, pointSegDist2, obbOverlap, hash2, smoothstep } from '../core/math.js';
+import { MEDIAN_W } from './roadnet.js';
 
 // Building styles. The renderer maps each to facade rows in the texture atlas.
 export const STYLE = {
@@ -568,24 +569,39 @@ export class City {
       const r = rng(hash2(road, 15485863));
       net.pointAt(road, len / 2, p);
       const dens = this.densityAt(p.x, p.z);
+      // A carriageway of a divided road has the median on one side and the kerb on the other.
+      const kerb = net.kerbSide(road), ow = net.oneway[road];
       if (net.bridge[road]) {
         for (let s = 6; s < len - 6; s += 24) {
           net.pointAt(road, s, p);
-          for (const side of [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI), PROP.LAMP, road);
+          for (const side of kerb ? [kerb] : [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI), PROP.LAMP, road);
         }
         continue;
       }
-      if (w >= 12) {
+      if (w >= 12 && !ow) {
         // Twin-arm lamps down the median of the wide roads.
         for (let s = net.trimStart(road) + 8; s < len - net.trimEnd(road) - 8; s += 34) {
           net.pointAt(road, s, p);
           add(p.x, p.z, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
+        }
+      } else if (w >= 12 && kerb) {
+        // On a divided road they stand on the median between the carriageways; the one
+        // heading east (north on a due north-south road) plants them, so there is one row.
+        for (let s = net.trimStart(road) + 8; s < len - net.trimEnd(road) - 8; s += 34) {
+          net.pointAt(road, s, p);
+          const fx = p.dx * ow, fz = p.dz * ow;
+          if (fx < -1e-6 || (Math.abs(fx) <= 1e-6 && fz < 0)) continue;
+          const inner = net.innerAt(road, s);
+          if (inner > w / 2 - 0.05) continue;
+          const m = inner + MEDIAN_W / 2;
+          add(p.x - fz * m, p.z + fx * m, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
         }
       } else if (w >= 8 || (dens > 0.5 && type <= 4)) {
         let side = 1;
         for (let s = net.trimStart(road) + r.range(4, 14); s < len - net.trimEnd(road) - 4; s += r.range(28, 36)) {
           net.pointAt(road, s, p);
           const off = w / 2 + 0.7;
+          if (kerb) side = kerb;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road);
           side = -side;
@@ -607,7 +623,7 @@ export class City {
           const s = r.range(net.trimStart(road) + 4, len - net.trimEnd(road) - 4);
           if (s <= 0) continue;
           net.pointAt(road, s, p);
-          const side = r.chance(0.5) ? 1 : -1;
+          const side = kerb || (r.chance(0.5) ? 1 : -1);
           const kind = r.pick([PROP.STALL, PROP.STALL, PROP.CART, PROP.CART, PROP.SHRINE, PROP.HOARDING]);
           const off = w / 2 + (kind === PROP.HOARDING ? 3.5 : 1.8);
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
