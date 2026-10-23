@@ -67,7 +67,7 @@ export class Hud {
   _perf() {
     const g = this.game, q = g.quality, p = g.perf, c = g.renderer.domElement;
     const mem = performance.memory ? ` · ${Math.round(performance.memory.usedJSHeapSize / 1e6)} MB` : '';
-    this.el.perf.textContent = `${Math.round(p.fps)} fps · ${Math.round(p.ms)} ms (worst ${Math.round(p.worstMs)}) · CPU ${g.cpuMs.toFixed(1)} · ${c.width}×${c.height} ${q.settings.name} · ${q.gpu}${mem}`;
+    this.el.perf.textContent = `${Math.round(p.fps)} fps · ${Math.round(p.ms)} ms (worst ${Math.round(p.worstMs)}) · CPU ${g.cpuMs.toFixed(1)} · ${c.width}×${c.height} ${q.settings.name}${q.crowd < 1 ? ` · crowd ${Math.round(q.crowd * 100)}%` : ''} · ${q.gpu}${mem}`;
   }
 
   /** Contextual button hints near the bottom: [{key, label}] */

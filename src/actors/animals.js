@@ -31,7 +31,7 @@ export class Animals {
 
   update(dt) {
     const g = this.game, pos = g.player.pos;
-    const target = Math.round(g.quality.settings.peds / 6);
+    const target = Math.round((g.quality.settings.peds * (g.quality.crowd ?? 1)) / 6);
     for (let i = this.list.length - 1; i >= 0; i--) if (dist(this.list[i].x, this.list[i].z, pos.x, pos.z) > 170) this.list.splice(i, 1);
     if (this.list.length < target) this._spawn(pos);
     for (const a of this.list) this._step(a, dt);
