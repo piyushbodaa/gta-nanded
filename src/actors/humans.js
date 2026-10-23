@@ -355,10 +355,12 @@ export class Humans {
     for (const k in this.meshes) {
       const m = this.meshes[k];
       m.mesh.count = m.n;
+      m.mesh.visible = m.n > 0; // no empty instanced draws (WebGL warns about each one)
       m.mesh.instanceMatrix.needsUpdate = true;
       if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
     }
     this.blobs.count = blobs;
+    this.blobs.visible = blobs > 0;
     this.blobs.instanceMatrix.needsUpdate = blobs > 0;
   }
 
