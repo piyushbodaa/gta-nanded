@@ -66,7 +66,8 @@ export class Game {
 
   async load(stage) {
     const spawn = { x: 463, z: 300 };
-    this.world = await createWorld(this.scene, this.renderer, { stage, focus: spawn });
+    const q = this.quality;
+    this.world = await createWorld(this.scene, this.renderer, { stage, focus: spawn, sharp: !(q.phone && q.tier === 'low') });
     const w = this.world;
     this.city = w.city; this.net = w.net; this.colliders = w.colliders; this.sky = w.sky;
     this.post = new Post(this.renderer, this.sky);

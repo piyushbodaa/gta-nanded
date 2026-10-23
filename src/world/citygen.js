@@ -578,7 +578,12 @@ export class City {
     const L = this.lots;
     const ext = Math.max(hw, hd) * 1.42;
     const ov = this._ov || (this._ov = {});
+    // Boxes whose bounding circles are apart can't overlap: most neighbours end there.
     return this.lotGrid.query(x - ext, z - ext, x + ext, z + ext, id => {
+      if (id >= 0) {
+        const dx = x - L.x[id], dz = z - L.z[id], r = Math.hypot(hw - gap, hd - gap) + Math.hypot(L.hw[id], L.hd[id]);
+        if (dx * dx + dz * dz > r * r * 1.000001) return false;
+      }
       if (id <= -200000) {
         const k = -200000 - id - 1, P = this.props;
         return Boolean(obbOverlap(x, z, hw, hd, rot, P.x[k], P.z[k], 1.4, 1.4, 0, ov));
@@ -601,10 +606,16 @@ export class City {
     const c = Math.cos(rot), s = Math.sin(rot);
     const ext = Math.max(hw, hd) * 1.42 + 8;
     let blocked = false;
+    // The box lies within `bound` of its centre: a segment farther than that plus the widest a
+    // road reaches (half its width, the margin and a footpath) can't come within reach of it.
+    const bound = Math.hypot(hw, hd) + margin + FOOTPATH_W + 1e-6;
     net.grid.query(x - ext, z - ext, x + ext, z + ext, i => {
-      const r = net.ptRoad[i];
-      const rad = net.width[r] / 2 + margin + (this.footpathAt(i) ? FOOTPATH_W : 0);
-      if (segBoxDist(net.px[i], net.pz[i], net.px[i + 1], net.pz[i + 1], x, z, hw, hd, c, s) < rad) { blocked = true; return true; }
+      const ax = net.px[i], az = net.pz[i], bx = net.px[i + 1], bz = net.pz[i + 1], r = net.ptRoad[i];
+      const reach = bound + net.width[r] / 2;
+      if (Math.min(ax, bx) > x + reach || Math.max(ax, bx) < x - reach || Math.min(az, bz) > z + reach || Math.max(az, bz) < z - reach) return;
+      const d = segBoxDist(ax, az, bx, bz, x, z, hw, hd, c, s), base = net.width[r] / 2 + margin;
+      // Only a near miss needs to know whether this stretch has a footpath.
+      if (d < base || (d < base + FOOTPATH_W && this.footpathAt(i))) { blocked = true; return true; }
     });
     if (blocked) return false;
     const rd = this.riverDistance(x, z, this._rd2 || (this._rd2 = {}));
