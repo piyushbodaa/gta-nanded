@@ -39,6 +39,7 @@ export const CHUNK = 192;
 export const chunkKey = (cx, cz) => `${cx},${cz}`;
 // Paved footpath along the busy roads; buildings keep behind it.
 export const FOOTPATH_W = 1.9;
+export const WALK_Y = 0.2; // the top of a footpath: its kerb's height
 
 export class City {
   constructor(world, net) {
@@ -110,6 +111,12 @@ export class City {
   footpathAt(seg) {
     const net = this.net;
     return this.footpathRoad(net.ptRoad[seg], (net.px[seg] + net.px[seg + 1]) / 2, (net.pz[seg] + net.pz[seg + 1]) / 2);
+  }
+
+  /** What someone on foot `lateral` metres from segment `seg`'s centreline stands on: its footpath's top, or the road. */
+  pavementAt(seg, lateral) {
+    const hw = this.net.width[this.net.ptRoad[seg]] / 2;
+    return lateral > hw - 0.05 && lateral < hw + FOOTPATH_W && this.footpathAt(seg) ? WALK_Y : 0;
   }
 
   /**

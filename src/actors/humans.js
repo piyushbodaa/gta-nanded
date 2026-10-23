@@ -3,6 +3,7 @@
 // police and the player, whatever their number.
 import * as THREE from 'three';
 import { rng, clamp } from '../core/math.js';
+import { radialTexture } from '../world/citymat.js';
 
 // ------------------------------------------------------------------ part geometry
 // Sculpted, smooth-shaded body parts built from lofted rings: a chest wider than
@@ -300,6 +301,15 @@ export class Humans {
       mesh.onBeforeShadow = () => { mesh.count = entry.nShadow; };
       mesh.onAfterShadow = () => { mesh.count = entry.n; };
     }
+    // A soft patch of shade under everyone on their feet, for settings whose shadow map doesn't
+    // follow moving people (without it they float). One draw call for the whole crowd.
+    const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    this.blobs = new THREE.InstancedMesh(plane, new THREE.MeshBasicMaterial({ map: radialTexture(64), color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }), capacity);
+    this.blobs.count = 0; this.blobs.frustumCulled = false; this.blobs.renderOrder = 1;
+    this.blobs.material.polygonOffset = true; this.blobs.material.polygonOffsetFactor = -1; this.blobs.material.polygonOffsetUnits = -2;
+    this.blobs.name = 'human-shade';
+    scene.add(this.blobs);
+    this.blobsOn = true;
     this.drawDistance = 140;
   }
 
@@ -316,8 +326,8 @@ export class Humans {
   /** Advance walk phases and write every visible body part's instance. */
   update(dt, cam, shadowBox) {
     for (const k in this.meshes) this.meshes[k].n = 0;
-    const maxD2 = this.drawDistance * this.drawDistance;
-    let drawn = 0;
+    const maxD2 = this.drawDistance * this.drawDistance, blobD2 = 60 * 60;
+    let drawn = 0, blobs = 0;
     // People inside the sun's shadow map are written first; the shadow pass then draws only
     // that leading run of each part's instances instead of everyone in view.
     for (let pass = 0; pass < 2; pass++) {
@@ -331,6 +341,14 @@ export class Humans {
         const stride = h.speed > 3.2 ? 2.4 : 1.35;
         h.phase += (h.speed / stride) * Math.PI * 2 * dt;
         this._pose(h, d2 > 3600);
+        // Seated riders and drivers are covered by their vehicle's shade.
+        if (this.blobsOn && d2 < blobD2 && h.pose !== 'sit' && h.pose !== 'ride') {
+          const lying = h.pose === 'lie', s = h.outfit.scale || 1;
+          _e.set(0, h.yaw, 0); _q.setFromEuler(_e);
+          _v.set(h.x, h.y + 0.09, h.z); // above the road surface (6-7 cm) _s.set((lying ? 1.1 : 1.35) * s, 1, (lying ? 2.3 : 1.35) * s);
+          this.blobs.setMatrixAt(blobs++, _m.compose(_v, _q, _s));
+          _s.set(1, 1, 1);
+        }
       }
       if (pass === 0) for (const k in this.meshes) this.meshes[k].nShadow = this.meshes[k].n;
     }
@@ -340,6 +358,8 @@ export class Humans {
       m.mesh.instanceMatrix.needsUpdate = true;
       if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
     }
+    this.blobs.count = blobs;
+    this.blobs.instanceMatrix.needsUpdate = blobs > 0;
   }
 
   _emit(key, matrix, colorHex) {

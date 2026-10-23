@@ -116,6 +116,18 @@ export class Geo {
     }
     for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; this.quad(base + i, base + j, base + 4 + j, base + 4 + i); }
   }
+  /** A wheel: a short cylinder on its side, centre (cx, cy, cz), its axle along the unit (ax, az). */
+  wheel(cx, cy, cz, r, w, ax, az, sides = 10) {
+    const px = -az, pz = ax, base = this.n;
+    for (const side of [-0.5, 0.5]) {
+      for (let i = 0; i < sides; i++) {
+        const a = (i / sides) * Math.PI * 2, c = Math.cos(a) * r;
+        this.v(cx + ax * w * side + px * c, cy + Math.sin(a) * r, cz + az * w * side + pz * c);
+      }
+    }
+    for (let i = 0; i < sides; i++) { const j = (i + 1) % sides; this.quad(base + i, base + sides + i, base + sides + j, base + j); }
+    for (let i = 1; i < sides - 1; i++) { this.tri(base, base + i, base + i + 1); this.tri(base + sides, base + sides + i + 1, base + sides + i); }
+  }
   cyl(cx, y0, cz, r0, h, sides = 6, r1 = r0, top = true) {
     const base = this.n;
     for (let i = 0; i < sides; i++) {

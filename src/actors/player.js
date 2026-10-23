@@ -43,6 +43,13 @@ export class Player {
 
   heal(amount) { this.health = Math.min(this.maxHealth, this.health + amount); }
 
+  /** The top of the footpath we are on, if we are on one (0 on the road). */
+  _pavement(g) {
+    this._onGround ||= r => !g.net.raised[r];
+    const n = g.net.nearest(this.x, this.z, 14, this._near || (this._near = {}), this._onGround);
+    return n ? g.city.pavementAt(n.seg, n.dist) : 0;
+  }
+
   update(dt, input) {
     const g = this.game;
     this.invuln = Math.max(0, this.invuln - dt);
@@ -78,7 +85,7 @@ export class Player {
     this.vy -= 15 * dt;
     this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
     // The ground, or a flyover deck if that is where we are walking.
-    const gy = Math.max(g.city.groundHeight(this.x, this.z), g.net.surfaceAt(this.x, this.z, this.groundY ?? 0));
+    const gy = Math.max(g.city.groundHeight(this.x, this.z), g.net.surfaceAt(this.x, this.z, this.groundY ?? 0), this._pavement(g));
     this.groundY = gy;
     if (this.y <= gy) { if (!this.onGround && this.vy < -9) this.damage((-this.vy - 9) * 6, 'fall'); this.y = gy; this.vy = 0; this.onGround = true; }
     // Collide: buildings and props, then vehicles, then keep out of deep water.
