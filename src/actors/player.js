@@ -26,6 +26,7 @@ export class Player {
   get pos() { return this.vehicle ? this.vehicle : this; }
 
   teleport(x, z, heading) {
+    this.teleportAt = this.game.time; // the quality governor gives the streets a moment to fill in
     if (this.vehicle) this.leaveVehicle(true);
     this.x = x; this.z = z; this.heading = heading; this.vx = this.vz = 0;
     this.y = this.groundY = this.game.city.groundHeight(x, z);

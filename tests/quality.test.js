@@ -11,7 +11,7 @@ Object.assign(globalThis, { innerWidth: 915, innerHeight: 412, devicePixelRatio:
 const { Quality, gpuLabel, guessTier, MIN_SCALE, MIN_CROWD } = await import('../src/core/quality.js');
 
 const phone = gpu => { coarse = true; globalThis.innerWidth = 915; globalThis.innerHeight = 412; globalThis.devicePixelRatio = 2.625; const q = new Quality(); q.setGpu(gpu); return q; };
-const game = () => ({ started: true, paused: false, resizes: 0, tiers: 0, resize() { this.resizes++; }, applyQuality() { this.tiers++; } });
+const game = () => ({ started: true, paused: false, time: 100, resizes: 0, tiers: 0, resize() { this.resizes++; }, applyQuality() { this.tiers++; } });
 /** Feed `seconds` of frames, each `ms` long. */
 const run = (q, g, seconds, ms) => { for (let t = 0; t < seconds; t += ms / 1000) q.sample(ms / 1000, g); };
 
@@ -105,11 +105,13 @@ test('what was learned belongs to one GPU', () => {
 test('a phone whose processor cannot keep up thins the crowds, then settles at 30 fps, and keeps its sharpness', () => {
   // A budget phone on Test Lab: 9-14 ms of the game's own work in a 16.7 ms frame.
   const q = phone('Mali-G57 MC2'), g = { ...game(), cpuMs: 12 };
-  run(q, g, 2.1, 25);
+  run(q, g, 2.1, 30);
+  assert.equal(q.crowd, 1, 'one slow window is not a sustained load');
+  run(q, g, 2.1, 30);
   assert.equal(q.crowd, 0.8, 'fewer cars and people first');
-  run(q, g, 10, 25);
+  run(q, g, 20, 30);
   assert.equal(q.crowd, MIN_CROWD);
-  assert.equal(q.fpsCap, 30, 'then a steady 30 instead of a ragged 40');
+  assert.equal(q.fpsCap, 30, 'then, still under 40 fps, a steady 30 instead of a ragged 30-40');
   assert.equal(q.scale, 1, 'the picture stays as sharp as it was');
   assert.equal(g.resizes, 0);
   const next = phone('Mali-G57 MC2');
@@ -124,11 +126,23 @@ test('a phone whose processor cannot keep up thins the crowds, then settles at 3
 
 test('crowds come back once there is room, a step at a time', () => {
   const q = phone('Adreno 619'), g = { ...game(), cpuMs: 12 };
-  run(q, g, 2.1, 25);
+  run(q, g, 4.2, 25);
   assert.equal(q.crowd, 0.8);
   g.cpuMs = 4;
   run(q, g, 30, 16.7);
   assert.equal(q.crowd, 0.8, 'not within a minute of thinning');
   run(q, g, 40, 16.7);
   assert.ok(q.crowd > 0.8, `back up after a minute (${q.crowd})`);
+});
+
+test('the first seconds after the start or a teleport are left out', () => {
+  const q = phone('Adreno 710'), g = { ...game(), time: 3 };
+  run(q, g, 4.2, 40);
+  assert.equal(q.scale, 1, 'streets still filling in after the start');
+  g.time = 50; g.player = { teleportAt: 48 };
+  run(q, g, 4.2, 40);
+  assert.equal(q.scale, 1, 'or just after a teleport');
+  g.player.teleportAt = 40;
+  run(q, g, 2.1, 40);
+  assert.equal(q.scale, 0.9);
 });
