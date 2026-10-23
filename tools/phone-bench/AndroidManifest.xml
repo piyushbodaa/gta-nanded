@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="fun.nanded.gta.bench" android:versionCode="1" android:versionName="1.0">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application android:label="GTA Nanded bench" android:hardwareAccelerated="true">
+    <activity android:name=".MainActivity" android:exported="true"
+        android:screenOrientation="sensorLandscape"
+        android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection|colorMode|touchscreen"
+        android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+      <!-- Firebase Test Lab game loop: run the scripted benchmark, then finish. -->
+      <intent-filter>
+        <action android:name="com.google.intent.action.TEST_LOOP" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="application/javascript" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
