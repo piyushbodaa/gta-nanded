@@ -35,9 +35,17 @@ export async function loadWorldData(onProgress) {
 /**
  * Build the world. stage(label, fraction) reports progress for the loading screen.
  */
-export async function createWorld(scene, renderer, { stage = () => {}, focus } = {}) {
+export async function createWorld(scene, renderer, { stage = () => {}, focus, sharp = true } = {}) {
   stage('Fetching the streets of Nanded', 0.02);
-  const data = await loadWorldData(f => stage('Fetching the streets of Nanded', 0.02 + f * 0.18));
+  // The map downloads while the facades are painted: neither needs the other. Only the weakest
+  // phones (Fast) paint at half resolution, a quarter of the texture memory; everything else
+  // draws enough pixels now to show the full-resolution shopfronts and signboards.
+  const loading = loadWorldData(f => stage('Fetching the streets of Nanded', 0.02 + f * 0.18));
+  await loadAtlasFonts();
+  const scale = sharp ? 1 : 0.5;
+  const atlas = paintAtlas(scale);
+  const detail = paintDetail(sharp ? 256 : 128);
+  const data = await loading;
   await tick();
   stage('Laying out the roads', 0.22);
   const net = new RoadNet(data);
@@ -47,19 +55,15 @@ export async function createWorld(scene, renderer, { stage = () => {}, focus } =
   city.generate();
   await tick();
   stage('Painting shopfronts and signboards', 0.48);
-  await loadAtlasFonts();
-  // Phones get half-resolution atlases: a quarter of the texture memory.
-  const small = matchMedia('(any-pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
-  const atlas = paintAtlas(small ? 0.5 : 1);
-  const signs = paintSigns(data.places, small ? 0.5 : 1);
-  const textures = createAtlasTextures(atlas, signs, renderer, paintDetail(small ? 128 : 256));
+  const signs = paintSigns(data.places, scale);
+  const textures = createAtlasTextures(atlas, signs, renderer, detail);
   const materials = createCityMaterials(textures);
   await tick();
   stage('Mapping walls and kerbs', 0.6);
   const colliders = new Colliders(city);
   await tick();
   const sky = new Sky(scene, renderer);
-  textures.foliage = createFoliageTexture(small ? 0.5 : 1);
+  textures.foliage = createFoliageTexture(scale);
   materials.foliage = createFoliageMaterial(textures.foliage, { uTime: cityUniforms.uTime, uSunDir: sky.uniforms.uSunDir, uSunColor: sky.uniforms.uSunColor });
   const rivers = createRivers(scene, city, sky);
   const chunks = new ChunkManager(scene, city, materials, signs.slots);
