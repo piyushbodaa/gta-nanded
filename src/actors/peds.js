@@ -134,7 +134,7 @@ export class Peds {
     const r = rng(hash2(this.seed++, 5153));
     const ang = r() * Math.PI * 2, d = r.range(minD, maxD);
     const n = net.nearest(focus.x + Math.cos(ang) * d, focus.z + Math.sin(ang) * d, 40, this._q);
-    if (!n || net.bridge[n.road]) return false;
+    if (!n || net.bridge[n.road] || net.raised[n.road]) return false;
     // Either footpath, except the median side of a divided road.
     const road = n.road, side = net.kerbSide(road) || (r.chance(0.5) ? 1 : -1);
     const off = this._offset(road);
@@ -159,7 +159,7 @@ export class Peds {
   _inVehicle(x, z, margin) {
     for (const v of this.game.vehicles.list) {
       const dx = x - v.x, dz = z - v.z;
-      if (dx * dx + dz * dz > (v.hd + margin + 1) ** 2) continue;
+      if (v.y > 1.5 || dx * dx + dz * dz > (v.hd + margin + 1) ** 2) continue;
       const c = Math.cos(v.heading), s = Math.sin(v.heading);
       if (Math.abs(dx * c - dz * s) < v.hw + margin && Math.abs(dx * s + dz * c) < v.hd + margin) return true;
     }
@@ -202,7 +202,7 @@ export class Peds {
     if (p.state !== 'down') {
       for (const v of g.vehicles.list) {
         const dx = h.x - v.x, dz = h.z - v.z;
-        if (dx * dx + dz * dz > 120) continue;
+        if (v.y > 1.5 || dx * dx + dz * dz > 120) continue; // up on a flyover
         const spd = speedOf(v);
         const c = Math.cos(v.heading), s = Math.sin(v.heading);
         const lx = dx * c - dz * s, lz = dx * s + dz * c;
@@ -314,7 +314,7 @@ export class Peds {
     if (p.s > len - 0.5) {
       // Next street at the junction; sometimes stop for a chat.
       const j = p.dir > 0 ? net.rb[p.road] : net.ra[p.road];
-      const roads = net.jRoads[j].filter(r => r !== p.road && !net.bridge[r]);
+      const roads = net.jRoads[j].filter(r => r !== p.road && !net.bridge[r] && !net.raised[r]);
       const r = rng(hash2(p.id, Math.floor(this.game.time)));
       const next = roads.length ? r.pick(roads) : p.road;
       p.dir = next === p.road ? -p.dir : net.ra[next] === j ? 1 : -1;

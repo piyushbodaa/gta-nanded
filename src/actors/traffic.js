@@ -132,7 +132,7 @@ export class Traffic {
     if (dist(p.x, p.z, focus.x, focus.z) < minD * 0.8) return false;
     const v = g.vehicles.spawn(type, p.x, p.z, p.heading, { role: 'traffic', seed: hash2(this.seed, 3) });
     const cap = TYPE_CAP[type] ?? 99;
-    v.ai = { road, dir, s, lane, speed: 0, cruise: Math.min(cap, CRUISE[net.type[road]] * r.range(0.85, 1.15)), turn: null, wait: 0, blocked: 0, honk: r.range(4, 20), weave: type === 'bike' || type === 'scooter' ? r.range(-0.6, 0.6) : 0 };
+    v.ai = { road, dir, s, lane, speed: 0, cruise: Math.min(cap, CRUISE[net.type[road]] * r.range(0.85, 1.15)), turn: null, wait: 0, blocked: 0, honk: r.range(4, 20), weave: type === 'bike' || type === 'scooter' ? r.range(-0.6, 0.6) : 0, dodge: 0, dodgeWant: 0 };
     v.ai.speed = v.ai.cruise * 0.7;
     if ((type === 'bike' || type === 'scooter') && r.chance(0.35)) g.vehicles.addPassenger(v, g.peds?.randomOutfit?.(r()) ?? undefined);
     if (type === 'auto' && r.chance(0.6)) g.vehicles.addPassenger(v, g.peds?.randomOutfit?.(r()));
@@ -145,24 +145,44 @@ export class Traffic {
     // Look ahead for anything in our path.
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     let gap = Infinity, blockedByPlayer = false;
-    const consider = (ox, oz, len, isPlayer) => {
+    a.dodgeWant = 0;
+    const consider = (ox, oz, len, isPlayer, oncoming = false, ohw = 0) => {
       const dx = ox - v.x, dz = oz - v.z;
       const f = dx * fx + dz * fz;
       if (f <= 0 || f > 32) return;
       const l = Math.abs(-dx * fz + dz * fx);
-      if (l > 1.5 + (len || 0) * 0.15) return;
+      // Oncoming traffic in its own lane passes us: only a head-on path holds us up.
+      if (l > (oncoming ? v.hw + ohw + 0.1 : 1.5 + (len || 0) * 0.15)) return;
       const gp = f - v.hd - (len || 2);
       if (gp < gap) { gap = gp; blockedByPlayer = isPlayer; }
     };
     for (const o of g.vehicles.list) {
-      if (o === v) continue;
+      if (o === v || Math.abs(o.y - v.y) > 2) continue;
       const dx = o.x - v.x, dz = o.z - v.z;
       if (dx * dx + dz * dz > 1200) continue;
-      consider(o.x, o.z, o.hd, o.role === 'player');
+      const f = dx * fx + dz * fz;
+      // A parked, crashed or abandoned vehicle sticking into the lane: squeeze past it
+      // towards the middle of the road, the way everyone does, instead of queueing forever.
+      if ((!o.ai || !o.kinematic) && o.role !== 'player' && f > -(v.hd + o.hd) && f < 26) {
+        const l = -dx * fz + dz * fx; // + is to our right
+        // How far to move right (+) to pass on its right, or left (-) to pass on its left.
+        const clear = v.hw + o.hw + 0.35, need = l < 0 ? clear + l : l - clear;
+        if (Math.abs(l) < clear && Math.abs(need) < 2.2 && Math.abs(Math.sin(o.heading - v.heading)) < 0.6) {
+          if (Math.abs(need) > Math.abs(a.dodgeWant)) a.dodgeWant = need;
+          continue;
+        }
+      }
+      const facing = Math.cos(o.heading - v.heading);
+      // Two cars each waiting for the other (across a junction, or nose to nose): after a while,
+      // a stuck car that isn't simply queueing ahead of us no longer holds us up.
+      if (a.blocked > 4 && o.ai && o.ai.blocked > 2 && facing < 0.5) continue;
+      consider(o.x, o.z, o.hd, o.role === 'player', o.ai && facing < -0.3, o.hw);
     }
-    if (g.player.state !== 'driving') consider(g.player.x, g.player.z, 0.6, true);
-    g.peds?.forEachNear(v.x, v.z, 20, ped => { if (!ped.onRoadOk) consider(ped.h.x, ped.h.z, 0.5, false); });
-    g.animals?.forEachNear(v.x, v.z, 22, a => consider(a.x, a.z, a.cow ? 1.2 : 0.4, false));
+    if (g.player.state !== 'driving' && Math.abs(g.player.y - v.y) < 2) consider(g.player.x, g.player.z, 0.6, true);
+    if (v.y < 1) {
+      g.peds?.forEachNear(v.x, v.z, 20, ped => { if (!ped.onRoadOk) consider(ped.h.x, ped.h.z, 0.5, false); });
+      g.animals?.forEachNear(v.x, v.z, 22, a => consider(a.x, a.z, a.cow ? 1.2 : 0.4, false));
+    }
 
     // Desired speed.
     let want = a.cruise;
@@ -198,7 +218,7 @@ export class Traffic {
         const u = T.u, iu = 1 - u;
         const x = iu * iu * T.x0 + 2 * iu * u * T.x1 + u * u * T.x2, z = iu * iu * T.z0 + 2 * iu * u * T.z1 + u * u * T.z2;
         const tx = 2 * iu * (T.x1 - T.x0) + 2 * u * (T.x2 - T.x1), tz = 2 * iu * (T.z1 - T.z0) + 2 * u * (T.z2 - T.z1);
-        this._place(v, x, z, Math.atan2(tx, tz), dt);
+        this._place(v, x, z, Math.atan2(tx, tz), dt, T.y0 + (T.y2 - T.y0) * u);
         return;
       }
     }
@@ -207,13 +227,16 @@ export class Traffic {
       if (!this._chooseTurn(v, j)) { a.s = end; a.speed = 0; }
       else return;
     }
-    const off = net.laneOffset(a.road, a.lane, a.dir > 0 ? a.s : len - a.s) + (a.weave || 0);
+    // Ease out round whatever is parked ahead, and back into the lane after it.
+    a.dodge = (a.dodge || 0) + clamp((a.dodgeWant || 0) - (a.dodge || 0), -1.2 * dt, 1.6 * dt);
+    const off = net.laneOffset(a.road, a.lane, a.dir > 0 ? a.s : len - a.s) + (a.weave || 0) - a.dodge;
     net.lanePoint(a.road, a.dir, a.s, off, p);
-    this._place(v, p.x, p.z, p.heading, dt);
+    this._place(v, p.x, p.z, p.heading, dt, net.deckAt(a.road, a.dir > 0 ? a.s : len - a.s));
   }
 
-  _place(v, x, z, heading, dt) {
+  _place(v, x, z, heading, dt, y = 0) {
     const a = v.ai;
+    v.y = y;
     v.vx = (x - v.x) / Math.max(dt, 1e-4); v.vz = (z - v.z) / Math.max(dt, 1e-4);
     if (Math.hypot(v.vx, v.vz) > 40) { v.vx = 0; v.vz = 0; }
     v.x = x; v.z = z;
@@ -272,7 +295,9 @@ export class Traffic {
       if (tt > 0 && tt < 30) { x1 = x0 + d1x * tt; z1 = z0 + d1z * tt; }
     }
     const len = Math.max(0.5, (dist(x0, z0, x1, z1) + dist(x1, z1, x2, z2) + dist(x0, z0, x2, z2)) / 2);
-    a.turn = { x0, z0, x1, z1, x2, z2, len, u: 0, road: best.road, dir: best.dir, s0, j };
+    const y0 = net.deckAt(a.road, a.dir > 0 ? net.length[a.road] - net.trimEnd(a.road) : net.trimEnd(a.road));
+    const y2 = net.deckAt(best.road, best.dir > 0 ? s0 : net.length[best.road] - s0);
+    a.turn = { x0, z0, x1, z1, x2, z2, y0, y2, len, u: 0, road: best.road, dir: best.dir, s0, j };
     a.lane = lane;
     return true;
   }
@@ -307,14 +332,14 @@ export class DynamicDriver {
   constructor(game, vehicle, { aggression = 0.6, maxSpeed = 30 } = {}) {
     this.game = game; this.v = vehicle; this.path = null; this.i = 0;
     this.aggression = aggression; this.maxSpeed = maxSpeed;
-    this.stuck = 0; this.reverseT = 0;
+    this.stuck = 0; this.reverseT = 0; this.unsticks = 0;
     this.ignore = null; // the vehicle we mean to hit (police ramming the player)
   }
   setPath(points, lane = true) {
     this.path = lane ? this.game.net.lanePath(points) : points; this.i = 0;
     const n = points.length / 2;
     this.goal = { x: points[(n - 1) * 2], z: points[(n - 1) * 2 + 1] };
-    this.offT = 0; this.unsticks = 0;
+    this.offT = 0;
   }
   /** Lost the path (knocked off the road, wedged in a lane): plan again from here. */
   _replan() {
@@ -385,7 +410,7 @@ export class DynamicDriver {
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading), range = 7 + Math.abs(spd) * 1.1;
     let avoid = 0, nearest = Infinity;
     for (const o of this.game.vehicles.list) {
-      if (o === v || (target && o === this.ignore)) continue;
+      if (o === v || (target && o === this.ignore) || Math.abs(o.y - v.y) > 2) continue;
       const dx = o.x - v.x, dz = o.z - v.z;
       if (dx * dx + dz * dz > range * range) continue;
       const f = dx * fx + dz * fz;
@@ -402,8 +427,9 @@ export class DynamicDriver {
     // Narrow lanes and junctions are taken at city speeds.
     const net = this.game.net, here = net.nearest(v.x, v.z, 12, this._n || (this._n = {}));
     if (here) {
+      // A lane between house walls is taken slowly: about 35 km/h in a 5 m lane, more on the big roads.
       const w = net.width[here.road];
-      maxV = Math.min(maxV, 6 + w * (1.4 + this.aggression * 0.5));
+      maxV = Math.min(maxV, (w < 7 ? 3 : 6) + w * (w < 7 ? 1.4 : 1.4 + this.aggression * 0.5));
       const len = net.length[here.road], toA = here.s, toB = len - here.s;
       const jA = net.jRoads[net.ra[here.road]].length >= 3, jB = net.jRoads[net.rb[here.road]].length >= 3;
       const toJ = Math.min(jA ? toA : Infinity, jB ? toB : Infinity);
@@ -413,8 +439,17 @@ export class DynamicDriver {
     maxV = Math.min(maxV, arriveCap);
     let throttle = spd < maxV ? 1 : 0, brake = spd > maxV + 1.5 ? 1 : 0;
     // Stuck against something: back up and swing round.
-    if (Math.abs(spd) < 1 && throttle > 0) this.stuck += dt; else this.stuck = Math.max(0, this.stuck - dt * 2);
-    if (this.stuck > 1.2) { this.reverseT = 1.1; this.stuck = 0; if (++this.unsticks >= 2 && !target) { this.unsticks = 0; this._replan(); } }
+    // Stuck: pushing at a wall, or held up for seconds by something that will not move. The count
+    // of tries survives re-planning and clears once the vehicle is properly under way again.
+    const slow = Math.abs(spd) < 1 && !(this.path && this.i >= this.path.length / 2 - 2);
+    if (slow) this.stuck += throttle > 0 ? dt : dt * 0.3; else this.stuck = Math.max(0, this.stuck - dt * 2);
+    if (Math.abs(spd) > 3) { this.moving = (this.moving || 0) + dt; if (this.moving > 2) this.unsticks = 0; } else this.moving = 0;
+    if (this.stuck > 1.2) {
+      this.reverseT = 1.6; this.stuck = 0;
+      // Wedged again and again (against a wall on a tight corner): let the owner rescue it.
+      if (++this.unsticks >= 3) { this.unsticks = 0; if (this.onStuck?.() !== true && !target) this._replan(); }
+      else if (this.unsticks === 2 && !target) this._replan();
+    }
     // Too far from the path for too long: re-plan.
     if (!target && this.path) {
       const P = this.path, d = dist(v.x, v.z, P[this.i * 2], P[this.i * 2 + 1]);
@@ -458,7 +493,7 @@ export class Parked {
     if (this.bySeg.size >= max) return;
     const p = {};
     net.segmentsIn(pos.x - R, pos.z - R, pos.x + R, pos.z + R, (i, road) => {
-      if (this.bySeg.size >= max || this.bySeg.has(i) || net.bridge[road]) return;
+      if (this.bySeg.size >= max || this.bySeg.has(i) || net.bridge[road] || net.raised[road]) return;
       const w = net.width[road];
       if (w < 6) return;
       const r = rng(hash2(i, 60013));

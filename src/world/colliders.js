@@ -1,8 +1,11 @@
 // Static collision world: every building, wall, tree trunk, pole, stall,
-// bridge railing and median as an oriented box or a circle on the ground plane.
+// bridge railing and median as an oriented box or a circle on the ground plane,
+// standing from a base height y0 (0 on the ground; a flyover's railings ride on
+// its deck) up h metres. Queries say at what level they are asked, so a car on a
+// flyover and a car on the street beneath it never meet each other's walls.
 import { SpatialGrid, clamp } from '../core/math.js';
-import { PROP } from './citygen.js';
-import { MEDIAN_W } from './roadnet.js';
+import { PROP, PUMP_HW, PUMP_HD } from './citygen.js';
+import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
 import { placeColliders } from './landmarks.js';
 
 export const SOLID = { OBB: 0, CIRCLE: 1 };
@@ -17,6 +20,7 @@ export class Colliders {
     this.hw = new Float32Array(cap); this.hd = new Float32Array(cap);
     this.c = new Float32Array(cap); this.s = new Float32Array(cap);
     this.h = new Float32Array(cap);
+    this.y0 = new Float32Array(cap);
     this.n = 0;
     this._q = 0; // resolveCircle's query number
     this._build();
@@ -25,23 +29,23 @@ export class Colliders {
   /** Double the arrays when full (a busy city outgrows any fixed estimate). */
   _grow() {
     const cap = this.type.length * 2;
-    for (const k of ['type', 'x', 'z', 'hw', 'hd', 'c', 's', 'h']) { const a = new this[k].constructor(cap); a.set(this[k]); this[k] = a; }
+    for (const k of ['type', 'x', 'z', 'hw', 'hd', 'c', 's', 'h', 'y0']) { const a = new this[k].constructor(cap); a.set(this[k]); this[k] = a; }
     this._mark = null;
   }
 
-  addBox(x, z, hw, hd, rot, h) {
+  addBox(x, z, hw, hd, rot, h, y0 = 0) {
     if (this.n >= this.type.length) this._grow();
     const i = this.n++;
     this.type[i] = SOLID.OBB; this.x[i] = x; this.z[i] = z; this.hw[i] = hw; this.hd[i] = hd;
-    this.c[i] = Math.cos(rot); this.s[i] = Math.sin(rot); this.h[i] = h;
+    this.c[i] = Math.cos(rot); this.s[i] = Math.sin(rot); this.h[i] = h; this.y0[i] = y0;
     const e = Math.abs(hw * this.c[i]) + Math.abs(hd * this.s[i]), f = Math.abs(hw * this.s[i]) + Math.abs(hd * this.c[i]);
     this.grid.insertRect(i, x - e, z - f, x + e, z + f);
     return i;
   }
-  addCircle(x, z, r, h) {
+  addCircle(x, z, r, h, y0 = 0) {
     if (this.n >= this.type.length) this._grow();
     const i = this.n++;
-    this.type[i] = SOLID.CIRCLE; this.x[i] = x; this.z[i] = z; this.hw[i] = r; this.hd[i] = r; this.c[i] = 1; this.s[i] = 0; this.h[i] = h;
+    this.type[i] = SOLID.CIRCLE; this.x[i] = x; this.z[i] = z; this.hw[i] = r; this.hd[i] = r; this.c[i] = 1; this.s[i] = 0; this.h[i] = h; this.y0[i] = y0;
     this.grid.insertRect(i, x - r, z - r, x + r, z + r);
     return i;
   }
@@ -67,55 +71,72 @@ export class Colliders {
         this.addBox(L.x[i] + fg * s, L.z[i] + fg * c, 0.8, 0.06, L.rot[i], 1.2);
       }
     }
-    for (const p of city.places) for (const b of placeColliders(p)) this.addBox(b.x, b.z, b.hw, b.hd, b.rot, b.h);
+    for (const p of city.places) for (const b of placeColliders(p)) b.r ? this.addCircle(b.x, b.z, b.r, b.h) : this.addBox(b.x, b.z, b.hw, b.hd, b.rot, b.h);
+    // Petrol pumps: canopy columns, dispenser islands, the kiosk and the price board.
+    for (const pump of city.pumps || []) {
+      const { x, z, rot, k } = pump, c = Math.cos(rot), s = Math.sin(rot), at = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+      const cw = 8.5 * k, cd = 4.6 * k;
+      for (const [lx, lz] of [[-cw + 1.2, -cd + 1.2], [cw - 1.2, -cd + 1.2], [-cw + 1.2, cd - 1.2], [cw - 1.2, cd - 1.2]]) { const [px, pz] = at(lx, lz - 1.5); this.addCircle(px, pz, 0.25, 5); }
+      for (const lx of [-3.6 * k, 3.6 * k]) { const [px, pz] = at(lx, -1.5); this.addBox(px, pz, 0.6, 2.2, rot, 1.9); }
+      { const [px, pz] = at(PUMP_HW * k - 5 * k, PUMP_HD * k - 2.4); this.addBox(px, pz, 3.6 * k, 2.2, rot, 3.5); }
+      { const [px, pz] = at(-PUMP_HW * k + 1.2, -PUMP_HD * k + 0.2); this.addBox(px, pz, 0.95, 0.4, rot, 6.4); }
+    }
     const T = city.trees;
     for (let i = 0; i < T.count; i++) this.addCircle(T.x[i], T.z[i], T.kind[i] === 2 ? 0.75 : T.kind[i] === 5 ? 0.6 : 0.32, T.kind[i] === 5 ? 1.2 : 2.5);
     const P = city.props;
     for (let i = 0; i < P.count; i++) {
       const k = P.kind[i], x = P.x[i], z = P.z[i], rot = P.rot[i];
-      if (k === PROP.LAMP || k === PROP.POLE) this.addCircle(x, z, 0.18, 8);
-      else if (k === PROP.MEDIAN_LAMP) this.addCircle(x, z, 0.3, 8);
+      if (k === PROP.LAMP || k === PROP.POLE) this.addCircle(x, z, 0.18, 8, P.y[i]);
+      else if (k === PROP.MEDIAN_LAMP) this.addCircle(x, z, 0.3, 8, P.y[i]);
       else if (k === PROP.STALL) this.addBox(x, z, 1.05, 0.85, rot, 2.2);
       else if (k === PROP.CART) this.addBox(x, z, 0.95, 0.6, rot, 1.2);
       else if (k === PROP.SHRINE) this.addBox(x, z, 0.75, 0.75, rot, 2.5);
+      else if (k === PROP.VENDOR) this.addBox(x, z, 1.0, 0.75, rot, 1.2);
       else if (k === PROP.HOARDING) { const c = Math.cos(rot), s = Math.sin(rot); this.addCircle(x + c * 2.2, z - s * 2.2, 0.15, 8); this.addCircle(x - c * 2.2, z + s * 2.2, 0.15, 8); }
     }
     // Bridge railings and wide-road medians, segment by segment.
     const net = city.net, p = {};
     for (let r = 0; r < net.count; r++) {
-      const w = net.width[r];
+      const w = net.width[r], lift = net.raised[r];
       // A carriageway of a divided road has its half of the median on its right (ms: +1 left of a->b, -1 right).
       const ms = net.oneway[r] ? -net.oneway[r] : 0;
       const bridge = net.bridge[r], median = w >= 11.5 && !bridge && !ms;
-      if (!bridge && !median && !ms) continue;
-      const s0 = net.trimStart(r), s1 = net.length[r] - net.trimEnd(r);
-      for (let s = s0; s < s1 - 0.5; s += 8) {
-        const e = Math.min(s + 8, s1), sm = (s + e) / 2;
+      if (!bridge && !lift && !median && !ms) continue;
+      const s0 = net.trimStart(r), s1 = net.length[r] - net.trimEnd(r), step = lift ? 4 : 8;
+      for (let s = s0; s < s1 - 0.5; s += step) {
+        const e = Math.min(s + step, s1), sm = (s + e) / 2;
         net.pointAt(r, sm, p);
         const rot = Math.atan2(p.dx, p.dz);
         const half = (e - s) / 2;
         const inner = ms ? net.innerAt(r, sm) : w / 2, divided = inner < w / 2 - 0.05;
-        if (bridge) {
+        const dA = lift ? net.deckAt(r, s) : 0, dB = lift ? net.deckAt(r, e) : 0, lo = Math.min(dA, dB), hi = Math.max(dA, dB);
+        if (bridge || hi > 0.05) {
+          // Railings ride on a deck you can pass under; a low ramp is walled down to the ground.
+          const y0 = lo >= SOLID_BELOW ? lo - 0.3 : 0, top = hi + 1.0;
           for (const side of [1, -1]) {
             const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2;
-            this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, 1.0);
+            this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, top - y0, y0);
           }
         } else if (divided) {
           const off = inner + MEDIAN_W / 4;
           this.addBox(p.x + p.dz * off * ms, p.z - p.dx * off * ms, MEDIAN_W / 4, half, rot, 0.35);
         } else if (median) this.addBox(p.x, p.z, 0.35, half, rot, 0.35);
       }
+      if (lift) for (const pier of net.deckPiers(r)) this.addCircle(pier.x, pier.z, 0.6, pier.d - 1.1);
     }
   }
 
   /** fn(i) for colliders near the rect. Indices may repeat. */
   near(minX, minZ, maxX, maxZ, fn) { return this.grid.query(minX, minZ, maxX, maxZ, fn); }
 
+  /** Does collider i stand in the way of something at height `level` (about 2 m tall)? */
+  _atLevel(i, level) { return this.y0[i] < level + 2 && this.y0[i] + this.h[i] > level + 0.3; }
+
   /**
    * Push a circle out of everything it overlaps. Mutates pos {x, z}; returns the
    * accumulated push normal (out.nx/out.nz) and whether anything was hit.
    */
-  resolveCircle(pos, r, out, maxH = Infinity) {
+  resolveCircle(pos, r, out, maxH = Infinity, level = 0) {
     let hit = false;
     out.nx = 0; out.nz = 0;
     // Walks the grid cells itself, marking each collider with this query's number so one that
@@ -135,7 +156,7 @@ export class Colliders {
           const i = list[k];
           if (mark[i] === q) continue;
           mark[i] = q;
-          if (this.h[i] < 0.3 || this.h[i] > maxH + 100) continue;
+          if (this.h[i] < 0.3 || this.h[i] > maxH + 100 || !this._atLevel(i, level)) continue;
           if (this.type[i] === SOLID.CIRCLE) {
             const dx = pos.x - this.x[i], dz = pos.z - this.z[i];
             const rr = r + this.hw[i], d2 = dx * dx + dz * dz;
@@ -174,7 +195,7 @@ export class Colliders {
    * Deepest penetration of an oriented box (a vehicle) into the static world.
    * Writes {nx, nz, depth, px, pz} (normal pushes the vehicle out; p = contact point).
    */
-  boxContact(x, z, hw, hd, rot, out) {
+  boxContact(x, z, hw, hd, rot, out, level = 0) {
     const ca = Math.cos(rot), sa = Math.sin(rot);
     const ext = Math.abs(hw * ca) + Math.abs(hd * sa) + 0.5, ezt = Math.abs(hw * sa) + Math.abs(hd * ca) + 0.5;
     let best = 0;
@@ -184,7 +205,7 @@ export class Colliders {
     this.grid.query(x - ext, z - ezt, x + ext, z + ezt, i => {
       if (seen.has(i)) return;
       seen.add(i);
-      if (this.h[i] < 0.3) return;
+      if (this.h[i] < 0.3 || !this._atLevel(i, level)) return;
       if (this.type[i] === SOLID.CIRCLE) {
         // Circle vs vehicle box.
         const dx = this.x[i] - x, dz = this.z[i] - z;
@@ -239,22 +260,19 @@ export class Colliders {
       else { let ta = (-hw - lax) / ldx, tb = (hw - lax) / ldx; if (ta > tb) { const t = ta; ta = tb; tb = t; } t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) return; }
       if (Math.abs(ldz) < 1e-9) { if (Math.abs(laz) > hd) return; }
       else { let ta = (-hd - laz) / ldz, tb = (hd - laz) / ldz; if (ta > tb) { const t = ta; ta = tb; tb = t; } t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) return; }
-      // Height check: the segment must be below the obstacle's top where it enters.
-      const y = ay + (by - ay) * t0;
-      if (y > this.h[i]) {
-        const y1 = ay + (by - ay) * t1;
-        if (y1 > this.h[i]) return;
-      }
+      // Height check: the segment must pass between the obstacle's base and top.
+      const y = ay + (by - ay) * t0, y1 = ay + (by - ay) * t1, top = this.y0[i] + this.h[i];
+      if ((y > top && y1 > top) || (y < this.y0[i] && y1 < this.y0[i])) return;
       if (t0 < tmin) tmin = t0;
     });
     return tmin;
   }
 
-  /** True when a circle at (x, z) overlaps anything solid. */
-  blocked(x, z, r) {
+  /** True when a circle at (x, z) overlaps anything solid (at height `level`). */
+  blocked(x, z, r, level = 0) {
     const p = this._bp || (this._bp = { x: 0, z: 0 });
     p.x = x; p.z = z;
-    return this.resolveCircle(p, r, this._bo || (this._bo = {}));
+    return this.resolveCircle(p, r, this._bo || (this._bo = {}), Infinity, level);
   }
 }
 

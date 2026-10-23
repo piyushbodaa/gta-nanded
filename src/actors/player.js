@@ -28,7 +28,7 @@ export class Player {
   teleport(x, z, heading) {
     if (this.vehicle) this.leaveVehicle(true);
     this.x = x; this.z = z; this.heading = heading; this.vx = this.vz = 0;
-    this.y = this.game.city.groundHeight(x, z);
+    this.y = this.groundY = this.game.city.groundHeight(x, z);
     this.state = 'foot';
     this.human.visible = true; this.human.pose = 'idle'; this.human.pitch = 0; this.human.roll = 0;
     this.game.camera.reset(heading);
@@ -77,13 +77,14 @@ export class Player {
     if (input.pressed('jump') && this.onGround) { this.vy = 4.6; this.onGround = false; g.audio?.sfx('jump'); }
     this.vy -= 15 * dt;
     this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
-    const gy = g.city.groundHeight(this.x, this.z);
+    // The ground, or a flyover deck if that is where we are walking.
+    const gy = Math.max(g.city.groundHeight(this.x, this.z), g.net.surfaceAt(this.x, this.z, this.groundY ?? 0));
     this.groundY = gy;
     if (this.y <= gy) { if (!this.onGround && this.vy < -9) this.damage((-this.vy - 9) * 6, 'fall'); this.y = gy; this.vy = 0; this.onGround = true; }
     // Collide: buildings and props, then vehicles, then keep out of deep water.
     const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
     p.x = this.x; p.z = this.z;
-    if (g.colliders.resolveCircle(p, 0.34, o)) {
+    if (g.colliders.resolveCircle(p, 0.34, o, Infinity, this.groundY)) {
       // Slide along the wall: remove the into-wall velocity.
       const vn = this.vx * o.nx + this.vz * o.nz;
       if (vn < 0) { this.vx -= vn * o.nx; this.vz -= vn * o.nz; }
@@ -170,7 +171,8 @@ export class Player {
     v.driver = null;
     v.role = 'abandoned';
     this.vehicle = null;
-    this.x = door.x; this.z = door.z; this.y = g.city.groundHeight(door.x, door.z);
+    this.x = door.x; this.z = door.z; this.y = Math.max(g.city.groundHeight(door.x, door.z), g.net.surfaceAt(door.x, door.z, v.y));
+    this.groundY = this.y;
     this.heading = v.heading;
     this.human.pose = 'idle'; this.human.pitch = 0; this.human.roll = 0;
     this.state = 'foot';

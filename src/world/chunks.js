@@ -4,10 +4,11 @@
 // and one line mesh for the wires.
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
-import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W } from './citygen.js';
+import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W, PUMP_HW, PUMP_HD } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
-import { MEDIAN_W } from './roadnet.js';
+import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
+import { buildAirfieldPiece } from './airfield.js';
 import { buildPlace } from './landmarks.js';
 import { FoliageGeo, LEAF } from './foliage.js';
 
@@ -141,10 +142,13 @@ export class ChunkManager {
     buildGround(ctx);
     if (data) {
       buildRoads(ctx, data);
+      buildRails(ctx, data);
+      for (const piece of data.airfield || []) buildAirfieldPiece(g, piece);
       pause(); yield 'ground'; resume();
       for (const i of data.lots) { buildLot(ctx, i); if (due()) { pause(); yield 'lots'; resume(); } }
       for (const i of data.trees) { buildTree(ctx, i); if (due()) { pause(); yield 'trees'; resume(); } }
       for (const i of data.props) { buildProp(ctx, i); if (due()) { pause(); yield 'props'; resume(); } }
+      for (const pump of data.pumps || []) buildPump(ctx, pump);
       let done = 'props';
       for (const i of data.places) { pause(); yield done; resume(); buildPlace(ctx, this.city.places[i], i); done = 'place'; }
       pause(); yield done; resume();
@@ -243,45 +247,156 @@ function roadTile(city, net, road) {
 }
 
 function buildRoads(ctx, data) {
-  const { g, city, net } = ctx;
+  const { net } = ctx;
   const p = {}, q = {};
   if (data.segs) {
     for (const i of data.segs) {
       const road = net.ptRoad[i];
-      const w = net.width[road], hw = w / 2;
       const len = net.length[road];
       const s0 = Math.max(net.cum[i], net.trimStart(road)), s1 = Math.min(net.cum[i + 1], len - net.trimEnd(road));
       if (s1 - s0 < 0.05) continue;
-      const tile = roadTile(city, net, road);
-      const y = ROAD_Y[net.type[road]] ?? 0.06;
-      // Mitred offsets at interior vertices keep curves seamless.
-      const start = net.ptStart[road], end = net.ptStart[road + 1] - 1;
-      const off0 = offsetAt(net, road, i, s0 > net.cum[i] + 1e-3, start, end, s0, p);
-      const off1 = offsetAt(net, road, i + 1, s1 < net.cum[i + 1] - 1e-3, start, end, s1, q);
-      // Edges left and right of a->b at each end: a carriageway of a divided road stops at its median.
-      const e0 = [net.edgeAt(road, s0, 1), net.edgeAt(road, s0, -1)], e1 = [net.edgeAt(road, s1, 1), net.edgeAt(road, s1, -1)];
-      g.setTint(0xffffff, road & 255).setTile(tile[0], tile[1], 1, 3);
-      const a = g.v(p.x + off0.nx * e0[0], y, p.z + off0.nz * e0[0], 0, s0 / FLOOR);
-      const b = g.v(p.x - off0.nx * e0[1], y, p.z - off0.nz * e0[1], 1, s0 / FLOOR);
-      const c = g.v(q.x - off1.nx * e1[1], y, q.z - off1.nz * e1[1], 1, s1 / FLOOR);
-      const d = g.v(q.x + off1.nx * e1[0], y, q.z + off1.nz * e1[0], 0, s1 / FLOOR);
-      // a,b at s0 (left, right), c,d at s1 (right, left): this order faces up.
-      g.quad(a, b, c, d);
-      // The median side of a divided road (+1 left of a->b, -1 right), where the other carriageway runs alongside.
-      const ms = net.oneway[road] ? -net.oneway[road] : 0, mk = ms > 0 ? 0 : 1;
-      const divided = ms !== 0 && (e0[mk] < hw - 0.05 || e1[mk] < hw - 0.05);
-      if (net.bridge[road]) buildBridgeSpan(ctx, p, q, off0, off1, e0, e1, divided ? ms : 0);
-      else {
-        if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1]);
-        if (divided) buildMedianHalf(ctx, p, q, off0, off1, ms, e0[mk], e1[mk]);
-        else if (w >= 11.5 && !ms) buildMedian(ctx, p, q, off0, off1);
-      }
-      // Zebra crossing just before a big junction.
-      if (w >= 8 && s1 >= len - net.trimEnd(road) - 0.01 && net.jRoads[net.rb[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, q, off1, e1, -1, s1);
-      if (w >= 8 && s0 <= net.trimStart(road) + 0.01 && net.jRoads[net.ra[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, p, off0, e0, 1, s0);
+      // A flyover's deck rises and falls along a segment: build it in short pieces.
+      const n = net.raised[road] ? Math.max(1, Math.ceil((s1 - s0) / 4)) : 1;
+      for (let k = 0; k < n; k++) roadPiece(ctx, road, i, s0 + ((s1 - s0) * k) / n, s0 + ((s1 - s0) * (k + 1)) / n, s0, s1, p, q);
+      if (net.raised[road]) buildPiers(ctx, road, s0, s1);
     }
   }
   if (data.junctions) for (const j of data.junctions) buildJunction(ctx, j);
+}
+
+/** The stretch of road segment i from sa to sb (s0..s1 is the whole drawn segment). */
+function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
+  const { g, city, net } = ctx;
+  const w = net.width[road], hw = w / 2, len = net.length[road];
+  const tile = roadTile(city, net, road);
+  // Mitred offsets at interior vertices keep curves seamless.
+  const start = net.ptStart[road], end = net.ptStart[road + 1] - 1;
+  const off0 = offsetAt(net, road, i, sa > net.cum[i] + 1e-3, start, end, sa, p);
+  const off1 = offsetAt(net, road, i + 1, sb < net.cum[i + 1] - 1e-3, start, end, sb, q);
+  // Edges left and right of a->b at each end: a carriageway of a divided road stops at its median.
+  const e0 = [net.edgeAt(road, sa, 1), net.edgeAt(road, sa, -1)], e1 = [net.edgeAt(road, sb, 1), net.edgeAt(road, sb, -1)];
+  const d0 = net.deckAt(road, sa), d1 = net.deckAt(road, sb), y = ROAD_Y[net.type[road]] ?? 0.06;
+  g.setTint(0xffffff, road & 255).setTile(tile[0], tile[1], 1, 3);
+  const a = g.v(p.x + off0.nx * e0[0], y + d0, p.z + off0.nz * e0[0], 0, sa / FLOOR);
+  const b = g.v(p.x - off0.nx * e0[1], y + d0, p.z - off0.nz * e0[1], 1, sa / FLOOR);
+  const c = g.v(q.x - off1.nx * e1[1], y + d1, q.z - off1.nz * e1[1], 1, sb / FLOOR);
+  const d = g.v(q.x + off1.nx * e1[0], y + d1, q.z + off1.nz * e1[0], 0, sb / FLOOR);
+  // a,b at sa (left, right), c,d at sb (right, left): this order faces up.
+  g.quad(a, b, c, d);
+  // The median side of a divided road (+1 left of a->b, -1 right), where the other carriageway runs alongside.
+  const ms = net.oneway[road] ? -net.oneway[road] : 0, mk = ms > 0 ? 0 : 1;
+  const divided = ms !== 0 && (e0[mk] < hw - 0.05 || e1[mk] < hw - 0.05);
+  if (net.bridge[road] || d0 > 0.05 || d1 > 0.05) buildBridgeSpan(ctx, p, q, off0, off1, e0, e1, divided ? ms : 0, d0, d1);
+  else {
+    if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1]);
+    if (divided) buildMedianHalf(ctx, p, q, off0, off1, ms, e0[mk], e1[mk]);
+    else if (w >= 11.5 && !ms) buildMedian(ctx, p, q, off0, off1);
+  }
+  // Zebra crossing just before a big junction (on the ground).
+  if (w >= 8 && sb === s1 && d1 < 0.3 && s1 >= len - net.trimEnd(road) - 0.01 && net.jRoads[net.rb[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, q, off1, e1, -1, s1);
+  if (w >= 8 && sa === s0 && d0 < 0.3 && s0 <= net.trimStart(road) + 0.01 && net.jRoads[net.ra[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, p, off0, e0, 1, s0);
+}
+
+/** Columns and caps under a flyover's raised deck, between s0 and s1. */
+function buildPiers(ctx, road, s0, s1) {
+  const { g, net } = ctx;
+  const hw = net.width[road] / 2;
+  for (const pier of net.deckPiers(road)) {
+    if (pier.s < s0 || pier.s >= s1) continue;
+    g.color(0xa39d90, 0);
+    g.cyl(pier.x, 0, pier.z, 0.6, pier.d - 1.1, 12);
+    g.color(0xb4aea1, 0);
+    g.cbox(pier.x, pier.d - 1.7, pier.z, hw * 0.8, 0.6, 0.55, pier.rot + Math.PI / 2);
+  }
+}
+
+// ------------------------------------------------------------------ petrol pumps
+// A forecourt with a canopy over two dispenser islands, the attendant's kiosk, a price
+// board at the road and an air stand. Three liveries, none of them a real company's.
+const PUMP_LOOKS = [[0xf07c1e, 0x1d4f91], [0x2e8b57, 0xf2c230], [0xc62828, 0xf4f1e8]];
+
+function buildPump(ctx, pump) {
+  const { g, pg, signSlots } = ctx;
+  const { x, z, rot, k } = pump, hw = PUMP_HW * k, hd = PUMP_HD * k;
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const X = (lx, lz) => x + lx * c + lz * s, Z = (lx, lz) => z - lx * s + lz * c;
+  const [band, trim] = PUMP_LOOKS[pump.look];
+  g.color(0xb9b6ad, 0); g.flat(X(-hw, -hd - 1.2), Z(-hw, -hd - 1.2), X(hw, -hd - 1.2), Z(hw, -hd - 1.2), X(hw, hd), Z(hw, hd), X(-hw, hd), Z(-hw, hd), 0.085);
+  // Canopy on four columns, its fascia in the livery.
+  const cw = 8.5 * k, cd = 4.6 * k, cy = 5.4;
+  g.color(0xe9e9e4, 0); for (const [lx, lz] of [[-cw + 1.2, -cd + 1.2], [cw - 1.2, -cd + 1.2], [-cw + 1.2, cd - 1.2], [cw - 1.2, cd - 1.2]]) g.cbox(X(lx, lz - 1.5), 0, Z(lx, lz - 1.5), 0.22, cy, 0.22, rot);
+  g.color(0xf6f6f2, 0); g.cbox(X(0, -1.5), cy, Z(0, -1.5), cw, 0.25, cd, rot);
+  g.color(band, 0); g.cbox(X(0, -1.5), cy + 0.25, Z(0, -1.5), cw + 0.05, 0.7, cd + 0.05, rot);
+  g.color(trim, 0); g.cbox(X(0, -1.5), cy + 0.95, Z(0, -1.5), cw + 0.06, 0.18, cd + 0.06, rot);
+  lightPool(pg, X(0, -1.5), Z(0, -1.5), 9 * k, cy - 0.1);
+  // Two islands, two dispensers each.
+  for (const lx of [-3.6 * k, 3.6 * k]) {
+    g.color(0xd4cfc2, 0); g.cbox(X(lx, -1.5), 0, Z(lx, -1.5), 0.6, 0.2, 2.2, rot);
+    for (const lz of [-2.6, -0.4]) {
+      g.color(0xf2f2ee, 0); g.cbox(X(lx, lz), 0.2, Z(lx, lz), 0.32, 1.7, 0.42, rot);
+      g.color(band, 0); g.cbox(X(lx, lz), 1.6, Z(lx, lz), 0.33, 0.3, 0.43, rot);
+      g.color(0x1d2b33, 0); g.cbox(X(lx - 0.33, lz), 1.0, Z(lx - 0.33, lz), 0.02, 0.35, 0.28, rot); g.cbox(X(lx + 0.33, lz), 1.0, Z(lx + 0.33, lz), 0.02, 0.35, 0.28, rot);
+      g.color(0x2b2b2b, 0); g.beam(X(lx + 0.34, lz + 0.2), 1.3, Z(lx + 0.34, lz + 0.2), X(lx + 0.5, lz + 0.35), 0.6, Z(lx + 0.5, lz + 0.35), 0.03);
+    }
+  }
+  // The kiosk at the back, in the livery.
+  g.color(0xf0eee6, 0); g.cbox(X(hw - 5 * k, hd - 2.4), 0, Z(hw - 5 * k, hd - 2.4), 3.6 * k, 3.1, 2.2, rot);
+  g.color(band, 0); g.cbox(X(hw - 5 * k, hd - 2.4), 3.1, Z(hw - 5 * k, hd - 2.4), 3.65 * k, 0.45, 2.25, rot);
+  g.color(0x24323c, 0); g.cbox(X(hw - 5 * k, hd - 4.62), 0.9, Z(hw - 5 * k, hd - 4.62), 2.4 * k, 1.4, 0.03, rot);
+  // Price board on a totem at the road, read from both sides.
+  const tx = -hw + 1.2, tz = -hd + 0.2;
+  g.color(trim, 0); g.cbox(X(tx, tz), 0, Z(tx, tz), 0.5, 6.2, 0.35, rot);
+  g.color(band, 0); g.cbox(X(tx, tz), 4.6, Z(tx, tz), 0.95, 1.8, 0.4, rot);
+  const slot = signSlots?.get(`pump-${pump.look}`);
+  if (slot !== undefined) {
+    const col = slot % SIGN_COLS, row = Math.floor(slot / SIGN_COLS), sg = ctx.sg;
+    sg.setTint(0xffffff, 0).setTile(col, row, 1, 2);
+    for (const side of [-1, 1]) {
+      const fz = tz + side * 0.42, a = side < 0 ? 1 : -1;
+      sg.wall(X(tx + a * 0.9, fz), Z(tx + a * 0.9, fz), X(tx - a * 0.9, fz), Z(tx - a * 0.9, fz), 3.3, 4.5, 0, 1, 0, 1);
+    }
+  }
+  // Air and water: a little red stand by the exit.
+  g.color(0xc0392b, 0); g.cbox(X(hw - 1.4, -hd + 1.6), 0, Z(hw - 1.4, -hd + 1.6), 0.25, 1.2, 0.25, rot);
+  g.color(0x2b2b2b, 0); g.cbox(X(hw - 1.4, -hd + 1.6), 1.2, Z(hw - 1.4, -hd + 1.6), 0.18, 0.2, 0.18, rot);
+}
+
+// ------------------------------------------------------------------ railway
+// Indian broad gauge (1,676 mm): a ballast bed with concrete sleepers and two rails,
+// set flush into the road where a street crosses the line.
+const GAUGE = 1.676, BALLAST_HW = 1.6;
+
+function buildRails(ctx, data) {
+  if (!data.rails) return;
+  const { g, city, net } = ctx;
+  for (let k = 0; k < data.rails.length; k += 2) {
+    const P = city.rails[data.rails[k]], i = data.rails[k + 1];
+    const ax = P[i], az = P[i + 1], bx = P[i + 2], bz = P[i + 3];
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 0.05) continue;
+    const fx = (bx - ax) / len, fz = (bz - az) / len, nx = fz, nz = -fx, rot = Math.atan2(fx, fz);
+    const pieces = Math.max(1, Math.ceil(len / 6));
+    for (let n = 0; n < pieces; n++) {
+      const s0 = (len * n) / pieces, s1 = (len * (n + 1)) / pieces, sm = (s0 + s1) / 2;
+      const x0 = ax + fx * s0, z0 = az + fz * s0, x1 = ax + fx * s1, z1 = az + fz * s1;
+      const crossing = net.onRoad(ax + fx * sm, az + fz * sm, 0.8);
+      if (!crossing) {
+        g.color(0x6b665f, 0);
+        const a = g.v(x0 + nx * BALLAST_HW, 0.09, z0 + nz * BALLAST_HW), b = g.v(x0 - nx * BALLAST_HW, 0.09, z0 - nz * BALLAST_HW);
+        const c = g.v(x1 - nx * BALLAST_HW, 0.09, z1 - nz * BALLAST_HW), d = g.v(x1 + nx * BALLAST_HW, 0.09, z1 + nz * BALLAST_HW);
+        g.quad(a, b, c, d);
+        g.color(0x8e897f, 0);
+        for (let s = s0 + 0.45; s < s1; s += 0.9) g.cbox(ax + fx * s, 0.09, az + fz * s, 1.35, 0.06, 0.12, rot);
+      }
+      // The rails: steel, worn bright on top.
+      const y = crossing ? 0.05 : 0.15;
+      for (const side of [1, -1]) {
+        const cx = (x0 + x1) / 2 + nx * side * GAUGE / 2, cz = (z0 + z1) / 2 + nz * side * GAUGE / 2;
+        g.color(0x5d5853, 0); g.cbox(cx, y, cz, 0.04, 0.11, (s1 - s0) / 2 + 0.02, rot);
+        g.color(0xb9b6b0, 0); g.cbox(cx, y + 0.11, cz, 0.036, 0.012, (s1 - s0) / 2 + 0.02, rot);
+      }
+    }
+  }
 }
 
 /** Offset direction (unit left normal, scaled for the mitre) at polyline vertex k. */
@@ -304,6 +419,13 @@ function offsetAt(net, road, k, clipped, start, end, s, out) {
     out.x = net.px[k]; out.z = net.pz[k];
   }
   return { nx, nz };
+}
+
+/** Vertical wall from A to B facing the right of A->B, its bottom and top sloping from (ya0, ya1) at A to (yb0, yb1) at B. */
+function slope(g, ax, az, bx, bz, ya0, ya1, yb0, yb1) {
+  const len = Math.hypot(bx - ax, bz - az);
+  const a = g.v(ax, ya0, az, 0, 0), b = g.v(bx, yb0, bz, len / 4, 0), c = g.v(bx, yb1, bz, len / 4, 1), d = g.v(ax, ya1, az, 0, 1);
+  g.quad(a, b, c, d);
 }
 
 function zebra(ctx, p, off, edges, dir, s) {
@@ -381,34 +503,38 @@ function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1) {
  * at each end; `median` is the side (+1 left, -1 right) where the other carriageway of a
  * divided bridge runs alongside, whose parapet then stands on the deck edge between the two.
  */
-function buildBridgeSpan(ctx, p, q, o0, o1, e0, e1, median) {
+function buildBridgeSpan(ctx, p, q, o0, o1, e0, e1, median, d0 = 0, d1 = 0) {
   const { g, city } = ctx;
   const ax = p.x, az = p.z, bx = q.x, bz = q.z;
   const len = Math.hypot(bx - ax, bz - az);
   if (len < 0.1) return;
   const nx0 = o0.nx, nz0 = o0.nz, nx1 = o1.nx, nz1 = o1.nz;
   const hw = Math.max(e0[0], e0[1], e1[0], e1[1]);
+  // Where a flyover's deck is low the ramp is a solid embankment walled to the ground;
+  // higher up it is a deck on piers you can drive under. A bridge over water hangs 1.1 m deep.
+  const foot = dk => (dk <= 0.05 ? -1.1 : dk < SOLID_BELOW ? -0.3 : dk - 1.1);
   // Deck sides and underside.
   g.color(0xb9b3a6, 0);
   for (const side of [1, -1]) {
     const k = side > 0 ? 0 : 1, inset = side === median ? 0.35 : 0;
     const eA = e0[k] + 0.35 - inset, eB = e1[k] + 0.35 - inset;
     const x0 = ax + nx0 * eA * side, z0 = az + nz0 * eA * side, x1 = bx + nx1 * eB * side, z1 = bz + nz1 * eB * side;
-    if (side > 0) g.wall(x1, z1, x0, z0, -1.1, 1.0, 0, 1, 0, 1); else g.wall(x0, z0, x1, z1, -1.1, 1.0, 0, 1, 0, 1);
+    if (side > 0) slope(g, x1, z1, x0, z0, foot(d1), d1 + 1.0, foot(d0), d0 + 1.0); else slope(g, x0, z0, x1, z1, foot(d0), d0 + 1.0, foot(d1), d1 + 1.0);
     // Parapet top cap and inner face.
     const iA = e0[k] + 0.05 - inset, iB = e1[k] + 0.05 - inset;
     const ix0 = ax + nx0 * iA * side, iz0 = az + nz0 * iA * side, ix1 = bx + nx1 * iB * side, iz1 = bz + nz1 * iB * side;
-    if (side > 0) g.wall(ix0, iz0, ix1, iz1, 0.05, 1.0, 0, 1, 0, 1); else g.wall(ix1, iz1, ix0, iz0, 0.05, 1.0, 0, 1, 0, 1);
+    if (side > 0) slope(g, ix0, iz0, ix1, iz1, d0 + 0.05, d0 + 1.0, d1 + 0.05, d1 + 1.0); else slope(g, ix1, iz1, ix0, iz0, d1 + 0.05, d1 + 1.0, d0 + 0.05, d0 + 1.0);
     g.color(0xd8d2c4, 0);
-    const a = g.v(ix0, 1.0, iz0), b = g.v(ix1, 1.0, iz1), c = g.v(x1, 1.0, z1), d = g.v(x0, 1.0, z0);
+    const a = g.v(ix0, d0 + 1.0, iz0), b = g.v(ix1, d1 + 1.0, iz1), c = g.v(x1, d1 + 1.0, z1), d = g.v(x0, d0 + 1.0, z0);
     if (side > 0) g.quad(a, b, c, d); else g.quad(a, d, c, b);
     g.color(0xb9b3a6, 0);
   }
-  // Underside slab (facing down) so the bridge reads from the ghats.
+  // Underside slab (facing down) so the bridge reads from the ghats and from the street below.
   const out = side => (side === median ? 0 : 0.35);
   const l0 = e0[0] + out(1), l1 = e1[0] + out(1), r0 = e0[1] + out(-1), r1 = e1[1] + out(-1);
-  const a = g.v(ax + nx0 * l0, -1.1, az + nz0 * l0), b = g.v(bx + nx1 * l1, -1.1, bz + nz1 * l1);
-  const c = g.v(bx - nx1 * r1, -1.1, bz - nz1 * r1), d = g.v(ax - nx0 * r0, -1.1, az - nz0 * r0);
+  const u0 = foot(d0), u1 = foot(d1);
+  const a = g.v(ax + nx0 * l0, u0, az + nz0 * l0), b = g.v(bx + nx1 * l1, u1, bz + nz1 * l1);
+  const c = g.v(bx - nx1 * r1, u1, bz - nz1 * r1), d = g.v(ax - nx0 * r0, u0, az - nz0 * r0);
   g.quad(a, b, c, d);
   // Piers every ~18 m where the riverbed is below.
   const steps = Math.floor(len / 18);
@@ -424,6 +550,7 @@ function buildBridgeSpan(ctx, p, q, o0, o1, e0, e1, median) {
 
 function buildJunction(ctx, j) {
   const { g, net } = ctx;
+  const lift = net.jDeck[j];
   const roads = net.jRoads[j];
   if (roads.length < 3) return;
   const jx = net.jx[j], jz = net.jz[j];
@@ -440,8 +567,8 @@ function buildJunction(ctx, j) {
   }
   pts.sort((a, b) => Math.atan2(a[1] - jz, a[0] - jx) - Math.atan2(b[1] - jz, b[0] - jx));
   g.setTint(0xffffff, 0).setTile(TILE.ASPHALT[0], TILE.ASPHALT[1], 1, 4);
-  const c = g.v(jx, PAD_Y, jz);
-  const ids = pts.map(([x, z]) => g.v(x, PAD_Y, z));
+  const c = g.v(jx, PAD_Y + lift, jz);
+  const ids = pts.map(([x, z]) => g.v(x, PAD_Y + lift, z));
   for (let i = 0; i < ids.length; i++) {
     const a = ids[i], b = ids[(i + 1) % ids.length];
     // Sorted by increasing atan2(z, x): counter-clockwise in x-z, which faces down; flip.
@@ -924,27 +1051,27 @@ function banana(ctx, x, z, seed) {
 function buildProp(ctx, i) {
   const { g, pg, city, net } = ctx;
   const P = city.props;
-  const x = P.x[i], z = P.z[i], rot = P.rot[i], kind = P.kind[i];
+  const x = P.x[i], z = P.z[i], rot = P.rot[i], kind = P.kind[i], y0 = P.y[i]; // y0: on a flyover's deck
   const r = rng(hash2(i, 31337));
   const c = Math.cos(rot), s = Math.sin(rot);
   switch (kind) {
     case PROP.LAMP: {
-      g.color(0x6f7779, 0); g.cyl(x, 0, z, 0.09, 7.2, 5, 0.06);
+      g.color(0x6f7779, 0); g.cyl(x, y0, z, 0.09, 7.2, 5, 0.06);
       // Arm reaches over the road (local -z of rot is toward the road for side lamps).
       const ax = x - s * 1.8, az = z - c * 1.8;
-      g.beam(x, 7.1, z, ax, 7.4, az, 0.06);
-      g.color(0x3a3f40, 0); g.cbox(ax, 7.2, az, 0.35, 0.18, 0.18, rot);
-      lightPool(pg, ax, az, 8.5, 7.15);
+      g.beam(x, y0 + 7.1, z, ax, y0 + 7.4, az, 0.06);
+      g.color(0x3a3f40, 0); g.cbox(ax, y0 + 7.2, az, 0.35, 0.18, 0.18, rot);
+      lightPool(pg, ax, az, 8.5, 7.15, y0);
       break;
     }
     case PROP.MEDIAN_LAMP: {
-      g.color(0x6f7779, 0); g.cyl(x, 0.3, z, 0.1, 8, 5, 0.07);
+      g.color(0x6f7779, 0); g.cyl(x, y0 + 0.3, z, 0.1, 8, 5, 0.07);
       for (const side of [1, -1]) {
         const ax = x + c * 2.2 * side, az = z - s * 2.2 * side;
-        g.beam(x, 8.1, z, ax, 8.3, az, 0.06);
-        g.color(0x3a3f40, 0); g.cbox(ax, 8.1, az, 0.35, 0.18, 0.18, rot + Math.PI / 2);
+        g.beam(x, y0 + 8.1, z, ax, y0 + 8.3, az, 0.06);
+        g.color(0x3a3f40, 0); g.cbox(ax, y0 + 8.1, az, 0.35, 0.18, 0.18, rot + Math.PI / 2);
         g.color(0x6f7779, 0);
-        lightPool(pg, ax, az, 10, 8.05);
+        lightPool(pg, ax, az, 10, 8.05, y0);
       }
       break;
     }
@@ -1002,6 +1129,34 @@ function buildProp(ctx, i) {
       lightPool(pg, x - s * 0.9, z - c * 0.9, 2.5, 0.8);
       break;
     }
+    case PROP.VENDOR: {
+      // A sabzi vendor at the kerb: a handcart, a mat on the ground or a crate stall, piled with produce.
+      const kind = hash2(i, 911) % 3, piles = [0xd63a2a, 0x4f8f3a, 0x9b4a5f, 0xb08a5a, 0xe8c33a, 0xf28c28, 0x5b2a5a, 0x2d7a2d, 0xe9e2c8];
+      const pile = (lx, lz, y, rx, rz) => { g.color(r.pick(piles), 0); g.blob(x + lx * c + lz * s, y, z - lx * s + lz * c, rx, 0.2, rz, i + lx * 7); };
+      if (kind === 0) {
+        g.color(0x7a5a34, 0); g.cbox(x, 0.75, z, 1.0, 0.18, 0.6, rot);
+        g.color(0x2b2b2b, 0); for (const lx of [-0.75, 0.75]) g.cyl(x + lx * c, 0, z - lx * s, 0.36, 0.1, 8);
+        g.color(0x5a4630, 0); g.beam(x + 1.0 * c, 0.85, z - 1.0 * s, x + 1.7 * c, 0.65, z - 1.7 * s, 0.04);
+        for (const lx of [-0.55, 0, 0.55]) pile(lx, 0, 1.05, 0.38, 0.45);
+      } else if (kind === 1) {
+        g.color(r.pick([0x2f6fb5, 0xb03a2e, 0x2e8b57, 0x6a4c93]), 0);
+        const a = g.v(x - 1.1 * c - 0.8 * s, 0.1, z + 1.1 * s - 0.8 * c), b = g.v(x + 1.1 * c - 0.8 * s, 0.1, z - 1.1 * s - 0.8 * c);
+        const d = g.v(x + 1.1 * c + 0.8 * s, 0.1, z - 1.1 * s + 0.8 * c), e = g.v(x - 1.1 * c + 0.8 * s, 0.1, z + 1.1 * s + 0.8 * c);
+        g.quad(a, b, d, e); g.quad(a, e, d, b);
+        for (const [lx, lz] of [[-0.6, -0.35], [0, -0.35], [0.6, -0.35], [-0.35, 0.35], [0.35, 0.35]]) pile(lx, lz, 0.18, 0.3, 0.26);
+      } else {
+        g.color(0x9a7a4c, 0);
+        for (const lx of [-0.55, 0.55]) { g.cbox(x + lx * c, 0, z - lx * s, 0.5, 0.42, 0.4, rot); g.cbox(x + lx * c + 0.1 * s, 0.42, z - lx * s + 0.1 * c, 0.48, 0.4, 0.38, rot); }
+        for (const lx of [-0.55, 0.55]) pile(lx, 0.05, 0.92, 0.42, 0.34);
+      }
+      // A big umbrella over the goods, its pole behind them (local +z faces the road).
+      g.color(0x555555, 0); g.cyl(x - 0.9 * s, 0, z - 0.9 * c, 0.03, 2.3, 4);
+      g.color(r.pick([0xc0392b, 0x2f6fb5, 0xf1c40f, 0x27ae60, 0xe67e22, 0x8e44ad]), 0); g.cone(x - 0.35 * s, 2.15, z - 0.35 * c, 1.45, 0.5, 8);
+      // A weighing scale on the cart or the mat's corner.
+      g.color(0x8f9496, 0); g.beam(x - 0.2 * s, kind === 1 ? 0.6 : 1.4, z - 0.2 * c, x - 0.2 * s, kind === 1 ? 0.15 : 0.95, z - 0.2 * c, 0.02);
+      if ((i & 3) === 0) lightPool(pg, x, z, 3.5, 2.0);
+      break;
+    }
     case PROP.HOARDING: {
       const tile = [TILE.HOARD_A, TILE.HOARD_B, TILE.HOARD_C, TILE.HOARD_D][i % 4];
       g.color(0x3b3f42, 0);
@@ -1032,10 +1187,11 @@ function wire(out, x0, z0, x1, z1, c, s) {
   }
 }
 
-function lightPool(pg, x, z, radius, headY) {
-  // Ground pool, and a small bright quad under the lamp head.
+function lightPool(pg, x, z, radius, headY, base = 0) {
+  // Ground pool, and a small bright quad under the lamp head (base: the deck it stands on).
   pg.setTint(0xffffff, 0).setTile(0, 0, 1, 0);
-  const y = 0.12;
+  const y = base + 0.12;
+  if (headY) headY += base;
   const a = pg.v(x - radius, y, z - radius, 0, 0), b = pg.v(x - radius, y, z + radius, 0, 1);
   const c = pg.v(x + radius, y, z + radius, 1, 1), d = pg.v(x + radius, y, z - radius, 1, 0);
   pg.quad(a, b, c, d);

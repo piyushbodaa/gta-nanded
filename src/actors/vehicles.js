@@ -7,7 +7,7 @@ import { makeOutfit, inShadowBox } from './humans.js';
 import { radialTexture } from '../world/citymat.js';
 import { clamp, rng } from '../core/math.js';
 
-const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 14, auto: 40, bike: 50, scooter: 40, bus: 8, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
+const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 14, auto: 48, bike: 50, scooter: 40, bus: 16, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
 const _m = new THREE.Matrix4(), _w = new THREE.Matrix4(), _t = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const WRECK = 0x2a2624;
@@ -137,6 +137,8 @@ export class Vehicles {
         if (v.kinematic) continue;
         const ctl = controls.get(v) || IDLE;
         stepBody(v, ctl, h, v.role === 'player' ? 1 : 1.3);
+        // Up a flyover's ramp and along its deck, or on the street beneath it.
+        v.y = this.city.net.surfaceAt(v.x, v.z, v.y);
         const hit = collideStatic(v, this.colliders, this._contact);
         if (hit > 4) this._impact(v, hit, null);
         // Water: the riverbank is a hard edge for anything with wheels.
@@ -150,7 +152,7 @@ export class Vehicles {
       for (const b of this.list) {
         if (a === b || (!b.kinematic && b.id < a.id)) continue;
         const dx = a.x - b.x, dz = a.z - b.z, rr = a.hd + b.hd + 0.5;
-        if (dx * dx + dz * dz > rr * rr) continue;
+        if (dx * dx + dz * dz > rr * rr || Math.abs(a.y - b.y) > 2) continue; // on a flyover and under it
         const was = b.kinematic;
         if (was) { b.vx = b.kinematic ? (b.vx || 0) : b.vx; }
         const imp = collidePair(a, b);

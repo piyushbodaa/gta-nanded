@@ -18,7 +18,8 @@ const TAXI_LINES = [
 ];
 const RACES = [
   { id: 'race-circle', name: 'Nanded Circle', start: { x: -29.7, z: -982.4 }, points: [{ x: -299.8, z: -1113.2 }, { x: -256.9, z: -485.7 }, { x: 39.7, z: 214.1 }, { x: -29.7, z: -982.4 }], reward: 1200 },
-  { id: 'race-airport', name: 'Station to Airport', start: { x: 5.3, z: 10.9 }, points: [{ x: 290.5, z: -31.7 }, { x: 766.5, z: -881.9 }, { x: 659.3, z: -1084.8 }], reward: 1400 },
+  // Starts down the forecourt road, clear of the first mission's marker at the station.
+  { id: 'race-airport', name: 'Station to Airport', start: { x: 35.1, z: 10.5 }, points: [{ x: 290.5, z: -31.7 }, { x: 766.5, z: -881.9 }, { x: 1357.0, z: -1358.8 }], reward: 1400 },
 ];
 
 export class Jobs {
@@ -129,7 +130,7 @@ export class Jobs {
     // A passenger waiting at a kerb 60-260 m away.
     for (let k = 0; k < 20; k++) {
       const ang = r() * 6.28, d = r.range(60, 260);
-      const n = g.net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 40, {});
+      const n = g.net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 40, {}, r => !g.net.raised[r]);
       if (!n || g.net.bridge[n.road]) continue;
       const off = (g.net.width[n.road] / 2 + 0.6) * (g.net.kerbSide(n.road) || 1);
       const x = n.x + n.dz * off, z = n.z - n.dx * off;
@@ -211,7 +212,7 @@ export class Jobs {
         // Deliver to a house: a random kerb point 200-700 m away.
         for (let k = 0; k < 30; k++) {
           const ang = r() * 6.28, d = r.range(200, 700);
-          const n = g.net.nearest(v.x + Math.cos(ang) * d, v.z + Math.sin(ang) * d, 40, {});
+          const n = g.net.nearest(v.x + Math.cos(ang) * d, v.z + Math.sin(ang) * d, 40, {}, r => !g.net.raised[r]);
           if (!n || g.net.type[n.road] < 4) continue;
           a.stage = 'deliver';
           const district = g.city.district(n.x, n.z).name;
@@ -247,7 +248,7 @@ export class Jobs {
     const rivals = [];
     const types = ['hatch', 'bike', 'sedan'];
     for (let i = 0; i < 3; i++) {
-      const n = g.net.nearest(def.start.x + (i + 1) * 7 * Math.sin(v.heading + 2.4), def.start.z + (i + 1) * 7 * Math.cos(v.heading + 2.4), 30, {});
+      const n = g.net.nearest(def.start.x + (i + 1) * 7 * Math.sin(v.heading + 2.4), def.start.z + (i + 1) * 7 * Math.cos(v.heading + 2.4), 30, {}, r => !g.net.raised[r]);
       if (!n) continue;
       const rv = g.vehicles.spawn(types[i], n.x, n.z, v.heading, { role: 'rival' });
       rv.kinematic = false; rv.keep = true;

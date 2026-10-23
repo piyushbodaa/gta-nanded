@@ -9,6 +9,13 @@ const TYPE_COST = [1, 1, 1.02, 1.06, 1.18, 1.3];
 const WRONG_WAY = 12;
 // The kerbed strip between the two carriageways of a divided road.
 export const MEDIAN_W = 1.2;
+// Flyovers: the deck surface over whatever they cross, the ramps' gradient, and how
+// far a ramp may run on along an approach road before the bridge.
+export const DECK_H = 6.4;
+const RAMP = 0.08, APPROACH = 110;
+// Below this deck height a ramp is a solid embankment, walled down to the ground; above it,
+// a deck on piers that traffic passes under.
+export const SOLID_BELOW = 4;
 
 export class RoadNet {
   constructor(world) {
@@ -84,6 +91,7 @@ export class RoadNet {
     for (let r = 0; r < nr; r++) for (let i = this.ptStart[r]; i < this.ptStart[r + 1]; i++) this.ptRoad[i] = r;
     this._t = [0];
     this._pairCarriageways();
+    this._raiseFlyovers(world);
 
     // Lanes: one each way on most streets, two each way on the widest; a one-way
     // carriageway runs two lanes the same way once it is wide enough.
@@ -142,6 +150,204 @@ export class RoadNet {
         if (!found[k] && found[k - 1] && found[k + 1]) this.inner[k] = (this.inner[k - 1] + this.inner[k + 1]) / 2;
       }
     }
+  }
+
+  /**
+   * A bridge on dry land that crosses a street or the railway is a flyover: it rises
+   * on ramps (RAMP gradient) from the ground to DECK_H over what it crosses, the ramps
+   * running on along straight approach roads where the mapped bridge is too short to
+   * climb. deckAt(road, s) is the deck height (0 on the ground), raised[r] marks roads
+   * that leave the ground, and jDeck[j] is the height of a junction. A bridge that still
+   * cannot clear what it crosses is levelled into an ordinary street, so it never walls
+   * off the road beneath it.
+   */
+  _raiseFlyovers(world) {
+    const nr = this.count, nj = this.junctionCount;
+    this.raised = new Uint8Array(nr);
+    this.jDeck = new Float32Array(nj);
+    this.crossings = [];
+    const rivers = world.rivers || [], rails = (this._rails = world.rails || []), p = {};
+    const near = (line, x, z, r) => {
+      for (let i = 0; i + 3 < line.length; i += 2) if (pointSegDist2(x, z, line[i], line[i + 1], line[i + 2], line[i + 3]) < r * r) return true;
+      return false;
+    };
+    const dry = new Uint8Array(nr);
+    for (let r = 0; r < nr; r++) {
+      if (!this.bridge[r]) continue;
+      this.pointAt(r, this.length[r] / 2, p);
+      if (!rivers.some(rv => near(rv.p, p.x, p.z, rv.w / 2 + 8))) dry[r] = 1;
+    }
+    // Where each dry bridge crosses another street (that it doesn't meet) or the railway.
+    const cross = (ax, az, bx, bz, cx, cz, dx, dz) => {
+      const d1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), d2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
+      const d3 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx), d4 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx);
+      return (d1 > 0) !== (d2 > 0) && (d3 > 0) !== (d4 > 0) ? d3 / (d3 - d4) : -1;
+    };
+    const found = [];
+    for (let r = 0; r < nr; r++) {
+      if (!dry[r]) continue;
+      for (let i = this.ptStart[r]; i < this.ptStart[r + 1] - 1; i++) {
+        const ax = this.px[i], az = this.pz[i], bx = this.px[i + 1], bz = this.pz[i + 1], seg = Math.hypot(bx - ax, bz - az);
+        const add = (u, half) => found.push({ road: r, s: this.cum[i] + u * seg, half });
+        this.segmentsIn(Math.min(ax, bx) - 1, Math.min(az, bz) - 1, Math.max(ax, bx) + 1, Math.max(az, bz) + 1, (k, o) => {
+          if (o === r || dry[o] || this.ra[o] === this.ra[r] || this.ra[o] === this.rb[r] || this.rb[o] === this.ra[r] || this.rb[o] === this.rb[r]) return;
+          const u = cross(ax, az, bx, bz, this.px[k], this.pz[k], this.px[k + 1], this.pz[k + 1]);
+          if (u >= 0) add(u, this.width[o] / 2 + 3);
+        });
+        for (const line of rails) for (let q = 0; q + 3 < line.length; q += 2) {
+          const u = cross(ax, az, bx, bz, line[q], line[q + 1], line[q + 2], line[q + 3]);
+          if (u >= 0) add(u, 6);
+        }
+      }
+    }
+    if (!found.length) return;
+    // The structures that lift: dry bridges joined to a crossing bridge, plus straight approaches.
+    const lift = new Uint8Array(nr), queue = [];
+    for (const c of found) if (!lift[c.road]) { lift[c.road] = 1; queue.push(c.road); }
+    while (queue.length) {
+      const r = queue.pop();
+      for (const j of [this.ra[r], this.rb[r]]) for (const o of this.jRoads[j]) if (dry[o] && !lift[o]) { lift[o] = 1; queue.push(o); }
+    }
+    for (let r = 0; r < nr; r++) {
+      if (!lift[r] || !dry[r]) continue;
+      for (const j0 of [this.ra[r], this.rb[r]]) {
+        // Through a plain bend (two roads), the ramp may carry on along the approach.
+        let j = j0, from = r, run = 0;
+        while (this.jRoads[j].length === 2 && run < APPROACH) {
+          const o = this.jRoads[j][0] === from ? this.jRoads[j][1] : this.jRoads[j][0];
+          if (o === from || lift[o] || this.bridge[o]) break;
+          lift[o] = 1; run += this.length[o];
+          from = o; j = this.otherEnd(o, j);
+        }
+      }
+    }
+    // Distances along the lifting roads: to the ground (any junction with a road that stays
+    // down) and to the nearest crossing (beyond the flat top over it).
+    const dijkstra = seed => {
+      const d = new Float64Array(nj).fill(Infinity), heap = new MinHeap(64);
+      seed((j, v) => { if (v < d[j]) { d[j] = v; heap.push(j, v); } });
+      while (heap.size) {
+        const v = heap.keys[0], j = heap.pop();
+        if (v > d[j]) continue;
+        for (const r of this.jRoads[j]) {
+          if (!lift[r]) continue;
+          const o = this.otherEnd(r, j), w = v + this.length[r];
+          if (w < d[o]) { d[o] = w; heap.push(o, w); }
+        }
+      }
+      return d;
+    };
+    const ground = dijkstra(push => { for (let j = 0; j < nj; j++) if (this.jRoads[j].some(r => !lift[r])) push(j, 0); });
+    const toCross = dijkstra(push => { for (const c of found) { push(this.ra[c.road], Math.max(0, c.s - c.half)); push(this.rb[c.road], Math.max(0, this.length[c.road] - c.s - c.half)); } });
+    const onRoad = new Map();
+    for (const c of found) { if (!onRoad.has(c.road)) onRoad.set(c.road, []); onRoad.get(c.road).push(c); }
+    this._lift = { ground, toCross, onRoad };
+    for (let r = 0; r < nr; r++) if (lift[r]) this.raised[r] = 1;
+    const heightAt = (r, s) => this.deckAt(r, s);
+    // A structure (lifting roads joined end to end) stands only if its deck clears at least one
+    // crossing. One that clears none was never a flyover (a culvert, or a level crossing mapped
+    // as a bridge): it is levelled into a plain street, so it never walls off the road beneath.
+    const comp = new Int32Array(nr).fill(-1);
+    const stands = [];
+    for (let r0 = 0; r0 < nr; r0++) {
+      if (!lift[r0] || comp[r0] >= 0) continue;
+      const id = stands.length, stack = [r0];
+      stands.push(false);
+      comp[r0] = id;
+      while (stack.length) {
+        const r = stack.pop();
+        for (const j of [this.ra[r], this.rb[r]]) for (const o of this.jRoads[j]) if (lift[o] && comp[o] < 0) { comp[o] = id; stack.push(o); }
+      }
+    }
+    for (const c of found) if (heightAt(c.road, c.s) >= 4.5) stands[comp[c.road]] = true;
+    for (let r = 0; r < nr; r++) {
+      if (!lift[r] || stands[comp[r]]) continue;
+      this.raised[r] = 0;
+      if (dry[r] && onRoad.has(r)) this.bridge[r] = 0;
+    }
+    for (let j = 0; j < nj; j++) for (const r of this.jRoads[j]) {
+      if (this.raised[r]) this.jDeck[j] = Math.max(this.jDeck[j], this.deckAt(r, this.ra[r] === j ? 0 : this.length[r]));
+    }
+    this.crossings = found.filter(c => this.raised[c.road]).map(c => ({ ...c, h: this.deckAt(c.road, c.s) }));
+  }
+
+  /**
+   * Deck height s metres along a road (0 for anything on the ground): as high as the ramps
+   * from the ground allow, and no higher than it needs to be to clear the nearest crossing.
+   */
+  deckAt(road, s) {
+    if (!this.raised[road]) return 0;
+    const { ground, toCross, onRoad } = this._lift, len = this.length[road], a = this.ra[road], b = this.rb[road];
+    let dc = Math.min(toCross[a] + s, toCross[b] + len - s);
+    const here = onRoad.get(road);
+    if (here) {
+      // Between two crossings the deck stays up rather than dipping in between.
+      let lo = Infinity, hi = -Infinity;
+      for (const c of here) { lo = Math.min(lo, c.s - c.half); hi = Math.max(hi, c.s + c.half); }
+      dc = Math.min(dc, s < lo ? lo - s : s > hi ? s - hi : 0);
+    }
+    const dg = Math.min(ground[a] + s, ground[b] + len - s);
+    return Math.max(0, Math.min(DECK_H, RAMP * dg, DECK_H - RAMP * dc));
+  }
+
+  /**
+   * Piers under a raised deck, every 16 m where it is high enough to stand on piers, except
+   * where one would land on another street or the railway: [{ s, x, z, d, rot }].
+   */
+  deckPiers(road) {
+    const cache = this._piers || (this._piers = new Map());
+    if (cache.has(road)) return cache.get(road);
+    const out = [], p = {}, t = this._t;
+    for (let s = this.trimStart(road) + 8; s < this.length[road] - this.trimEnd(road) - 4; s += 16) {
+      const d = this.deckAt(road, s);
+      if (d < SOLID_BELOW) continue;
+      this.pointAt(road, s, p);
+      const x = p.x, z = p.z;
+      const onStreet = this.grid.query(x - 2, z - 2, x + 2, z + 2, i => {
+        const r = this.ptRoad[i];
+        if (r === road || this.raised[r]) return false;
+        const hw = this.width[r] / 2 + 1;
+        return pointSegDist2(x, z, this.px[i], this.pz[i], this.px[i + 1], this.pz[i + 1], t) < hw * hw;
+      });
+      if (onStreet || this._rails.some(line => { for (let i = 0; i + 3 < line.length; i += 2) if (pointSegDist2(x, z, line[i], line[i + 1], line[i + 2], line[i + 3]) < 25) return true; return false; })) continue;
+      out.push({ s, x, z, d, rot: Math.atan2(p.dx, p.dz) });
+    }
+    cache.set(road, out);
+    return out;
+  }
+
+  /** Highest deck over (x, z), 0 when no flyover passes overhead (keeps lamps and stalls out from under it). */
+  deckOver(x, z) {
+    let best = 0;
+    const t = this._t;
+    this.grid.query(x - 1, z - 1, x + 1, z + 1, i => {
+      const r = this.ptRoad[i];
+      if (!this.raised[r]) return;
+      const hw = this.width[r] / 2 + 1;
+      if (pointSegDist2(x, z, this.px[i], this.pz[i], this.px[i + 1], this.pz[i + 1], t) > hw * hw) return;
+      best = Math.max(best, this.deckAt(r, this.cum[i] + (this.cum[i + 1] - this.cum[i]) * t[0]));
+    });
+    return best;
+  }
+
+  /**
+   * The surface height under (x, z) for something now at height y: a flyover deck it is
+   * on (or driving up onto from the ramp's foot), else the ground (0). Decks far above
+   * or below y are passed under or over.
+   */
+  surfaceAt(x, z, y = 0) {
+    let best = 0, bestErr = Math.abs(y), t = this._t;
+    this.grid.query(x - 1, z - 1, x + 1, z + 1, i => {
+      const r = this.ptRoad[i];
+      if (!this.raised[r]) return;
+      const d2 = pointSegDist2(x, z, this.px[i], this.pz[i], this.px[i + 1], this.pz[i + 1], t);
+      const hw = this.width[r] / 2 + 0.4;
+      if (d2 > hw * hw) return;
+      const h = this.deckAt(r, this.cum[i] + (this.cum[i + 1] - this.cum[i]) * t[0]);
+      const err = Math.abs(h - y);
+      if (err < 2.6 && err < bestErr) { best = h; bestErr = err; }
+    });
+    return best;
   }
 
   name(road) { return this.names[this.nameId[road]] || ''; }

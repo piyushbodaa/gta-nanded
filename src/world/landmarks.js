@@ -4,6 +4,7 @@
 // from the street, and that every college and coaching class has its board up.
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2 } from '../core/math.js';
+import { STATION_HD, BUS_STAND } from './citygen.js';
 import { LEAF } from './foliage.js';
 
 const FLOOR = 3.2;
@@ -84,10 +85,31 @@ export function placeColliders(p) {
     case 'godavari-river': case 'navghat-bridge': case 'govardhan-ghat-bridge': case 'visava-garden': return [];
     case 'ram-ghat': case 'govardhan-ghat': case 'urvashi-ghat': return [];
     case 'sggs-stadium': return [box(0, -p.d / 2 + 2, p.w / 2, 2.5, 8), box(0, p.d / 2 - 2, p.w / 2, 2.5, 8), box(-p.w / 2 + 2, 0, 2.5, p.d / 2, 8), box(p.w / 2 - 2, 0, 2.5, p.d / 2, 8)];
-    case 'shivaji-putla': case 'gandhi-putla': case 'ambedkar-chowk-latur-phata': return [box(0, 0, 1.6, 1.6, 8)];
+    case 'shivaji-putla': case 'gandhi-putla': case 'ambedkar-chowk-latur-phata': return [{ x: p.x, z: p.z, r: 4.3, h: 1.2 }, box(0, 0, 2.2, 2.2, 10)];
     case 'bhagya-nagar-kaman': case 'hingoli-gate': case 'mal-tekdi': case 'vishnupuri-dam': return [];
     case 'old-mondha-clock-tower': return [box(0, 0, 2.6, 2.6, 22)];
-    case 'nanded-station': return [box(0, 0, p.w / 2 + 6, p.d / 2, 10)];
+    case 'nanded-airport': {
+      const out = [box(0, 0, 18, 8, 10), box(27, 6, 1.7, 1.7, 24)];
+      for (const lx of [-13, -4.5, 4.5, 13]) out.push(box(lx, -13, 0.4, 0.4, 7));
+      if (p.plane) {
+        const { x, z, heading } = p.plane;
+        out.push({ x, z, hw: 1.4, hd: 13.6, rot: heading, h: 4 });
+      }
+      return out;
+    }
+    case 'nanded-bus-stand': {
+      const k = p.fit ?? 1, HW = BUS_STAND[0] * k, HD = BUS_STAND[1] * k;
+      const out = [box(0, (6.6 + HD) / 2, HW - 1, (HD - 6.6) / 2, 8), box(0, 3.4, HW - 2, 1.4, 0.32)];
+      for (let lx = -HW + 4; lx <= HW - 4; lx += 6) out.push(box(lx, 2.4, 0.25, 0.25, 5));
+      for (const gx of [-HW * 0.62, HW * 0.62]) for (const side of [-1, 1]) out.push(box(gx + side * 4.6, -HD, 0.45, 0.45, 6));
+      return out;
+    }
+    case 'nanded-station': {
+      if (!p.station) return [box(0, 0, p.w / 2 + 6, p.d / 2, 10)];
+      const S = p.station, out = [box(0, -3.75, 34, 8, 11), box(0, -STATION_HD - 0.75, 10, 0.8, 12)];
+      if (S.train) out.push(box((-S.train.a0 - S.train.a1) / 2, S.train.b, (S.train.a1 - S.train.a0) / 2, 1.6, 4.3));
+      return out;
+    }
     default:
       if (p.category === 'junction' || p.category === 'park') return [];
       return [box(0, 0, p.w / 2, p.d / 2, p.h || 10)];
@@ -140,6 +162,16 @@ function onionDome(g, x, y, z, r, gold = GOLD) {
   g.blob(x, y + r * 2.1, z, r * 0.12, r * 0.14, r * 0.12, 3);
 }
 
+/** Gilded ribs down an onion dome (the same profile as onionDome), as on Hazur Sahib's fluted dome. */
+function ribs(g, x, y, z, r, n) {
+  const prof = [[0.82, 0], [0.93, 0.16], [1.0, 0.35], [1.06, 0.54], [1.08, 0.7], [1.04, 0.88], [0.95, 1.05], [0.8, 1.22], [0.62, 1.38], [0.42, 1.51], [0.25, 1.62], [0.08, 1.8]];
+  g.gilt(0xf0c050);
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2, c = Math.cos(a) * r * 1.02, s = Math.sin(a) * r * 1.02;
+    for (let i = 0; i + 1 < prof.length; i++) g.beam(x + c * prof[i][0], y + r * prof[i][1], z + s * prof[i][0], x + c * prof[i + 1][0], y + r * prof[i + 1][1], z + s * prof[i + 1][0], r * 0.012);
+  }
+}
+
 function chhatri(g, x, y, z, r, pillar = MARBLE) {
   g.color(pillar, 0);
   for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) g.cyl(x + dx * r * 0.75, y, z + dz * r * 0.75, r * 0.1, r * 1.3, 5);
@@ -186,8 +218,9 @@ function hazurSahib(ctx, p) {
   // Darshani Deori: a tall arched gateway with a golden dome.
   texBox(g, X, Z, rot, 0, 0, -R, 7, 9, 2.2, TILE.MARBLE, 0xffffff, 4);
   archFace(g, X, Z, 0, -R - 2.25, 5, 7, 0, 0x3a2e24);
-  onionDome(g, X(0, -R), 9, Z(0, -R), 2.2);
-  chhatri(g, X(-5.5, -R), 9, Z(-5.5, -R), 1.1); chhatri(g, X(5.5, -R), 9, Z(5.5, -R), 1.1);
+  onionDome(g, X(0, -R), 11.6, Z(0, -R), 2.2);
+  ribs(g, X(0, -R), 11.6, Z(0, -R), 2.2, 12);
+  chhatri(g, X(-5.5, -R), 11.6, Z(-5.5, -R), 1.1); chhatri(g, X(5.5, -R), 11.6, Z(5.5, -R), 1.1);
   // Plinth and the two tiers of the Takht.
   texBox(g, X, Z, rot, 0, 0, 0, 12, 1.4, 12, TILE.MARBLE, 0xffffff, 4);
   g.color(0xe8e2d4, 0);
@@ -210,10 +243,41 @@ function hazurSahib(ctx, p) {
   texBox(g, X, Z, rot, 0, 10.4, 0, 6.2, 4.6, 6.2, TILE.MARBLE, 0xffffff, 4);
   g.gilt(GOLD); g.cbox(p.x, 15, p.z, 6.4, 0.4, 6.4, rot);
   for (const [lx, lz] of [[-6, -6], [6, -6], [6, 6], [-6, 6]]) chhatri(g, X(lx, lz), 15.4, Z(lx, lz), 1.2);
-  // The golden dome on its drum.
+  // The golden dome on its drum, fluted with gilded ribs.
   g.color(MARBLE, 0); g.cyl(cx, 15.4, cz, 4.2, 1.6, 14);
   onionDome(g, cx, 17, cz, 4.4);
-  // Nishan Sahib pair before the gate.
+  ribs(g, cx, 17, cz, 4.4, 16);
+  // Gilded jharokhas on every face of the upper storey, a little dome over each.
+  for (let q = 0; q < 4; q++) {
+    const F = frame(p, rot + (q * Math.PI) / 2);
+    for (const lx of [-3.6, 0, 3.6]) {
+      g.color(MARBLE, 0); g.cbox(F.X(lx, -6.6), 11.2, F.Z(lx, -6.6), 0.9, 1.9, 0.5, F.rot);
+      g.gilt(GOLD); g.cbox(F.X(lx, -7.12), 11.35, F.Z(lx, -7.12), 0.75, 0.12, 0.04, F.rot); g.cbox(F.X(lx, -7.12), 12.85, F.Z(lx, -7.12), 0.75, 0.12, 0.04, F.rot);
+      archFace(g, F.X, F.Z, lx, -7.13, 1.1, 1.4, 11.5, 0x5b3a1e);
+      onionDome(g, F.X(lx, -6.6), 13.1, F.Z(lx, -6.6), 0.45);
+    }
+  }
+  // Angitha Sahib: a small marble shrine with its own golden dome in the courtyard.
+  const ax = -R * 0.62, az = R * 0.45;
+  texBox(g, X, Z, rot, ax, 0, az, 3.2, 4.4, 3.2, TILE.MARBLE, 0xffffff, 4);
+  for (let q = 0; q < 4; q++) { const F = frame({ x: X(ax, az), z: Z(ax, az), rot: p.rot }, rot + (q * Math.PI) / 2); archFace(g, F.X, F.Z, 0, -3.25, 1.6, 2.8, 0.2, 0x5b3a1e); }
+  g.gilt(GOLD); g.cbox(X(ax, az), 4.4, Z(ax, az), 3.3, 0.3, 3.3, rot);
+  for (const [dx, dz] of [[-2.8, -2.8], [2.8, -2.8], [2.8, 2.8], [-2.8, 2.8]]) chhatri(g, X(ax + dx, az + dz), 4.7, Z(ax + dx, az + dz), 0.7);
+  g.color(MARBLE, 0); g.cyl(X(ax, az), 4.7, Z(ax, az), 1.7, 0.8, 12);
+  onionDome(g, X(ax, az), 5.5, Z(ax, az), 1.9);
+  // Lanterns along the parikrama.
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2 + 0.31, rr = R * 0.78, lx = Math.cos(a) * rr, lz = Math.sin(a) * rr;
+    if (Math.abs(lx) < 6 && lz < 0) continue; // keep the path from the gate clear
+    g.color(0x2a2a2a, 0); g.cyl(X(lx, lz), 0.09, Z(lx, lz), 0.08, 3.4, 6);
+    g.gilt(GOLD); g.blob(X(lx, lz), 3.6, Z(lx, lz), 0.28, 0.36, 0.28, k);
+    pool(pg, X(lx, lz), Z(lx, lz), 4, 3.6);
+  }
+  // The Darshani Deori rises a storey higher, with balconies either side of its dome.
+  texBox(g, X, Z, rot, 0, 9, -R, 5.2, 2.6, 1.8, TILE.MARBLE, 0xffffff, 4);
+  for (const lx of [-3, 3]) { archFace(g, X, Z, lx, -R - 1.85, 1.3, 1.7, 9.4, 0x5b3a1e); g.gilt(GOLD); g.cbox(X(lx, -R - 1.9), 9.25, Z(lx, -R - 1.9), 0.9, 0.12, 0.25, rot); }
+  // The tall Nishan Sahib before the gate, with a pair either side of the path.
+  nishanSahib(g, X(0, -R - 9), Z(0, -R - 9), 32);
   nishanSahib(g, X(-6, -R + 6), Z(-6, -R + 6), 25);
   nishanSahib(g, X(6, -R + 6), Z(6, -R + 6), 25);
   // Night: the complex glows.
@@ -306,49 +370,222 @@ function smallTemple(ctx, p, lx, lz) {
 
 // ------------------------------------------------------------------ transport & civic
 function station(ctx, p) {
-  const { g, pg, sg } = ctx;
+  const { g, pg } = ctx;
+  const S = p.station;
+  if (!S) return;
   const { X, Z, rot } = frame(p);
-  const hw = p.w / 2 + 6, hd = p.d / 2;
-  // Main building: cream with maroon bands, a central clock gable.
-  facadeBox(g, X, Z, rot, 0, 0, hw, hd, 7.2, ROW.OLD, 0xf0dca8, 41);
-  g.color(0x7a2e2e, 0); g.cbox(p.x, 3.0, p.z, hw + 0.05, 0.35, hd + 0.05, rot);
-  texBox(g, X, Z, rot, 0, 0, -0.5, 5, 11, hd + 0.6, TILE.COMPOUND, 0xf0dca8, 4);
-  g.color(0xffffff, 0); g.cyl(X(0, -hd - 1.2), 9.2, Z(0, -hd - 1.2), 1.2, 0.15, 14);
-  // Portico.
-  g.color(0xe8d6a8, 0);
-  for (let i = -2; i <= 2; i++) g.cyl(X(i * 3, -hd - 4), 0, Z(i * 3, -hd - 4), 0.35, 4.5, 8);
-  g.cbox(X(0, -hd - 2.5), 4.5, Z(0, -hd - 2.5), 8, 0.5, 2.8, rot);
-  // Station name boards in front.
-  for (const lx of [-12, 12]) {
-    g.color(0x1a1a1a, 0); g.cyl(X(lx - 1.6, -hd - 8), 0, Z(lx - 1.6, -hd - 8), 0.08, 3.6, 4); g.cyl(X(lx + 1.6, -hd - 8), 0, Z(lx + 1.6, -hd - 8), 0.08, 3.6, 4);
-    g.setTint(0xffffff, 0).setTile(TILE.STATION_BOARD[0], TILE.STATION_BOARD[1], 1, 2);
-    g.wall(X(lx + 2, -hd - 8.05), Z(lx + 2, -hd - 8.05), X(lx - 2, -hd - 8.05), Z(lx - 2, -hd - 8.05), 1.6, 3.6, 0, 1, 0, 1);
-    g.wall(X(lx - 2, -hd - 7.95), Z(lx - 2, -hd - 7.95), X(lx + 2, -hd - 7.95), Z(lx + 2, -hd - 7.95), 1.6, 3.6, 0, 1, 0, 1);
+  const CREAM = 0xf1e6c8, MAROON = 0x7a2a26, TRIM = 0xf8f4ea, STONE2 = 0xc9bfa8;
+  const front = -STATION_HD, back = 4.25;
+  // Plinth and forecourt pavers.
+  g.color(STONE2, 0); g.cbox(X(0, (front + back) / 2), 0, Z(0, (front + back) / 2), 33, 0.6, (back - front) / 2, rot);
+  texBox(g, X, Z, rot, 0, 0, front - 2.2, 34, 0.08, 2.2, TILE.PAVERS, 0xffffff, 2);
+  // The wings: two storeys of arched windows over a ground-floor arcade, maroon bands.
+  for (const side of [-1, 1]) {
+    const cx = side * 21, hw = 11;
+    facadeBox(g, X, Z, rot, cx, (front + back) / 2, hw, (back - front) / 2, 8.4, ROW.OLD, CREAM, 41 + side);
+    for (let i = -2; i <= 2; i++) {
+      archFace(g, X, Z, cx + i * 4.2, front - 0.05, 2.6, 3.6, 0.6, 0x3a2e24);
+      archFace(g, X, Z, cx + i * 4.2, front - 0.06, 1.5, 2.2, 4.9, 0x2c3a40);
+    }
+    g.color(MAROON, 0);
+    g.cbox(X(cx, front - 0.1), 4.1, Z(cx, front - 0.1), hw, 0.32, 0.12, rot);
+    g.cbox(X(cx, front - 0.1), 8.1, Z(cx, front - 0.1), hw, 0.3, 0.12, rot);
+    // Domelets along the parapet.
+    for (let i = -1; i <= 1; i++) { g.color(TRIM, 0); g.cyl(X(cx + i * 7, front + 0.4), 9.3, Z(cx + i * 7, front + 0.4), 0.5, 0.5, 8); onionDome(g, X(cx + i * 7, front + 0.4), 9.8, Z(cx + i * 7, front + 0.4), 0.55); }
+    // End pavilions with chhatris.
+    texBox(g, X, Z, rot, side * 32.5, 0, (front + back) / 2, 3.2, 10.4, (back - front) / 2 + 0.3, TILE.COMPOUND, CREAM, 3);
+    archFace(g, X, Z, side * 32.5, front - 0.4, 2.2, 3.4, 0.6, 0x3a2e24);
+    g.color(MAROON, 0); g.cbox(X(side * 32.5, front - 0.35), 9.4, Z(side * 32.5, front - 0.35), 3.25, 0.4, 0.1, rot);
+    chhatri(g, X(side * 32.5, front + 2), 10.4, Z(side * 32.5, front + 2), 1.6, TRIM);
+    chhatri(g, X(side * 32.5, back - 2), 10.4, Z(side * 32.5, back - 2), 1.6, TRIM);
   }
-  // Platform and shelters behind.
-  g.color(0xb7ab92, 0); g.cbox(X(0, hd + 6), 0, Z(0, hd + 6), hw + 30, 0.9, 4, rot);
-  g.color(0x7d8a8f, 0);
-  for (let i = -6; i <= 6; i++) g.cyl(X(i * 6, hd + 6), 0.9, Z(i * 6, hd + 6), 0.15, 3.4, 5);
-  g.color(0x5f6f75, 0); g.cbox(X(0, hd + 6), 4.3, Z(0, hd + 6), hw + 24, 0.15, 3.4, rot);
-  sign(ctx, p, X, Z, 0, -hd - 0.7, 7, 7.4, 8.6);
-  pool(pg, X(0, -hd - 6), Z(0, -hd - 6), 10);
-  pool(pg, X(-14, hd + 6), Z(-14, hd + 6), 7); pool(pg, X(14, hd + 6), Z(14, hd + 6), 7);
+  // The entrance pavilion: a tall arch, a clock, a golden dome and chhatris over the booking hall.
+  texBox(g, X, Z, rot, 0, 0, (front - 1.5 + back) / 2, 10, 12.4, (back - front + 1.5) / 2, TILE.COMPOUND, CREAM, 3);
+  const pf = front - 1.55;
+  archFace(g, X, Z, 0, pf, 6.4, 8.6, 0.6, 0x2e2620);
+  archFace(g, X, Z, -6.6, pf, 3.4, 6.2, 0.6, 0x3a2e24); archFace(g, X, Z, 6.6, pf, 3.4, 6.2, 0.6, 0x3a2e24);
+  for (let i = -2; i <= 2; i++) if (i) archFace(g, X, Z, i * 3.4, pf - 0.01, 1.4, 1.9, 10.0, 0x2c3a40);
+  g.color(MAROON, 0); g.cbox(X(0, pf - 0.05), 9.3, Z(0, pf - 0.05), 10.05, 0.4, 0.12, rot);
+  disc(g, X, Z, 0, pf - 0.06, 11.2, 1.05, 0x2a2420); disc(g, X, Z, 0, pf - 0.08, 11.2, 0.9, 0xf8f4e6);
+  g.color(0x1a1a1a, 0); g.beam(X(0, pf - 0.12), 11.2, Z(0, pf - 0.12), X(0, pf - 0.12), 11.85, Z(0, pf - 0.12), 0.04); g.beam(X(0, pf - 0.12), 11.2, Z(0, pf - 0.12), X(0.45, pf - 0.12), 11.2, Z(0.45, pf - 0.12), 0.05);
+  // Cantilevered canopy over the doors, on steel brackets.
+  g.color(0xd9d3c6, 0); g.cbox(X(0, pf - 1.6), 6.9, Z(0, pf - 1.6), 8, 0.3, 1.6, rot);
+  g.color(0x4a4f52, 0); for (const lx of [-7, -2.4, 2.4, 7]) g.beam(X(lx, pf), 8.2, Z(lx, pf), X(lx, pf - 3), 7.2, Z(lx, pf - 3), 0.06);
+  sign(ctx, p, X, Z, 0, pf - 0.12, 8.6, 12.4, 13.9);
+  // Dome on its drum, chhatris at the corners, gilded domelets on the parapet.
+  g.color(TRIM, 0); g.cyl(p.x, 12.4, p.z, 3.1, 1.4, 16);
+  onionDome(g, p.x, 13.8, p.z, 3.3);
+  for (const [lx, lz] of [[-8.6, pf + 1.4], [8.6, pf + 1.4], [-8.6, back - 1.4], [8.6, back - 1.4]]) chhatri(g, X(lx, lz), 12.4, Z(lx, lz), 1.4, TRIM);
+  // Platform 1: 840 mm high, pavers with a yellow edge, a canopy on steel columns, benches and boards.
+  for (const pl of S.platforms) {
+    const lx0 = -pl.a1, lx1 = -pl.a0, cx = (lx0 + lx1) / 2, hw = (lx1 - lx0) / 2, cz = (pl.b0 + pl.b1) / 2, hd = (pl.b1 - pl.b0) / 2;
+    g.color(0xb4ad9e, 0); g.cbox(X(cx, cz), 0, Z(cx, cz), hw, 0.8, hd, rot);
+    texBox(g, X, Z, rot, cx, 0.8, cz, hw, 0.04, hd, TILE.PAVERS, 0xffffff, 2);
+    g.color(0xf2c230, 0); g.cbox(X(cx, pl.b1 - 0.45), 0.845, Z(cx, pl.b1 - 0.45), hw, 0.01, 0.15, rot);
+    for (let lx = lx0 + 4; lx <= lx1 - 4; lx += 8) {
+      g.color(0x55635f, 0); g.cyl(X(lx, cz), 0.84, Z(lx, cz), 0.14, 4.9, 6);
+      g.beam(X(lx, cz), 5.6, Z(lx, cz), X(lx, pl.b0 + 0.3), 5.25, Z(lx, pl.b0 + 0.3), 0.07);
+      g.beam(X(lx, cz), 5.6, Z(lx, cz), X(lx, pl.b1 - 0.3), 5.25, Z(lx, pl.b1 - 0.3), 0.07);
+      if ((lx - lx0) % 16 < 8) { g.color(0x6b4a2e, 0); g.cbox(X(lx + 2.5, cz + 1.2), 0.84, Z(lx + 2.5, cz + 1.2), 1.1, 0.45, 0.25, rot); g.cbox(X(lx + 2.5, cz + 1.45), 1.29, Z(lx + 2.5, cz + 1.45), 1.1, 0.4, 0.05, rot); }
+    }
+    // Corrugated roof sheets sloping to both edges, with a fascia.
+    g.color(0x768c84, 0);
+    for (const [z0, z1] of [[cz, pl.b0 - 0.4], [cz, pl.b1 + 0.6]]) {
+      const a = g.v(X(lx0 - 1, z0), 5.75, Z(lx0 - 1, z0)), b = g.v(X(lx1 + 1, z0), 5.75, Z(lx1 + 1, z0));
+      const c = g.v(X(lx1 + 1, z1), 5.3, Z(lx1 + 1, z1)), d = g.v(X(lx0 - 1, z1), 5.3, Z(lx0 - 1, z1));
+      g.quad(a, b, c, d); g.quad(a, d, c, b);
+    }
+    for (const lx of [lx0 + 1.5, lx1 - 1.5]) stationBoard(g, X, Z, lx, pl.b1 - 1.6, 0.84);
+    for (let lx = lx0 + 10; lx < lx1 - 6; lx += 20) pool(pg, X(lx, cz), Z(lx, cz), 6);
+  }
+  // The foot overbridge: a covered deck on piers between the tracks, stairs at each end.
+  if (S.fob) {
+    const fx = -S.fob.a, D = 7.2, b0 = S.fob.b0, b1 = S.fob.b1;
+    g.color(0xb8b2a6, 0); g.cbox(X(fx, (b0 + b1) / 2), D - 0.4, Z(fx, (b0 + b1) / 2), 1.6, 0.4, (b1 - b0) / 2, rot);
+    g.color(0x9fb0aa, 0);
+    for (const side of [-1, 1]) g.cbox(X(fx + side * 1.55, (b0 + b1) / 2), D, Z(fx + side * 1.55, (b0 + b1) / 2), 0.06, 1.1, (b1 - b0) / 2, rot);
+    g.color(0x768c84, 0); g.cbox(X(fx, (b0 + b1) / 2), D + 2.5, Z(fx, (b0 + b1) / 2), 1.9, 0.12, (b1 - b0) / 2 + 0.3, rot);
+    g.color(0x55635f, 0);
+    for (let b = b0 + 1; b <= b1 - 1; b += 6) for (const side of [-1, 1]) g.cyl(X(fx + side * 1.5, b), D, Z(fx + side * 1.5, b), 0.07, 2.5, 5);
+    // Piers stand in the gaps between the tracks.
+    const gaps = [S.track - 1.9, ...S.tracks.slice(0, -1).map((t, i) => (t + S.tracks[i + 1]) / 2).filter((m, i) => S.tracks[i + 1] - S.tracks[i] > 2.6), b1 - 1];
+    g.color(0xa39d90, 0);
+    for (const b of gaps) g.cbox(X(fx, b), 0, Z(fx, b), 0.35, D - 0.4, 0.35, rot);
+    // Stairs: down onto Platform 1, and down to the street beyond the yard.
+    stairs(g, X, Z, rot, fx - 1.6, b0 + 1.5, -1, D, 0.84);
+    stairs(g, X, Z, rot, fx + 1.6, b1 - 1.5, 1, D, 0);
+  }
+  // Overhead line: portal masts across the tracks, a contact wire over each.
+  if (S.tracks.length) {
+    const t0 = S.tracks[0] - 2.4, t1 = S.tracks[S.tracks.length - 1] + 2.4;
+    for (let lx = -60; lx <= 60; lx += 30) {
+      g.color(0x4c5355, 0);
+      g.cbox(X(lx, t0), 0, Z(lx, t0), 0.18, 7.8, 0.18, rot); g.cbox(X(lx, t1), 0, Z(lx, t1), 0.18, 7.8, 0.18, rot);
+      g.cbox(X(lx, (t0 + t1) / 2), 7.5, Z(lx, (t0 + t1) / 2), 0.15, 0.3, (t1 - t0) / 2, rot);
+    }
+    g.color(0x3c3a36, 0);
+    for (const t of S.tracks) g.cbox(X(0, t), 6.1, Z(0, t), 62, 0.03, 0.02, rot);
+  }
+  // A train in at Platform 1: an electric loco and three coaches.
+  if (S.train) train(g, X, Z, rot, -S.train.a1, -S.train.a0, S.train.b);
+  pool(pg, X(0, front - 4), Z(0, front - 4), 12);
+}
+
+/** A clock face or round window on a front face (local -z), as a flat disc. */
+function disc(g, X, Z, lx, lz, y, r, color) {
+  g.color(color, 0);
+  const n = 20, c = g.v(X(lx, lz), y, Z(lx, lz)), ids = [];
+  for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI * 2; ids.push(g.v(X(lx + Math.cos(a) * r, lz), y + Math.sin(a) * r, Z(lx + Math.cos(a) * r, lz))); }
+  for (let i = 0; i < n; i++) g.tri(c, ids[i + 1], ids[i]);
+}
+
+/** The yellow station name board on two posts. */
+function stationBoard(g, X, Z, lx, lz, y0) {
+  g.color(0x1a1a1a, 0);
+  g.cyl(X(lx - 1.5, lz), y0, Z(lx - 1.5, lz), 0.06, 3.2, 4); g.cyl(X(lx + 1.5, lz), y0, Z(lx + 1.5, lz), 0.06, 3.2, 4);
+  g.setTint(0xffffff, 0).setTile(TILE.STATION_BOARD[0], TILE.STATION_BOARD[1], 1, 2);
+  g.wall(X(lx + 1.8, lz - 0.05), Z(lx + 1.8, lz - 0.05), X(lx - 1.8, lz - 0.05), Z(lx - 1.8, lz - 0.05), y0 + 1.6, y0 + 3.2, 0, 1, 0, 1);
+  g.wall(X(lx - 1.8, lz + 0.05), Z(lx - 1.8, lz + 0.05), X(lx + 1.8, lz + 0.05), Z(lx + 1.8, lz + 0.05), y0 + 1.6, y0 + 3.2, 0, 1, 0, 1);
+}
+
+/** A straight flight of steps along local x from (lx, lz) going `dir`, from height top down to bottom. */
+function stairs(g, X, Z, rot, lx, lz, dir, top, bottom) {
+  const steps = Math.round((top - bottom) / 0.3), run = 0.42;
+  g.color(0xb4aea1, 0);
+  for (let k = 0; k < steps; k++) {
+    const y = top - (k + 1) * ((top - bottom) / steps);
+    g.cbox(X(lx + dir * (k + 0.5) * run, lz), bottom, Z(lx + dir * (k + 0.5) * run, lz), run / 2 + 0.01, y - bottom + 0.15, 1.3, rot);
+  }
+  g.color(0x9fb0aa, 0);
+  for (const side of [-1, 1]) g.beam(X(lx, lz + side * 1.3), top + 1.0, Z(lx, lz + side * 1.3), X(lx + dir * steps * run, lz + side * 1.3), bottom + 1.0, Z(lx + dir * steps * run, lz + side * 1.3), 0.04);
+}
+
+/** An Indian Railways train along local x from lx0 to lx1 on the track at lz: WAP-7 style loco and LHB coaches. */
+function train(g, X, Z, rot, lx0, lx1, lz) {
+  const LOCO = 20, COACH = 23.5, GAP = 0.7, hw = 1.6;
+  let x = lx1;
+  // The loco: red with a white band, a cab at each end, a pantograph.
+  const loco = (x0, x1) => {
+    const cx = (x0 + x1) / 2, half = (x1 - x0) / 2;
+    g.color(0x2a2a2a, 0); for (const k of [-1, 1]) g.cbox(X(cx + k * (half - 3.5), lz), 0.15, Z(cx + k * (half - 3.5), lz), 2.2, 0.95, 1.3, rot);
+    g.color(0xb8322a, 0); g.cbox(X(cx, lz), 1.1, Z(cx, lz), half, 3.0, hw, rot);
+    g.color(0xf2efe6, 0); g.cbox(X(cx, lz), 2.15, Z(cx, lz), half + 0.01, 0.35, hw + 0.01, rot);
+    g.color(0x1d2b33, 0); for (const k of [-1, 1]) g.cbox(X(cx + k * (half - 0.05), lz), 2.7, Z(cx + k * (half - 0.05), lz), 0.06, 0.9, 1.25, rot);
+    g.color(0x9a9890, 0); g.cbox(X(cx, lz), 4.1, Z(cx, lz), half - 0.6, 0.18, hw - 0.3, rot);
+    g.color(0x3c3a36, 0); g.beam(X(cx - 4, lz), 4.3, Z(cx - 4, lz), X(cx - 2.5, lz), 5.6, Z(cx - 2.5, lz), 0.05); g.beam(X(cx - 2.5, lz), 5.6, Z(cx - 2.5, lz), X(cx - 1, lz), 6.05, Z(cx - 1, lz), 0.05);
+  };
+  const coach = (x0, x1) => {
+    const cx = (x0 + x1) / 2, half = (x1 - x0) / 2;
+    g.color(0x262626, 0); for (const k of [-1, 1]) g.cbox(X(cx + k * (half - 3), lz), 0.15, Z(cx + k * (half - 3), lz), 1.6, 0.9, 1.25, rot);
+    g.color(0x2f4e86, 0); g.cbox(X(cx, lz), 1.05, Z(cx, lz), half, 2.95, hw, rot);
+    g.color(0xe9e6dc, 0); g.cbox(X(cx, lz), 2.25, Z(cx, lz), half + 0.01, 0.85, hw + 0.01, rot);
+    g.color(0x22313b, 0);
+    for (let w = x0 + 2.5; w < x1 - 2; w += 1.9) for (const k of [-1, 1]) g.cbox(X(w, lz + k * (hw + 0.02)), 2.35, Z(w, lz + k * (hw + 0.02)), 0.55, 0.62, 0.02, rot);
+    g.color(0xb9bcbd, 0); g.cbox(X(cx, lz), 4.0, Z(cx, lz), half - 0.3, 0.25, hw - 0.2, rot);
+    g.color(0x1a1a1a, 0); g.cbox(X(x1 + GAP / 2, lz), 1.3, Z(x1 + GAP / 2, lz), GAP / 2 + 0.05, 2.5, 0.8, rot);
+  };
+  loco(x - LOCO, x); x -= LOCO + GAP;
+  while (x - COACH >= lx0) { coach(x - COACH, x); x -= COACH + GAP; }
 }
 
 function busStand(ctx, p) {
   const { g, pg } = ctx;
   const { X, Z, rot } = frame(p);
-  const hw = p.w / 2 + 6, hd = p.d / 2;
-  facadeBox(g, X, Z, rot, 0, hd - 3, hw, 3, 6.4, ROW.MODERN, 0xe9e2d0, 44, ROW.SHOP);
-  // The big bay shed on columns, painted MSRTC red and cream.
-  g.color(0xb03a2e, 0);
-  for (let i = -4; i <= 4; i++) for (const lz of [-hd + 2, hd - 7]) g.cyl(X(i * hw / 4.5, lz), 0, Z(i * hw / 4.5, lz), 0.3, 5.2, 6);
-  g.color(0xe8e2d0, 0); g.cbox(X(0, -2.5), 5.2, Z(0, -2.5), hw + 1, 0.4, hd - 1, rot);
-  g.color(0xb03a2e, 0); g.cbox(X(0, -2.5), 5.6, Z(0, -2.5), hw + 1.1, 0.5, hd - 0.9, rot);
-  // Bay platforms.
-  g.color(0xb7ab92, 0); g.cbox(X(0, hd - 8.5), 0, Z(0, hd - 8.5), hw, 0.25, 1.2, rot);
-  sign(ctx, p, X, Z, 0, -hd + 0.3, 8, 6.2, 7.4);
-  pool(pg, X(0, -2), Z(0, -2), 12);
+  const k = p.fit ?? 1, HW = BUS_STAND[0] * k, HD = BUS_STAND[1] * k;
+  const RED = 0xb03a2e, CREAM = 0xf0e6cc, GREY = 0xb7ab92;
+  // The apron where the buses turn, and the raised platform along the bays.
+  g.color(0x45484a, 0); g.flat(X(-HW, -HD), Z(-HW, -HD), X(HW, -HD), Z(HW, -HD), X(HW, 2), Z(HW, 2), X(-HW, 2), Z(-HW, 2), 0.075);
+  g.color(GREY, 0); g.cbox(X(0, 3.4), 0, Z(0, 3.4), HW - 2, 0.32, 1.4, rot);
+  g.color(0xf2c230, 0); g.cbox(X(0, 2.05), 0.32, Z(0, 2.05), HW - 2, 0.01, 0.06, rot);
+  // Bay lines, numbered posts on the platform edge.
+  for (const bay of busBays(p)) {
+    g.color(0xe8e6dc, 0);
+    const a = Math.atan2(bay.dx, bay.dz), lx = bay.lx, lz = bay.lz;
+    for (const side of [-1, 1]) {
+      const ox = Math.cos(a) * 1.9 * side, oz = -Math.sin(a) * 1.9 * side;
+      g.beam(X(lx + ox - bay.dx * 5.5, lz + oz - bay.dz * 5.5), 0.08, Z(lx + ox - bay.dx * 5.5, lz + oz - bay.dz * 5.5), X(lx + ox + bay.dx * 4.6, lz + oz + bay.dz * 4.6), 0.08, Z(lx + ox + bay.dx * 4.6, lz + oz + bay.dz * 4.6), 0.07);
+    }
+    g.color(RED, 0); g.cbox(X(lx + bay.dx * 6.3, 2.6), 0.32, Z(lx + bay.dx * 6.3, 2.6), 0.18, 2.1, 0.18, rot);
+    g.color(0xf4f1e6, 0); g.cbox(X(lx + bay.dx * 6.3, 2.6), 1.9, Z(lx + bay.dx * 6.3, 2.6), 0.35, 0.45, 0.2, rot);
+  }
+  // The bay shed: a long roof over the platform and the buses' noses, red fascia, cream soffit.
+  for (let lx = -HW + 4; lx <= HW - 4; lx += 6) { g.color(CREAM, 0); g.cyl(X(lx, 2.4), 0.32, Z(lx, 2.4), 0.22, 5.0, 8); }
+  g.color(0xe0d9c6, 0); g.cbox(X(0, 2.5), 5.3, Z(0, 2.5), HW - 1, 0.35, 4.2, rot);
+  g.color(RED, 0); g.cbox(X(0, -1.75), 5.1, Z(0, -1.75), HW - 1, 0.75, 0.12, rot);
+  g.color(CREAM, 0); g.cbox(X(0, -1.75), 5.85, Z(0, -1.75), HW - 1, 0.12, 0.13, rot);
+  // The building behind: a waiting hall open on columns below, offices above, red bands.
+  const b0 = 6.6, b1 = HD;
+  facadeBox(g, X, Z, rot, 0, (b0 + b1) / 2, HW - 1, (b1 - b0) / 2, 7.2, ROW.MODERN, CREAM, 44, ROW.SHOP);
+  g.color(0x2b2f31, 0); g.cbox(X(0, b0 - 0.02), 0.32, Z(0, b0 - 0.02), HW - 7, 2.9, 0.02, rot);
+  g.color(CREAM, 0); for (let lx = -HW + 7; lx <= HW - 7; lx += 4.5) g.cbox(X(lx, b0 - 0.25), 0.32, Z(lx, b0 - 0.25), 0.3, 3.2, 0.3, rot);
+  g.color(RED, 0); g.cbox(X(0, b0 - 0.12), 3.55, Z(0, b0 - 0.12), HW - 1, 0.35, 0.14, rot); g.cbox(X(0, b0 - 0.12), 7.05, Z(0, b0 - 0.12), HW - 1, 0.3, 0.14, rot);
+  // Enquiry and booking windows at one end of the hall, benches along it.
+  for (let i = 0; i < 4; i++) { g.color(0x1d2b33, 0); g.cbox(X(-HW + 2.4 + i * 1.6, b0 - 0.05), 1.1, Z(-HW + 2.4 + i * 1.6, b0 - 0.05), 0.55, 1.0, 0.04, rot); }
+  g.color(0x6b4a2e, 0); for (let lx = -HW + 9; lx <= HW - 8; lx += 6) g.cbox(X(lx, b0 + 1.4), 0.32, Z(lx, b0 + 1.4), 1.4, 0.45, 0.3, rot);
+  sign(ctx, p, X, Z, 0, b0 - 0.2, 10, 7.6, 8.9);
+  // Boundary wall to the street, with entry and exit arches.
+  const gates = [-HW * 0.62, HW * 0.62];
+  g.setTint(CREAM, 0).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
+  let x0 = -HW;
+  for (const gx of [...gates, HW + 4.5]) {
+    const x1 = gx - 4.5;
+    if (x1 > x0) { g.wall(X(x1, -HD), Z(x1, -HD), X(x0, -HD), Z(x0, -HD), 0, 1.5, 0, (x1 - x0) / FLOOR, 0.55, 1); g.wall(X(x0, -HD), Z(x0, -HD), X(x1, -HD), Z(x1, -HD), 0, 1.5, 0, (x1 - x0) / FLOOR, 0.55, 1); }
+    x0 = gx + 4.5;
+  }
+  for (const gx of gates) {
+    g.color(RED, 0); for (const side of [-1, 1]) g.cbox(X(gx + side * 4.6, -HD), 0, Z(gx + side * 4.6, -HD), 0.45, 5.6, 0.45, rot);
+    g.color(CREAM, 0); g.cbox(X(gx, -HD), 5.6, Z(gx, -HD), 5.2, 1.1, 0.5, rot);
+    g.color(RED, 0); g.cbox(X(gx, -HD - 0.02), 5.85, Z(gx, -HD - 0.02), 4.4, 0.6, 0.5, rot);
+  }
+  pool(pg, X(0, -2), Z(0, -2), 14); pool(pg, X(-HW / 2, 3), Z(-HW / 2, 3), 9); pool(pg, X(HW / 2, 3), Z(HW / 2, 3), 9);
+}
+
+/** The bays at the bus stand: buses nose in at 30 degrees to the platform. { lx, lz, dx, dz } in place coordinates. */
+export function busBays(p) {
+  const k = p.fit ?? 1, out = [];
+  const a = -Math.PI / 6, dx = Math.sin(a), dz = Math.cos(a);
+  for (let i = 0; i < 8; i++) out.push({ lx: (-19.5 + i * 5.6) * k, lz: -3.3, dx, dz });
+  return out;
 }
 
 function stadium(ctx, p) {
@@ -494,14 +731,117 @@ function hillTemple(ctx, p) {
 function airport(ctx, p) {
   const { g, pg } = ctx;
   const { X, Z, rot } = frame(p);
-  facadeBox(g, X, Z, rot, 0, 0, p.w / 2, p.d / 2, 7, ROW.MODERN, 0xe9eef0, 91, ROW.MODERN);
-  g.color(0x2a5d8f, 0); g.cbox(X(0, -p.d / 2 - 2), 6, Z(0, -p.d / 2 - 2), p.w / 2, 0.35, 2.4, rot);
-  // Control tower.
-  g.color(0xe9eef0, 0); g.cyl(X(p.w / 2 + 8, 4), 0, Z(p.w / 2 + 8, 4), 1.6, 16, 8);
-  g.color(0x2f4f5f, 0); g.cyl(X(p.w / 2 + 8, 4), 16, Z(p.w / 2 + 8, 4), 3, 2.6, 8, 3.4);
-  g.color(0xe9eef0, 0); g.cyl(X(p.w / 2 + 8, 4), 18.6, Z(p.w / 2 + 8, 4), 3.4, 0.4, 8, 2);
-  sign(ctx, p, X, Z, 0, -p.d / 2 - 0.1, 10, 7.4, 8.8);
-  pool(pg, X(0, -p.d / 2 - 6), Z(0, -p.d / 2 - 6), 12);
+  const hw = 18, d0 = -8, d1 = 8, H = 9.5;
+  // The hall: cream side and back walls, a full-height glass curtain wall to the street.
+  texBox(g, X, Z, rot, 0, 0, 0, hw, H, d1, TILE.COMPOUND, 0xeceeeb, 3);
+  g.color(0x2c3e4c, 0); g.cbox(X(0, d0 - 0.05), 0.15, Z(0, d0 - 0.05), hw - 0.4, H - 0.4, 0.05, rot);
+  g.color(0xb9c0c4, 0);
+  for (let lx = -hw + 1; lx <= hw - 1; lx += 2.2) g.cbox(X(lx, d0 - 0.12), 0.15, Z(lx, d0 - 0.12), 0.07, H - 0.4, 0.06, rot);
+  for (const y of [3.4, 6.6]) g.cbox(X(0, d0 - 0.12), y, Z(0, d0 - 0.12), hw - 0.4, 0.12, 0.06, rot);
+  g.color(0x1b262d, 0); for (const lx of [-7, -3.5, 3.5, 7]) g.cbox(X(lx, d0 - 0.15), 0.15, Z(lx, d0 - 0.15), 1.4, 2.8, 0.04, rot);
+  // A great overhanging roof, slightly arched, on tree columns over the drop-off lane.
+  g.color(0xd3d7d8, 0);
+  const roofY = z => H + 0.9 + 1.4 * Math.cos(((z + 2) / 12) * (Math.PI / 2)) ** 2;
+  for (let z = -15; z < 10; z += 2.5) {
+    const a = g.v(X(-hw - 2, z), roofY(z), Z(-hw - 2, z)), b = g.v(X(hw + 2, z), roofY(z), Z(hw + 2, z));
+    const c = g.v(X(hw + 2, z + 2.5), roofY(z + 2.5), Z(hw + 2, z + 2.5)), d = g.v(X(-hw - 2, z + 2.5), roofY(z + 2.5), Z(-hw - 2, z + 2.5));
+    g.quad(a, b, c, d); g.quad(a, d, c, b);
+  }
+  g.color(0x8b9297, 0); g.cbox(X(0, -15.1), roofY(-15) - 0.6, Z(0, -15.1), hw + 2, 0.6, 0.12, rot);
+  g.color(0xe6e9ea, 0);
+  for (const lx of [-13, -4.5, 4.5, 13]) {
+    g.cyl(X(lx, -13), 0, Z(lx, -13), 0.32, 7.2, 10, 0.26);
+    for (const [ox, oz] of [[-1.6, -1.2], [1.6, -1.2], [-1.4, 1.4], [1.4, 1.4]]) g.beam(X(lx, -13), 7.2, Z(lx, -13), X(lx + ox, -13 + oz), roofY(-13 + oz) - 0.05, Z(lx + ox, -13 + oz), 0.1);
+  }
+  sign(ctx, p, X, Z, 0, -15.25, 12, roofY(-15) - 0.55, roofY(-15) + 0.75);
+  // Flags in front: the tricolour.
+  for (const lx of [-11, 0, 11]) {
+    g.color(0xd9d9d6, 0); g.cyl(X(lx, -19), 0, Z(lx, -19), 0.07, 9, 6);
+    const band = (y0, color) => { g.color(color, 0); const a = g.v(X(lx, -19), y0, Z(lx, -19)), b = g.v(X(lx + 2.4, -19), y0, Z(lx + 2.4, -19)), c = g.v(X(lx + 2.4, -19), y0 + 0.5, Z(lx + 2.4, -19)), d = g.v(X(lx, -19), y0 + 0.5, Z(lx, -19)); g.quad(a, b, c, d); g.quad(a, d, c, b); };
+    band(8.5, 0xff9933); band(8.0, 0xf6f6f2); band(7.5, 0x138808);
+    g.color(0x000080, 0); g.blob(X(lx + 1.2, -19.02), 8.25, Z(lx + 1.2, -19.02), 0.16, 0.16, 0.04, 2);
+  }
+  // Air traffic control tower on the airside.
+  const tx = hw + 9, tz = 6;
+  g.color(0xf0eee8, 0); g.cbox(X(tx, tz), 0, Z(tx, tz), 1.7, 20, 1.7, rot);
+  g.color(0xd5d2c8, 0); g.cyl(X(tx, tz), 20, Z(tx, tz), 3.4, 0.6, 8);
+  g.color(0x24323c, 0); g.cyl(X(tx, tz), 20.6, Z(tx, tz), 3.3, 3.0, 8, 3.7);
+  g.color(0xe8e6de, 0); g.cyl(X(tx, tz), 23.6, Z(tx, tz), 3.9, 0.5, 8);
+  g.color(0x5f6668, 0); g.beam(X(tx, tz), 24.1, Z(tx, tz), X(tx, tz), 27.5, Z(tx, tz), 0.06); g.beam(X(tx + 1.4, tz), 24.1, Z(tx + 1.4, tz), X(tx + 1.4, tz), 26, Z(tx + 1.4, tz), 0.05);
+  // An airliner waits on the apron, across the concrete from the terminal's airside doors.
+  if (p.plane) {
+    const { x, z, heading } = p.plane, len = Math.hypot(p.x - x, p.z - z);
+    g.color(0xa9a69c, 0);
+    const ux = (p.x - x) / len, uz = (p.z - z) / len, w = 26;
+    const a = g.v(x - uz * w, 0.082, z + ux * w), b = g.v(x + uz * w, 0.082, z - ux * w);
+    const c = g.v(p.x + uz * w, 0.082, p.z - ux * w), d = g.v(p.x - uz * w, 0.082, p.z + ux * w);
+    g.quad(a, b, c, d); g.quad(a, d, c, b);
+    aircraft(g, x, z, heading);
+  }
+  pool(pg, X(0, -13), Z(0, -13), 14); pool(pg, X(0, 12), Z(0, 12), 10);
+}
+
+/**
+ * A twin turboprop regional airliner (ATR 72 class, 27 m long, 27 m span) at (x, z) facing
+ * heading: white with an orange tail and cheatline, high wing, T-tail. Fictional livery.
+ */
+function aircraft(g, x, z, heading) {
+  const fx = Math.sin(heading), fz = Math.cos(heading), rx = -fz, rz = fx; // forward, right
+  const P = (s, u, y) => [x + fx * s + rx * u, y, z + fz * s + rz * u];
+  const WHITE = 0xf3f3f1, BELLY = 0xc6c9cb, TAIL = 0xe8702a;
+  // Fuselage: rings along s with radius r around (centre line height y).
+  tube(g, P, [[13.6, 0.12, 2.75], [13.1, 0.62, 2.7], [12.2, 1.05, 2.66], [11, 1.26, 2.62], [9.5, 1.3, 2.6], [-6.5, 1.3, 2.6], [-9.5, 1.05, 2.85], [-12, 0.62, 3.25], [-13.6, 0.2, 3.6]], WHITE, 14);
+  // Cheatline and windows down both sides, cockpit glazing.
+  for (const side of [-1, 1]) {
+    g.color(TAIL, 0); band3(g, P(-8, side * 1.31, 2.2), P(10.5, side * 1.31, 2.2), 0.16, heading);
+    g.color(0x1f2a33, 0);
+    for (let s = -7.4; s < 9.2; s += 0.76) { const [wx, wy, wz] = P(s, side * 1.315, 2.95); g.cbox(wx, wy - 0.17, wz, 0.02, 0.34, 0.16, heading); }
+    const [cx, cy, cz] = P(12.15, side * 0.62, 3.35); g.cbox(cx, cy, cz, 0.25, 0.32, 0.4, heading + side * 0.7);
+  }
+  // High wing on top of the fuselage, a nacelle and six-bladed propeller under each side.
+  g.color(WHITE, 0);
+  for (const side of [-1, 1]) {
+    const [wx, , wz] = P(1.0, side * 7.2, 0); g.cbox(wx, 3.9, wz, 6.6, 0.32, 1.25, heading);
+    tube(g, (s, u, y) => P(s, side * 4.1 + u, y), [[4.6, 0.12, 3.45], [4.1, 0.48, 3.45], [2.5, 0.58, 3.5], [-1.2, 0.5, 3.55], [-2.6, 0.18, 3.6]], WHITE, 10);
+    g.color(0x2a2a2a, 0);
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + 0.3, [bx, by, bz] = P(4.7, side * 4.1 + Math.cos(a) * 1.95, 3.45 + Math.sin(a) * 1.95), [ox, oy, oz] = P(4.7, side * 4.1, 3.45);
+      g.beam(ox, oy, oz, bx, by, bz, 0.09);
+    }
+    const [px, , pz] = P(-0.4, side * 1.45, 0);
+    g.color(BELLY, 0); g.blob(px, 1.55, pz, 0.6, 0.45, 1.6, side + 4); // main gear sponson
+    g.color(0x1a1a1a, 0); const [mx, , mz] = P(-0.4, side * 1.75, 0); g.cbox(mx, 0, mz, 0.3, 0.9, 0.45, heading);
+  }
+  // Fin and T-tail.
+  g.color(TAIL, 0);
+  const fin = [P(-9.2, 0, 3.7), P(-13.3, 0, 3.7), P(-13.7, 0, 7.6), P(-11.8, 0, 7.6)].map(([a, b, c]) => g.v(a, b, c));
+  g.quad(fin[0], fin[1], fin[2], fin[3]); g.quad(fin[0], fin[3], fin[2], fin[1]);
+  g.color(WHITE, 0); const [sx, , sz] = P(-12.9, 0, 0); g.cbox(sx, 7.55, sz, 3.65, 0.16, 0.9, heading);
+  // Nose gear.
+  g.color(0x1a1a1a, 0); const [nx, , nz] = P(11.2, 0, 0); g.cbox(nx, 0, nz, 0.2, 1.4, 0.3, heading);
+}
+
+/** A tube along an aircraft's axis: stations [s, r, y]; P(s, u, y) maps aircraft coordinates to world [x, y, z]. */
+function tube(g, P, stations, color, sides = 12) {
+  g.color(color, 0);
+  const rings = stations.map(([s, r, y]) => {
+    const out = [];
+    for (let k = 0; k < sides; k++) { const a = (k / sides) * Math.PI * 2; out.push(g.v(...P(s, Math.cos(a) * r, y + Math.sin(a) * r))); }
+    return out;
+  });
+  for (let i = 0; i + 1 < rings.length; i++) {
+    for (let k = 0; k < sides; k++) {
+      const j = (k + 1) % sides;
+      // Rings run nose-first, so this order faces outward.
+      g.quad(rings[i][k], rings[i][j], rings[i + 1][j], rings[i + 1][k]);
+    }
+  }
+}
+
+/** A thin stripe along the fuselage between two points (both faces). */
+function band3(g, a, b, h, heading) {
+  const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+  g.cbox((a[0] + b[0]) / 2, a[1] - h / 2, (a[2] + b[2]) / 2, 0.02, h, len / 2, heading);
 }
 
 function garden(ctx, p) {
@@ -535,32 +875,78 @@ function garden(ctx, p) {
 function statue(ctx, p, kind) {
   const { g, pg } = ctx;
   const { X, Z, rot } = frame(p);
-  // A garlanded figure on a tall pedestal: kept as an elegant silhouette.
-  g.color(0xe8e2d4, 0); g.cbox(p.x, 0, p.z, 1.8, 0.6, 1.8, rot);
-  g.color(0xd8d0bc, 0); g.cbox(p.x, 0.6, p.z, 1.3, 3.4, 1.3, rot);
-  g.color(0x6a6f63, 0);
-  const bronze = 0x5d5a4a;
-  if (kind === 'horse') {
-    g.color(bronze, 0);
-    g.blob(p.x, 5.6, p.z, 0.75, 0.75, 1.7, 1); // horse body
-    g.beam(X(0, -1.5), 5.9, Z(0, -1.5), X(0, -2.2), 7.0, Z(0, -2.2), 0.32); // neck
-    g.blob(X(0, -2.5), 7.1, Z(0, -2.5), 0.3, 0.32, 0.55, 2); // head
-    for (const [lx, lz, up] of [[-0.4, -1.1, 1], [0.4, -1.1, 0], [-0.4, 1.1, 0], [0.4, 1.1, 0]]) g.beam(X(lx, lz), 5.2, Z(lx, lz), X(lx, lz - (up ? 0.9 : 0)), up ? 4.6 : 4.0, Z(lx, lz - (up ? 0.9 : 0)), 0.13);
-    g.beam(X(0, 1.6), 5.8, Z(0, 1.6), X(0, 2.2), 4.6, Z(0, 2.2), 0.1); // tail
-    g.blob(p.x, 6.9, p.z, 0.4, 0.62, 0.36, 3); // rider
-    g.blob(p.x, 7.75, p.z, 0.24, 0.27, 0.24, 4);
-    g.beam(X(0.3, 0), 7.3, Z(0.3, 0), X(0.5, -0.9), 8.6, Z(0.5, -0.9), 0.07); // raised sword
-    g.color(0xff8c1a, 0); g.cyl(p.x, 4.05, p.z, 1.05, 0.25, 10); // marigold garland
-  } else {
-    g.color(bronze, 0);
-    g.blob(p.x, 4.9, p.z, 0.42, 0.8, 0.32, 5);
-    g.beam(X(-0.2, 0), 4.0, Z(-0.2, 0), X(-0.2, 0), 4.6, Z(-0.2, 0), 0.14);
-    g.blob(p.x, 6.0, p.z, 0.24, 0.28, 0.24, 6);
-    if (kind === 'pointing') g.beam(X(0.38, 0), 5.4, Z(0.38, 0), X(0.5, -0.9), 6.2, Z(0.5, -0.9), 0.08);
-    else g.beam(X(0.36, 0), 5.3, Z(0.36, 0), X(0.45, -0.3), 4.1, Z(0.45, -0.3), 0.06);
-    g.color(0xff8c1a, 0); g.cyl(p.x, 5.35, p.z, 0.46, 0.12, 10);
+  const BRONZE = 0x4c4637, GRANITE = 0x5d5a55, PALE = 0xe8e2d4;
+  // A round garden island with a low railing, flowers round the foot of the pedestal.
+  g.color(0xd8d0bc, 0); g.cyl(p.x, 0, p.z, 4.3, 0.35, 24);
+  g.color(0x6f9e4c, 0); g.cyl(p.x, 0.35, p.z, 3.9, 0.05, 24);
+  for (let k = 0; k < 18; k++) {
+    const a = (k / 18) * Math.PI * 2;
+    g.color(k % 3 ? 0xff9b1a : 0xf5d33b, 0); g.blob(p.x + Math.cos(a) * 3.3, 0.5, p.z + Math.sin(a) * 3.3, 0.35, 0.22, 0.35, k);
   }
-  pool(pg, p.x, p.z, 6);
+  g.color(0x2b2b2b, 0);
+  for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; g.cyl(p.x + Math.cos(a) * 4.15, 0.35, p.z + Math.sin(a) * 4.15, 0.03, 0.9, 4); }
+  for (const y of [0.75, 1.2]) { for (let k = 0; k < 24; k++) { const a0 = (k / 24) * Math.PI * 2, a1 = ((k + 1) / 24) * Math.PI * 2; g.beam(p.x + Math.cos(a0) * 4.15, y, p.z + Math.sin(a0) * 4.15, p.x + Math.cos(a1) * 4.15, y, p.z + Math.sin(a1) * 4.15, 0.025); } }
+  // Stepped pedestal: granite tiers, a gilded inscription band, a garland of marigolds.
+  g.color(GRANITE, 0); g.cbox(p.x, 0.35, p.z, 2.2, 0.5, 2.2, rot);
+  g.color(0x6b6862, 0); g.cbox(p.x, 0.85, p.z, 1.8, 0.45, 1.8, rot);
+  g.color(GRANITE, 0); g.cbox(p.x, 1.3, p.z, 1.45, 3.2, 1.45, rot);
+  g.gilt(GOLD); for (const lz of [-1.47, 1.47]) g.cbox(X(0, lz), 2.6, Z(0, lz), 1.1, 0.5, 0.03, rot);
+  g.color(0x7a756c, 0); g.cbox(p.x, 4.5, p.z, 1.7, 0.35, 1.7, rot);
+  g.color(0xff8c1a, 0);
+  for (let k = 0; k < 4; k++) { const F = frame(p, rot + (k * Math.PI) / 2); g.beam(F.X(-1.4, -1.5), 4.4, F.Z(-1.4, -1.5), F.X(0, -1.55), 3.9, F.Z(0, -1.55), 0.09); g.beam(F.X(0, -1.55), 3.9, F.Z(0, -1.55), F.X(1.4, -1.5), 4.4, F.Z(1.4, -1.5), 0.09); }
+  const top = 4.85;
+  if (kind === 'horse') {
+    // A rearing horse, its hind legs planted, Maharaj in the saddle with his sword raised.
+    g.color(BRONZE, 0);
+    const Y = top;
+    g.blob(X(0, 0.3), Y + 2.3, Z(0, 0.3), 0.72, 0.78, 1.55, 1); // barrel
+    g.blob(X(0, -1.0), Y + 2.85, Z(0, -1.0), 0.66, 0.8, 0.75, 2); // chest, rising
+    g.beam(X(0, -1.3), Y + 3.2, Z(0, -1.3), X(0, -1.9), Y + 4.3, Z(0, -1.9), 0.36); // neck
+    g.blob(X(0, -2.15), Y + 4.45, Z(0, -2.15), 0.26, 0.3, 0.55, 3); // head
+    g.blob(X(0, -2.6), Y + 4.25, Z(0, -2.6), 0.17, 0.19, 0.25, 4); // muzzle
+    for (const ex of [-0.11, 0.11]) g.beam(X(ex, -2.0), Y + 4.7, Z(ex, -2.0), X(ex, -1.95), Y + 5.0, Z(ex, -1.95), 0.04); // ears
+    g.beam(X(0, -1.3), Y + 3.75, Z(0, -1.3), X(0, -1.95), Y + 4.75, Z(0, -1.95), 0.12); // mane
+    // Hind legs planted on the plinth, forelegs pawing the air.
+    for (const lx of [-0.34, 0.34]) {
+      g.beam(X(lx, 1.3), Y + 2.0, Z(lx, 1.3), X(lx, 1.6), Y + 1.0, Z(lx, 1.6), 0.17);
+      g.beam(X(lx, 1.6), Y + 1.0, Z(lx, 1.6), X(lx, 1.2), Y + 0.08, Z(lx, 1.2), 0.11);
+      g.beam(X(lx, -1.0), Y + 2.6, Z(lx, -1.0), X(lx, -1.75), Y + 2.5, Z(lx, -1.75), 0.15);
+      g.beam(X(lx, -1.75), Y + 2.5, Z(lx, -1.75), X(lx, -1.85), Y + 1.75, Z(lx, -1.85), 0.1);
+    }
+    g.beam(X(0, 1.7), Y + 2.6, Z(0, 1.7), X(0, 2.4), Y + 0.9, Z(0, 2.4), 0.13); // tail, sweeping to the plinth
+    g.color(0x8a2a1e, 0); g.blob(X(0, 0.2), Y + 2.95, Z(0, 0.2), 0.8, 0.12, 0.7, 5); // saddle cloth
+    // The rider: legs in the stirrups, torso, shela over the shoulders, beard and pagdi.
+    g.color(BRONZE, 0);
+    for (const lx of [-0.55, 0.55]) { g.beam(X(lx * 0.7, 0.1), Y + 3.15, Z(lx * 0.7, 0.1), X(lx, -0.35), Y + 2.6, Z(lx, -0.35), 0.13); g.beam(X(lx, -0.35), Y + 2.6, Z(lx, -0.35), X(lx, 0.0), Y + 1.95, Z(lx, 0.0), 0.1); }
+    g.blob(X(0, 0.15), Y + 3.75, Z(0, 0.15), 0.38, 0.62, 0.3, 6);
+    g.blob(X(0, 0.35), Y + 3.9, Z(0, 0.35), 0.48, 0.5, 0.2, 7); // shela flowing behind
+    g.blob(X(0, 0.05), Y + 4.55, Z(0, 0.05), 0.2, 0.24, 0.21, 8); // head
+    g.blob(X(0, -0.08), Y + 4.38, Z(0, -0.08), 0.15, 0.14, 0.12, 9); // beard
+    g.blob(X(0, 0.05), Y + 4.82, Z(0, 0.05), 0.26, 0.17, 0.26, 10); // pagdi
+    g.beam(X(0, 0.05), Y + 4.95, Z(0, 0.05), X(0, 0.2), Y + 5.2, Z(0, 0.2), 0.06); // its turra
+    // Right arm raised with the sword; left on the reins.
+    g.beam(X(0.36, 0.05), Y + 4.15, Z(0.36, 0.05), X(0.55, -0.1), Y + 4.8, Z(0.55, -0.1), 0.09);
+    g.beam(X(0.55, -0.1), Y + 4.8, Z(0.55, -0.1), X(0.6, -0.35), Y + 5.35, Z(0.6, -0.35), 0.08);
+    g.gilt(0xc8c8c0); g.beam(X(0.6, -0.35), Y + 5.35, Z(0.6, -0.35), X(0.75, -1.2), Y + 6.5, Z(0.75, -1.2), 0.035);
+    g.color(BRONZE, 0); g.beam(X(-0.34, 0.05), Y + 4.1, Z(-0.34, 0.05), X(-0.3, -0.75), Y + 3.6, Z(-0.3, -0.75), 0.08);
+    // Bhagwa flag beside the island.
+    g.color(0xd9d9d6, 0); g.cyl(X(3.1, 2.4), 0.35, Z(3.1, 2.4), 0.05, 7.5, 5);
+    g.color(SAFFRON, 0);
+    const fa = g.v(X(3.1, 2.4), 7.8, Z(3.1, 2.4)), fb = g.v(X(4.9, 2.4), 7.0, Z(4.9, 2.4)), fc = g.v(X(3.1, 2.4), 6.2, Z(3.1, 2.4));
+    g.tri(fa, fb, fc); g.tri(fa, fc, fb);
+  } else {
+    // A standing figure: dhoti or coat, a shawl, one arm raised or pointing the way.
+    g.color(BRONZE, 0);
+    g.beam(X(-0.15, 0), top, Z(-0.15, 0), X(-0.15, 0), top + 1.0, Z(-0.15, 0), 0.13); g.beam(X(0.15, 0), top, Z(0.15, 0), X(0.15, 0), top + 1.0, Z(0.15, 0), 0.13);
+    g.blob(p.x, top + 1.55, p.z, 0.42, 0.75, 0.3, 5);
+    g.blob(p.x, top + 2.55, p.z, 0.22, 0.27, 0.22, 6);
+    g.beam(X(-0.4, 0), top + 2.0, Z(-0.4, 0), X(-0.45, -0.25), top + 1.3, Z(-0.45, -0.25), 0.07);
+    if (kind === 'pointing') g.beam(X(0.38, 0), top + 2.1, Z(0.38, 0), X(0.55, -0.95), top + 2.75, Z(0.55, -0.95), 0.07);
+    else { g.beam(X(0.38, 0), top + 2.0, Z(0.38, 0), X(0.5, -0.4), top + 1.3, Z(0.5, -0.4), 0.06); g.color(0x3d2b1f, 0); g.beam(X(0.5, -0.4), top + 1.3, Z(0.5, -0.4), X(0.55, -0.55), top, Z(0.55, -0.55), 0.03); }
+  }
+  // Floodlights at night.
+  pool(pg, p.x, p.z, 7, 0);
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.785; pool(pg, p.x + Math.cos(a) * 3.6, p.z + Math.sin(a) * 3.6, 2.5, 0.6); }
 }
 
 /** Gateway arch spanning the street at the place's approach. */

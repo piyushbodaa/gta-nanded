@@ -52,6 +52,7 @@ The starting lane's grey-blue house, yellow parapet details, black-and-white gat
 | [food-hotels.json](food-hotels.json), [food-hotels-notes.md](food-hotels-notes.md) | Food, lodging, cinemas and shopping; branch and operating-status caveats |
 | [placement-overrides.json](placement-overrides.json), [placement-notes.md](placement-notes.md) | Coordinates, explicit area anchors, aliases, rejected map matches and provenance |
 | [osm-network.json](osm-network.json), [osm-places.json](osm-places.json) | Retained OSM geometry and named-place snapshots |
+| [osm-airport.json](osm-airport.json) | OSM runway 10/28, taxiways, aprons and terminal of Shri Guru Gobind Singh Ji Airport (Overpass, OSM base 2026-07-28) |
 
 Run from the project root:
 

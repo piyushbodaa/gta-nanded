@@ -786,6 +786,11 @@ const SIGN_STYLES = [
   ['#2e7d32', '#ffffff'], ['#111111', '#ffd54f'], ['#ef6c00', '#111111'], ['#ffffff', '#1a237e'],
   ['#6a1b9a', '#fff59d'], ['#00838f', '#ffffff'],
 ];
+const LANDMARK_SIGNS = {
+  'nanded-station': ['हजूर साहिब नांदेड', 'HAZUR SAHIB NANDED', 1],
+  'nanded-bus-stand': ['नांदेड मध्यवर्ती बसस्थानक', 'NANDED CENTRAL BUS STAND', 0],
+  'nanded-airport': ['श्री गुरु गोबिंद सिंह जी विमानतळ', 'SHRI GURU GOBIND SINGH JI AIRPORT, NANDED', 7],
+};
 export const SHOP_SIGNS = [
   ['श्री गणेश किराणा', 'SHREE GANESH KIRANA'], ['साई मेडिकल', 'SAI MEDICAL & GENERAL'], ['बालाजी मोबाईल्स', 'BALAJI MOBILES'],
   ['जय मल्हार हार्डवेअर', 'JAI MALHAR HARDWARE'], ['हॉटेल जय भवानी', 'HOTEL JAI BHAVANI'], ['पाटील टी हाऊस', 'PATIL TEA HOUSE'],
@@ -837,6 +842,13 @@ export function paintSigns(places, scale = 1) {
     const en = p.shortName.length > 34 ? p.shortName.slice(0, 33) + '…' : p.shortName;
     slots.set(p.id, draw(null, en.toUpperCase(), style + (i % 2)));
   });
+  // Each petrol pump livery's price board.
+  [['पेट्रोल पंप', 'PETROL ₹106.31 · DIESEL ₹92.84', 6], ['पेट्रोल पंप', 'PETROL ₹106.31 · DIESEL ₹92.84', 4], ['पेट्रोल पंप', 'PETROL ₹106.31 · DIESEL ₹92.84', 0]]
+    .forEach(([mr, en, style], look) => { if (slot < SIGN_COLS * SIGN_ROWS) slots.set(`pump-${look}`, draw(mr, en, style)); });
+  // The station, the bus stand and the airport carry their names in Marathi and English.
+  for (const [id, [mr, en, style]] of Object.entries(LANDMARK_SIGNS)) {
+    if (places.some(p => p.id === id) && slot < SIGN_COLS * SIGN_ROWS) slots.set(id, draw(mr, en, style));
+  }
   return { canvas, emissive: emis, slots };
 }
 

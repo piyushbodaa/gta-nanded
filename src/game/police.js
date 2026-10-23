@@ -114,7 +114,7 @@ export class Police {
     const r = rng(hash2(this.seed++, 4271));
     for (let tries = 0; tries < 8; tries++) {
       const ang = r() * Math.PI * 2, d = r.range(110, 180);
-      const n = net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 60, {});
+      const n = net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 60, {}, r => !net.raised[r]);
       if (!n || net.width[n.road] < 4.5) continue;
       if (g.vehicles.list.some(v => dist(v.x, v.z, n.x, n.z) < 8)) continue;
       const toward = headingTo(n.x, n.z, pos.x, pos.z);
@@ -123,6 +123,7 @@ export class Police {
       v.kinematic = false; v.sirenOn = true; v.keep = true;
       if (this.level >= 2) g.vehicles.addPassenger(v, makeOutfit('police', (r() * 1e9) | 0));
       const u = { v, driver: new DynamicDriver(g, v, { aggression: 0.55 + this.level * 0.08, maxSpeed: 30 + this.level * 2 }), repath: 0, state: 'pursue', exitT: 0 };
+      u.driver.onStuck = () => this._unstick(u);
       this.units.push(u);
       return u;
     }
@@ -155,11 +156,31 @@ export class Police {
       ctl = u.driver.control(dt);
     }
     g.controls.set(v, ctl);
-    // A stopped unit near a player on foot sends its officers out.
-    if (!g.player.vehicle && d < 14 && speedOf(v) < 2) {
+    // A stopped unit near a player on foot sends its officers out: at once when close, and
+    // after a couple of seconds when it is held up further off (a blocked lane, a parked auto).
+    if (!g.player.vehicle && d < 35 && speedOf(v) < 2) {
       u.exitT += dt;
-      if (u.exitT > 0.6 && v.driver) this._dismount(u);
-    }
+      if (u.exitT > (d < 14 ? 0.6 : 2.2) && v.driver) this._dismount(u);
+    } else u.exitT = Math.max(0, u.exitT - dt);
+  }
+
+  /**
+   * A jeep wedged against a wall: close to the player its officers get out and run; out of
+   * sight it is put back on the road a little further along its route. Returns true if handled.
+   */
+  _unstick(u) {
+    const g = this.game, v = u.v, P = g.player, d = Math.hypot(v.x - P.x, v.z - P.z);
+    if (d < 45) { if (!g.player.vehicle && v.driver) { this._dismount(u); return true; } return false; }
+    const path = u.driver.path, net = g.net;
+    if (!path) return false;
+    const k = Math.min(path.length / 2 - 1, u.driver.i + 3);
+    const n = net.nearest(path[k * 2], path[k * 2 + 1], 20, {}, r => !net.raised[r]);
+    if (!n || g.vehicles.list.some(o => o !== v && Math.hypot(o.x - n.x, o.z - n.z) < 6)) return false;
+    const ahead = Math.min(path.length / 2 - 1, k + 1);
+    v.x = n.x; v.z = n.z; v.y = 0; v.vx = v.vz = 0; v.w = 0;
+    v.heading = Math.atan2(path[ahead * 2] - n.x, path[ahead * 2 + 1] - n.z);
+    u.driver.i = k; u.driver.reverseT = 0; u.driver.stuck = 0;
+    return true;
   }
 
   _dismount(u) {
