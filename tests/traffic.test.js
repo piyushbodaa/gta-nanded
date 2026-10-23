@@ -171,3 +171,22 @@ test('a car parked in the lane is squeezed past, not queued behind for ever', ()
   assert.ok(car.ai.road !== road || car.ai.s > net.length[road] / 2 + 6, `the car got past (s ${car.ai.s.toFixed(1)} of ${net.length[road].toFixed(0)})`);
   void parked;
 });
+
+test('traffic slows to a crawl over speed breakers', () => {
+  const { net, city } = world();
+  // A two-way street with a breaker well clear of its ends.
+  const b = city.bumps.bumps.find(o => !net.oneway[o.road] && o.s > 60 && net.length[o.road] - o.s > 30);
+  const { g, traffic } = streets(b.x, b.z);
+  g.quality.settings.traffic = 0;
+  const s = b.s - 45, q = net.lanePoint(b.road, 1, s, net.laneOffset(b.road, 0, s), {});
+  const car = g.vehicles.spawn('sedan', q.x, q.z, q.heading, { role: 'traffic' });
+  car.ai = { road: b.road, dir: 1, s, lane: 0, speed: 11, cruise: 12, turn: null, wait: 0, blocked: 0, honk: 9, weave: 0, dodge: 0, dodgeWant: 0 };
+  traffic.cars.push(car);
+  let over = Infinity, lifted = 0;
+  for (let f = 0; f < 30 * 10 && car.ai.road === b.road && car.ai.s < b.s + 8; f++) {
+    g.time += 1 / 30; traffic.update(1 / 30);
+    if (Math.abs(car.ai.s - b.s) < 1) { over = Math.min(over, car.ai.speed); lifted = Math.max(lifted, car.y); }
+  }
+  assert.ok(over < 4, `crossed at ${over.toFixed(1)} m/s`);
+  assert.ok(lifted > 0.03, 'and rode up over it');
+});

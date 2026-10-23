@@ -4,6 +4,7 @@
 import { SpatialGrid, rng, clamp, pointSegDist2, obbOverlap, hash2, smoothstep } from '../core/math.js';
 import { MEDIAN_W } from './roadnet.js';
 import { airfieldPieces } from './airfield.js';
+import { RoadBumps } from './roadbumps.js';
 
 // Building styles. The renderer maps each to facade rows in the texture atlas.
 export const STYLE = {
@@ -19,6 +20,8 @@ export const STYLE = {
 };
 
 export const ZONE = { RURAL: 0, RESIDENTIAL: 1, OLD: 2, COACHING: 3, CAMPUS: 4, MARKET: 5 };
+// How worn the streets are, by zone: the old town and the villages have the most potholes.
+const WEAR = [1, 0.6, 1, 0.35, 0.3, 0.85];
 const OLD_AREAS = new Set(['Old City', 'Old Mondha', 'Hazur Sahib', 'Vazirabad', 'Godavari riverfront', 'Riverfront', 'Old Nanded', 'Degloor Naka', 'Station Road', 'Hingoli Gate', 'Doctor Lane']);
 const COACHING_AREAS = new Set(['Shyam Nagar', 'Bhagya Nagar', 'Rajendra Nagar', 'Tilak Nagar', 'Anand Nagar', 'Baba Nagar', 'VIP Road', 'Stadium Road', 'Gokul Nagar']);
 const MARKET_AREAS = new Set(['New Mondha', 'Datta Nagar', 'ITI / Phule Market', 'ITI Corner', 'Workshop Corner', 'Shivaji Nagar']);
@@ -251,6 +254,7 @@ export class City {
     this._infill();
     this._placeTrees();
     this._placeProps();
+    this.bumps = new RoadBumps(this.net).place(this.places, (x, z) => WEAR[this.zoneAt(x, z)], (x, z) => this.railDistance(x, z));
     this._indexChunks();
     this.genTime = performance.now() - t0;
     return this;
@@ -938,6 +942,8 @@ export class City {
       for (let i = 0; i + 3 < line.length; i += 2) (get((line[i] + line[i + 2]) / 2, (line[i + 1] + line[i + 3]) / 2).rails ||= []).push(l, i);
     });
     for (const piece of airfieldPieces(this.world.airfield)) (get(piece.x, piece.z).airfield ||= []).push(piece);
+    this.bumps.bumps.forEach((b, i) => (get(b.x, b.z).bumps ||= []).push(i));
+    this.bumps.holes.forEach((h, i) => (get(h.x, h.z).holes ||= []).push(i));
   }
 
   chunk(cx, cz) { return this.chunkIndex.get(chunkKey(cx, cz)); }

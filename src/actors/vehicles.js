@@ -6,6 +6,7 @@ import { createBody, stepBody, collideStatic, collidePair, speedOf } from './veh
 import { makeOutfit, inShadowBox } from './humans.js';
 import { radialTexture } from '../world/citymat.js';
 import { clamp, rng } from '../core/math.js';
+import { sendFirst } from '../core/buffers.js';
 
 const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 14, auto: 48, bike: 50, scooter: 40, bus: 16, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
 const _m = new THREE.Matrix4(), _w = new THREE.Matrix4(), _t = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -137,8 +138,11 @@ export class Vehicles {
         if (v.kinematic) continue;
         const ctl = controls.get(v) || IDLE;
         stepBody(v, ctl, h, v.role === 'player' ? 1 : 1.3);
-        // Up a flyover's ramp and along its deck, or on the street beneath it.
-        v.y = this.city.net.surfaceAt(v.x, v.z, v.y);
+        // Up a flyover's ramp and along its deck, or on the street beneath it; over a speed
+        // breaker the body rises with the hump, and taken fast it leaves the road for a moment.
+        v.y = this.city.net.surfaceAt(v.x, v.z, v.y - (v.hop || 0));
+        this._ride(v, h);
+        v.y += v.hop;
         const hit = collideStatic(v, this.colliders, this._contact);
         if (hit > 4) this._impact(v, hit, null);
         // Water: the riverbank is a hard edge for anything with wheels.
@@ -162,6 +166,42 @@ export class Vehicles {
           if (b.kinematic && b.role !== 'parked-static') this.wake(b);
         }
       }
+    }
+  }
+
+  /**
+   * Speed breakers and potholes under a physics body. v.hop is the body's height above the road:
+   * a hump under its axles pushes it up, the springs give back a little more than they took,
+   * gravity brings it down, and a hard landing or a wheel dropping into a pothole jolts (onBump).
+   */
+  _ride(v, h) {
+    const B = this.city.bumps, fx = Math.sin(v.heading), fz = Math.cos(v.heading), half = v.spec.wheelbase / 2;
+    const hf = B.heightAt(v.x + fx * half, v.z + fz * half), hr = B.heightAt(v.x - fx * half, v.z - fz * half);
+    const base = (hf + hr) / 2;
+    v.hopV = (v.hopV || 0) - 9.81 * h;
+    v.hop = (v.hop || 0) + v.hopV * h;
+    if (v.hop <= base) {
+      if (v.air && v.hopV < -1.6) this.onBump?.(v, -v.hopV);
+      const rise = (base - (v.base ?? base)) / h;
+      v.hop = base; v.hopV = Math.max(v.hopV, rise * 1.2); v.air = false;
+      v.bumpPitch = Math.atan2(hf - hr, 2 * half);
+    } else {
+      if (v.hop > base + 0.03) v.air = true; // off the road (until it lands)
+      v.bumpPitch = (v.bumpPitch || 0) * (1 - Math.min(1, h * 3));
+    }
+    v.base = base;
+    // Potholes under the front wheels (the rear ones follow the same line).
+    const speed = speedOf(v), tw = v.spec.two ? 0 : v.hw * 0.78;
+    for (const side of v.spec.two ? [0] : [-1, 1]) {
+      const hole = B.holeAt(v.x + fx * half - fz * tw * side, v.z + fz * half + fx * tw * side);
+      const key = side < 0 ? 'holeL' : 'holeR';
+      if (hole && hole !== v[key] && speed > 2.5 && !v.air) {
+        v.hopV = Math.max(v.hopV, 0.35 + speed * 0.03);
+        v.vx *= 0.985; v.vz *= 0.985;
+        if (v.spec.two) v.lean += (Math.random() - 0.5) * 0.2;
+        this.onBump?.(v, 0.8 + speed * 0.1, true);
+      }
+      v[key] = hole;
     }
   }
 
@@ -203,7 +243,7 @@ export class Vehicles {
         const M = this.meshes[v.type];
         // Body transform with suspension pitch/roll and two-wheeler lean.
         const lean = v.spec.two ? -v.lean : v.roll;
-        _e.set(v.pitch, v.heading, lean, 'YXZ');
+        _e.set(v.pitch - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
         _q.setFromEuler(_e);
         const bob = v.kinematic ? 0 : Math.sin(this.time * 18 + v.id) * 0.006 * Math.min(1, speedOf(v) / 8);
         const sink = v.sinking ? Math.min(2.5, v.sinking * 0.8) : 0;
@@ -259,14 +299,15 @@ export class Vehicles {
       const M = this.meshes[t];
       for (const k of ['paint', 'glass', 'fixed', 'lights']) {
         M[k].count = M.n;
-        M[k].instanceMatrix.needsUpdate = true;
-        if (M[k].instanceColor) M[k].instanceColor.needsUpdate = true;
+        sendFirst(M[k].instanceMatrix, M.n);
+        // Glass is never recoloured: its white colours went up once, with the first frame.
+        if (k !== 'glass') sendFirst(M[k].instanceColor, M.n);
         M[k].visible = M.n > 0;
       }
     }
-    this.wheels.count = this.wheelsN = wn; this.wheels.instanceMatrix.needsUpdate = true;
-    this.blobs.count = bn; this.blobs.instanceMatrix.needsUpdate = true;
-    this.beams.count = hn; this.beams.instanceMatrix.needsUpdate = true;
+    this.wheels.count = this.wheelsN = wn; sendFirst(this.wheels.instanceMatrix, wn);
+    this.blobs.count = bn; sendFirst(this.blobs.instanceMatrix, bn);
+    this.beams.count = hn; sendFirst(this.beams.instanceMatrix, hn);
     // Nothing to draw: skip the draw call (WebGL warns about every empty instanced draw).
     this.wheels.visible = wn > 0; this.blobs.visible = bn > 0; this.beams.visible = hn > 0;
     this.beams.material.opacity = clamp(night * 0.55, 0, 0.55);

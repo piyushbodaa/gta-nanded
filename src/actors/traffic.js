@@ -191,6 +191,9 @@ export class Traffic {
     const end = len - net.trimEnd(a.road);
     const j = a.dir > 0 ? net.rb[a.road] : net.ra[a.road];
     if (!a.turn) {
+      // Speed breakers: everyone crawls over them, two-wheelers a little quicker.
+      const toBump = g.city.bumps.ahead(a.road, a.dir, a.s, 28);
+      if (toBump < 28) want = Math.min(want, (v.spec.two ? 4.2 : 3) + Math.max(0, toBump - 2) * 0.5);
       const toEnd = end - a.s;
       if (net.jRoads[j].length >= 3 && toEnd < 22) want = Math.min(want, 5 + toEnd * 0.45);
       if (this.signals.has(j) && toEnd < 16 && this.isRed(j, a.road, time)) want = Math.min(want, Math.max(0, (toEnd - 2) * 0.9));
@@ -235,8 +238,12 @@ export class Traffic {
   }
 
   _place(v, x, z, heading, dt, y = 0) {
-    const a = v.ai;
-    v.y = y;
+    const a = v.ai, B = this.game.city.bumps;
+    // Up and over a speed breaker, nose first.
+    const fx = Math.sin(heading), fz = Math.cos(heading), half = v.spec.wheelbase / 2;
+    const hf = B.heightAt(x + fx * half, z + fz * half), hr = B.heightAt(x - fx * half, z - fz * half);
+    v.y = y + (hf + hr) / 2;
+    v.bumpPitch = Math.atan2(hf - hr, 2 * half);
     v.vx = (x - v.x) / Math.max(dt, 1e-4); v.vz = (z - v.z) / Math.max(dt, 1e-4);
     if (Math.hypot(v.vx, v.vz) > 40) { v.vx = 0; v.vz = 0; }
     v.x = x; v.z = z;

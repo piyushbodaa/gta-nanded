@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { clamp, rng } from '../core/math.js';
 import { radialTexture } from '../world/citymat.js';
+import { sendFirst } from '../core/buffers.js';
 
 const MAX = 2400;
 
@@ -110,12 +111,15 @@ export class Effects {
     this.skidI = (this.skidI + 1) % this.skidN;
     this.skids.count = Math.min(this.skidN, this.skids.count + 1);
     this.skids.visible = true;
+    // Send just this mark (three.js merges the ranges of a frame's marks into one upload).
+    this.skids.instanceMatrix.addUpdateRange(((this.skidI + this.skidN - 1) % this.skidN) * 16, 16);
     this.skids.instanceMatrix.needsUpdate = true;
     void key;
   }
 
   update(dt, camera, weather = {}) {
     const P = this.p;
+    let hi = 0; // one past the highest slot a live particle uses
     for (let k = P.length - 1; k >= 0; k--) {
       const p = P[k];
       p.life -= dt;
@@ -125,12 +129,17 @@ export class Effects {
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       const t = 1 - p.life / p.max;
       const i = p.i;
+      if (i >= hi) hi = i + 1;
       this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
       this.size[i] = p.size * (1 + t * p.grow);
       this.col[i * 4] = p.r; this.col[i * 4 + 1] = p.g; this.col[i * 4 + 2] = p.b; this.col[i * 4 + 3] = p.a * (1 - t * t);
     }
+    // Slots are handed out lowest first, so the live ones sit at the front: draw and send only
+    // those (dead slots among them were zeroed above), not all 2400 every frame.
     const g = this.points.geometry;
-    g.attributes.position.needsUpdate = true; g.attributes.pcolor.needsUpdate = true; g.attributes.psize.needsUpdate = true;
+    for (const k of ['position', 'pcolor', 'psize']) sendFirst(g.attributes[k], hi);
+    g.setDrawRange(0, hi);
+    this.points.visible = hi > 0;
     this.mat.uniforms.scale.value = innerHeight * 0.9;
     // Explosion flashes light the street.
     let li = 0;
@@ -205,6 +214,6 @@ export class Markers {
     }
     this.column.count = c; this.ring.count = c; this.arrow.count = a;
     this.column.visible = this.ring.visible = c > 0; this.arrow.visible = a > 0; // no empty instanced draws
-    for (const o of [this.column, this.ring, this.arrow]) { o.instanceMatrix.needsUpdate = true; if (o.instanceColor) o.instanceColor.needsUpdate = true; }
+    for (const o of [this.column, this.ring, this.arrow]) { sendFirst(o.instanceMatrix, o.count); if (o.instanceColor) sendFirst(o.instanceColor, o.count); }
   }
 }

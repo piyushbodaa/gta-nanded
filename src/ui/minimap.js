@@ -5,6 +5,10 @@ const ROAD_STYLE = [
   ['#e8e2cf', 1.9], ['#e0d9c4', 1.7], ['#d6cfba', 1.55], ['#c9c2ad', 1.35], ['#a9a392', 1.0], ['#8f8a7c', 0.85],
 ];
 
+// The radar's streets come from tiles: squares of the map painted once at the radar's scale and
+// kept, so a redraw places a few pictures instead of stroking every road around the player.
+const TILE_M = 256, TILE_PAD = 2, TILE_CACHE = 48;
+
 export class Minimap {
   constructor(game, canvas) {
     this.game = game;
@@ -12,6 +16,8 @@ export class Minimap {
     this.ctx = canvas.getContext('2d');
     this.range = 170; // metres from the centre to the edge
     this.dpr = 1;
+    this.tiles = new Map();
+    this.frame = 0;
   }
 
   resize() {
@@ -19,10 +25,57 @@ export class Minimap {
     this.dpr = Math.min(2, devicePixelRatio || 1);
     this.canvas.width = Math.max(1, Math.round(r.width * this.dpr));
     this.canvas.height = Math.max(1, Math.round(r.height * this.dpr));
+    this.tiles.clear(); // painted for the old size
+  }
+
+  /** Paint the rivers and streets of one tile at the radar's resting scale. */
+  _paint(ix, iz) {
+    const g = this.game, net = g.net, k = this.canvas.width / 2 / this.range;
+    // A couple of pixels of overlap all round, so tiles meet without seams when turned.
+    const S = Math.ceil(TILE_M * k) + TILE_PAD * 2, x0 = ix * TILE_M - TILE_PAD / k, z0 = iz * TILE_M - TILE_PAD / k, size = S / k;
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const ctx = c.getContext('2d');
+    ctx.setTransform(k, 0, 0, k, -x0 * k, -z0 * k);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const x1 = x0 + size, z1 = z0 + size;
+    for (const river of g.city.rivers) {
+      const p = river.p, m = river.w;
+      ctx.beginPath();
+      let open = false;
+      for (let i = 0; i + 3 < p.length; i += 2) {
+        const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3];
+        if (Math.max(ax, bx) < x0 - m || Math.min(ax, bx) > x1 + m || Math.max(az, bz) < z0 - m || Math.min(az, bz) > z1 + m) { open = false; continue; }
+        if (!open) ctx.moveTo(ax, az);
+        ctx.lineTo(bx, bz);
+        open = true;
+      }
+      ctx.strokeStyle = '#4f8aa3'; ctx.lineWidth = river.w; ctx.stroke();
+    }
+    // Roads batched by class, the minor ones first.
+    const batches = ROAD_STYLE.map(() => []), m = 12;
+    net.segmentsIn(x0 - m, z0 - m, x1 + m, z1 + m, (i, road) => batches[net.type[road]].push(i));
+    for (let t = ROAD_STYLE.length - 1; t >= 0; t--) {
+      const list = batches[t];
+      if (!list.length) continue;
+      ctx.beginPath();
+      for (const i of list) { ctx.moveTo(net.px[i], net.pz[i]); ctx.lineTo(net.px[i + 1], net.pz[i + 1]); }
+      ctx.strokeStyle = ROAD_STYLE[t][0];
+      ctx.lineWidth = Math.max(net.width[net.ptRoad[list[0]]] * 0.9, ROAD_STYLE[t][1] / k * 1.4);
+      ctx.stroke();
+    }
+    const tile = { canvas: c, x: x0, z: z0, size, used: this.frame };
+    this.tiles.set(`${ix},${iz}`, tile);
+    if (this.tiles.size > TILE_CACHE) {
+      // Forget the tiles that have gone longest unused.
+      const old = [...this.tiles].sort((a, b) => a[1].used - b[1].used).slice(0, this.tiles.size - TILE_CACHE);
+      for (const [key] of old) this.tiles.delete(key);
+    }
+    return tile;
   }
 
   draw(blips, route) {
-    const g = this.game, ctx = this.ctx, net = g.net;
+    const g = this.game, ctx = this.ctx;
     const W = this.canvas.width, H = this.canvas.height;
     if (!W) return;
     const pos = g.player.pos;
@@ -37,27 +90,24 @@ export class Minimap {
     ctx.rotate(rot);
     ctx.scale(scale, scale);
     ctx.translate(-pos.x, -pos.z);
-    // Rivers.
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (const river of g.city.rivers) {
-      const p = river.p;
-      ctx.beginPath();
-      for (let i = 0; i < p.length; i += 2) i ? ctx.lineTo(p[i], p[i + 1]) : ctx.moveTo(p[i], p[i + 1]);
-      ctx.strokeStyle = '#4f8aa3'; ctx.lineWidth = river.w; ctx.stroke();
+    // Streets: every tile within reach of the corners (painted now if missing), and at most one
+    // more from the ring just beyond, so tiles are ready before they scroll into view.
+    this.frame++;
+    const reach = Math.hypot(W / 2, H * 0.62) / scale, ahead = reach + TILE_M;
+    let next = null, nextD = Infinity;
+    for (let ix = Math.floor((pos.x - ahead) / TILE_M); ix <= Math.floor((pos.x + ahead) / TILE_M); ix++) {
+      for (let iz = Math.floor((pos.z - ahead) / TILE_M); iz <= Math.floor((pos.z + ahead) / TILE_M); iz++) {
+        const dx = Math.max(ix * TILE_M - pos.x, 0, pos.x - (ix + 1) * TILE_M), dz = Math.max(iz * TILE_M - pos.z, 0, pos.z - (iz + 1) * TILE_M);
+        const d = Math.hypot(dx, dz);
+        if (d > ahead) continue;
+        let tile = this.tiles.get(`${ix},${iz}`);
+        if (!tile && d > reach) { if (d < nextD) { nextD = d; next = [ix, iz]; } continue; }
+        tile ||= this._paint(ix, iz);
+        tile.used = this.frame;
+        if (d <= reach) ctx.drawImage(tile.canvas, tile.x, tile.z, tile.size, tile.size);
+      }
     }
-    // Roads near the player, batched by class.
-    const R = range * 1.6;
-    const batches = ROAD_STYLE.map(() => []);
-    net.segmentsIn(pos.x - R, pos.z - R, pos.x + R, pos.z + R, (i, road) => batches[net.type[road]].push(i));
-    for (let t = ROAD_STYLE.length - 1; t >= 0; t--) {
-      const list = batches[t];
-      if (!list.length) continue;
-      ctx.beginPath();
-      for (const i of list) { ctx.moveTo(net.px[i], net.pz[i]); ctx.lineTo(net.px[i + 1], net.pz[i + 1]); }
-      ctx.strokeStyle = ROAD_STYLE[t][0];
-      ctx.lineWidth = Math.max(net.width[net.ptRoad[list[0]]] * 0.9, ROAD_STYLE[t][1] / scale * 1.4);
-      ctx.stroke();
-    }
+    if (next) this._paint(next[0], next[1]);
     // GPS route.
     if (route && route.points.length >= 4) {
       ctx.beginPath();
