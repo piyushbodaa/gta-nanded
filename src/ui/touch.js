@@ -11,19 +11,32 @@ export class TouchControls {
     this.knob = $('touch-knob');
     this.input = game.input;
     this.active = false;
+    this.wanted = false;
+    this.touched = false;
     this.stick = null;
     this._bind();
   }
 
+  /**
+   * Show the buttons while playing on a touch screen: phones and tablets from the
+   * start, a touch-screen laptop once it is touched. Hints follow, until a key is pressed.
+   */
   show(on) {
-    this.active = on && matchMedia('(any-pointer: coarse)').matches;
+    this.wanted = on;
+    this.active = on && (matchMedia('(pointer: coarse)').matches || this.touched);
     this.root.hidden = !this.active;
     this.input.touch.active = this.active;
     document.body.classList.toggle('touch-ui', this.active);
+    if (this.active && this.input.mode === 'keyboard' && !this.input.keyboardUsed) this.input.mode = 'touch';
   }
 
   _bind() {
     const t = this.input.touch;
+    addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'touch' || this.touched) return;
+      this.touched = true;
+      if (this.wanted && !this.active) this.show(true);
+    }, { capture: true, passive: true });
     // Floating joystick.
     const R = 56;
     const move = e => {
@@ -71,16 +84,23 @@ export class TouchControls {
   /** Swap button sets for on foot / driving and show contextual ones. */
   update() {
     if (!this.active) return;
-    const g = this.game, P = g.player;
+    const g = this.game, P = g.player, v = P.vehicle;
     const driving = P.state === 'driving';
     this.root.classList.toggle('driving', driving);
+    // ENTER (or JACK) next to a vehicle; EXIT lives with the driving buttons.
     const near = P.state === 'foot' && g.nearestEnterable(P.x, P.z, 4.2);
-    $('tb-enter').hidden = !(near || driving);
-    $('tb-enter').textContent = driving ? 'EXIT' : near?.driver ? 'JACK' : 'ENTER';
+    setButton('tb-enter', near && (near.driver ? 'JACK' : 'ENTER'));
     const act = g.contextAction?.();
-    $('tb-action').hidden = !act || driving;
-    if (act) $('tb-action').textContent = act.label.length > 18 ? act.label.split('·')[0].trim() : act.label;
-    $('tb-job').hidden = !(driving && act && act.key === 'N');
-    $('tb-job').textContent = g.jobs?.active ? 'STOP JOB' : 'START JOB';
+    setButton('tb-action', !driving && act && (act.label.length > 18 ? act.label.split('·')[0].trim() : act.label));
+    setButton('tb-job', driving && act?.key === 'N' && (g.jobs?.active ? 'STOP JOB' : act.label.startsWith('Start race') ? 'START RACE' : 'START JOB'));
+    setButton('tb-siren', driving && v && (v.type === 'police' || v.type === 'ambulance') && (v.sirenOn ? 'SIREN OFF' : 'SIREN'));
   }
+}
+
+/** Show a contextual button with this label, or hide it (label falsy); touches the DOM only on change. */
+function setButton(id, label) {
+  const el = $(id);
+  if (!label) { if (!el.hidden) el.hidden = true; return; }
+  if (el.hidden) el.hidden = false;
+  if (el.textContent !== label) el.textContent = label;
 }

@@ -20,11 +20,19 @@ import { STORY, HOME } from './game/story.js';
 import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
 import { track } from './core/analytics.js';
+import { press } from './ui/controls.js';
 
 const $ = id => document.getElementById(id);
 const status = (text, f) => { $('loading-status').textContent = text.toUpperCase(); if (f !== undefined) $('load-bar').style.width = `${Math.round(f * 100)}%`; };
 
 function fatal(msg) { $('fatal-msg').textContent = msg; $('fatal').hidden = false; }
+
+/** Phones and tablets play full screen, sideways. Browsers that can't (iPhone Safari) carry on as they are. */
+function fullscreen() {
+  const el = document.documentElement;
+  if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement || !el.requestFullscreen) return;
+  el.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+}
 
 async function boot() {
   const probe = document.createElement('canvas').getContext('webgl2');
@@ -57,7 +65,7 @@ async function boot() {
     clearTimeout(game.hud._radioT); game.hud._radioT = setTimeout(() => (el.hidden = true), 4500);
   };
   const st = game.save.data.settings;
-  game.input.mouseSensitivity = 0.0024 * (st.sensitivity || 1);
+  game.input.setSensitivity(st.sensitivity || 1);
   game.toggleSound = async () => {
     if (!game.audio.ctx) { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); st.sound = true; }
     else { game.audio.setEnabled(!game.audio.enabled); st.sound = game.audio.enabled; }
@@ -73,6 +81,7 @@ async function boot() {
 
   const begin = async mode => {
     if (game.started) return;
+    fullscreen(); // while the tap still counts as a user gesture
     if (st.sound !== false) { try { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
     const play = () => startGame(game, mode);
     if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
@@ -82,7 +91,7 @@ async function boot() {
   $('menu-new').addEventListener('click', () => {
     if (has && !$('menu-new').dataset.confirm) {
       $('menu-new').dataset.confirm = '1';
-      $('menu-new').querySelector('small').textContent = 'TAP AGAIN: THIS ERASES YOUR SAVE';
+      $('menu-new').querySelector('small').textContent = `${matchMedia('(pointer: coarse)').matches ? 'TAP' : 'CLICK'} AGAIN: THIS ERASES YOUR SAVE`;
       return;
     }
     if (has) { const settings = game.save.data.settings; game.save.reset(); game.save.data.settings = settings; }
@@ -116,7 +125,7 @@ function startGame(game, mode) {
   game.start();
   game.save.flush();
   if (mode === 'new') setTimeout(() => game.missions.start('m1'), 400);
-  else if (mode === 'free') game.hud.help('<b>Free roam.</b> The whole city is open. Press <kbd>M</kbd> for the map, or find a contact marker to play the story.', 7);
+  else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map, or find a contact marker to play the story.`, 7);
   else game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. Your next contact is on the radar.`, 6);
   game.canvas.focus();
 }

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { Steps as S } from './missions.js';
 import { dist, headingTo } from '../core/math.js';
+import { key, pick, drivingHelp } from '../ui/controls.js';
 
 export const CHARACTERS = {
   YOU: { name: 'Sunny', color: '#ffffff' },
@@ -91,12 +92,12 @@ export const STORY = [
           };
         },
       }),
-      S.enter('auto', "Get in Pakya's <b>auto</b>. <i>(F)</i>"),
+      S.enter('auto', `Get in Pakya's <b>auto</b>. <i>(${key(g, 'enter')})</i>`),
       S.call(c => {
         const p = c.ent.pakya;
         if (p) { c.g.peds.remove(p); delete c.ent.pakya; }
         c.g.vehicles.addPassenger(c.ent.auto, Object.assign(c.g.peds.randomOutfit(), { shirt: 0x3f88c5, sleeve: 0x3f88c5, pants: 0x2b2b2b, kind: 'man', flags: new Set() }));
-        c.g.hud.help('Hold <kbd>W</kbd> to drive, <kbd>A</kbd>/<kbd>D</kbd> to steer, <kbd>S</kbd> to brake and reverse, <kbd>Space</kbd> for the handbrake. Follow the yellow route on the radar.', 9);
+        c.g.hud.help(`${drivingHelp(c.g)} Follow the yellow route on the radar.`, 9);
       }),
       S.goTo(P.zenda, 'Drive Pakya to <b>Zenda Chowk</b>, Taroda Khurd.', {
         vehicle: 'auto', radius: 7,
@@ -114,7 +115,7 @@ export const STORY = [
         ['PAKYA', 'Go, go. And bhau — meet Anna at Workshop Corner. And that Joshi girl, Priya, was asking for you near Visava Garden.'],
       ]),
     ],
-    onPass: g => g.hud.help('New contacts are marked on your radar and map (<kbd>M</kbd>) with their initials. Walk into a marker to start.', 9),
+    onPass: g => g.hud.help(`New contacts are marked on your radar and map (${key(g, 'map')}) with their initials. Walk into a marker to start.`, 9),
   },
   {
     id: 'm2', giver: 'ANNA', title: 'चहा आणि राडा', subtitle: 'CHAI & CHAOS', reward: 800, requires: ['m1'],
@@ -132,7 +133,7 @@ export const STORY = [
         for (let i = 0; i < 3; i++) nearPed(c, `g${i}`, 'goon', { x: b.x, z: b.z }, Math.cos(i * 2.1) * 2.4, Math.sin(i * 2.1) * 2.4, { pose: 'idle' });
       }),
       S.say([['GOON', 'Ae hero! Anna sent you? Go home before you get hurt.'], ['YOU', 'Funny. Anna said the same about you.']]),
-      S.fight(['g0', 'g1', 'g2'], "Beat up Vicky's boys. <i>(Click / J to punch)</i>"),
+      S.fight(['g0', 'g1', 'g2'], `Beat up Vicky's boys. <i>(${pick(g, { keyboard: 'click or <kbd>J</kbd>', gamepad: key(g, 'attack'), touch: key(g, 'attack') })} to punch)</i>`),
       S.enter('bike', "Take back <b>Anna's bike</b>."),
       S.goTo(P.workshop, 'Ride it back to <b>Workshop Corner</b>.', { vehicle: 'bike', radius: 7 }),
       S.say([

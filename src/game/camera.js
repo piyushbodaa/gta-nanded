@@ -24,6 +24,13 @@ export class GameCamera {
     this.zoom = 1;
   }
 
+  /** Next camera distance: normal, far, close (the camera button). */
+  cycleView() {
+    const views = [1, 1.35, 0.8];
+    const i = views.findIndex(z => Math.abs(z - this.zoom) < 0.01);
+    this.zoom = views[(i + 1) % views.length];
+  }
+
   /** Snap behind a heading (spawns, teleports, mission starts). */
   reset(heading, pitch = 0.22) { this.yaw = heading + Math.PI; this.pitch = pitch; this._snap = true; }
   addShake(v) { this.shake = Math.min(1.2, this.shake + v); }

@@ -82,12 +82,14 @@
         <button type="button" class="tb" data-tap="attack">PUNCH</button>
         <button type="button" class="tb" data-hold="sprint">RUN</button>
         <button type="button" class="tb big" data-tap="jump">JUMP</button>
-        <button type="button" class="tb small" data-tap="photo">📷</button>
+        <button type="button" class="tb small" data-tap="photo" aria-label="Photo">📷</button>
       </div>
       <div class="touch-right drive-only">
-        <button id="tb-job" type="button" class="tb wide" data-tap="job" hidden>JOB</button>
-        <button type="button" class="tb small" data-tap="radio">📻</button>
-        <button type="button" class="tb small" data-tap="camera">🎥</button>
+        <button id="tb-exit" type="button" class="tb wide accent" data-tap="enter">EXIT</button>
+        <button id="tb-job" type="button" class="tb wide" data-tap="job" hidden>START JOB</button>
+        <button id="tb-siren" type="button" class="tb wide" data-tap="action" hidden>SIREN</button>
+        <button type="button" class="tb small" data-tap="radio" aria-label="Radio">📻</button>
+        <button type="button" class="tb small" data-tap="camera" aria-label="Camera distance">🎥</button>
         <button type="button" class="tb" data-hold="horn">HORN</button>
         <button type="button" class="tb" data-hold="handbrake">DRIFT</button>
         <button type="button" class="tb pedal brake" data-hold="brake">BRAKE</button>
@@ -108,7 +110,7 @@
           <button type="button" data-tab="settings" role="tab">Settings</button>
           <button type="button" data-tab="help" role="tab">Controls</button>
         </nav>
-        <button id="pause-resume" type="button" class="resume">Resume ↵</button>
+        <button id="pause-resume" type="button" class="resume">Resume<kbd class="for-desk">Esc</kbd></button>
       </header>
       <div class="pause-body">
         <div class="tab" data-pane="map">
@@ -116,7 +118,7 @@
           <div class="map-side">
             <input id="map-search" type="search" placeholder="Search 133 real places — Hazur Sahib, Chate Classes…" autocomplete="off" />
             <div id="map-results" class="map-results"></div>
-            <p class="map-tip">Click the map to set a waypoint. Drag to pan, scroll to zoom.</p>
+            <p class="map-tip"><span class="for-desk">Click the map to set a waypoint. Drag to pan, scroll to zoom.</span><span class="for-touch">Tap the map to set a waypoint. Drag to pan, pinch to zoom.</span></p>
             <div class="map-actions"><button id="map-zoom-in" type="button">＋</button><button id="map-zoom-out" type="button">－</button><button id="map-me" type="button">◎ Me</button><button id="map-clear" type="button">Clear waypoint</button></div>
           </div>
         </div>
@@ -130,18 +132,22 @@
             <label>Sound <button id="set-sound" type="button"></button></label>
             <label>Music volume <input id="set-music" type="range" min="0" max="1" step="0.05" /></label>
             <label>Effects volume <input id="set-sfx" type="range" min="0" max="1" step="0.05" /></label>
-            <label>Mouse sensitivity <input id="set-sens" type="range" min="0.3" max="2.5" step="0.1" /></label>
+            <label>Look sensitivity <input id="set-sens" type="range" min="0.3" max="2.5" step="0.1" /></label>
             <label>Time of day <button id="set-time" type="button">Advance 3 hours</button></label>
             <label>Weather <button id="set-weather" type="button"></button></label>
+            <form id="set-cheat-form" class="cheat" autocomplete="off"><label for="set-cheat">Cheat code</label><input id="set-cheat" type="text" maxlength="14" spellcheck="false" autocapitalize="characters" enterkeyhint="go" placeholder="Type a code" /><button type="submit">Enter</button></form>
             <label>Save <button id="set-reset" type="button" class="danger">Start over (erase progress)</button></label>
             <p class="small">Progress saves automatically on this device. Map data © OpenStreetMap contributors (ODbL). All characters and stories are fictional.</p>
           </div>
         </div>
         <div class="tab" data-pane="help">
           <div class="help-grid">
-            <section><h3>On foot</h3><p><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump<br /><kbd>Click</kbd>/<kbd>J</kbd> punch · <kbd>F</kbd> get in / jack a vehicle<br /><kbd>Q</kbd> buy, talk, photograph · <kbd>X</kbd> photo</p></section>
-            <section><h3>Driving</h3><p><kbd>W</kbd> gas · <kbd>S</kbd> brake / reverse · <kbd>A D</kbd> steer<br /><kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio<br /><kbd>C</kbd> look back · <kbd>N</kbd> start a job · <kbd>F</kbd> get out</p></section>
-            <section><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepads work too: sticks, triggers, A jump/handbrake, Y enter.</p></section>
+            <section class="for-touch"><h3>On foot</h3><p>Left thumb: walk (push further to jog) · drag the right side to look<br /><kbd class="tap">RUN</kbd> sprint · <kbd class="tap">JUMP</kbd> · <kbd class="tap">PUNCH</kbd> · <kbd class="tap">📷</kbd> photo<br /><kbd class="tap">ENTER</kbd> or <kbd class="tap">JACK</kbd> shows up next to a vehicle; buy, talk and photograph with the button that appears</p></section>
+            <section class="for-touch"><h3>Driving</h3><p>Left thumb: steer · <kbd class="tap">GAS</kbd> · <kbd class="tap">BRAKE</kbd> (hold to reverse) · <kbd class="tap">DRIFT</kbd> handbrake<br /><kbd class="tap">HORN</kbd> · <kbd class="tap">📻</kbd> radio · <kbd class="tap">🎥</kbd> camera distance · <kbd class="tap">EXIT</kbd> get out<br /><kbd class="tap">START JOB</kbd> in an auto or on a two-wheeler · <kbd class="tap">SIREN</kbd> in a police jeep or ambulance</p></section>
+            <section class="for-touch"><h3>Everywhere</h3><p><kbd class="tap">MAP</kbd> city map · <kbd class="tap">❚❚</kbd> pause<br />Hold your phone sideways for the full city.</p></section>
+            <section class="for-desk"><h3>On foot</h3><p><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump<br /><kbd>Click</kbd>/<kbd>J</kbd> punch · <kbd>F</kbd> get in / jack a vehicle<br /><kbd>Q</kbd> buy, talk, photograph · <kbd>X</kbd> photo</p></section>
+            <section class="for-desk"><h3>Driving</h3><p><kbd>W</kbd> gas · <kbd>S</kbd> brake / reverse · <kbd>A D</kbd> steer<br /><kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio · <kbd>V</kbd> camera<br /><kbd>C</kbd> look back · <kbd>N</kbd> start a job · <kbd>Q</kbd> siren · <kbd>F</kbd> get out</p></section>
+            <section class="for-desk"><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepad: sticks to move and look, <kbd>RT</kbd>/<kbd>LT</kbd> gas and brake, <kbd>A</kbd> jump/handbrake, <kbd>B</kbd> punch, <kbd>X</kbd> sprint/buy, <kbd>Y</kbd> get in/out, <kbd>D-pad ↑</kbd> job, <kbd>Back</kbd> map, <kbd>Start</kbd> pause.</p></section>
             <section><h3>Wanted</h3><p>Crimes the police see raise your stars. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.</p></section>
           </div>
         </div>

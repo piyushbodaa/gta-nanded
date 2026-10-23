@@ -17,11 +17,15 @@ export class Input {
     this.lastLookAt = 0; // time of the last deliberate look input
     this.touch = { moveX: 0, moveY: 0, gas: 0, brake: 0, handbrake: false, sprint: false, horn: false, active: false };
     this.mode = 'keyboard'; // keyboard | touch | gamepad
+    this.keyboardUsed = false;
     this.enabled = true;
     this.pointerLocked = false;
-    this.mouseSensitivity = 0.0024;
+    this.setSensitivity(1);
     this._bind();
   }
+
+  /** Look speed for the mouse, a dragging finger and the right stick alike (1 is the default). */
+  setSensitivity(k) { this.lookScale = k; this.mouseSensitivity = 0.0024 * k; }
 
   _bind() {
     addEventListener('keydown', e => {
@@ -31,7 +35,7 @@ export class Input {
       if (!a) return;
       if (['up', 'down', 'left', 'right', 'jump', 'map'].includes(a) || e.code === 'Tab') e.preventDefault();
       if (t instanceof HTMLButtonElement && (e.code === 'Space' || e.code === 'Enter')) return;
-      this.mode = 'keyboard';
+      this.mode = 'keyboard'; this.keyboardUsed = true;
       if (!e.repeat) this.events.add(a);
       this.held.add(a);
     });
@@ -67,7 +71,7 @@ export class Input {
     });
     addEventListener('pointermove', e => {
       if (!drag || e.pointerId !== drag.id || !this.enabled) return;
-      const k = e.pointerType === 'mouse' ? 0.005 : 0.0065;
+      const k = (e.pointerType === 'mouse' ? 0.005 : 0.0065) * this.lookScale;
       this.look.x -= (e.clientX - drag.x) * k;
       this.look.y -= (e.clientY - drag.y) * k;
       drag.x = e.clientX; drag.y = e.clientY;
@@ -100,7 +104,7 @@ export class Input {
     let mx = (h.has('right') ? 1 : 0) - (h.has('left') ? 1 : 0);
     let my = (h.has('up') ? 1 : 0) - (h.has('down') ? 1 : 0);
     let throttle = h.has('up') ? 1 : 0, brake = h.has('down') ? 1 : 0, steer = mx;
-    let handbrake = h.has('jump'), sprint = h.has('sprint'), horn = h.has('horn');
+    let handbrake = h.has('jump'), sprint = h.has('sprint'), horn = h.has('horn'), lookBack = h.has('lookBack');
     // Touch controls.
     if (t.active) {
       if (Math.abs(t.moveX) > 0.02 || Math.abs(t.moveY) > 0.02) { mx = t.moveX; my = t.moveY; steer = t.moveX; }
@@ -119,16 +123,17 @@ export class Input {
       if (lx || ly) { mx = lx; my = -ly; steer = lx; }
       throttle = Math.max(throttle, val(7));
       brake = Math.max(brake, val(6));
-      if (rx || ry) { this.look.x -= rx * 0.05; this.look.y -= ry * 0.04; this.lastLookAt = performance.now(); }
-      handbrake ||= btn(0); sprint ||= btn(2); horn ||= btn(10);
+      if (rx || ry) { this.look.x -= rx * 0.05 * this.lookScale; this.look.y -= ry * 0.04 * this.lookScale; this.lastLookAt = performance.now(); }
+      handbrake ||= btn(0); sprint ||= btn(2); horn ||= btn(10); lookBack ||= btn(11);
       const edge = (i, a) => { const k = `pad${i}`; if (btn(i) && !this.held.has(k)) { this.events.add(a); this.held.add(k); } else if (!btn(i)) this.held.delete(k); };
       edge(0, 'jump'); edge(3, 'enter'); edge(1, 'attack'); edge(9, 'pause'); edge(8, 'map'); edge(2, 'action'); edge(5, 'radio'); edge(4, 'camera');
+      edge(12, 'job'); edge(13, 'photo');
     }
     const l = Math.hypot(mx, my);
     if (l > 1) { mx /= l; my /= l; }
     s.moveX = mx; s.moveY = my; s.throttle = throttle; s.brake = brake; s.steer = Math.max(-1, Math.min(1, steer));
     s.handbrake = handbrake; s.sprint = sprint; s.horn = horn;
-    s.lookBack = h.has('lookBack');
+    s.lookBack = lookBack;
     s.attackHeld = h.has('attack') || h.has('attackMouse');
     s.aim = h.has('aim');
   }

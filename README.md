@@ -13,9 +13,11 @@ Steal an auto-rickshaw outside Hazur Sahib Nanded station, weave through Shyam N
 | Sprint · Jump · Punch | `Shift` · `Space` · click / `J` | X · A · B | RUN · JUMP · PUNCH |
 | Get in / jack / get out | `F` (or `E`) | Y | ENTER / EXIT |
 | Gas · Brake/reverse · Handbrake | `W` · `S` · `Space` | RT · LT · A | GAS · BRAKE · DRIFT |
-| Horn · Radio · Look back | `H` · `R` · `C` | L3 · RB · — | HORN · 📻 |
+| Horn · Radio · Look back | `H` · `R` · `C` | L3 · RB · R3 | HORN · 📻 |
+| Camera distance | `V` | LB | 🎥 |
 | Buy / talk / photograph | `Q` | X | contextual button |
-| Start a job (in an auto or on a two-wheeler) | `N` | — | START JOB |
+| Siren (police jeep, ambulance) | `Q` | X | SIREN |
+| Start a job (in an auto or on a two-wheeler) | `N` | D-pad ↑ | START JOB |
 | Map · Pause | `M` · `Esc` | Back · Start | MAP · ❚❚ |
 
 **Story (8 missions).** Sunny "Bhau" Patil comes home from Pune. Pakya picks him up at the station in his auto; Anna at Workshop Corner always has "work"; Priya is late for her NEET mock test; Vicky Deshmukh, the neta's son with the white SUV, wants a race over the Govardhan Ghat bridge; Gurpreet Paaji needs flour at the langar before the evening sangat; and Inspector Kadam is closing in. Contacts appear on the radar and map with their initials — walk into a marker to start.

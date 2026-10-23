@@ -4,6 +4,10 @@ import { dist, rng, hash2, clamp } from '../core/math.js';
 import { speedOf } from '../actors/vehicle-physics.js';
 import { GARAGE } from './story.js';
 import { PROP } from '../world/citygen.js';
+import { key, pick } from '../ui/controls.js';
+
+/** How to end the job you are on. */
+const stopJob = g => pick(g, { keyboard: `Press ${key(g, 'job')} again to stop.`, gamepad: `Press ${key(g, 'job')} again to stop.`, touch: 'Tap <kbd class="tap">STOP JOB</kbd> to stop.' });
 
 export const LANDMARK_IDS = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat',
   'ram-ghat', 'govardhan-ghat', 'urvashi-ghat', 'kaleshwar-temple', 'vishnupuri-dam', 'nandgiri-fort', 'old-mondha-clock-tower', 'mal-tekdi', 'godavari-river'];
@@ -116,7 +120,7 @@ export class Jobs {
   _startTaxi() {
     const g = this.game;
     this.active = { kind: 'taxi', label: 'Rickshaw fares', vehicle: g.player.vehicle, t: 0, earned: 0, chain: 0 };
-    g.hud.help('<b>Rickshaw fares</b>: pick up the person waving, then drive them to their stop. Quick, clean rides pay tips. <kbd>N</kbd> to stop.', 7);
+    g.hud.help(`<b>Rickshaw fares</b>: pick up the person waving, then drive them to their stop. Quick, clean rides pay tips. ${stopJob(g)}`, 7);
     this._nextFare();
   }
   _nextFare() {
@@ -186,7 +190,7 @@ export class Jobs {
   _startDelivery() {
     const g = this.game;
     this.active = { kind: 'delivery', label: 'Bhookh Express', vehicle: g.player.vehicle, t: 0, earned: 0, chain: 0 };
-    g.hud.help('<b>Bhookh Express</b>: collect the order from the restaurant and deliver it hot. <kbd>N</kbd> to stop.', 7);
+    g.hud.help(`<b>Bhookh Express</b>: collect the order from the restaurant and deliver it hot. ${stopJob(g)}`, 7);
     this._nextOrder();
   }
   _nextOrder() {
