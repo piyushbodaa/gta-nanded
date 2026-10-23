@@ -27,6 +27,8 @@ export class Geo {
     return this;
   }
   color(rgb, seed = 0) { this.setTint(rgb, seed); this.k[0] = 0; this.k[1] = 0; this.k[2] = 1; this.k[3] = 0; return this; }
+  /** Plain colour that fills with rainwater in the monsoon (potholes). */
+  hollow(rgb) { this.setTint(rgb, 0); this.k[0] = 0; this.k[1] = 0; this.k[2] = 2; this.k[3] = 0; return this; }
   /** Plain colour as polished metal (gilded domes, brass finials). */
   gilt(rgb) { this.setTint(rgb, 0); this.k[0] = 1; this.k[1] = 0; this.k[2] = 1; this.k[3] = 0; return this; }
   _grow() {

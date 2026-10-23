@@ -67,3 +67,28 @@ test('the ground under the player is built at once, and far chunks are released'
   assert.ok(loaded > 4 && cm.chunks.size > 4);
   for (const ch of cm.chunks.values()) assert.ok(Math.hypot((ch.cx + 0.5) * CHUNK + 1500, (ch.cz + 0.5) * CHUNK + 1800) < 300 + CHUNK * 2);
 });
+
+test('far chunks are plain blocks, swapped for the close-up as the player comes near', () => {
+  const cm = manager();
+  // Old Mondha: the densest streets.
+  const x = 517, z = 600;
+  cm.setRadius(420);
+  for (let i = 0; i < 20000 && cm.update(x, z, 50) > 0; i++);
+  const tris = level => level.meshes.reduce((n, m) => n + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0);
+  let near = 0, far = 0;
+  for (const ch of cm.chunks.values()) {
+    const d = cm._dist(ch.cx, ch.cz), [N, F] = ch.levels;
+    if (d < 150) { assert.ok(N && N.group.visible && !(F && F.group.visible), 'close-up near the player'); near++; }
+    if (d > 190) { assert.ok(F && F.group.visible && !N, 'far version away from the player'); far++; }
+  }
+  assert.ok(near >= 4 && far >= 10, `${near} close-up, ${far} far`);
+  // A far chunk costs a fraction of its close-up.
+  const key = [...cm.chunks.keys()].find(k => cm.chunks.get(k).levels[1] && cm._dist(cm.chunks.get(k).cx, cm.chunks.get(k).cz) > 250 && tris(cm.chunks.get(k).levels[1]) > 4000);
+  const ch = cm.chunks.get(key), ref = manager();
+  ref._build(key, ch.cx, ch.cz);
+  assert.ok(tris(ch.levels[1]) < tris(ref.chunks.get(key).levels[0]) * 0.45, `far ${tris(ch.levels[1])} vs close-up ${tris(ref.chunks.get(key).levels[0])}`);
+  // Walk over to it: the close-up replaces the far version.
+  const cx = (ch.cx + 0.5) * CHUNK, cz = (ch.cz + 0.5) * CHUNK;
+  for (let i = 0; i < 20000 && cm.update(cx, cz, 50) > 0; i++);
+  assert.ok(ch.levels[0]?.group.visible && !ch.levels[1]?.group.visible, 'close-up on arrival');
+});
