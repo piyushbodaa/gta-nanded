@@ -66,7 +66,7 @@ export class Quality {
     this.learned = null;
     this.autoTier = guessTier('', this.phone, navigator.hardwareConcurrency, navigator.deviceMemory);
     this.scale = 1; // dynamic resolution multiplier
-    this.frames = []; this.windowT = 0; this.goodT = 0; this.slowWindows = 0;
+    this.frames = []; this.windowT = 0; this.goodT = 0; this.slowWindows = 0; this.cpuSlow = 0;
     this.ceiling = 1; this.ceilingT = 0; this.headroomT = 0; this.crowdT = 0; this.idleCpuT = 0;
     this.fps = 60;
   }
@@ -161,6 +161,9 @@ export class Quality {
     this.fps = frames.length / spent;
     const throttled = frames.filter(f => f > 0.2).length;
     if (frames.length < 20 || throttled > frames.length * 0.2) return;
+    // The first seconds after the start or a teleport are busy filling in the streets around
+    // the player: a passing load, not what this device can sustain.
+    if (game.time < 6 || game.time - (game.player?.teleportAt ?? -Infinity) < 4) return;
     if (this.mode !== 'auto') return;
     const target = 1 / (this.fpsCap || 60);
     const sorted = frames.sort((a, b) => a - b);
@@ -169,14 +172,20 @@ export class Quality {
     const cpuBound = (game.cpuMs || 0) > target * 1000 * 0.55;
     if (p80 > target * 1.3) {
       this.goodT = 0; this.headroomT = 0; this.idleCpuT = 0;
-      if (cpuBound && this.crowd > MIN_CROWD + 1e-3) { this.crowd = Math.max(MIN_CROWD, Math.round((this.crowd - 0.2) * 100) / 100); this.crowdT = 60; this.learn(); return; }
-      if (cpuBound && this.fpsMode === 'auto' && this.autoCap === 60) { this.autoCap = 30; this.learn({ cap30: true }); return; }
+      if (cpuBound) {
+        // Two slow windows in a row before each step: crowds only thin for a sustained load.
+        if (++this.cpuSlow < 2) return;
+        this.cpuSlow = 0;
+        if (this.crowd > MIN_CROWD + 1e-3) { this.crowd = Math.max(MIN_CROWD, Math.round((this.crowd - 0.2) * 100) / 100); this.crowdT = 60; this.learn(); return; }
+        // Thinned and still under 40 fps: a steady 30 paces better than a ragged 30-40.
+        if (this.fpsMode === 'auto' && this.autoCap === 60 && p80 > 0.025) { this.autoCap = 30; this.learn({ cap30: true }); return; }
+      }
       this.ceiling = this.scale; this.ceilingT = 60;
       if (this.scale > MIN_SCALE + 1e-3) { this.scale = Math.max(MIN_SCALE, Math.round((this.scale - 0.1) * 100) / 100); game.resize(); this.learn(); }
       else if (++this.slowWindows >= 2) { this.slowWindows = 0; this.stepDown(game); }
       return;
     }
-    this.slowWindows = 0;
+    this.slowWindows = 0; this.cpuSlow = 0;
     if (p80 > target * 1.05) return;
     this.goodT += spent;
     // Crowds come back a step at a time once the frame has room again, never within a minute.
