@@ -113,3 +113,5 @@
   #welcome .front-panel,#welcome .front-panel img,#welcome .front-content{animation:none;transform:none;opacity:1}
   #welcome .front-option{transition:none}
 }
+/* Phones and tablets play with the on-screen buttons: no keyboard hints. */
+@media(hover:none) and (pointer:coarse){#welcome .front-footer-controls{display:none}}

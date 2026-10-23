@@ -186,25 +186,50 @@ export class CityMap {
 
   _bind() {
     const c = this.canvas;
-    let drag = null, moved = 0;
-    c.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; moved = 0; c.setPointerCapture(e.pointerId); });
+    // One finger (or the mouse) drags, two fingers pinch to zoom, and a tap or click sets a waypoint.
+    const down = new Map();
+    let moved = 0, spread = 0;
+    const pair = () => { const [a, b] = down.values(); return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+    const world = (sx, sy) => {
+      const r = c.getBoundingClientRect();
+      return { x: this.center.x + (sx - r.left - r.width / 2) / this.zoom, z: this.center.z + (sy - r.top - r.height / 2) / this.zoom };
+    };
+    c.addEventListener('pointerdown', e => {
+      down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      c.setPointerCapture(e.pointerId);
+      if (down.size === 1) moved = 0;
+      else { moved = Infinity; spread = pair().d; } // a pinch is never a tap
+    });
     c.addEventListener('pointermove', e => {
-      if (!drag) return;
-      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      const p = down.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (down.size >= 2) {
+        // Zoom about the point between the fingers, so it stays under them.
+        const m = pair(), before = world(m.x, m.y);
+        if (spread > 0 && m.d > 0) this.zoom = clamp(this.zoom * (m.d / spread), 0.06, 2.5);
+        const after = world(m.x, m.y);
+        this.center.x += before.x - after.x; this.center.z += before.z - after.z;
+        spread = m.d;
+        this.draw();
+        return;
+      }
       moved += Math.abs(dx) + Math.abs(dy);
       this.center.x -= dx / this.zoom; this.center.z -= dy / this.zoom;
-      drag = { x: e.clientX, y: e.clientY };
       this.draw();
     });
-    c.addEventListener('pointerup', e => {
-      if (drag && moved < 6) {
-        const r = c.getBoundingClientRect();
-        const wx = this.center.x + (e.clientX - r.left - r.width / 2) / this.zoom;
-        const wz = this.center.z + (e.clientY - r.top - r.height / 2) / this.zoom;
-        this.onPick?.(wx, wz);
+    const up = e => {
+      if (!down.has(e.pointerId)) return;
+      if (e.type === 'pointerup' && down.size === 1 && moved < (e.pointerType === 'touch' ? 12 : 6)) {
+        const w = world(e.clientX, e.clientY);
+        this.onPick?.(w.x, w.z);
       }
-      drag = null;
-    });
+      down.delete(e.pointerId);
+      spread = down.size >= 2 ? pair().d : 0;
+    };
+    c.addEventListener('pointerup', up);
+    c.addEventListener('pointercancel', up);
     c.addEventListener('wheel', e => { e.preventDefault(); this.zoomBy(e.deltaY < 0 ? 1.25 : 0.8); }, { passive: false });
   }
 

@@ -2,6 +2,7 @@
 import { CityMap } from './minimap.js';
 import { STORY, CHARACTERS } from '../game/story.js';
 import { dist } from '../core/math.js';
+import { key, verb, pick } from './controls.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -30,12 +31,19 @@ export class PauseMenu {
     $('set-sound').addEventListener('click', async () => { await g.toggleSound(); this._settings(); });
     $('set-music').addEventListener('input', e => { g.save.data.settings.music = Number(e.target.value); g.audio.setVolumes({ music: Number(e.target.value) }); g.save.dirty(); });
     $('set-sfx').addEventListener('input', e => { g.save.data.settings.sfx = Number(e.target.value); g.audio.setVolumes({ sfx: Number(e.target.value) }); g.save.dirty(); });
-    $('set-sens').addEventListener('input', e => { g.save.data.settings.sensitivity = Number(e.target.value); g.input.mouseSensitivity = 0.0024 * Number(e.target.value); g.save.dirty(); });
+    $('set-sens').addEventListener('input', e => { g.save.data.settings.sensitivity = Number(e.target.value); g.input.setSensitivity(Number(e.target.value)); g.save.dirty(); });
+    $('set-cheat-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const field = $('set-cheat'), msg = g.cheat?.(field.value);
+      field.value = '';
+      field.placeholder = msg === null ? 'Nothing happened' : msg ? 'Cheat activated' : 'Not a cheat code';
+      if (msg) { this.close(); g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5); }
+    });
     $('set-time').addEventListener('click', () => { g.sky.hours = (g.sky.hours + 3) % 24; g.renderer.shadowMap.needsUpdate = true; this._settings(); });
     $('set-weather').addEventListener('click', () => { g.sky.cycleWeather(); this._settings(); });
     $('set-reset').addEventListener('click', () => {
       if (this._confirmReset) { g.save.reset(); location.reload(); return; }
-      this._confirmReset = true; $('set-reset').textContent = 'Tap again to erase everything';
+      this._confirmReset = true; $('set-reset').textContent = `${verb(g) === 'tap' ? 'Tap' : 'Click'} again to erase everything`;
       setTimeout(() => { this._confirmReset = false; $('set-reset').textContent = 'Start over (erase progress)'; }, 4000);
     });
     addEventListener('resize', () => { if (this.open && this.tab === 'map') this._drawMap(); });
@@ -123,12 +131,13 @@ export class PauseMenu {
 
   _jobs() {
     const g = this.game, j = g.jobs, rec = g.save.data.records;
+    const job = `${verb(g)} ${key(g, 'job')}`;
     const cards = [
-      ['RICKSHAW FARES', 'रिक्षा', 'Get in any auto-rickshaw and press <kbd>N</kbd>. Pick up passengers and drive them to real places across Nanded. Fast, clean rides earn tips and streak bonuses.', `${g.save.data.stats.fares} fares so far`],
-      ['BHOOKH EXPRESS', 'डिलिव्हरी', 'On any bike or scooty press <kbd>N</kbd>. Collect orders from restaurants and deliver them while they are still hot.', `${g.save.data.stats.deliveries} deliveries`],
+      ['RICKSHAW FARES', 'रिक्षा', `Get in any auto-rickshaw and ${job}. Pick up passengers and drive them to real places across Nanded. Fast, clean rides earn tips and streak bonuses.`, `${g.save.data.stats.fares} fares so far`],
+      ['BHOOKH EXPRESS', 'डिलिव्हरी', `On any bike or scooty ${job}. Collect orders from restaurants and deliver them while they are still hot.`, `${g.save.data.stats.deliveries} deliveries`],
       ...j.races.map(r => [r.name.toUpperCase(), 'STREET RACE', `Drive into the orange marker to start. ₹${r.reward} for first place.`, rec[r.id] ? `Best: ${rec[r.id].toFixed(1)}s` : 'Not raced yet', r]),
       ['RANG GARAGE', 'रंग गॅरेज', g.save.data.garage ? "Drive into Anna's garage at Workshop Corner while wanted: new colour, repairs, stars cleared. ₹250." : 'Unlocks during the story.', ''],
-      ['ROADSIDE SNACKS', 'चहा · वडा पाव', 'Walk up to a tea stall or handcart and press <kbd>Q</kbd>: chai, vada pav, misal… They heal you and give you a burst of energy.', ''],
+      ['ROADSIDE SNACKS', 'चहा · वडा पाव', `Walk up to a tea stall or handcart and ${pick(g, { keyboard: `press ${key(g, 'action')}`, gamepad: `press ${key(g, 'action')}`, touch: 'tap the button that appears' })}: chai, vada pav, misal… They heal you and give you a burst of energy.`, ''],
     ];
     $('jobs-list').innerHTML = cards.map(([t, sub, p, meta, race], i) => `<div class="card"><span class="sub">${sub}</span><h3>${t}</h3><p>${p}</p>${meta ? `<p class="small">${meta}</p>` : ''}${race ? `<button type="button" data-race="${i}">Set waypoint</button>` : ''}</div>`).join('');
     for (const b of $('jobs-list').querySelectorAll('[data-race]')) b.addEventListener('click', () => { const r = cards[Number(b.dataset.race)][4]; this.setWaypoint(r.start.x, r.start.z, r.name); this.show('map'); });

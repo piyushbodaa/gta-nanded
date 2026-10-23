@@ -6,6 +6,7 @@ import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 import { HOSPITAL, POLICE_STATION } from './story.js';
 import { DynamicDriver } from '../actors/traffic.js';
 import { driveHunters } from './missions.js';
+import { drivingHelp, vehicleKeys } from '../ui/controls.js';
 
 const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
 
@@ -76,7 +77,7 @@ export function installRules(g) {
     g.audio.sfx('door');
     if (!g.save.data.seenDriveHelp && !g.missions.active) {
       g.save.data.seenDriveHelp = true;
-      g.hud.help('<kbd>W</kbd> gas · <kbd>S</kbd> brake/reverse · <kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio · <kbd>F</kbd> get out', 7);
+      g.hud.help(`${drivingHelp(g)}<br>${vehicleKeys(g)}`, 8);
     }
   };
 
@@ -173,6 +174,7 @@ export function installRules(g) {
     // Radio, camera, map, photo.
     const inp = g.input;
     if (inp.pressed('radio') && P.vehicle) { const st = g.audio.radio?.cycle(); if (st) g.hud.radioText(st.name, st.tag, '#ffd27a'); }
+    if (inp.pressed('camera')) g.camera.cycleView();
     if (inp.pressed('photo')) g.takePhoto(null);
     if (inp.pressed('action') && P.state === 'foot') { const a = g.contextAction(); a?.run?.(); }
     saveT += dt;
@@ -198,6 +200,14 @@ export function installRules(g) {
     v.kinematic = true;
     return msg;
   }
+  /** Run a cheat by name (Settings has a box for it on phones): its message, null if it had no effect, '' if unknown. */
+  g.cheat = code => {
+    const run = CHEATS[String(code).toUpperCase().replace(/[^A-Z]/g, '')];
+    if (!run) return '';
+    const msg = run();
+    if (msg) g.audio.sfx('checkpoint');
+    return msg ?? null;
+  };
   let typed = '';
   addEventListener('keydown', e => {
     if (!g.started || g.paused || e.key.length !== 1) return;
@@ -205,8 +215,8 @@ export function installRules(g) {
     for (const code in CHEATS) {
       if (!typed.endsWith(code)) continue;
       typed = '';
-      const msg = CHEATS[code]();
-      if (msg) { g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5); g.audio.sfx('checkpoint'); }
+      const msg = g.cheat(code);
+      if (msg) g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5);
     }
   });
 
