@@ -43,7 +43,7 @@ export class Effects {
     // --- skid marks: ring buffer of dark quads.
     const SK = 600;
     this.skids = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -3 }), SK);
-    this.skids.count = 0; this.skids.frustumCulled = false; this.skidI = 0; this.skidN = SK;
+    this.skids.count = 0; this.skids.visible = false; this.skids.frustumCulled = false; this.skidI = 0; this.skidN = SK;
     this.skids.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.skids);
     this.lastSkid = new Map();
@@ -109,6 +109,7 @@ export class Effects {
     this.skids.setMatrixAt(this.skidI, m);
     this.skidI = (this.skidI + 1) % this.skidN;
     this.skids.count = Math.min(this.skidN, this.skids.count + 1);
+    this.skids.visible = true;
     this.skids.instanceMatrix.needsUpdate = true;
     void key;
   }
@@ -203,6 +204,7 @@ export class Markers {
       }
     }
     this.column.count = c; this.ring.count = c; this.arrow.count = a;
+    this.column.visible = this.ring.visible = c > 0; this.arrow.visible = a > 0; // no empty instanced draws
     for (const o of [this.column, this.ring, this.arrow]) { o.instanceMatrix.needsUpdate = true; if (o.instanceColor) o.instanceColor.needsUpdate = true; }
   }
 }

@@ -156,6 +156,6 @@ export class Animals {
       _m.compose(_v.set(0, bodyY + (cow ? 0.3 : 0.2), cow ? -1.12 : -0.72), _q, _s.set(1, cow ? 1 : 0.55, 1));
       emit('tail', _m.premultiply(_a), a.color);
     }
-    for (const k in P) { P[k].count = Math.min(this.n[k], P[k].instanceMatrix.count); P[k].instanceMatrix.needsUpdate = true; if (P[k].instanceColor) P[k].instanceColor.needsUpdate = true; }
+    for (const k in P) { P[k].count = Math.min(this.n[k], P[k].instanceMatrix.count); P[k].visible = P[k].count > 0; P[k].instanceMatrix.needsUpdate = true; if (P[k].instanceColor) P[k].instanceColor.needsUpdate = true; }
   }
 }

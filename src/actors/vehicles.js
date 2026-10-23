@@ -267,6 +267,8 @@ export class Vehicles {
     this.wheels.count = this.wheelsN = wn; this.wheels.instanceMatrix.needsUpdate = true;
     this.blobs.count = bn; this.blobs.instanceMatrix.needsUpdate = true;
     this.beams.count = hn; this.beams.instanceMatrix.needsUpdate = true;
+    // Nothing to draw: skip the draw call (WebGL warns about every empty instanced draw).
+    this.wheels.visible = wn > 0; this.blobs.visible = bn > 0; this.beams.visible = hn > 0;
     this.beams.material.opacity = clamp(night * 0.55, 0, 0.55);
     this.beams.visible = hn > 0 && night > 0.05;
   }
