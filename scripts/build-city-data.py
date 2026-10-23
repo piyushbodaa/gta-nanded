@@ -64,10 +64,26 @@ def node(k):
 
 
 widths = {'trunk': 12, 'primary': 10, 'secondary': 9, 'tertiary': 8, 'unclassified': 6, 'residential': 4.8}
+
+
+def oneway(tags):
+    """1: traffic flows only in the way's node order, -1: only against it, 0: both ways.
+    Dual carriageways are mapped as two one-way ways, and roundabouts are one-way too."""
+    value = tags.get('oneway', '')
+    if value in ('yes', 'true', '1'):
+        return 1
+    if value in ('-1', 'reverse'):
+        return -1
+    if value != 'no' and tags.get('junction') in ('roundabout', 'circular'):
+        return 1
+    return 0
+
+
 seen_edges = set()
 for way in ways:
     tags = way['tags']
     kind = tags['highway']
+    flow = oneway(tags)
     pieces, current = [], []
     for p in way['geometry']:
         if inside(p):
@@ -88,9 +104,12 @@ for way in ways:
                 if a == b or edge_key in seen_edges:
                     continue
                 seen_edges.add(edge_key)
-                edges.append({'a': a, 'b': b, 'width': widths.get(kind.replace('_link', ''), 8),
-                              'type': kind, 'name': tags.get('name', ''),
-                              'bridge': tags.get('bridge') == 'yes'})
+                edge = {'a': a, 'b': b, 'width': widths.get(kind.replace('_link', ''), 8),
+                        'type': kind, 'name': tags.get('name', ''),
+                        'bridge': tags.get('bridge') == 'yes'}
+                if flow:
+                    edge['oneway'] = flow
+                edges.append(edge)
 
 adj = defaultdict(list)
 for e in edges:
@@ -144,8 +163,6 @@ network = {'nodes': nodes, 'edges': edges, 'rivers': water_or_rails('waterway'),
            'source': 'https://www.openstreetmap.org/copyright', 'retrieved': '2026-10-16',
            'license': 'ODbL-1.0', 'omittedDisconnectedNodes': sum(len(c) for c in components) - len(keep)}
 (OUT / 'network.json').write_text(json.dumps(network, ensure_ascii=False, separators=(',', ':')) + '\n')
-(ROOT / 'public/data').mkdir(exist_ok=True)
-(ROOT / 'public/data/network.json').write_text(json.dumps(network, ensure_ascii=False, separators=(',', ':')) + '\n')
 print(f'Network: {len(nodes)} junction/bend nodes, {len(edges)} edges; {len(components)} source components')
 
 overrides_path = ROOT / 'research/placement-overrides.json'

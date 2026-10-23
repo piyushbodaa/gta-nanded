@@ -10,6 +10,8 @@ const MAJOR_ONLY = new Set(['bus', 'truck']);
 const CRUISE = [17, 15, 14, 12.5, 10.5, 8.5]; // by road class, m/s
 const TYPE_CAP = { auto: 13, tractor: 8.5, bus: 13, truck: 14, tempo: 13, bike: 16, scooter: 13 };
 const SIGNAL_CYCLE = 22;
+// Junctions joined by a road this short are one crossing (a street over both carriageways of a divided road).
+const CROSSING_LINK = 16;
 
 export class Traffic {
   constructor(game) {
@@ -23,31 +25,66 @@ export class Traffic {
     this.signals = this._findSignals();
   }
 
-  /** Big chowks (4+ ways with a main road) get signals. */
+  /**
+   * Signals stand at the chowks where main roads cross. A crossing is the junctions
+   * joined by short links (a street over both carriageways of a divided road counts
+   * once), with main roads on two different axes; all its junctions share one cycle,
+   * so the lights agree. Maps each of those junctions to { offset, axis, junctions }.
+   */
   _findSignals() {
-    const net = this.net, set = new Map();
-    for (let j = 0; j < net.junctionCount; j++) {
-      const roads = net.jRoads[j];
-      if (roads.length < 4) continue;
-      if (!roads.some(r => net.type[r] <= 2)) continue;
-      set.set(j, { offset: (j * 7) % SIGNAL_CYCLE });
+    const net = this.net, J = net.junctionCount, set = new Map(), p = {};
+    const major = j => net.jRoads[j].length >= 3 && net.jRoads[j].some(r => net.type[r] <= 2);
+    const parent = Int32Array.from({ length: J }, (_, i) => i);
+    const find = i => { while (parent[i] !== i) i = parent[i] = parent[parent[i]]; return i; };
+    for (let r = 0; r < net.count; r++) {
+      const a = net.ra[r], b = net.rb[r];
+      if (a !== b && net.length[r] < CROSSING_LINK && major(a) && major(b)) parent[find(a)] = find(b);
+    }
+    const groups = new Map();
+    for (let j = 0; j < J; j++) {
+      if (!major(j)) continue;
+      const c = find(j);
+      if (!groups.has(c)) groups.set(c, []);
+      groups.get(c).push(j);
+    }
+    for (const junctions of groups.values()) {
+      let ways = 0;
+      const axes = [];
+      for (const j of junctions) for (const r of net.jRoads[j]) {
+        if (this._link(junctions, r)) continue;
+        ways++;
+        if (net.type[r] > 2) continue;
+        // The main road's bearing as it leaves the crossing, folded to an axis (0..PI).
+        net.pointAt(r, net.ra[r] === j ? Math.min(12, net.length[r]) : Math.max(0, net.length[r] - 12), p);
+        const b = ((Math.atan2(p.dx, p.dz) % Math.PI) + Math.PI) % Math.PI;
+        if (!axes.some(a => { const d = Math.abs(a - b); return Math.min(d, Math.PI - d) < 0.6; })) axes.push(b);
+      }
+      if (ways < 3 || axes.length < 2) continue;
+      const sig = { offset: (junctions[0] * 7) % SIGNAL_CYCLE, axis: axes[0], junctions };
+      for (const j of junctions) set.set(j, sig);
     }
     return set;
   }
 
-  /** Red for a road arriving at junction j at time t? Two phases by street bearing. */
-  isRed(j, road, t) {
+  /** A short road between two junctions of the same crossing: whoever is on it is already crossing. */
+  _link(junctions, road) {
+    const net = this.net;
+    return net.length[road] < CROSSING_LINK && junctions.includes(net.ra[road]) && junctions.includes(net.rb[road]);
+  }
+
+  /** The light for a road arriving at junction j at time t: 'green', 'amber' or 'red'. Two phases, by axis. */
+  signalState(j, road, t) {
     const sig = this.signals.get(j);
-    if (!sig) return false;
+    if (!sig || this._link(sig.junctions, road)) return 'green';
     const net = this.net, p = this._p;
     net.pointAt(road, net.ra[road] === j ? 0 : net.length[road], p);
-    const ang = ((Math.atan2(p.dx, p.dz) % Math.PI) + Math.PI) % Math.PI;
-    const phase = ang < Math.PI / 4 || ang > (3 * Math.PI) / 4 ? 0 : 1;
-    const c = (t + sig.offset) % SIGNAL_CYCLE;
-    const green = phase === 0 ? c < SIGNAL_CYCLE / 2 - 2 : c >= SIGNAL_CYCLE / 2 && c < SIGNAL_CYCLE - 2;
-    return !green;
+    let d = Math.abs((((Math.atan2(p.dx, p.dz) - sig.axis) % Math.PI) + Math.PI) % Math.PI);
+    d = Math.min(d, Math.PI - d);
+    // Phase 1 runs half a cycle after phase 0: green, two seconds of amber, then red.
+    const half = SIGNAL_CYCLE / 2, c = (t + sig.offset + (d < Math.PI / 4 ? 0 : half)) % SIGNAL_CYCLE;
+    return c < half - 2 ? 'green' : c < half ? 'amber' : 'red';
   }
-  signalState(j, road, t) { return this.isRed(j, road, t) ? 'red' : 'green'; }
+  isRed(j, road, t) { return this.signalState(j, road, t) !== 'green'; }
 
   update(dt) {
     const g = this.game, focus = g.player.pos;
@@ -84,12 +121,12 @@ export class Traffic {
     // Choose a type that suits the street.
     let type = pickWeighted(MIX, r);
     if (MAJOR_ONLY.has(type) && net.type[road] > 3) type = 'hatch';
-    const dir = r.chance(0.5) ? 1 : -1;
+    const dir = net.oneway[road] || (r.chance(0.5) ? 1 : -1);
     const len = net.length[road];
     const s = clamp(dir > 0 ? n.s : len - n.s, net.trimStart(road) + 1, len - net.trimEnd(road) - 1);
     if (!(s > 0 && s < len)) return false;
     const lane = net.lanes[road] > 1 && r.chance(0.5) ? 1 : 0;
-    const p = net.lanePoint(road, dir, s, net.laneOffset(road, lane), this._p);
+    const p = net.lanePoint(road, dir, s, net.laneOffset(road, lane, dir > 0 ? s : len - s), this._p);
     // Keep clear of everything else.
     for (const o of g.vehicles.list) if (dist(o.x, o.z, p.x, p.z) < 9) return false;
     if (dist(p.x, p.z, focus.x, focus.z) < minD * 0.8) return false;
@@ -170,7 +207,7 @@ export class Traffic {
       if (!this._chooseTurn(v, j)) { a.s = end; a.speed = 0; }
       else return;
     }
-    const off = net.laneOffset(a.road, a.lane) + (a.weave || 0);
+    const off = net.laneOffset(a.road, a.lane, a.dir > 0 ? a.s : len - a.s) + (a.weave || 0);
     net.lanePoint(a.road, a.dir, a.s, off, p);
     this._place(v, p.x, p.z, p.heading, dt);
   }
@@ -194,25 +231,26 @@ export class Traffic {
     const net = this.net, a = v.ai;
     const roads = net.jRoads[j];
     const p = this._p, q = this._q;
-    net.lanePoint(a.road, a.dir, net.length[a.road] - net.trimEnd(a.road), net.laneOffset(a.road, a.lane), p);
+    const sEnd = net.length[a.road] - net.trimEnd(a.road);
+    net.lanePoint(a.road, a.dir, sEnd, net.laneOffset(a.road, a.lane, a.dir > 0 ? sEnd : net.length[a.road] - sEnd), p);
     const inHeading = p.heading;
-    let best = null, bestScore = -Infinity;
+    let best = null, bestScore = -Infinity, hairpin = null, hairpinTurn = Infinity;
     const r = rng(hash2(v.id, Math.floor(this.game.time * 3)));
     for (const road of roads) {
       if (road === a.road && roads.length > 1) continue;
       if (net.bridge[road] && net.width[road] < 5) continue;
       const dir = net.ra[road] === j ? 1 : -1;
+      if (!net.canTravel(road, dir)) continue; // no entry: one-way the other way
       if (MAJOR_ONLY.has(v.type) && net.type[road] > 3 && roads.length > 1) continue;
-      net.lanePoint(road, dir, net.trimStart(road), net.laneOffset(road, 0), q);
+      net.lanePoint(road, dir, net.trimStart(road), net.laneOffset(road, 0, dir > 0 ? net.trimStart(road) : net.length[road] - net.trimStart(road)), q);
       const turn = Math.abs(wrapAngle(q.heading - inHeading));
+      if (turn < hairpinTurn) { hairpinTurn = turn; hairpin = { road, dir }; }
       if (turn > 2.6 && roads.length > 1) continue;
       const score = -turn * 1.2 + (5 - net.type[road]) * 0.25 + r() * 1.6;
       if (score > bestScore) { bestScore = score; best = { road, dir }; }
     }
-    if (!best) {
-      // Dead end: turn around.
-      best = { road: a.road, dir: -a.dir };
-    }
+    // Only hairpins on: take the gentlest legal one. A dead end: turn around.
+    if (!best) best = hairpin || { road: a.road, dir: -a.dir };
     // Junction etiquette: wait while someone else is crossing (but not forever).
     if (net.jRoads[j].length >= 3 && a.blocked < 3) {
       const R = net.jRadius[j] + 2;
@@ -223,7 +261,7 @@ export class Traffic {
     }
     const lane = net.lanes[best.road] > 1 ? a.lane : 0;
     const s0 = net.trimStart(best.road);
-    net.lanePoint(best.road, best.dir, s0, net.laneOffset(best.road, lane), q);
+    net.lanePoint(best.road, best.dir, s0, net.laneOffset(best.road, lane, best.dir > 0 ? s0 : net.length[best.road] - s0), q);
     const x0 = p.x, z0 = p.z, x2 = q.x, z2 = q.z;
     // Control point where the two lane lines would meet (fall back to the midpoint).
     const d1x = Math.sin(inHeading), d1z = Math.cos(inHeading), d2x = Math.sin(q.heading), d2z = Math.cos(q.heading);
@@ -247,8 +285,8 @@ export class Traffic {
     if (v.stunned > 0 || speedOf(v) > 0.6 || v.wrecked) return;
     const n = this.net.nearest(v.x, v.z, 6, this._q);
     if (!n) { v.ai = null; v.role = 'abandoned'; return; }
-    // Rejoin: snap to the nearest lane, facing the way the car points.
-    const dir = Math.cos(v.heading - Math.atan2(n.dx, n.dz)) >= 0 ? 1 : -1;
+    // Rejoin: snap to the nearest lane, facing the way the car points (or the only way a one-way road allows).
+    const dir = this.net.oneway[n.road] || (Math.cos(v.heading - Math.atan2(n.dx, n.dz)) >= 0 ? 1 : -1);
     a.road = n.road; a.dir = dir; a.s = dir > 0 ? n.s : this.net.length[n.road] - n.s; a.turn = null; a.speed = 0; a.lane = 0;
     v.kinematic = true; v.vx = v.vz = 0; v.w = 0;
   }
@@ -435,11 +473,13 @@ export class Parked {
       let type = pickWeighted(PARKED_MIX, r);
       const two = type === 'bike' || type === 'scooter';
       if (!two && w < 8) type = r.chance(0.5) ? 'scooter' : 'bike';
-      const side = r.chance(0.5) ? 1 : -1;
+      // Either kerb, but never on the median of a divided road.
+      const side = net.kerbSide(road) || (r.chance(0.5) ? 1 : -1);
       const off = type === 'bike' || type === 'scooter' ? w / 2 + 0.55 : w / 2 - 0.95;
       const x = p.x + p.dz * off * side, z = p.z - p.dx * off * side;
-      // Two-wheelers park nose-in at an angle; cars along the kerb.
-      const along = Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI);
+      // Two-wheelers park nose-in at an angle; cars along the kerb, facing the traffic's way.
+      const flow = net.oneway[road] || side;
+      const along = Math.atan2(p.dx, p.dz) + (flow > 0 ? 0 : Math.PI);
       const heading = type === 'bike' || type === 'scooter' ? along + side * 1.2 : along;
       if (g.vehicles.list.some(o => dist(o.x, o.z, x, z) < 4)) return;
       if (g.colliders.blocked(x, z, 0.5)) return;

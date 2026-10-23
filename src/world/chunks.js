@@ -7,6 +7,7 @@ import { Geo, setBounds } from './geo.js';
 import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
+import { MEDIAN_W } from './roadnet.js';
 import { buildPlace } from './landmarks.js';
 import { FoliageGeo, LEAF } from './foliage.js';
 
@@ -257,19 +258,27 @@ function buildRoads(ctx, data) {
       const start = net.ptStart[road], end = net.ptStart[road + 1] - 1;
       const off0 = offsetAt(net, road, i, s0 > net.cum[i] + 1e-3, start, end, s0, p);
       const off1 = offsetAt(net, road, i + 1, s1 < net.cum[i + 1] - 1e-3, start, end, s1, q);
+      // Edges left and right of a->b at each end: a carriageway of a divided road stops at its median.
+      const e0 = [net.edgeAt(road, s0, 1), net.edgeAt(road, s0, -1)], e1 = [net.edgeAt(road, s1, 1), net.edgeAt(road, s1, -1)];
       g.setTint(0xffffff, road & 255).setTile(tile[0], tile[1], 1, 3);
-      const a = g.v(p.x + off0.nx * hw, y, p.z + off0.nz * hw, 0, s0 / FLOOR);
-      const b = g.v(p.x - off0.nx * hw, y, p.z - off0.nz * hw, 1, s0 / FLOOR);
-      const c = g.v(q.x - off1.nx * hw, y, q.z - off1.nz * hw, 1, s1 / FLOOR);
-      const d = g.v(q.x + off1.nx * hw, y, q.z + off1.nz * hw, 0, s1 / FLOOR);
+      const a = g.v(p.x + off0.nx * e0[0], y, p.z + off0.nz * e0[0], 0, s0 / FLOOR);
+      const b = g.v(p.x - off0.nx * e0[1], y, p.z - off0.nz * e0[1], 1, s0 / FLOOR);
+      const c = g.v(q.x - off1.nx * e1[1], y, q.z - off1.nz * e1[1], 1, s1 / FLOOR);
+      const d = g.v(q.x + off1.nx * e1[0], y, q.z + off1.nz * e1[0], 0, s1 / FLOOR);
       // a,b at s0 (left, right), c,d at s1 (right, left): this order faces up.
       g.quad(a, b, c, d);
-      if (net.bridge[road]) buildBridgeSpan(ctx, p, q, off0, off1, hw);
-      else if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw);
-      if (w >= 11.5 && !net.bridge[road]) buildMedian(ctx, p, q, off0, off1);
+      // The median side of a divided road (+1 left of a->b, -1 right), where the other carriageway runs alongside.
+      const ms = net.oneway[road] ? -net.oneway[road] : 0, mk = ms > 0 ? 0 : 1;
+      const divided = ms !== 0 && (e0[mk] < hw - 0.05 || e1[mk] < hw - 0.05);
+      if (net.bridge[road]) buildBridgeSpan(ctx, p, q, off0, off1, e0, e1, divided ? ms : 0);
+      else {
+        if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1]);
+        if (divided) buildMedianHalf(ctx, p, q, off0, off1, ms, e0[mk], e1[mk]);
+        else if (w >= 11.5 && !ms) buildMedian(ctx, p, q, off0, off1);
+      }
       // Zebra crossing just before a big junction.
-      if (w >= 8 && s1 >= len - net.trimEnd(road) - 0.01 && net.jRoads[net.rb[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, q, off1, hw, -1, s1);
-      if (w >= 8 && s0 <= net.trimStart(road) + 0.01 && net.jRoads[net.ra[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, p, off0, hw, 1, s0);
+      if (w >= 8 && s1 >= len - net.trimEnd(road) - 0.01 && net.jRoads[net.rb[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, q, off1, e1, -1, s1);
+      if (w >= 8 && s0 <= net.trimStart(road) + 0.01 && net.jRoads[net.ra[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, p, off0, e0, 1, s0);
     }
   }
   if (data.junctions) for (const j of data.junctions) buildJunction(ctx, j);
@@ -297,7 +306,7 @@ function offsetAt(net, road, k, clipped, start, end, s, out) {
   return { nx, nz };
 }
 
-function zebra(ctx, p, off, hw, dir, s) {
+function zebra(ctx, p, off, edges, dir, s) {
   const { g } = ctx;
   // A 3 m band across the road, set back from the junction edge.
   const fx = -off.nz, fz = off.nx; // forward along the road (right of the left normal is forward? left=(fz,-fx) => f=(-nz, nx))
@@ -309,17 +318,17 @@ function zebra(ctx, p, off, hw, dir, s) {
   const bx = ax + ux * depth, bz = az + uz * depth;
   g.setTint(0xffffff, 0).setTile(TILE.ZEBRA[0], TILE.ZEBRA[1], 1, 2);
   const y = PAD_Y + 0.004;
-  const w = hw * 0.96;
-  const v0 = g.v(ax + nx * w, y, az + nz * w, 0, 0), v1 = g.v(ax - nx * w, y, az - nz * w, 1, 0);
-  const v2 = g.v(bx - nx * w, y, bz - nz * w, 1, 1), v3 = g.v(bx + nx * w, y, bz + nz * w, 0, 1);
+  const wl = edges[0] * 0.96, wr = edges[1] * 0.96;
+  const v0 = g.v(ax + nx * wl, y, az + nz * wl, 0, 0), v1 = g.v(ax - nx * wr, y, az - nz * wr, 1, 0);
+  const v2 = g.v(bx - nx * wr, y, bz - nz * wr, 1, 1), v3 = g.v(bx + nx * wl, y, bz + nz * wl, 0, 1);
   // Facing up regardless of dir.
   if (dir > 0) g.quad(v0, v1, v2, v3); else g.quad(v0, v3, v2, v1);
 }
 
-function buildFootpaths(ctx, p, q, o0, o1, hw) {
+function buildFootpaths(ctx, p, q, o0, o1, hw, sides) {
   const { g } = ctx;
   const width = FOOTPATH_W;
-  for (const side of [1, -1]) {
+  for (const side of sides) {
     const i0 = hw * side, i1 = (hw + width) * side;
     const ax = p.x + o0.nx * i0, az = p.z + o0.nz * i0, bx = q.x + o1.nx * i0, bz = q.z + o1.nz * i0;
     const cx = q.x + o1.nx * i1, cz = q.z + o1.nz * i1, dx = p.x + o0.nx * i1, dz = p.z + o0.nz * i1;
@@ -349,21 +358,46 @@ function buildMedian(ctx, p, q, o0, o1) {
   g.quad(a, d, c, b);
 }
 
-function buildBridgeSpan(ctx, p, q, o0, o1, hw) {
+/**
+ * This carriageway's half of a divided road's median, on `side` (+1 left of a->b, -1 right)
+ * from its edge (e0, e1 at each end) to the middle: a kerb facing the traffic and a planted
+ * top. The other carriageway builds the other half.
+ */
+function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1) {
+  const { g } = ctx;
+  const h = 0.32, f0 = (e0 + MEDIAN_W / 2 + 0.05) * side, f1 = (e1 + MEDIAN_W / 2 + 0.05) * side;
+  const ax = p.x + o0.nx * e0 * side, az = p.z + o0.nz * e0 * side, bx = q.x + o1.nx * e1 * side, bz = q.z + o1.nz * e1 * side;
+  const cx = q.x + o1.nx * f1, cz = q.z + o1.nz * f1, dx = p.x + o0.nx * f0, dz = p.z + o0.nz * f0;
+  const len = Math.hypot(bx - ax, bz - az);
+  g.setTint(0xffffff, 0).setTile(TILE.KERB[0], TILE.KERB[1], 1, 1);
+  if (side > 0) g.wall(ax, az, bx, bz, 0.03, h, 0, len / 2.4, 0, 0.3); else g.wall(bx, bz, ax, az, 0.03, h, 0, len / 2.4, 0, 0.3);
+  g.color(0x8c9a5a, 0);
+  const a = g.v(ax, h, az), b = g.v(bx, h, bz), c = g.v(cx, h, cz), d = g.v(dx, h, dz);
+  if (side > 0) g.quad(a, b, c, d); else g.quad(a, d, c, b);
+}
+
+/**
+ * Deck, parapets and piers under a bridge segment. e0/e1: the deck's edges [left, right]
+ * at each end; `median` is the side (+1 left, -1 right) where the other carriageway of a
+ * divided bridge runs alongside, whose parapet then stands on the deck edge between the two.
+ */
+function buildBridgeSpan(ctx, p, q, o0, o1, e0, e1, median) {
   const { g, city } = ctx;
   const ax = p.x, az = p.z, bx = q.x, bz = q.z;
   const len = Math.hypot(bx - ax, bz - az);
   if (len < 0.1) return;
   const nx0 = o0.nx, nz0 = o0.nz, nx1 = o1.nx, nz1 = o1.nz;
+  const hw = Math.max(e0[0], e0[1], e1[0], e1[1]);
   // Deck sides and underside.
   g.color(0xb9b3a6, 0);
   for (const side of [1, -1]) {
-    const e = hw + 0.35;
-    const x0 = ax + nx0 * e * side, z0 = az + nz0 * e * side, x1 = bx + nx1 * e * side, z1 = bz + nz1 * e * side;
+    const k = side > 0 ? 0 : 1, inset = side === median ? 0.35 : 0;
+    const eA = e0[k] + 0.35 - inset, eB = e1[k] + 0.35 - inset;
+    const x0 = ax + nx0 * eA * side, z0 = az + nz0 * eA * side, x1 = bx + nx1 * eB * side, z1 = bz + nz1 * eB * side;
     if (side > 0) g.wall(x1, z1, x0, z0, -1.1, 1.0, 0, 1, 0, 1); else g.wall(x0, z0, x1, z1, -1.1, 1.0, 0, 1, 0, 1);
     // Parapet top cap and inner face.
-    const ie = hw + 0.05;
-    const ix0 = ax + nx0 * ie * side, iz0 = az + nz0 * ie * side, ix1 = bx + nx1 * ie * side, iz1 = bz + nz1 * ie * side;
+    const iA = e0[k] + 0.05 - inset, iB = e1[k] + 0.05 - inset;
+    const ix0 = ax + nx0 * iA * side, iz0 = az + nz0 * iA * side, ix1 = bx + nx1 * iB * side, iz1 = bz + nz1 * iB * side;
     if (side > 0) g.wall(ix0, iz0, ix1, iz1, 0.05, 1.0, 0, 1, 0, 1); else g.wall(ix1, iz1, ix0, iz0, 0.05, 1.0, 0, 1, 0, 1);
     g.color(0xd8d2c4, 0);
     const a = g.v(ix0, 1.0, iz0), b = g.v(ix1, 1.0, iz1), c = g.v(x1, 1.0, z1), d = g.v(x0, 1.0, z0);
@@ -371,9 +405,10 @@ function buildBridgeSpan(ctx, p, q, o0, o1, hw) {
     g.color(0xb9b3a6, 0);
   }
   // Underside slab (facing down) so the bridge reads from the ghats.
-  const e = hw + 0.35;
-  const a = g.v(ax + nx0 * e, -1.1, az + nz0 * e), b = g.v(bx + nx1 * e, -1.1, bz + nz1 * e);
-  const c = g.v(bx - nx1 * e, -1.1, bz - nz1 * e), d = g.v(ax - nx0 * e, -1.1, az - nz0 * e);
+  const out = side => (side === median ? 0 : 0.35);
+  const l0 = e0[0] + out(1), l1 = e1[0] + out(1), r0 = e0[1] + out(-1), r1 = e1[1] + out(-1);
+  const a = g.v(ax + nx0 * l0, -1.1, az + nz0 * l0), b = g.v(bx + nx1 * l1, -1.1, bz + nz1 * l1);
+  const c = g.v(bx - nx1 * r1, -1.1, bz - nz1 * r1), d = g.v(ax - nx0 * r0, -1.1, az - nz0 * r0);
   g.quad(a, b, c, d);
   // Piers every ~18 m where the riverbed is below.
   const steps = Math.floor(len / 18);
@@ -398,9 +433,9 @@ function buildJunction(ctx, j) {
     const atA = net.ra[r] === j;
     const s = atA ? net.trimStart(r) : net.length[r] - net.trimEnd(r);
     net.pointAt(r, s, p);
-    const hw = net.width[r] / 2 + 0.15;
+    const el = net.edgeAt(r, s, 1) + 0.15, er = net.edgeAt(r, s, -1) + 0.15;
     const nx = p.dz, nz = -p.dx;
-    pts.push([p.x + nx * hw, p.z + nz * hw], [p.x - nx * hw, p.z - nz * hw]);
+    pts.push([p.x + nx * el, p.z + nz * el], [p.x - nx * er, p.z - nz * er]);
     if (net.ra[r] === j && net.rb[r] === j) break;
   }
   pts.sort((a, b) => Math.atan2(a[1] - jz, a[0] - jx) - Math.atan2(b[1] - jz, b[0] - jx));

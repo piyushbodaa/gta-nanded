@@ -194,7 +194,7 @@ export function installRules(g) {
   function spawnNear(type, msg) {
     const P = g.player, pos = P.pos, n = g.net.nearest(pos.x + Math.sin(P.heading) * 8, pos.z + Math.cos(P.heading) * 8, 40, {});
     if (!n) return null;
-    const v = g.vehicles.spawn(type, n.x, n.z, Math.atan2(n.dx, n.dz), { role: 'parked', driver: false });
+    const v = g.vehicles.spawn(type, n.x, n.z, Math.atan2(n.dx, n.dz) + (g.net.oneway[n.road] < 0 ? Math.PI : 0), { role: 'parked', driver: false });
     v.kinematic = true;
     return msg;
   }
@@ -245,7 +245,8 @@ export function installRules(g) {
     if (fine) g.addCash(-fine);
     P.health = P.maxHealth;
     const n = g.net.nearest(at.x, at.z, 50, {});
-    P.teleport(n ? n.x + n.dz * (g.net.width[n.road] / 2 + 1) : at.x, n ? n.z - n.dx * (g.net.width[n.road] / 2 + 1) : at.z, n ? Math.atan2(n.dx, n.dz) : 0);
+    const off = n ? (g.net.width[n.road] / 2 + 1) * (g.net.kerbSide(n.road) || 1) : 0;
+    P.teleport(n ? n.x + n.dz * off : at.x, n ? n.z - n.dx * off : at.z, n ? Math.atan2(n.dx, n.dz) : 0);
     g.respawning = false;
     g.hud.help(msg, 5);
     g.save.flush();

@@ -5,6 +5,10 @@ import { SpatialGrid, MinHeap, pointSegDist2, clamp } from '../core/math.js';
 export const ROAD_TYPES = ['trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential'];
 // Route cost per unit length: drivers prefer the big roads, as they do.
 const TYPE_COST = [1, 1, 1.02, 1.06, 1.18, 1.3];
+// Going the wrong way down a one-way road costs this much more: only when there is no other way.
+const WRONG_WAY = 12;
+// The kerbed strip between the two carriageways of a divided road.
+export const MEDIAN_W = 1.2;
 
 export class RoadNet {
   constructor(world) {
@@ -61,9 +65,11 @@ export class RoadNet {
       for (const r of list) w = Math.max(w, this.width[r]);
       this.jRadius[j] = w * 0.5 + 1.2;
     }
-    // Lanes: one each way on most streets, two each way on the widest.
-    this.lanes = new Uint8Array(nr);
-    for (let i = 0; i < nr; i++) this.lanes[i] = this.width[i] >= 11 ? 2 : 1;
+    // One-way roads (each carriageway of a dual carriageway, roundabouts, one-way
+    // streets): 1 when traffic may only go from junction a to b, -1 only from b to a.
+    this.oneway = new Int8Array(nr);
+    for (const r of world.oneway?.forward || []) this.oneway[r] = 1;
+    for (const r of world.oneway?.backward || []) this.oneway[r] = -1;
 
     this.grid = new SpatialGrid(24);
     for (let r = 0; r < nr; r++) {
@@ -77,15 +83,107 @@ export class RoadNet {
     this.ptRoad = new Int32Array(total);
     for (let r = 0; r < nr; r++) for (let i = this.ptStart[r]; i < this.ptStart[r + 1]; i++) this.ptRoad[i] = r;
     this._t = [0];
+    this._pairCarriageways();
+
+    // Lanes: one each way on most streets, two each way on the widest; a one-way
+    // carriageway runs two lanes the same way once it is wide enough.
+    this.lanes = new Uint8Array(nr);
+    for (let i = 0; i < nr; i++) {
+      if (!this.oneway[i]) { this.lanes[i] = this.width[i] >= 11 ? 2 : 1; continue; }
+      this.lanes[i] = this.width[i] / 2 + this.innerAt(i, this.length[i] / 2) >= 6.4 ? 2 : 1;
+    }
+  }
+
+  /**
+   * A dual carriageway is mapped as two one-way roads only a few metres apart (the
+   * map is at half scale, the road widths are not), so drawn at full width their
+   * surfaces would overlap. Each carriageway keeps its kerb (left) edge and stops at
+   * a median halfway to the other one. inner[k] is the distance from the centre line
+   * to that median-side edge at polyline point k (half the width where there is no
+   * other carriageway alongside), and paired[r] marks the roads that have one.
+   */
+  _pairCarriageways() {
+    const n = this.px.length, t = this._t;
+    this.inner = new Float32Array(n);
+    this.paired = new Uint8Array(this.count);
+    const found = new Uint8Array(n);
+    for (let r = 0; r < this.count; r++) {
+      const hw = this.width[r] / 2, a = this.ptStart[r], b = this.ptStart[r + 1], ow = this.oneway[r];
+      this.inner.fill(hw, a, b);
+      if (!ow) continue;
+      let hits = 0;
+      for (let k = a; k < b; k++) {
+        const k0 = Math.max(a, k - 1), k1 = Math.min(b - 1, k + 1);
+        let fx = (this.px[k1] - this.px[k0]) * ow, fz = (this.pz[k1] - this.pz[k0]) * ow;
+        const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l;
+        // The nearest stretch of another one-way road, running the other way on our right.
+        const x = this.px[k], z = this.pz[k], R = hw + 5;
+        let best = R;
+        this.grid.query(x - R, z - R, x + R, z + R, i => {
+          const o = this.ptRoad[i], ow2 = this.oneway[o];
+          if (o === r || !ow2 || i + 1 >= this.ptStart[o + 1]) return;
+          const gx = (this.px[i + 1] - this.px[i]) * ow2, gz = (this.pz[i + 1] - this.pz[i]) * ow2;
+          const gl = Math.hypot(gx, gz);
+          if (gl < 1e-6 || (gx * fx + gz * fz) / gl > -0.85) return;
+          const d = Math.sqrt(pointSegDist2(x, z, this.px[i], this.pz[i], this.px[i + 1], this.pz[i + 1], t));
+          if (d >= best) return;
+          const cx = this.px[i] + (this.px[i + 1] - this.px[i]) * t[0], cz = this.pz[i] + (this.pz[i + 1] - this.pz[i]) * t[0];
+          if ((cx - x) * -fz + (cz - z) * fx > 0) best = d;
+        });
+        if (best >= R) continue;
+        // On a bridge the two decks meet; on the ground a median strip runs between them.
+        const edge = this.bridge[r] ? best / 2 : best / 2 - MEDIAN_W / 2;
+        if (edge < hw) { this.inner[k] = Math.max(1, edge); found[k] = 1; hits++; }
+      }
+      if (!hits) continue;
+      this.paired[r] = hits * 2 >= b - a ? 1 : 0;
+      // A point missed between two that found the other carriageway takes their average.
+      for (let k = a + 1; k < b - 1; k++) {
+        if (!found[k] && found[k - 1] && found[k + 1]) this.inner[k] = (this.inner[k - 1] + this.inner[k + 1]) / 2;
+      }
+    }
   }
 
   name(road) { return this.names[this.nameId[road]] || ''; }
   trimStart(road) { return Math.min(this.jRadius[this.ra[road]], this.length[road] * 0.45); }
   trimEnd(road) { return Math.min(this.jRadius[this.rb[road]], this.length[road] * 0.45); }
 
-  /** Lane centre offset (to the driver's left) for lane 0 (outer, kerb side) or 1. */
-  laneOffset(road, lane = 0) {
-    const w = this.width[road];
+  /** May traffic travel along the road in direction dir (+1 from a to b, -1 from b to a)? */
+  canTravel(road, dir) { return !this.oneway[road] || this.oneway[road] === dir; }
+
+  /**
+   * Which side of the road (+1 left of a->b, -1 right) has the kerb people use, or 0
+   * when both do: a carriageway of a divided road has the median on its other side.
+   */
+  kerbSide(road) { return this.paired[road] ? this.oneway[road] : 0; }
+
+  /** Distance from the centre line to the road's edge on `side` (+1 left of a->b, -1 right), s metres along. */
+  edgeAt(road, s, side) {
+    return this.oneway[road] && side === -this.oneway[road] ? this.innerAt(road, s) : this.width[road] / 2;
+  }
+
+  /** Distance from the centre line to the median-side edge, s metres along the road. */
+  innerAt(road, s) {
+    if (!this.paired[road] && !this.oneway[road]) return this.width[road] / 2;
+    const p = this.pointAt(road, s, this._in || (this._in = {}));
+    const lo = p.seg, hi = Math.min(lo + 1, this.ptStart[road + 1] - 1);
+    const span = this.cum[hi] - this.cum[lo];
+    const f = span > 1e-6 ? clamp((s - this.cum[lo]) / span, 0, 1) : 0;
+    return this.inner[lo] + (this.inner[hi] - this.inner[lo]) * f;
+  }
+
+  /**
+   * Lane centre offset to the driver's left for lane 0 (kerb side) or 1, s metres
+   * along the road. A one-way road's driver always travels its legal way.
+   */
+  laneOffset(road, lane = 0, s = this.length[road] / 2) {
+    const w = this.width[road], hw = w / 2;
+    if (this.oneway[road]) {
+      // The whole carriageway runs one way: the kerb lane on the left, the other by the median.
+      const inner = this.innerAt(road, s), W = hw + inner;
+      if (W < 6.4) return (hw - inner) / 2 + W * 0.08;
+      return lane === 0 ? hw - W / 4 : -inner + W / 4;
+    }
     if (this.lanes[road] === 1) return w * 0.25;
     return lane === 0 ? w * 0.375 : w * 0.125;
   }
@@ -215,6 +313,8 @@ export class RoadNet {
     const g = this._g, came = this._came, cameRoad = this._cameRoad, closed = this._closed, seenAt = this._seenAt;
     const stamp = ++this._stamp;
     const cost = r => (plain ? 1 : TYPE_COST[this.type[r]]);
+    // Wrong way down a one-way road: allowed, but only when nothing else gets there.
+    const way = (r, dir) => (this.canTravel(r, dir) ? 1 : WRONG_WAY);
     const heap = new MinHeap(256);
     const tx = goal.x, tz = goal.z;
     const h = j => Math.hypot(this.jx[j] - tx, this.jz[j] - tz);
@@ -225,9 +325,9 @@ export class RoadNet {
       heap.push(j, gv + h(j));
     };
     const sr = start.road, gr = goal.road;
-    const sameRoadCost = sr === gr ? Math.abs(goal.s - start.s) * cost(sr) : Infinity;
-    open(this.ra[sr], start.s * cost(sr), -1, sr);
-    open(this.rb[sr], (this.length[sr] - start.s) * cost(sr), -2, sr);
+    const sameRoadCost = sr === gr ? Math.abs(goal.s - start.s) * cost(sr) * way(sr, goal.s >= start.s ? 1 : -1) : Infinity;
+    open(this.ra[sr], start.s * cost(sr) * way(sr, -1), -1, sr);
+    open(this.rb[sr], (this.length[sr] - start.s) * cost(sr) * way(sr, 1), -2, sr);
     let bestCost = sameRoadCost, bestEnd = -1;
     while (heap.size) {
       const j = heap.pop();
@@ -235,11 +335,11 @@ export class RoadNet {
       closed[j] = stamp;
       if (g[j] + h(j) >= bestCost) break;
       // Reaching either end of the goal road finishes along it.
-      if (this.ra[gr] === j) { const c = g[j] + goal.s * cost(gr); if (c < bestCost) { bestCost = c; bestEnd = j; } }
-      if (this.rb[gr] === j) { const c = g[j] + (this.length[gr] - goal.s) * cost(gr); if (c < bestCost) { bestCost = c; bestEnd = j; } }
+      if (this.ra[gr] === j) { const c = g[j] + goal.s * cost(gr) * way(gr, 1); if (c < bestCost) { bestCost = c; bestEnd = j; } }
+      if (this.rb[gr] === j) { const c = g[j] + (this.length[gr] - goal.s) * cost(gr) * way(gr, -1); if (c < bestCost) { bestCost = c; bestEnd = j; } }
       for (const r of this.jRoads[j]) {
         const other = this.otherEnd(r, j);
-        open(other, g[j] + this.length[r] * cost(r), j, r);
+        open(other, g[j] + this.length[r] * cost(r) * way(r, this.ra[r] === j ? 1 : -1), j, r);
       }
     }
     const pts = [start.x, start.z];
@@ -288,6 +388,11 @@ export class RoadNet {
       const r = this.nearest(x, z, 8, near);
       const w = r ? this.width[r.road] : 6;
       let off = i === 0 || i === n - 1 ? 0 : this.lanes[r ? r.road : 0] > 1 ? w * 0.3 : w * 0.25;
+      if (off && r && this.oneway[r.road]) {
+        // A one-way carriageway: keep to its middle, the way it runs (even when going against it).
+        const mid = (w / 2 - this.innerAt(r.road, r.s)) / 2;
+        off = (r.dx * dx + r.dz * dz) * this.oneway[r.road] >= 0 ? mid : -mid;
+      }
       // At a sharp corner the lane line would cut across the kerb: hug the centre instead.
       if (i > 0 && i < n - 1) {
         const h1 = Math.atan2(x - points[(i - 1) * 2], z - points[(i - 1) * 2 + 1]);

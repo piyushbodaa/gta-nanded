@@ -135,7 +135,8 @@ export class Peds {
     const ang = r() * Math.PI * 2, d = r.range(minD, maxD);
     const n = net.nearest(focus.x + Math.cos(ang) * d, focus.z + Math.sin(ang) * d, 40, this._q);
     if (!n || net.bridge[n.road]) return false;
-    const road = n.road, side = r.chance(0.5) ? 1 : -1;
+    // Either footpath, except the median side of a divided road.
+    const road = n.road, side = net.kerbSide(road) || (r.chance(0.5) ? 1 : -1);
     const off = this._offset(road);
     const x = n.x + n.dz * off * side, z = n.z - n.dx * off * side;
     // Never appear inside or against a wall, post, stall or platform, in a vehicle or in someone.
@@ -318,7 +319,7 @@ export class Peds {
       const next = roads.length ? r.pick(roads) : p.road;
       p.dir = next === p.road ? -p.dir : net.ra[next] === j ? 1 : -1;
       p.road = next; p.s = 0.5;
-      if (r.chance(0.5)) p.side = -p.side;
+      p.side = net.kerbSide(next) || (r.chance(0.5) ? -p.side : p.side);
       if (r.chance(0.08)) { p.state = 'idle'; p.t = r.range(3, 10); }
       return;
     }
@@ -373,7 +374,7 @@ export class Peds {
     p.road = n.road; p.dir = Math.random() < 0.5 ? 1 : -1; p.lat = 0; p.stuck = 0;
     p.s = p.dir > 0 ? n.s : this.net.length[n.road] - n.s;
     const lx = p.h.x - n.x, lz = p.h.z - n.z;
-    p.side = lx * n.dz - lz * n.dx >= 0 ? 1 : -1;
+    p.side = this.net.kerbSide(n.road) || (lx * n.dz - lz * n.dx >= 0 ? 1 : -1);
   }
 
   /** Player punch: the nearest person in front within reach goes down. */

@@ -41,7 +41,8 @@ test('traffic keeps left: lane points sit left of the direction of travel', () =
   const out = {}, centre = {};
   for (let r = 0; r < net.count; r += 211) {
     const s = net.length[r] / 2;
-    for (const dir of [1, -1]) {
+    // A one-way road is only ever driven its own way.
+    for (const dir of net.oneway[r] ? [net.oneway[r]] : [1, -1]) {
       net.lanePoint(r, dir, s, net.laneOffset(r), out);
       net.pointAt(r, s, centre);
       const fx = out.dx, fz = out.dz;

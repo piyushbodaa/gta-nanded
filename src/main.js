@@ -9,6 +9,7 @@ import { TouchControls } from './ui/touch.js';
 import { PauseMenu } from './ui/menus.js';
 import { Effects } from './game/effects.js';
 import { Traffic, Parked } from './actors/traffic.js';
+import { Signals } from './world/signals.js';
 import { Peds } from './actors/peds.js';
 import { Animals } from './actors/animals.js';
 import { Police } from './game/police.js';
@@ -38,6 +39,7 @@ async function boot() {
   game.hud = new Hud(game);
   game.effects = new Effects(game.scene);
   game.traffic = new Traffic(game);
+  game.signals = new Signals(game.scene, game.net, game.traffic, game.colliders);
   game.parked = new Parked(game);
   game.peds = new Peds(game);
   game.animals = new Animals(game);

@@ -45,7 +45,7 @@ export class Animals {
     const n = net.nearest(pos.x + Math.cos(ang) * d, pos.z + Math.sin(ang) * d, 40, {});
     if (!n || net.bridge[n.road]) return;
     const cow = r.chance(0.6);
-    const side = r.chance(0.5) ? 1 : -1, off = net.width[n.road] / 2 + (cow ? 0.6 : 1.0);
+    const side = net.kerbSide(n.road) || (r.chance(0.5) ? 1 : -1), off = net.width[n.road] / 2 + (cow ? 0.6 : 1.0);
     const x = n.x + n.dz * off * side, z = n.z - n.dx * off * side;
     if (g.colliders.blocked(x, z, 0.7)) return;
     this.list.push({
