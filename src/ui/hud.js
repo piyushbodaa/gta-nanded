@@ -14,8 +14,10 @@ export class Hud {
       clock: $('hud-clock'), cash: $('hud-cash'), stars: $('hud-stars'), health: $('hud-health'), stamina: $('hud-stamina'),
       help: $('hud-help'), area: $('hud-area'), vehicle: $('hud-vehicle'), speed: $('hud-speed'), speedNum: $('hud-speed-num'), gear: $('hud-gear'),
       objective: $('hud-objective'), subtitle: $('hud-subtitle'), bark: $('hud-bark'), timer: $('hud-timer'), big: $('hud-big'), toast: $('hud-toast'),
-      cashDelta: $('hud-cash-delta'), prompt: $('hud-prompt'),
+      cashDelta: $('hud-cash-delta'), prompt: $('hud-prompt'), perf: $('hud-perf'),
     };
+    this.perfOn = false;
+    this.perfT = 0;
     this.timers = { help: 0, subtitle: 0, bark: 0, area: 0, vehicle: 0, big: 0, toast: 0, cash: 0 };
     this.shownCash = 0;
     this.lastDistrict = '';
@@ -60,6 +62,14 @@ export class Hud {
     el.className = `cash-delta ${delta >= 0 ? 'gain' : 'loss'}`;
     el.hidden = false; this.timers.cash = 2.5;
   }
+  /** The performance readout (Settings): what this device really does, for tuning and bug reports. */
+  showPerf(on) { this.perfOn = on; this.el.perf.hidden = !on; this.perfT = 0; }
+  _perf() {
+    const g = this.game, q = g.quality, p = g.perf, c = g.renderer.domElement;
+    const mem = performance.memory ? ` · ${Math.round(performance.memory.usedJSHeapSize / 1e6)} MB` : '';
+    this.el.perf.textContent = `${Math.round(p.fps)} fps · ${Math.round(p.ms)} ms (worst ${Math.round(p.worstMs)}) · CPU ${g.cpuMs.toFixed(1)} · ${c.width}×${c.height} ${q.settings.name} · ${q.gpu}${mem}`;
+  }
+
   /** Contextual button hints near the bottom: [{key, label}] */
   prompt(list) {
     const key = list.map(p => p.key + p.label).join('|');
@@ -117,6 +127,7 @@ export class Hud {
     // Radar at ~30 fps.
     this.radarT -= dt;
     if (this.radarT <= 0) { this.radarT = 1 / 30; this.radar.draw(this.collectBlips(), this.route); }
+    if (this.perfOn && (this.perfT -= dt) <= 0) { this.perfT = 0.5; this._perf(); }
   }
 
   collectBlips() {

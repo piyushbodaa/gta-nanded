@@ -3,6 +3,7 @@
   "short_name": "GTA Nanded",
   "description": "An open-world browser game set on the real streets of Nanded, Maharashtra: drive, run fares, race, and outrun Inspector Kadam.",
   "lang": "en",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
@@ -10,7 +11,8 @@
   "background_color": "#0b0d0e",
   "theme_color": "#0b0d0e",
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/media/gta-nanded-chase.webp", "sizes": "512x512", "type": "image/webp", "purpose": "any" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

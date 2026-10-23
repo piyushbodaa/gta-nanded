@@ -9,7 +9,7 @@ const DEFAULT = () => ({
   districts: [],
   records: {}, // best times
   stats: { distance: 0, fares: 0, deliveries: 0, jacked: 0, busted: 0, wasted: 0, punches: 0, crashes: 0, playTime: 0 },
-  settings: { lang: 'en', music: 0.6, sfx: 0.8, radio: 0, sound: true, sensitivity: 1, invertY: false, assist: true },
+  settings: { lang: 'en', music: 0.6, sfx: 0.8, radio: 0, sound: true, sensitivity: 1, invertY: false, assist: true, perf: false },
   started: false,
 });
 

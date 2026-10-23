@@ -3,6 +3,7 @@ import { CityMap } from './minimap.js';
 import { STORY, CHARACTERS } from '../game/story.js';
 import { dist } from '../core/math.js';
 import { key, verb, pick } from './controls.js';
+import { installKind, promptInstall } from './install.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -28,6 +29,13 @@ export class PauseMenu {
     $('map-clear').addEventListener('click', () => { g.waypoint = null; g.hud.route = null; this._drawMap(); });
     $('map-search').addEventListener('input', () => this._search());
     $('set-quality').addEventListener('click', () => { g.quality.cycle(g); this._settings(); });
+    $('set-fps').addEventListener('click', () => { g.quality.cycleFps(); this._settings(); });
+    $('set-perf').addEventListener('click', () => { const s = g.save.data.settings; s.perf = !s.perf; g.hud.showPerf(s.perf); g.save.dirty(); this._settings(); });
+    $('set-install').addEventListener('click', async () => {
+      if (installKind() === 'ios') { $('set-install-help').hidden = !$('set-install-help').hidden; return; }
+      await promptInstall();
+      this._settings();
+    });
     $('set-sound').addEventListener('click', async () => { await g.toggleSound(); this._settings(); });
     $('set-music').addEventListener('input', e => { g.save.data.settings.music = Number(e.target.value); g.audio.setVolumes({ music: Number(e.target.value) }); g.save.dirty(); });
     $('set-sfx').addEventListener('input', e => { g.save.data.settings.sfx = Number(e.target.value); g.audio.setVolumes({ sfx: Number(e.target.value) }); g.save.dirty(); });
@@ -170,6 +178,12 @@ export class PauseMenu {
   _settings() {
     const g = this.game, s = g.save.data.settings;
     $('set-quality').textContent = g.quality.label();
+    $('set-fps').textContent = g.quality.fpsLabel();
+    $('set-perf').textContent = s.perf ? 'On' : 'Off';
+    const install = installKind();
+    $('set-install-row').hidden = !install;
+    $('set-install').textContent = install === 'ios' ? 'How?' : 'Install the game';
+    if (!install) $('set-install-help').hidden = true;
     $('set-sound').textContent = g.audio.enabled ? 'On' : 'Off';
     $('set-music').value = s.music; $('set-sfx').value = s.sfx; $('set-sens').value = s.sensitivity;
     $('set-weather').textContent = { clear: 'Clear', haze: 'Summer haze', rain: 'Monsoon rain' }[g.sky.weather];

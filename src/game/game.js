@@ -8,7 +8,7 @@ import { GameCamera } from './camera.js';
 import { Input } from '../core/input.js';
 import { speedOf } from '../actors/vehicle-physics.js';
 import { clamp, dist, rng, hash2 } from '../core/math.js';
-import { Quality } from '../core/quality.js';
+import { Quality, ORDER, MIN_SCALE } from '../core/quality.js';
 import { Post } from '../world/post.js';
 
 export class Game {
@@ -18,6 +18,12 @@ export class Game {
     this.quality = new Quality();
     // Anti-aliasing happens in the post-processing buffer, where tiers can switch it on and off.
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+    // Which GPU this is decides where the automatic quality starts. Chrome and Safari mask
+    // the plain RENDERER string; Firefox gives the real one and deprecates the extension.
+    const gl = this.renderer.getContext();
+    let gpu = gl.getParameter(gl.RENDERER);
+    if (/^webkit webgl$/i.test(gpu)) { const info = gl.getExtension('WEBGL_debug_renderer_info'); if (info) gpu = gl.getParameter(info.UNMASKED_RENDERER_WEBGL); }
+    this.quality.setGpu(gpu);
     this.renderer.setPixelRatio(this.quality.pixelRatio());
     this.renderer.setSize(innerWidth, innerHeight, false);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -35,6 +41,9 @@ export class Game {
     this.controls = new Map();
     this.shadowAt = new THREE.Vector3(1e9, 0, 0);
     this._frameMs = 0;
+    this.cpuMs = 0; // the game's own work per frame, smoothed (the performance readout)
+    this.perf = { n: 0, t: 0, worst: 0, fps: 0, ms: 0, worstMs: 0 };
+    this._nextFrame = 0;
     this.energy = 0;
     addEventListener('resize', () => this.resize());
     addEventListener('blur', () => { if (this.started && !this.paused && !this.respawning) this.pause?.openMenu(this.pause.tab); });
@@ -46,6 +55,13 @@ export class Game {
     this.camera3.updateProjectionMatrix();
     this.renderer.setPixelRatio(this.quality.pixelRatio());
     this.renderer.setSize(innerWidth, innerHeight, false);
+    this.post?.configure(this._postSettings());
+  }
+
+  /** The final pass sharpens in proportion to how far the browser will stretch the frame. */
+  _postSettings() {
+    const q = this.quality, s = q.settings;
+    return { msaa: s.msaa, bloom: s.bloom, sharpen: Math.min(0.4, (q.upscale() - 1) * 0.3) };
   }
 
   async load(stage) {
@@ -71,10 +87,11 @@ export class Game {
     this.renderer.setSize(innerWidth, innerHeight, false);
     this.world.chunks.setRadius(q.viewDistance);
     this.world.sky.setViewDistance(q.viewDistance);
-    this.post.configure({ msaa: q.msaa, bloom: q.bloom });
+    this.post.configure(this._postSettings());
     this.camera3.far = q.viewDistance + 150;
     this.camera3.updateProjectionMatrix();
     const sun = this.world.sky.sun;
+    this.renderer.shadowMap.enabled = q.shadows > 0;
     sun.castShadow = q.shadows > 0;
     // The bounce fill lights cast shade; without a shadow map it would only flatten the picture.
     this.world.sky.bounceOn = q.shadows > 0;
@@ -89,7 +106,65 @@ export class Game {
     this.started = true;
     this.paused = false;
     this.clock.getDelta();
-    if (!this._loop) { this._loop = () => this.frame(); this.renderer.setAnimationLoop(this._loop); }
+    if (!this._loop) {
+      this._loop = () => {
+        // The frame-rate cap: on 90 and 120 Hz screens, and in battery saver, skip the display
+        // refreshes that come too early instead of drawing frames nobody needs.
+        const cap = this.quality.fpsCap;
+        if (cap) {
+          const now = performance.now(), step = 1000 / cap;
+          if (now < this._nextFrame - 2) return;
+          this._nextFrame = Math.max(this._nextFrame + step, now + step - 2);
+        }
+        this.frame();
+      };
+      this.renderer.setAnimationLoop(this._loop);
+    }
+  }
+
+  /**
+   * The first launch on a GPU: time a few frames behind the cover and settle the automatic
+   * setting before play, so nobody spends their first minute in a stuttering city. Later
+   * launches start where the governor last settled, unless it found room for a tier up.
+   * Tier changes recompile shaders, which belongs here, not in the middle of a chase.
+   */
+  calibrate() {
+    const q = this.quality;
+    if (q.mode !== 'auto' || (q.learned && !q.learned.promote)) return;
+    const gl = this.renderer.getContext(), chunks = this.world.chunks, p = this.player.pos;
+    const budget = 1000 / (q.fpsCap || 60);
+    // Milliseconds per frame: the median of three short runs, so one busy moment can't decide.
+    const time = () => {
+      // The nearest streets in first (the rest streams in during play anyway).
+      for (const until = performance.now() + 700; chunks.queue.length && performance.now() < until;) chunks.update(p.x, p.z, 50);
+      for (let i = 0; i < 5; i++) this.renderWorld(0, false); // compile, and let the GPU clock up
+      gl.finish();
+      const runs = [];
+      for (let k = 0; k < 3; k++) {
+        const t0 = performance.now();
+        for (let i = 0; i < 4; i++) this.renderWorld(0, false);
+        gl.finish();
+        runs.push((performance.now() - t0) / 4);
+      }
+      return runs.sort((a, b) => a - b)[1];
+    };
+    const set = tier => { q.autoTier = tier; q.scale = 1; this.applyQuality(); };
+    const up = t => ORDER[ORDER.indexOf(t) + 1], down = t => ORDER[ORDER.indexOf(t) - 1];
+    const heavy = new Set(q.tooHeavy), first = !q.learned;
+    set(q.learned?.promote && up(q.autoTier) && !heavy.has(up(q.autoTier)) ? up(q.autoTier) : q.autoTier);
+    let ms = time();
+    while (ms > budget * 0.8 && down(q.autoTier)) { heavy.add(q.autoTier); set(down(q.autoTier)); ms = time(); }
+    // Plenty of room on a first launch: try one tier up, and keep it only if it still fits.
+    const next = up(q.autoTier);
+    if (first && next && !heavy.has(next) && ms < budget * 0.3) {
+      const was = q.autoTier;
+      set(next);
+      const tried = time();
+      if (tried > budget * 0.6) { heavy.add(next); set(was); } else ms = tried;
+    }
+    // Whatever doesn't fit in two thirds of the frame comes off the resolution.
+    if (ms > budget * 0.66) { q.scale = Math.max(MIN_SCALE, Math.round(Math.sqrt((budget * 0.66) / ms) * 20) / 20); this.resize(); }
+    q.learn({ tooHeavy: [...heavy], promote: false, frameMs: Math.round(ms * 10) / 10 });
   }
 
   // ---------------------------------------------------------------- helpers for actors
@@ -149,7 +224,12 @@ export class Game {
     this._frameStart = performance.now();
     const raw = fixedDt ?? this.clock.getDelta();
     const dt = Math.min(raw, 1 / 20);
-    if (fixedDt === undefined) this.quality.sample(raw, this);
+    if (fixedDt === undefined) {
+      this.quality.sample(raw, this);
+      const pf = this.perf;
+      pf.n++; pf.t += raw; pf.worst = Math.max(pf.worst, raw);
+      if (pf.t >= 0.5) { pf.fps = pf.n / pf.t; pf.ms = (pf.t / pf.n) * 1000; pf.worstMs = pf.worst * 1000; pf.n = pf.t = pf.worst = 0; }
+    }
     const input = this.input;
     input.update();
     // Menus: Esc pauses, M opens the map, and either closes the menu again.
@@ -192,11 +272,11 @@ export class Game {
     this.renderWorld(this.paused ? 0 : dt);
   }
 
-  renderWorld(dt) {
+  renderWorld(dt, stream = true) {
     const w = this.world, cam = this.camera3;
     const focus = this.player.pos;
     // Stream with what the frame can spare: up to 4 ms, less when frames are already long.
-    w.chunks.update(focus.x, focus.z, this.started ? clamp(13 - this._frameMs, 1, 4) : 30);
+    if (stream) w.chunks.update(focus.x, focus.z, this.started ? clamp(13 - this._frameMs, 1, 4) : 30);
     w.sky.update(dt, focus);
     this.signals?.update(dt, this.time);
     w.sky.placeDome(cam);
@@ -223,6 +303,10 @@ export class Game {
     this.hud?.update(dt);
     this.post.render(this.scene, cam, dt);
     // How long a frame takes besides streaming (smoothed), for the streaming budget.
-    if (this._frameStart) this._frameMs += (performance.now() - this._frameStart - w.chunks.lastMs - this._frameMs) * 0.1;
+    if (this._frameStart) {
+      const spent = performance.now() - this._frameStart;
+      this._frameMs += (spent - w.chunks.lastMs - this._frameMs) * 0.1;
+      this.cpuMs += (spent - this.cpuMs) * 0.1;
+    }
   }
 }

@@ -23,6 +23,7 @@ import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
 import { track } from './core/analytics.js';
 import { press } from './ui/controls.js';
+import { installKind } from './ui/install.js';
 
 const $ = id => document.getElementById(id);
 const status = (text, f) => { $('loading-status').textContent = text.toUpperCase(); if (f !== undefined) $('load-bar').style.width = `${Math.round(f * 100)}%`; };
@@ -70,6 +71,7 @@ async function boot() {
   };
   const st = game.save.data.settings;
   game.input.setSensitivity(st.sensitivity || 1);
+  if (st.perf || new URLSearchParams(location.search).has('perf')) game.hud.showPerf(true);
   game.toggleSound = async () => {
     if (!game.audio.ctx) { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); st.sound = true; }
     else { game.audio.setEnabled(!game.audio.enabled); st.sound = game.audio.enabled; }
@@ -77,6 +79,12 @@ async function boot() {
   };
   // Draw the city once behind the cover so the first frame after it is instant.
   game.renderWorld(0);
+  // The first time on this device: find the graphics it can hold before anyone plays.
+  if (game.quality.mode === 'auto' && (!game.quality.learned || game.quality.learned.promote)) {
+    status('Tuning the graphics for this device');
+    await new Promise(r => setTimeout(r, 30)); // let the status paint before the GPU is busy
+    game.calibrate();
+  }
   status('The city is yours', 1);
   const has = game.save.hasProgress;
   const done = STORY.filter(m => game.save.done(m.id)).length;
@@ -128,6 +136,15 @@ function startGame(game, mode) {
   game.parked.t = 0; game.parked.update(1);
   game.start();
   game.save.flush();
+  // Ask the browser to keep the save through storage clean-ups (granted quietly where it is).
+  navigator.storage?.persist?.().catch(() => {});
+  // iPhones clear a site's saves after a week away unless it is on the Home Screen: say so once.
+  if (installKind() === 'ios' && !game.save.data.settings.homeTip) {
+    setTimeout(() => {
+      game.save.data.settings.homeTip = true; game.save.dirty();
+      game.hud.help('<b>Tip:</b> add GTA Nanded to your Home Screen — tap <b>Share</b>, then <b>Add to Home Screen</b>. It opens full screen, and your iPhone keeps your progress.', 9);
+    }, 150000);
+  }
   if (mode === 'new') setTimeout(() => game.missions.start('m1'), 400);
   else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map, or find a contact marker to play the story.`, 7);
   else game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. Your next contact is on the radar.`, 6);
