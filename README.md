@@ -67,3 +67,5 @@ npm run world      # rebuild public/data/world.json from src/data/ after data ch
 Code, artwork and audio are [MIT](LICENSE) (see [NOTICE](NOTICE)). The cover art is original; fonts are Google Fonts (Anton, Barlow Condensed, DM Sans, Noto Sans Devanagari).
 
 All characters, stories and businesses' roles in the story are fictional. Real places appear only as public settings; their inclusion implies no endorsement. The city is an illustration on the real street map, not a survey: distances are compressed to half scale and buildings are generated. Their architecture is loosely inspired by typical Marathwada streets (Shyam Nagar's coaching blocks, Old Mondha's bazaar, Station Road); no facade, shop or landmark is a measured replica.
+
+**Analytics.** gta.nanded.fun counts visits, game starts (new story, continue or free roam) and passed missions with Google Analytics 4, with advertising features and Google signals off. Every page address is reported as the bare domain, and no other host sends anything, so local builds and previews stay silent ([public/analytics.js](public/analytics.js)).

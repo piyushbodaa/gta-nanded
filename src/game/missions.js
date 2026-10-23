@@ -2,6 +2,7 @@
 // mission, dialogue, objectives, GPS, timers, and pass/fail bookkeeping.
 import * as THREE from 'three';
 import { dist, clamp, headingTo, rng } from '../core/math.js';
+import { track } from '../core/analytics.js';
 import { makeOutfit } from '../actors/humans.js';
 import { speedOf } from '../actors/vehicle-physics.js';
 import { DynamicDriver } from '../actors/traffic.js';
@@ -130,6 +131,7 @@ export class Missions {
     this._cleanup(m, true);
     this.active = null;
     g.save.complete(def.id);
+    track('mission_complete');
     if (def.reward) g.addCash(def.reward);
     g.hud.big('MISSION PASSED', def.reward ? `₹${def.reward.toLocaleString('en-IN')}` : def.passText || 'RESPECT +', 'passed', 5);
     g.audio?.sfx('passed');
