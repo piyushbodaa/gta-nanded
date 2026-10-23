@@ -899,7 +899,7 @@ export class City {
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           if (!clear(x, z) || this._overlapsLots(x, z, 1.1, 0.9, Math.atan2(p.dx, p.dz), 0) || net.roadClearance(x, z, 10) < 0.25) continue;
           // Local +z toward the road: the goods face the street.
-          add(x, z, Math.atan2(-p.dz * side, p.dx * side), PROP.VENDOR, road);
+          add(x, z, Math.atan2(-p.dz * side, p.dx * side), PROP.VENDOR, road, this.pavementAt(p.seg, off));
           vendors.push(P.x.length - 1);
           this.lotGrid.insertRect(-200000 - P.x.length, x - 1.2, z - 1.2, x + 1.2, z + 1.2);
         }
