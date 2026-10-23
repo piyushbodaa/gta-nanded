@@ -106,6 +106,8 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
             // Gilded metal (domes, finials) and true normals on lathed shapes.
             if (vTile.x > 0.5) { cityMetal = 1.0; cityRough = 0.24; }
             citySmooth = step(0.5, vTile.y);
+            // Potholes (third channel set): rainwater stands in them through the monsoon.
+            if (vTile.z > 1.5 && uWet > 0.0) { diffuseColor.rgb *= 1.0 - 0.45 * uWet; cityRough = mix(cityRough, 0.03, min(1.0, uWet * 1.5)); }
           } else {
             vec2 origin = vTile.xy;
             vec2 coord = vTUv;

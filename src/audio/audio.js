@@ -168,6 +168,10 @@ export class GameAudio {
         this._tone(55, 1.2, { gain: 0.9, glide: 25 });
         break;
       case 'jump': this._tone(240, 0.08, { gain: 0.05, glide: 300 }); break;
+      case 'thud': // suspension bottoming out on a speed breaker or in a pothole
+        this._burst(0.12, { freq: 220, q: 0.6, gain: 0.35 * k, type: 'lowpass', buf: this.brown });
+        this._tone(62, 0.18, { gain: 0.4 * k, glide: 40 });
+        break;
       case 'step': this._burst(0.04, { freq: 1400, q: 0.8, gain: 0.04 * k }); break;
       case 'checkpoint': this._tone(880, 0.12, { type: 'triangle', gain: 0.25 }); this._tone(1320, 0.25, { type: 'triangle', gain: 0.25, at: 0.1 }); break;
       case 'passed': [523, 659, 784, 1046].forEach((f, i) => this._tone(f, 0.5, { type: 'triangle', gain: 0.18, at: i * 0.12 })); break;

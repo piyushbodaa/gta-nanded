@@ -101,6 +101,15 @@ export function installRules(g) {
     }
   };
 
+  // Speed breakers and potholes: a thud and a shake under the player.
+  g.vehicles.onBump = (v, speed, hole) => {
+    if (v.role !== 'player') return;
+    const k = clamp(speed / (hole ? 4 : 6), 0.15, 1);
+    g.camera.addShake(k * (hole ? 0.22 : 0.4));
+    g.audio.sfx('thud', k);
+    if (!hole && speed > 3) g.effects.dust(v.x, v.z, 3);
+  };
+
   g.vehicles.onWreck = v => {
     // Fire, then a fireball.
     v.onFire = 0.01;
@@ -281,18 +290,57 @@ export function installRules(g) {
 
   g.vehicleSank = () => {};
 
+  // Photos: the frame as you see it (graded, smoothed), at least 1280 pixels across even when a
+  // slow phone plays at a lower resolution, with a caption strip naming the place and the game.
+  // Share hands it to the phone's share sheet (WhatsApp, Instagram...); Save downloads it.
+  const photo = document.getElementById('photo');
+  const hidePhotoLater = ms => { clearTimeout(g._photoT); g._photoT = setTimeout(() => (photo.hidden = true), ms); };
   g.takePhoto = title => {
-    g.renderer.render(g.scene, g.camera3);
+    const r = g.renderer, ratio = r.getPixelRatio(), want = Math.min(2, Math.max(ratio, 1280 / innerWidth));
     try {
-      const url = g.renderer.domElement.toDataURL('image/jpeg', 0.9);
-      const img = document.getElementById('photo-img');
-      img.src = url;
+      if (want > ratio * 1.1) { r.setPixelRatio(want); r.setSize(innerWidth, innerHeight, false); }
+      g.post.render(g.scene, g.camera3, 0);
       const name = title || g.city.district(g.player.pos.x, g.player.pos.z).name;
+      const src = r.domElement, W = src.width, H = src.height, bar = Math.round(Math.max(40, W * 0.045));
+      const shot = document.createElement('canvas');
+      shot.width = W; shot.height = H + bar;
+      const ctx = shot.getContext('2d');
+      ctx.drawImage(src, 0, 0);
+      ctx.fillStyle = '#f7f2e6'; ctx.fillRect(0, H, W, bar);
+      ctx.fillStyle = '#222'; ctx.textBaseline = 'middle';
+      ctx.font = `700 ${Math.round(bar * 0.46)}px Georgia, serif`;
+      ctx.fillText(`${name} · नांदेड`, bar * 0.35, H + bar / 2);
+      ctx.textAlign = 'right'; ctx.font = `${Math.round(bar * 0.5)}px Anton, "Barlow Condensed", sans-serif`;
+      ctx.fillText('GTA NANDED · gta.nanded.fun', W - bar * 0.35, H + bar / 2);
+      document.getElementById('photo-img').src = src.toDataURL('image/jpeg', 0.85);
       document.getElementById('photo-title').textContent = `${name} · नांदेड`;
-      document.getElementById('photo').hidden = false;
-      clearTimeout(g._photoT);
-      g._photoT = setTimeout(() => (document.getElementById('photo').hidden = true), 9000);
-      g._photoUrl = url; g._photoName = name;
-    } catch { /* tainted or lost context */ }
+      photo.hidden = false;
+      hidePhotoLater(9000);
+      g._photoName = name; g._photoFile = null;
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'nanded';
+      shot.toBlob(b => { if (b) g._photoFile = new File([b], `gta-nanded-${slug}.jpg`, { type: 'image/jpeg' }); }, 'image/jpeg', 0.88);
+    } catch { /* tainted or lost context */ } finally {
+      if (r.getPixelRatio() !== ratio) { r.setPixelRatio(ratio); r.setSize(innerWidth, innerHeight, false); }
+    }
   };
+  // Touching the photo keeps it up; it goes away a while after you leave it.
+  photo.addEventListener('pointerdown', () => hidePhotoLater(20000));
+  document.getElementById('photo-close').addEventListener('click', () => { clearTimeout(g._photoT); photo.hidden = true; });
+  document.getElementById('photo-save').addEventListener('click', () => {
+    const file = g._photoFile;
+    if (!file) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  });
+  document.getElementById('photo-share').addEventListener('click', async () => {
+    const text = `${g._photoName || 'Nanded'} in GTA Nanded! Play free in your browser: https://gta.nanded.fun`;
+    const file = g._photoFile;
+    try {
+      if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], text });
+      else if (navigator.share) await navigator.share({ text });
+      else open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    } catch { /* closed the share sheet */ }
+  });
 }

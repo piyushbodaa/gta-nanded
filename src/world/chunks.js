@@ -1,7 +1,9 @@
 // Builds and streams the city around the player, one 192 m chunk at a time.
 // Each chunk becomes: one city mesh (everything opaque), one signboard mesh,
 // one foliage mesh (leaf cards), one additive light-pool mesh for the night
-// and one line mesh for the wires.
+// and one line mesh for the wires. Chunks away from the player get a far version
+// instead: the same blocks in the same paint and windows, without the details
+// that are a pixel or two at that distance.
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
 import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD } from './citygen.js';
@@ -11,6 +13,7 @@ import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
 import { buildAirfieldPiece } from './airfield.js';
 import { buildPlace } from './landmarks.js';
 import { FoliageGeo, LEAF } from './foliage.js';
+import { BUMP_LEN, humpAt } from './roadbumps.js';
 
 const FLOOR = 3.2;
 const ROAD_Y = [0.07, 0.068, 0.066, 0.064, 0.062, 0.06];
@@ -19,6 +22,18 @@ const PAD_Y = 0.074;
 const RUSH = 48;
 // A build slice hands control back after about this long (between buildings, trees or props).
 const SLICE_MS = 0.75;
+// Levels of detail. A chunk is built close-up when its near side comes within NEAR_D metres,
+// shows that until it is beyond FAR_D (the gap stops it flickering between the two), and
+// drops it for good half a chunk further out.
+export const NEAR = 0, FAR = 1;
+const NEAR_D = 150, FAR_D = 190;
+
+/** One chunk's builds: a close-up and a far level, each a group of meshes, either still to come. */
+class Chunk {
+  constructor(cx, cz) { this.cx = cx; this.cz = cz; this.levels = [null, null]; }
+  /** The meshes of the most detailed level built (for tests and tools). */
+  get meshes() { return (this.levels[NEAR] || this.levels[FAR])?.meshes ?? []; }
+}
 
 export class ChunkManager {
   constructor(scene, city, materials, signSlots) {
@@ -35,6 +50,8 @@ export class ChunkManager {
     scene.add(this.group);
     this.stats = { built: 0, triangles: 0, ms: 0 };
     this.lastMs = 0; // time the last update took
+    this.x = 0; this.z = 0; // where the player was at the last update
+    this.night = 0;
   }
 
   setRadius(r) { this.radius = r; }
@@ -51,6 +68,7 @@ export class ChunkManager {
     // Everything here was built last time and the player has hardly moved: nothing to do.
     const idle = this._idle;
     if (idle && !this.job && idle.r === r && Math.abs(x - idle.x) < 8 && Math.abs(z - idle.z) < 8) { this.lastMs = 0; return 0; }
+    this.x = x; this.z = z;
     const cx0 = Math.floor((x - r) / C), cx1 = Math.floor((x + r) / C);
     const cz0 = Math.floor((z - r) / C), cz1 = Math.floor((z + r) / C);
     // How far (x, z) is from a chunk's square (0 standing on it).
@@ -58,11 +76,14 @@ export class ChunkManager {
     const want = [];
     for (let cx = cx0; cx <= cx1; cx++) {
       for (let cz = cz0; cz <= cz1; cz++) {
-        const mx = (cx + 0.5) * C, mz = (cz + 0.5) * C;
-        const d = Math.hypot(mx - x, mz - z) - C * 0.7;
+        const d = this._dist(cx, cz);
         if (d > r) continue;
-        const key = `${cx},${cz}`;
-        if (!this.chunks.has(key)) want.push({ key, cx, cz, d, rush: gap(cx, cz) < RUSH });
+        const key = `${cx},${cz}`, ch = this.chunks.get(key), rush = gap(cx, cz) < RUSH;
+        // A new chunk at its level; a far one coming close gets its close-up; a close-up left
+        // behind gets its far version last of all (it stays up until that is ready).
+        if (!ch) want.push({ key, cx, cz, d, rush, lod: d < NEAR_D ? NEAR : FAR });
+        else if (d < NEAR_D && !ch.levels[NEAR]) want.push({ key, cx, cz, d, rush, lod: NEAR });
+        else if (d > FAR_D && !ch.levels[FAR]) want.push({ key, cx, cz, d: d + 1e4, rush: false, lod: FAR });
       }
     }
     // Nearest first. The ground right around the player jumps the queue and ignores the
@@ -72,7 +93,7 @@ export class ChunkManager {
     if (job) {
       job.rush = gap(job.cx, job.cz) < RUSH;
       // A half-built chunk the player has left far behind, or one holding up the ground here, is dropped.
-      const far = Math.hypot((job.cx + 0.5) * C - x, (job.cz + 0.5) * C - z) - C * 0.7 > r + C;
+      const far = this._dist(job.cx, job.cz) > r + C;
       if (far || (want.length && want[0].rush && !job.rush)) this.job = null;
     }
     // Falling behind (a fast drive on a slow machine): catch up at the full rate.
@@ -81,53 +102,82 @@ export class ChunkManager {
     while (this.job || next < want.length) {
       if (!this.job) {
         const w = want[next++];
-        if (this.chunks.has(w.key)) continue;
-        this.job = { key: w.key, cx: w.cx, cz: w.cz, rush: w.rush, steps: this._steps(w.key, w.cx, w.cz) };
+        if (this.chunks.get(w.key)?.levels[w.lod]) continue;
+        this.job = { key: w.key, cx: w.cx, cz: w.cz, lod: w.lod, rush: w.rush, steps: this._steps(w.key, w.cx, w.cz, w.lod) };
       }
       if (this.job.steps.next().done) this.job = null;
       // Out of time, unless what comes next is the ground right here.
       const rush = this.job ? this.job.rush : next < want.length && want[next].rush;
       if (!rush && performance.now() > deadline && this.chunks.size > 0) break;
     }
-    // Drop chunks well outside the radius.
+    // Drop chunks well outside the radius, and close-ups well behind their far versions;
+    // show each chunk at its level.
     for (const [key, ch] of this.chunks) {
-      const d = Math.hypot((ch.cx + 0.5) * C - x, (ch.cz + 0.5) * C - z) - C * 0.7;
-      if (d > r + C * 1.2) this._dispose(key, ch);
+      const d = this._dist(ch.cx, ch.cz);
+      if (d > r + C * 1.2) { this._dispose(key, ch); continue; }
+      if (ch.levels[FAR] && ch.levels[NEAR] && d > FAR_D + C / 2) this._drop(ch, NEAR);
+      this._pick(ch, d);
     }
+    this.queue = want.slice(next);
+    if (this.job) this.queue.unshift(this.job);
     this._idle = !this.job && next >= want.length ? { x, z, r } : null;
     this.lastMs = performance.now() - t0;
     return want.length;
   }
 
+  /** How far the player is from a chunk: its centre's distance less most of its half-diagonal. */
+  _dist(cx, cz) { return Math.hypot((cx + 0.5) * CHUNK - this.x, (cz + 0.5) * CHUNK - this.z) - CHUNK * 0.7; }
+
+  /** Show the close-up inside FAR_D (or while it is all there is), else the far version. */
+  _pick(ch, d) {
+    const near = ch.levels[NEAR], far = ch.levels[FAR];
+    const show = near && (d < FAR_D || !far) ? NEAR : FAR;
+    if (near) near.group.visible = show === NEAR;
+    if (far) far.group.visible = show === FAR;
+  }
+
+  _drop(ch, lod) {
+    const level = ch.levels[lod];
+    for (const m of level.meshes) m.geometry.dispose();
+    this.group.remove(level.group);
+    ch.levels[lod] = null;
+  }
+
   /** Build everything within `radius` immediately (loading screen). */
   prime(x, z, radius, onProgress) {
     const C = CHUNK, list = [];
+    this.x = x; this.z = z;
     for (let cx = Math.floor((x - radius) / C); cx <= Math.floor((x + radius) / C); cx++) {
       for (let cz = Math.floor((z - radius) / C); cz <= Math.floor((z + radius) / C); cz++) {
-        if (Math.hypot((cx + 0.5) * C - x, (cz + 0.5) * C - z) - C * 0.7 <= radius) list.push([cx, cz]);
+        if (this._dist(cx, cz) <= radius) list.push([cx, cz]);
       }
     }
-    list.forEach(([cx, cz], i) => { const key = `${cx},${cz}`; if (!this.chunks.has(key)) this._build(key, cx, cz); onProgress?.((i + 1) / list.length); });
+    list.forEach(([cx, cz], i) => {
+      const key = `${cx},${cz}`;
+      if (!this.chunks.has(key)) this._build(key, cx, cz, this._dist(cx, cz) < NEAR_D ? NEAR : FAR);
+      onProgress?.((i + 1) / list.length);
+    });
   }
 
   _dispose(key, ch) {
-    for (const m of ch.meshes) { m.geometry.dispose(); this.group.remove(m); }
+    for (const lod of [NEAR, FAR]) if (ch.levels[lod]) this._drop(ch, lod);
     this.chunks.delete(key);
   }
 
   setNight(n) {
     this.mat.pools.opacity = clamp(n * 0.9, 0, 0.72);
-    for (const ch of this.chunks.values()) if (ch.pools) ch.pools.visible = n > 0.02;
+    this.night = n;
+    for (const ch of this.chunks.values()) for (const level of ch.levels) if (level?.pools) level.pools.visible = n > 0.02;
   }
 
   /** Build one chunk at once (loading screen, tools). */
-  _build(key, cx, cz) {
+  _build(key, cx, cz, lod = NEAR) {
     this.job = null; // its shared builders are about to be reused
-    for (const _ of this._steps(key, cx, cz));
+    for (const _ of this._steps(key, cx, cz, lod));
   }
 
   /** The chunk build as resumable slices; yields (naming the work just done) between them. */
-  *_steps(key, cx, cz) {
+  *_steps(key, cx, cz, lod = NEAR) {
     let ms = 0, t0 = performance.now();
     const pause = () => { ms += performance.now() - t0; };
     const resume = () => { t0 = performance.now(); };
@@ -136,17 +186,23 @@ export class ChunkManager {
     const B = this._builders || (this._builders = { g: new Geo(65536), sg: new Geo(1024), pg: new Geo(1024), fg: new FoliageGeo(16384) });
     const g = B.g.reset(), sg = B.sg.reset(), pg = B.pg.reset(), fg = B.fg.reset();
     const wires = [];
-    const ctx = { g, sg, pg, fg, wires, city: this.city, net: this.net, signSlots: this.signSlots, cx, cz };
+    const ctx = { g, sg, pg, fg, wires, city: this.city, net: this.net, signSlots: this.signSlots, cx, cz, far: lod === FAR };
     const data = this.city.chunk(cx, cz);
     buildGround(ctx);
     if (data) {
       buildRoads(ctx, data);
+      buildBumps(ctx, data);
       buildRails(ctx, data);
       for (const piece of data.airfield || []) buildAirfieldPiece(g, piece);
       pause(); yield 'ground'; resume();
       for (const i of data.lots) { buildLot(ctx, i); if (due()) { pause(); yield 'lots'; resume(); } }
       for (const i of data.trees) { buildTree(ctx, i); if (due()) { pause(); yield 'trees'; resume(); } }
-      for (const i of data.props) { buildProp(ctx, i); if (due()) { pause(); yield 'props'; resume(); } }
+      for (const i of data.props) {
+        // From afar only the big props: street lamps (their light at night) and hoardings.
+        if (ctx.far && !FAR_PROPS.has(this.city.props.kind[i])) continue;
+        buildProp(ctx, i);
+        if (due()) { pause(); yield 'props'; resume(); }
+      }
       for (const pump of data.pumps || []) buildPump(ctx, pump);
       let done = 'props';
       for (const i of data.places) { pause(); yield done; resume(); buildPlace(ctx, this.city.places[i], i); done = 'place'; }
@@ -161,15 +217,22 @@ export class ChunkManager {
     if (!sg.empty) { const m = new THREE.Mesh(sg.build(), this.mat.signs); m.receiveShadow = true; m.matrixAutoUpdate = false; meshes.push(m); }
     if (!fg.empty) { const m = new THREE.Mesh(fg.build(), this.mat.foliage); m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; meshes.push(m); }
     let pools = null;
-    if (!pg.empty) { pools = new THREE.Mesh(pg.build(), this.mat.pools); pools.matrixAutoUpdate = false; pools.renderOrder = 2; pools.visible = this.mat.pools.opacity > 0.02; meshes.push(pools); }
+    if (!pg.empty) { pools = new THREE.Mesh(pg.build(), this.mat.pools); pools.matrixAutoUpdate = false; pools.renderOrder = 2; meshes.push(pools); }
     if (wires.length) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3));
       setBounds(geo, geo.attributes.position.array);
       const l = new THREE.LineSegments(geo, this.mat.wires); l.matrixAutoUpdate = false; meshes.push(l);
     }
-    for (const m of meshes) { m.updateMatrix(); this.group.add(m); }
-    this.chunks.set(key, { cx, cz, meshes, pools });
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    for (const m of meshes) { m.updateMatrix(); group.add(m); }
+    if (pools) pools.visible = this.night > 0.02;
+    let ch = this.chunks.get(key);
+    if (!ch) this.chunks.set(key, (ch = new Chunk(cx, cz)));
+    ch.levels[lod] = { group, meshes, pools };
+    this.group.add(group);
+    this._pick(ch, this._dist(cx, cz));
     pause();
     this.stats.built++; this.stats.ms += ms;
   }
@@ -296,6 +359,43 @@ function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   if (w >= 8 && sa === s0 && d0 < 0.3 && s0 <= net.trimStart(road) + 0.01 && net.jRoads[net.ra[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, p, off0, e0, 1, s0);
 }
 
+/**
+ * Speed breakers: a rounded hump across the carriageway in black and yellow bands. Potholes
+ * (close up only): a ragged rim of broken asphalt round a dark hollow that holds rainwater.
+ */
+function buildBumps(ctx, data) {
+  const { g, city, net } = ctx;
+  for (const i of data.bumps || []) {
+    const b = city.bumps.bumps[i], y0 = (ROAD_Y[net.type[b.road]] ?? 0.06) + 0.004;
+    const nx = b.dz, nz = -b.dx, w = b.left + b.right;
+    g.setTint(0xffffff, 0).setTile(TILE.KERB[0], TILE.KERB[1], 1, 1);
+    let pl = -1, pr = -1;
+    for (let k = 0; k <= 8; k++) {
+      const u = BUMP_LEN * (k / 8 - 0.5), y = y0 + humpAt(u), cx = b.x + b.dx * u, cz = b.z + b.dz * u;
+      const l = g.v(cx + nx * b.left, y, cz + nz * b.left, 0, k / 8), r = g.v(cx - nx * b.right, y, cz - nz * b.right, w / 3.2, k / 8);
+      if (k) g.quad(pl, pr, r, l);
+      pl = l; pr = r;
+    }
+  }
+  if (ctx.far) return;
+  for (const i of data.holes || []) {
+    const h = city.bumps.holes[i], y = (ROAD_Y[net.type[h.road]] ?? 0.06) + 0.003, r = rng(h.seed);
+    // Plain colours are linear: these read as dusty broken asphalt and a black hollow.
+    const n = 13, rim = [], pit = [];
+    for (let k = 0; k < n; k++) {
+      const a = h.rot + (k / n) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a), k1 = h.r * r.range(0.7, 1.3), k2 = k1 * r.range(0.45, 0.75);
+      rim.push([h.x + c * k1, h.z + s * k1]);
+      pit.push([h.x + c * k2, h.z + s * k2]);
+    }
+    g.hollow(0x1a1916); // the broken edge gets as wet as the street
+    const R = rim.map(([x, z]) => g.v(x, y, z)), Pr = pit.map(([x, z]) => g.v(x, y, z));
+    for (let k = 0; k < n; k++) g.quad(R[k], Pr[k], Pr[(k + 1) % n], R[(k + 1) % n]);
+    g.hollow(0x070706);
+    const P = pit.map(([x, z]) => g.v(x, y + 0.001, z)), mid = g.v(h.x, y + 0.001, h.z);
+    for (let k = 0; k < n; k++) g.tri(mid, P[(k + 1) % n], P[k]);
+  }
+}
+
 /** Columns and caps under a flyover's raised deck, between s0 and s1. */
 function buildPiers(ctx, road, s0, s1) {
   const { g, net } = ctx;
@@ -385,7 +485,7 @@ function buildRails(ctx, data) {
         const c = g.v(x1 - nx * BALLAST_HW, 0.09, z1 - nz * BALLAST_HW), d = g.v(x1 + nx * BALLAST_HW, 0.09, z1 + nz * BALLAST_HW);
         g.quad(a, b, c, d);
         g.color(0x8e897f, 0);
-        for (let s = s0 + 0.45; s < s1; s += 0.9) g.cbox(ax + fx * s, 0.09, az + fz * s, 1.35, 0.06, 0.12, rot);
+        if (!ctx.far) for (let s = s0 + 0.45; s < s1; s += 0.9) g.cbox(ax + fx * s, 0.09, az + fz * s, 1.35, 0.06, 0.12, rot);
       }
       // The rails: steel, worn bright on top.
       const y = crossing ? 0.05 : 0.15;
@@ -659,8 +759,14 @@ function skirt(ctx, X, Z, hw, hd, on, width = 1.1) {
 const RES_ROWS = { [STYLE.HOUSE]: ROW.RES, [STYLE.SHOPHOUSE]: ROW.RES, [STYLE.APARTMENT]: ROW.BALCONY, [STYLE.OLD]: ROW.OLD, [STYLE.COMMERCIAL]: ROW.MODERN, [STYLE.INSTITUTION]: ROW.MODERN, [STYLE.SHED]: ROW.BLANK, [STYLE.HUT]: ROW.BLANK, [STYLE.UNFINISHED]: ROW.BLANK };
 const AWNINGS = [0x2f6fb5, 0x2e8b57, 0xe67e22, 0xc0392b, 0x1f9aa8, 0xf1c40f, 0x7d3c98];
 
+/**
+ * A building on its lot. From afar (ctx.far) the same block in the same paint and windows,
+ * with its roof, parapet, tank, stair room and hoarding, but none of the relief, balconies,
+ * awnings, signs, compound walls or contact shading. Every random choice is still made, in
+ * the same order, so the two versions match.
+ */
 function buildLot(ctx, i) {
-  const { g, sg, pg, city } = ctx;
+  const { g, sg, pg, city, far } = ctx;
   const L = city.lots;
   const x = L.x[i], z = L.z[i], hw = L.hw[i], hd = L.hd[i], rot = L.rot[i];
   const h = L.h[i], floors = L.floors[i], style = L.style[i], color = L.color[i], seed = L.seed[i], flags = L.flags[i];
@@ -716,11 +822,11 @@ function buildLot(ctx, i) {
   // Relief: plinth (shops stand on their platform instead) and roof slab edge on every
   // open face; slab edges, chajjas and pilasters only where the building fronts a street.
   const street = flags & 1024;
-  if (!unfinished) {
+  if (!unfinished && !far) {
     g.setTint(mix(color, 0x6b6359, 0.5), sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
     band(g, X, Z, hw, hd, open.map((o, k) => o && !(k === 0 && shops)), 0, PLINTH, 0.06);
   }
-  if (!unfinished && street) {
+  if (!unfinished && street && !far) {
     g.setTint(mix(color, 0xffffff, 0.2), sb);
     band(g, X, Z, hw, hd, open, h - 0.14, h + 0.03, 0.11, 0, false);
     const edge = style === STYLE.OLD ? 0.12 : 0.07;
@@ -756,12 +862,12 @@ function buildLot(ctx, i) {
     }
     // Inner faces (reverse direction, inset) and the coping on top, a little proud of the wall.
     const Q = [[-hw + t, -hd + t], [hw - t, -hd + t], [hw - t, hd - t], [-hw + t, hd - t]];
-    for (const [a, b] of WALLS) {
+    for (const [a, b] of far ? [] : WALLS) {
       const ax = X(Q[b][0], Q[b][1]), az = Z(Q[b][0], Q[b][1]), bx = X(Q[a][0], Q[a][1]), bz = Z(Q[a][0], Q[a][1]);
       g.wall(ax, az, bx, bz, h, h + ph, 0, Math.hypot(bx - ax, bz - az) / FLOOR, 0.7, 0.95);
     }
     g.color(mix(color, 0xffffff, 0.35), sb);
-    for (const [a, b] of WALLS) {
+    for (const [a, b] of far ? [] : WALLS) {
       const o0x = X(P[a][0], P[a][1]), o0z = Z(P[a][0], P[a][1]), o1x = X(P[b][0], P[b][1]), o1z = Z(P[b][0], P[b][1]);
       const i0x = X(Q[a][0], Q[a][1]), i0z = Z(Q[a][0], Q[a][1]), i1x = X(Q[b][0], Q[b][1]), i1z = Z(Q[b][0], Q[b][1]);
       const y = h + ph;
@@ -770,7 +876,7 @@ function buildLot(ctx, i) {
     }
     if (railing) {
       g.color(r.pick([0x2b2d2e, 0x3b4a57, 0x5a3a2a]), 0);
-      for (const [k, [a, b]] of WALLS.entries()) {
+      for (const [k, [a, b]] of far ? [] : WALLS.entries()) {
         if (!open[k]) continue;
         const ax = P[a][0] * 0.98, az = P[a][1] * 0.98, bx = P[b][0] * 0.98, bz = P[b][1] * 0.98;
         g.beam(X(ax, az), h + ph + 0.85, Z(ax, az), X(bx, bz), h + ph + 0.85, Z(bx, bz), 0.025);
@@ -780,7 +886,7 @@ function buildLot(ctx, i) {
       }
     }
   }
-  if (unfinished) {
+  if (unfinished && !far) {
     // Rebar sticking out of the roof: the next floor is always "coming soon".
     g.color(0x5b4636, 0);
     for (const [px, pz] of [[-hw + 0.3, -hd + 0.3], [hw - 0.3, -hd + 0.3], [hw - 0.3, hd - 0.3], [-hw + 0.3, hd - 0.3], [0, -hd + 0.3], [0, hd - 0.3]]) g.cbox(X(px, pz), h, Z(px, pz), 0.05, 1.3, 0.05, rot);
@@ -789,8 +895,10 @@ function buildLot(ctx, i) {
   if (flags & 4) {
     const tx = r.range(-hw + 1, hw - 1), tz = r.range(0, hd - 1.1);
     const rad = r.range(0.55, 0.85);
-    g.color(0x4a4a4a, 0); g.cbox(X(tx, tz), h, Z(tx, tz), rad * 0.8, 0.5, rad * 0.8, rot);
-    g.color(0x1d1f20, 0); g.cyl(X(tx, tz), h + 0.5, Z(tx, tz), rad, rad * 1.5, 8, rad * 0.92);
+    if (far) { g.color(0x1d1f20, 0); g.cbox(X(tx, tz), h, Z(tx, tz), rad * 0.9, 0.5 + rad * 1.5, rad * 0.9, rot); } else {
+      g.color(0x4a4a4a, 0); g.cbox(X(tx, tz), h, Z(tx, tz), rad * 0.8, 0.5, rad * 0.8, rot);
+      g.color(0x1d1f20, 0); g.cyl(X(tx, tz), h + 0.5, Z(tx, tz), rad, rad * 1.5, 8, rad * 0.92);
+    }
   }
   if (flags & 8 && hw > 2.4 && hd > 2.6) {
     const sx = r.chance(0.5) ? -hw + 1.4 : hw - 1.4, sz = hd - 1.5;
@@ -798,19 +906,21 @@ function buildLot(ctx, i) {
     g.box(X(sx, sz), h, Z(sx, sz), 1.2, 2.5, 1.25, rot, FLOOR);
     g.color(0x6b4a33, 0);
     // Door facing forward.
-    g.wall(X(sx + 0.45, sz - 1.27), Z(sx + 0.45, sz - 1.27), X(sx - 0.45, sz - 1.27), Z(sx - 0.45, sz - 1.27), h, h + 2.0, 0, 1, 0, 1);
+    if (!far) g.wall(X(sx + 0.45, sz - 1.27), Z(sx + 0.45, sz - 1.27), X(sx - 0.45, sz - 1.27), Z(sx - 0.45, sz - 1.27), h, h + 2.0, 0, 1, 0, 1);
   }
   if (flags & 256) {
     const dx = r.range(-hw + 0.6, hw - 0.6), dz = -hd + 0.6;
-    g.color(0x777b7c, 0); g.cbox(X(dx, dz), h, Z(dx, dz), 0.04, 1.0, 0.04, rot);
-    g.color(0xd9d9d6, 0); g.cyl(X(dx, dz), h + 0.9, Z(dx, dz), 0.4, 0.15, 7, 0.05);
+    if (!far) {
+      g.color(0x777b7c, 0); g.cbox(X(dx, dz), h, Z(dx, dz), 0.04, 1.0, 0.04, rot);
+      g.color(0xd9d9d6, 0); g.cyl(X(dx, dz), h + 0.9, Z(dx, dz), 0.4, 0.15, 7, 0.05);
+    }
   }
   // Balconies on the street face: a thin slab with an MS railing or a concrete balustrade.
   if (flags & 16 && floors >= 2 && style !== STYLE.COMMERCIAL) {
     const bw = Math.min(hw * 0.7, 3.2), bd = 0.95;
     const concrete = style !== STYLE.OLD && r.chance(0.6);
     const rail = style === STYLE.OLD ? 0x4a3020 : r.pick([0x26292b, 0x2d4b66, 0x5e2a24, 0xd9d9d4]);
-    for (let f = 1; f < floors; f++) {
+    for (let f = 1; f < (far ? 1 : floors); f++) {
       const y = f * FLOOR;
       g.setTint(mix(color, 0xffffff, 0.22), sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
       g.box(X(0, -hd - bd / 2), y - 0.14, Z(0, -hd - bd / 2), bw, 0.14, bd / 2, rot, FLOOR, true, true);
@@ -834,43 +944,47 @@ function buildLot(ctx, i) {
     const sw = hw - 0.3;
     if (flags & 64) {
       const cloth = mix(r.pick(AWNINGS), 0x8a8a84, 0.3);
-      const y0 = 3.0, y1 = 2.66, out = 1.1;
-      const A0 = [X(-sw, -hd), Z(-sw, -hd)], B0 = [X(sw, -hd), Z(sw, -hd)], C0 = [X(sw, -hd - out), Z(sw, -hd - out)], D0 = [X(-sw, -hd - out), Z(-sw, -hd - out)];
-      g.color(cloth, 0);
-      g.quad(g.v(A0[0], y0, A0[1]), g.v(B0[0], y0, B0[1]), g.v(C0[0], y1, C0[1]), g.v(D0[0], y1, D0[1]));
-      // Underside a little lighter: sun through the cloth.
-      g.color(mix(cloth, 0xfff2d8, 0.35), 0);
-      g.quad(g.v(A0[0], y0 - 0.01, A0[1]), g.v(D0[0], y1 - 0.01, D0[1]), g.v(C0[0], y1 - 0.01, C0[1]), g.v(B0[0], y0 - 0.01, B0[1]));
-      g.color(cloth, 0);
-      // Valance along the front edge and two steel brackets.
-      g.box(X(0, -hd - out), y1 - 0.16, Z(0, -hd - out), sw, 0.16, 0.012, rot);
-      g.color(0x3a3d3f, 0);
-      for (const bx2 of [-sw + 0.3, sw - 0.3]) g.beam(X(bx2, -hd), y0 - 0.55, Z(bx2, -hd), X(bx2, -hd - out * 0.6), y0 - (y0 - y1) * 0.6 - 0.03, Z(bx2, -hd - out * 0.6), 0.018);
+      if (!far) {
+        const y0 = 3.0, y1 = 2.66, out = 1.1;
+        const A0 = [X(-sw, -hd), Z(-sw, -hd)], B0 = [X(sw, -hd), Z(sw, -hd)], C0 = [X(sw, -hd - out), Z(sw, -hd - out)], D0 = [X(-sw, -hd - out), Z(-sw, -hd - out)];
+        g.color(cloth, 0);
+        g.quad(g.v(A0[0], y0, A0[1]), g.v(B0[0], y0, B0[1]), g.v(C0[0], y1, C0[1]), g.v(D0[0], y1, D0[1]));
+        // Underside a little lighter: sun through the cloth.
+        g.color(mix(cloth, 0xfff2d8, 0.35), 0);
+        g.quad(g.v(A0[0], y0 - 0.01, A0[1]), g.v(D0[0], y1 - 0.01, D0[1]), g.v(C0[0], y1 - 0.01, C0[1]), g.v(B0[0], y0 - 0.01, B0[1]));
+        g.color(cloth, 0);
+        // Valance along the front edge and two steel brackets.
+        g.box(X(0, -hd - out), y1 - 0.16, Z(0, -hd - out), sw, 0.16, 0.012, rot);
+        g.color(0x3a3d3f, 0);
+        for (const bx2 of [-sw + 0.3, sw - 0.3]) g.beam(X(bx2, -hd), y0 - 0.55, Z(bx2, -hd), X(bx2, -hd - out * 0.6), y0 - (y0 - y1) * 0.6 - 0.03, Z(bx2, -hd - out * 0.6), 0.018);
+      }
     }
     const slot = (seed >>> 8) % 32;
     const col = slot % SIGN_COLS, row = Math.floor(slot / SIGN_COLS);
-    sg.setTint(0xffffff, 0).setTile(col, row, 1, 2);
-    const y0 = 3.0, y1 = 3.75, f = -hd - 0.14;
-    sg.wall(X(sw, f), Z(sw, f), X(-sw, f), Z(-sw, f), y0, y1, 0, 1, 0, 1);
-    g.color(0x2a2a2a, 0); g.cbox(X(0, -hd - 0.07), y0, Z(0, -hd - 0.07), sw, y1 - y0, 0.07, rot);
-    lightPool(pg, X(0, -hd - 1.6), Z(0, -hd - 1.6), Math.min(3.6, hw + 0.8));
+    if (!far) {
+      sg.setTint(0xffffff, 0).setTile(col, row, 1, 2);
+      const y0 = 3.0, y1 = 3.75, f = -hd - 0.14;
+      sg.wall(X(sw, f), Z(sw, f), X(-sw, f), Z(-sw, f), y0, y1, 0, 1, 0, 1);
+      g.color(0x2a2a2a, 0); g.cbox(X(0, -hd - 0.07), y0, Z(0, -hd - 0.07), sw, y1 - y0, 0.07, rot);
+      lightPool(pg, X(0, -hd - 1.6), Z(0, -hd - 1.6), Math.min(3.6, hw + 0.8));
+    }
   }
   // Compound wall with a gate gap (only where it keeps off the road).
   if (city.compoundWall(i)) {
     const f = -hd - 1.6, gap = 1.6;
     g.setTint(color, sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
-    for (const [l0, l1] of [[-hw, -gap / 2], [gap / 2, hw]]) {
+    for (const [l0, l1] of far ? [] : [[-hw, -gap / 2], [gap / 2, hw]]) {
       const ax = X(l1, f), az = Z(l1, f), bx = X(l0, f), bz = Z(l0, f);
       const len = Math.hypot(bx - ax, bz - az);
       g.wall(ax, az, bx, bz, 0, 1.25, 0, len / FLOOR, 0.6, 1);
       g.wall(bx + (X(0, f + 0.2) - X(0, f)), bz + (Z(0, f + 0.2) - Z(0, f)), ax + (X(0, f + 0.2) - X(0, f)), az + (Z(0, f + 0.2) - Z(0, f)), 0, 1.25, 0, len / FLOOR, 0.6, 1);
     }
     g.color(r.pick([0x2d5d8a, 0x7d2f2f, 0x2f6b3a, 0x333333]), 0);
-    g.cbox(X(0, f), 0, Z(0, f), gap / 2, 1.2, 0.04, rot);
+    if (!far) g.cbox(X(0, f), 0, Z(0, f), gap / 2, 1.2, 0.04, rot);
     // Bougainvillea spilling over the wall beside the gate.
     if (r.chance(0.6)) {
       const side = r.chance(0.5) ? 1 : -1, bx = side * r.range(gap / 2 + 0.9, Math.max(gap / 2 + 1, hw - 0.8));
-      ctx.fg.crown(X(bx, f + 0.3), 1.5, Z(bx, f + 0.3), 1.3, 0.85, 0.75, 12, 1.3, LEAF.BOUGAIN, 0xffffff, seed + 3, 0.4);
+      if (!far) ctx.fg.crown(X(bx, f + 0.3), 1.5, Z(bx, f + 0.3), 1.3, 0.85, 0.75, 12, 1.3, LEAF.BOUGAIN, 0xffffff, seed + 3, 0.4);
     }
   }
   // Rooftop hoarding on commercial blocks.
@@ -884,7 +998,7 @@ function buildLot(ctx, i) {
     g.wall(X(bw, -hd + 0.5), Z(bw, -hd + 0.5), X(-bw, -hd + 0.5), Z(-bw, -hd + 0.5), y0, y1, 0, 1, 0, 1);
   }
   // Ground contact: darker earth along walls that stand on open ground.
-  if (!unfinished) skirt(ctx, X, Z, hw + 0.06, hd + 0.06, open.map((o, k) => o && !(k === 0 && shops)));
+  if (!unfinished && !far) skirt(ctx, X, Z, hw + 0.06, hd + 0.06, open.map((o, k) => o && !(k === 0 && shops)));
 }
 
 /**
@@ -912,7 +1026,7 @@ function frontage(ctx, i, ax, az, bx, bz, len, groundRow, top, r) {
     const x0 = ax + dx * bw * k, z0 = az + dz * bw * k, x1 = ax + dx * bw * (k + 1), z1 = az + dz * bw * (k + 1);
     g.wall(x0, z0, x1, z1, 0, top, k, k + 1, 0, top / FLOOR);
   }
-  if (!shop && !(L.flags[i] & 1024)) return;
+  if (ctx.far || (!shop && !(L.flags[i] & 1024))) return;
   g.setTint(mix(L.color[i], 0x6b6359, 0.5), L.seed[i] & 255).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
   if (shop) {
     const depth = city.shopPlatform(i);
@@ -932,7 +1046,7 @@ function buildShed(ctx, x, z, hw, hd, rot, h, color, sb, style, r) {
   const X = (lx, lz) => x + lx * c + lz * s, Z = (lx, lz) => z - lx * s + lz * c;
   if (style === STYLE.HUT && r.chance(0.35)) {
     const side = r.chance(0.5) ? 1 : -1;
-    for (let k = 0; k < r.int(1, 3); k++) banana(ctx, X(side * (hw + 1.2 + k * 0.4), -hd + 1 + k * 1.6), Z(side * (hw + 1.2 + k * 0.4), -hd + 1 + k * 1.6), hash2(Math.round(x * 7) + k, 77));
+    for (let k = 0; k < r.int(1, 3); k++) if (!ctx.far) banana(ctx, X(side * (hw + 1.2 + k * 0.4), -hd + 1 + k * 1.6), Z(side * (hw + 1.2 + k * 0.4), -hd + 1 + k * 1.6), hash2(Math.round(x * 7) + k, 77));
   }
   const wallH = style === STYLE.HUT ? 2.7 : h * 0.72;
   const P = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
@@ -1047,6 +1161,9 @@ function banana(ctx, x, z, seed) {
 }
 
 // ------------------------------------------------------------------ props
+// The props a far chunk keeps: street lamps (their light pools at night) and hoardings.
+const FAR_PROPS = new Set([PROP.LAMP, PROP.MEDIAN_LAMP, PROP.HOARDING]);
+
 function buildProp(ctx, i) {
   const { g, pg, city, net } = ctx;
   const P = city.props;

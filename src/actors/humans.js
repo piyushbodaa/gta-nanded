@@ -1,9 +1,11 @@
-// Every person in the city is drawn by one set of instanced body parts with a
-// procedural skeleton: ~14 draw calls for all pedestrians, drivers, riders,
-// police and the player, whatever their number.
+// Every person in the city is drawn by one instanced mesh with a procedural skeleton:
+// one draw call for all pedestrians, drivers, riders, police and the player, whatever
+// their number. The processor poses the bones; the graphics chip bends the body to them.
 import * as THREE from 'three';
 import { rng, clamp } from '../core/math.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { radialTexture } from '../world/citymat.js';
+import { sendFirst } from '../core/buffers.js';
 
 // ------------------------------------------------------------------ part geometry
 // Sculpted, smooth-shaded body parts built from lofted rings: a chest wider than
@@ -172,27 +174,55 @@ function pack() {
   return merge(loft([[0.08, 0.13, 0.05, 0.06], [0.2, 0.145, 0.06, 0.07], [0.38, 0.14, 0.055, 0.065], [0.44, 0.1, 0.045, 0.05]], 14).translate(0, 0, -0.17));
 }
 
+// The skeleton's bones; every part hangs from one (the limbs from one each side).
+const BONES = ['hips', 'torso', 'head', 'upperArmL', 'lowerArmL', 'upperArmR', 'lowerArmR', 'thighL', 'shinL', 'footL', 'thighR', 'shinR', 'footR'];
+// Parts only some people have, and the limbs (skipped at range): bits of each person's mask.
+const SHOW = { hair: 1, long: 2, bun: 4, turban: 8, cap: 16, beard: 32, moustache: 64, skirt: 128, kurta: 256, pack: 512, limbs: 1024 };
 const PARTS = [
-  { key: 'head', geo: head, color: 'skin', mat: 'skin' },
-  { key: 'face', geo: face, color: 'brow', mat: 'skin' },
-  { key: 'hair', geo: () => hairShell(), color: 'hair', mat: 'hair' },
-  { key: 'long', geo: () => merge(ellipsoid(0.088, 0.15, 0.045, 0.1, -0.088, 12, 8)), color: 'hair', mat: 'hair', flag: 'long' },
-  { key: 'bun', geo: () => merge(ellipsoid(0.056, 0.052, 0.048, 0.16, -0.12)), color: 'hair', mat: 'hair', flag: 'bun' },
-  { key: 'turban', geo: turban, color: 'extra', flag: 'turban' },
-  { key: 'cap', geo: () => merge(ellipsoid(0.072, 0.05, 0.122, 0.272, -0.01, 12, 6)), color: 'cap', flag: 'cap' },
-  { key: 'beard', geo: () => merge(ellipsoid(0.084, 0.072, 0.07, 0.11, 0.045, 12, 7)), color: 'hair', mat: 'hair', flag: 'beard' },
-  { key: 'moustache', geo: () => merge(ellipsoid(0.031, 0.008, 0.012, 0.141, 0.1, 10, 5)), color: 'hair', mat: 'hair', flag: 'moustache' },
-  { key: 'torso', geo: torso, color: 'shirt' },
-  { key: 'hips', geo: hips, color: 'pants' },
-  { key: 'skirt', geo: () => skirt(0.86, 0.18, 0.28), color: 'extra', flag: 'skirt' },
-  { key: 'kurta', geo: () => skirt(0.44, 0.19, 0.235), color: 'shirt', flag: 'kurta' },
-  { key: 'pack', geo: pack, color: 'extra', flag: 'pack' },
-  { key: 'upperArm', geo: () => limb(0.29, [[0, 0.058], [0.3, 0.054], [0.65, 0.048], [1, 0.043]], 0.94), color: 'sleeve', count: 2 },
-  { key: 'lowerArm', geo: hand, color: 'skin', mat: 'skin', count: 2 },
-  { key: 'thigh', geo: () => limb(0.43, [[0, 0.086], [0.3, 0.079], [0.72, 0.063], [1, 0.055]], 0.95), color: 'pants', count: 2 },
-  { key: 'shin', geo: () => limb(0.42, [[0, 0.054], [0.25, 0.059], [0.7, 0.045], [1, 0.039]], 0.95), color: 'legs', count: 2 },
-  { key: 'foot', geo: shoe, color: 'shoes', count: 2 },
+  { key: 'head', geo: head, color: 'skin', mat: 'skin', bones: ['head'] },
+  { key: 'face', geo: face, color: 'brow', mat: 'skin', bones: ['head'] },
+  { key: 'hair', geo: () => hairShell(), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.hair },
+  { key: 'long', geo: () => merge(ellipsoid(0.088, 0.15, 0.045, 0.1, -0.088, 12, 8)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.long },
+  { key: 'bun', geo: () => merge(ellipsoid(0.056, 0.052, 0.048, 0.16, -0.12)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.bun },
+  { key: 'turban', geo: turban, color: 'extra', bones: ['head'], show: SHOW.turban },
+  { key: 'cap', geo: () => merge(ellipsoid(0.072, 0.05, 0.122, 0.272, -0.01, 12, 6)), color: 'cap', bones: ['head'], show: SHOW.cap },
+  { key: 'beard', geo: () => merge(ellipsoid(0.084, 0.072, 0.07, 0.11, 0.045, 12, 7)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.beard },
+  { key: 'moustache', geo: () => merge(ellipsoid(0.031, 0.008, 0.012, 0.141, 0.1, 10, 5)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.moustache },
+  { key: 'torso', geo: torso, color: 'shirt', bones: ['torso'] },
+  { key: 'hips', geo: hips, color: 'pants', bones: ['hips'] },
+  { key: 'skirt', geo: () => skirt(0.86, 0.18, 0.28), color: 'extra', bones: ['hips'], show: SHOW.skirt },
+  { key: 'kurta', geo: () => skirt(0.44, 0.19, 0.235), color: 'shirt', bones: ['hips'], show: SHOW.kurta },
+  { key: 'pack', geo: pack, color: 'extra', bones: ['torso'], show: SHOW.pack },
+  { key: 'upperArm', geo: () => limb(0.29, [[0, 0.058], [0.3, 0.054], [0.65, 0.048], [1, 0.043]], 0.94), color: 'sleeve', bones: ['upperArmL', 'upperArmR'], show: SHOW.limbs },
+  { key: 'lowerArm', geo: hand, color: 'skin', mat: 'skin', bones: ['lowerArmL', 'lowerArmR'], show: SHOW.limbs },
+  { key: 'thigh', geo: () => limb(0.43, [[0, 0.086], [0.3, 0.079], [0.72, 0.063], [1, 0.055]], 0.95), color: 'pants', bones: ['thighL', 'thighR'], show: SHOW.limbs },
+  { key: 'shin', geo: () => limb(0.42, [[0, 0.054], [0.25, 0.059], [0.7, 0.045], [1, 0.039]], 0.95), color: 'legs', bones: ['shinL', 'shinR'], show: SHOW.limbs },
+  { key: 'foot', geo: shoe, color: 'shoes', bones: ['footL', 'footR'], show: SHOW.limbs },
 ];
+// Each person's colours, in the order the shader reads them, and how glossy each material is.
+const SLOTS = ['skin', 'brow', 'hair', 'extra', 'cap', 'shirt', 'pants', 'sleeve', 'legs', 'shoes'];
+const ROUGH = { cloth: 0.86, skin: 0.55, hair: 0.42 };
+
+/**
+ * Every part of the body in one mesh. Each vertex knows its bone, its colour slot, the mask
+ * bit that shows it (0: always) and its roughness; welded back to indexed triangles.
+ */
+function crowdGeometry() {
+  const pos = [], nrm = [], tag = [];
+  for (const p of PARTS) {
+    const g0 = p.geo(), g = g0.index ? g0.toNonIndexed() : g0;
+    const P = g.attributes.position.array, N = g.attributes.normal.array;
+    for (const bone of p.bones) {
+      for (let i = 0; i < P.length; i++) { pos.push(P[i]); nrm.push(N[i]); }
+      for (let i = 0; i < P.length / 3; i++) tag.push(BONES.indexOf(bone), SLOTS.indexOf(p.color), p.show || 0, ROUGH[p.mat || 'cloth']);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('crowdPart', new THREE.Float32BufferAttribute(tag, 4));
+  return mergeVertices(geo);
+}
 
 // ------------------------------------------------------------------ outfits
 const SKIN = [0x8d5524, 0xa0672c, 0xb5753d, 0xc68642, 0x7a4a24, 0xc98e5a, 0x9b6a40];
@@ -266,7 +296,7 @@ export function inShadowBox(b, x, y, z, margin) {
   return Math.abs(rx * b.xx + rz * b.xz) <= lim && Math.abs(rx * b.yx + y * b.yy + rz * b.yz) <= lim;
 }
 const _m = new THREE.Matrix4(), _root = new THREE.Matrix4(), _hip = new THREE.Matrix4(), _torso = new THREE.Matrix4();
-const _a = new THREE.Matrix4(), _b = new THREE.Matrix4(), _e = new THREE.Euler(), _c = new THREE.Color();
+const _a = new THREE.Matrix4(), _b = new THREE.Matrix4(), _e = new THREE.Euler();
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
 
 function local(out, x, y, z, rx = 0, ry = 0, rz = 0) {
@@ -276,35 +306,92 @@ function local(out, x, y, z, rx = 0, ry = 0, rz = 0) {
   return out;
 }
 
+// Each person's row in the crowd's data texture: three texels (a 3x4 matrix) per bone, then
+// four of colours, each carrying the person's mask in its last channel.
+const BLOCK = BONES.length * 3 + 4;
+const B = Object.fromEntries(BONES.map((k, i) => [k, i]));
+
+// The crowd shader: pose each vertex by its bone, colour it from its slot, and fold away
+// the parts a person doesn't have (their triangles collapse to a point and never draw).
+const CROWD_PARS = /* glsl */`
+uniform highp sampler2D crowdData;
+attribute vec4 crowdPart;
+varying vec3 vCrowdColor;
+varying float vCrowdRough;
+`;
+const CROWD_FETCH = /* glsl */`
+ivec2 crowdAt = ivec2(0, gl_InstanceID);
+int crowdBone = int(crowdPart.x) * 3, crowdSlot = int(crowdPart.y), crowdShow = int(crowdPart.z);
+vec4 crowdR0 = texelFetch(crowdData, crowdAt + ivec2(crowdBone, 0), 0);
+vec4 crowdR1 = texelFetch(crowdData, crowdAt + ivec2(crowdBone + 1, 0), 0);
+vec4 crowdR2 = texelFetch(crowdData, crowdAt + ivec2(crowdBone + 2, 0), 0);
+vec4 crowdC = texelFetch(crowdData, crowdAt + ivec2(${BONES.length * 3} + crowdSlot / 3, 0), 0);
+float crowdOn = crowdShow == 0 || (int(crowdC.w) & crowdShow) != 0 ? 1.0 : 0.0;
+`;
+const CROWD_POSITION = /* glsl */`
+transformed = crowdOn * vec3(dot(crowdR0, vec4(transformed, 1.0)), dot(crowdR1, vec4(transformed, 1.0)), dot(crowdR2, vec4(transformed, 1.0)));
+`;
+const CROWD_NORMAL = /* glsl */`
+objectNormal = vec3(dot(crowdR0.xyz, objectNormal), dot(crowdR1.xyz, objectNormal), dot(crowdR2.xyz, objectNormal));
+float crowdHex = floor((crowdSlot % 3 == 0 ? crowdC.x : crowdSlot % 3 == 1 ? crowdC.y : crowdC.z) + 0.5);
+vec3 crowdRgb = vec3(floor(crowdHex / 65536.0), mod(floor(crowdHex / 256.0), 256.0), mod(crowdHex, 256.0)) / 255.0;
+vCrowdColor = mix(crowdRgb * 0.0773993808, pow(crowdRgb * 0.9478672986 + 0.0521327014, vec3(2.4)), step(0.04045, crowdRgb));
+vCrowdRough = crowdPart.w;
+`;
+
 export class Humans {
   constructor(scene, capacity = 200) {
     this.capacity = capacity;
     this.list = [];
-    this.meshes = {};
-    const mats = {
-      cloth: new THREE.MeshStandardMaterial({ roughness: 0.86, metalness: 0 }),
-      skin: new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0 }),
-      hair: new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0 }),
+    // Everyone is one instanced mesh: one draw call for the whole crowd. The processor poses
+    // each skeleton and writes the bones into a float texture, a row per person; only the
+    // rows in use are sent (see _send).
+    this.data = new Float32Array(BLOCK * capacity * 4);
+    this.tex = new THREE.DataTexture(this.data, BLOCK, capacity, THREE.RGBAFormat, THREE.FloatType);
+    this.tex.minFilter = this.tex.magFilter = THREE.NearestFilter;
+    this.tex.generateMipmaps = false;
+    this.tex.needsUpdate = true;
+    const uniform = { value: this.tex };
+    const mat = new THREE.MeshStandardMaterial({ metalness: 0 });
+    mat.onBeforeCompile = sh => {
+      sh.uniforms.crowdData = uniform;
+      sh.vertexShader = CROWD_PARS + sh.vertexShader
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + CROWD_FETCH + CROWD_NORMAL)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + CROWD_POSITION);
+      sh.fragmentShader = 'varying vec3 vCrowdColor;\nvarying float vCrowdRough;\n' + sh.fragmentShader
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vCrowdColor;')
+        .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vCrowdRough;');
     };
-    for (const p of PARTS) {
-      const n = capacity * (p.count || 1);
-      const mesh = new THREE.InstancedMesh(p.geo(), mats[p.mat || 'cloth'], n);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      mesh.setColorAt(0, _c.set(0xffffff));
-      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-      mesh.count = 0;
-      mesh.castShadow = true;
-      mesh.frustumCulled = false;
-      mesh.name = `human-${p.key}`;
-      scene.add(mesh);
-      const entry = (this.meshes[p.key] = { mesh, part: p, n: 0, nShadow: 0 });
-      mesh.onBeforeShadow = () => { mesh.count = entry.nShadow; };
-      mesh.onAfterShadow = () => { mesh.count = entry.n; };
-    }
+    mat.customProgramCacheKey = () => 'crowd';
+    // The sun's shadow map draws the same poses.
+    const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    depth.onBeforeCompile = sh => {
+      sh.uniforms.crowdData = uniform;
+      sh.vertexShader = CROWD_PARS + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + CROWD_FETCH + CROWD_POSITION);
+    };
+    depth.customProgramCacheKey = () => 'crowd-depth';
+    const body = crowdGeometry(), geo = new THREE.InstancedBufferGeometry();
+    geo.setIndex(body.index);
+    for (const k in body.attributes) geo.setAttribute(k, body.attributes[k]);
+    geo.instanceCount = 0;
+    this.mesh = new THREE.Mesh(geo, mat);
+    this.mesh.customDepthMaterial = depth;
+    this.mesh.castShadow = true;
+    this.mesh.frustumCulled = false;
+    this.mesh.visible = false;
+    this.mesh.name = 'human-crowd';
+    this.n = 0; this.nShadow = 0;
+    // The shadow pass draws only the leading run of people inside the sun's shadow map.
+    // Whichever pass comes first sends this frame's rows.
+    this.mesh.onBeforeShadow = r => { this._send(r); geo.instanceCount = this.nShadow; };
+    this.mesh.onAfterShadow = () => { geo.instanceCount = this.n; };
+    this.mesh.onBeforeRender = r => this._send(r);
+    scene.add(this.mesh);
     // A soft patch of shade under everyone on their feet, for settings whose shadow map doesn't
     // follow moving people (without it they float). One draw call for the whole crowd.
     const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.blobs = new THREE.InstancedMesh(plane, new THREE.MeshBasicMaterial({ map: radialTexture(64), color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }), capacity);
+    this.blobs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.blobs.count = 0; this.blobs.frustumCulled = false; this.blobs.renderOrder = 1;
     this.blobs.material.polygonOffset = true; this.blobs.material.polygonOffsetFactor = -1; this.blobs.material.polygonOffsetUnits = -2;
     this.blobs.name = 'human-shade';
@@ -323,57 +410,84 @@ export class Humans {
   }
   remove(h) { const i = this.list.indexOf(h); if (i >= 0) this.list.splice(i, 1); }
 
-  /** Advance walk phases and write every visible body part's instance. */
+  /** Advance walk phases and write every visible person's bones and colours. */
   update(dt, cam, shadowBox) {
-    for (const k in this.meshes) this.meshes[k].n = 0;
     const maxD2 = this.drawDistance * this.drawDistance, blobD2 = 60 * 60;
-    let drawn = 0, blobs = 0;
+    let n = 0, blobs = 0;
     // People inside the sun's shadow map are written first; the shadow pass then draws only
-    // that leading run of each part's instances instead of everyone in view.
+    // that leading run instead of everyone in view.
     for (let pass = 0; pass < 2; pass++) {
       for (const h of this.list) {
         if (!h.visible) continue;
         const dx = h.x - cam.x, dz = h.z - cam.z, d2 = dx * dx + dz * dz;
         if (d2 > maxD2 || (pass === 0) !== inShadowBox(shadowBox, h.x, h.y, h.z, 2.5)) continue;
-        if (drawn >= this.capacity) break;
-        drawn++;
+        if (n >= this.capacity) break;
         // Stride ~1.35 m per cycle walking, longer running.
         const stride = h.speed > 3.2 ? 2.4 : 1.35;
         h.phase += (h.speed / stride) * Math.PI * 2 * dt;
+        this._at = n * BLOCK * 4;
         this._pose(h, d2 > 3600);
+        n++;
         // Seated riders and drivers are covered by their vehicle's shade.
         if (this.blobsOn && d2 < blobD2 && h.pose !== 'sit' && h.pose !== 'ride') {
           const lying = h.pose === 'lie', s = h.outfit.scale || 1;
           _e.set(0, h.yaw, 0); _q.setFromEuler(_e);
-          _v.set(h.x, h.y + 0.09, h.z); // above the road surface (6-7 cm) _s.set((lying ? 1.1 : 1.35) * s, 1, (lying ? 2.3 : 1.35) * s);
+          _v.set(h.x, h.y + 0.09, h.z); // above the road surface (6-7 cm)
+          _s.set((lying ? 1.1 : 1.35) * s, 1, (lying ? 2.3 : 1.35) * s);
           this.blobs.setMatrixAt(blobs++, _m.compose(_v, _q, _s));
           _s.set(1, 1, 1);
         }
       }
-      if (pass === 0) for (const k in this.meshes) this.meshes[k].nShadow = this.meshes[k].n;
+      if (pass === 0) this.nShadow = n;
     }
-    for (const k in this.meshes) {
-      const m = this.meshes[k];
-      m.mesh.count = m.n;
-      m.mesh.visible = m.n > 0; // no empty instanced draws (WebGL warns about each one)
-      m.mesh.instanceMatrix.needsUpdate = true;
-      if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
-    }
+    this.n = n;
+    this.mesh.geometry.instanceCount = n;
+    this.mesh.visible = n > 0;
+    this.dirty = n > 0;
     this.blobs.count = blobs;
     this.blobs.visible = blobs > 0;
-    this.blobs.instanceMatrix.needsUpdate = blobs > 0;
+    sendFirst(this.blobs.instanceMatrix, blobs);
   }
 
-  _emit(key, matrix, colorHex) {
-    const m = this.meshes[key];
-    if (m.n >= m.mesh.instanceMatrix.count) return;
-    m.mesh.setMatrixAt(m.n, matrix);
-    m.mesh.setColorAt(m.n, _c.setHex(colorHex));
-    m.n++;
+  /**
+   * Send the rows in use to the graphics chip, once a frame. three.js would send the whole
+   * texture, or ask the GPU for its unpack state before each partial upload (a stall in Chrome),
+   * so after three.js has made the texture this writes the rows itself, in one call.
+   */
+  _send(renderer) {
+    if (!this.dirty) return;
+    this.dirty = false;
+    const t = renderer.properties.get(this.tex).__webglTexture;
+    if (!t) { this.tex.needsUpdate = true; return; } // first frame: three.js uploads it all
+    const gl = renderer.getContext();
+    renderer.state.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0); gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0); gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, BLOCK, this.n, gl.RGBA, gl.FLOAT, this.data, 0);
+  }
+
+  /** One bone's matrix into this person's row (the three rows of its 3x4 part). */
+  _bone(bone, m) {
+    const d = this.data, e = m.elements, o = this._at + bone * 12;
+    d[o] = e[0]; d[o + 1] = e[4]; d[o + 2] = e[8]; d[o + 3] = e[12];
+    d[o + 4] = e[1]; d[o + 5] = e[5]; d[o + 6] = e[9]; d[o + 7] = e[13];
+    d[o + 8] = e[2]; d[o + 9] = e[6]; d[o + 10] = e[10]; d[o + 11] = e[14];
   }
 
   _pose(h, far) {
     const o = h.outfit, f = o.flags, sc = o.scale;
+    // Colours, and which of the optional parts this person shows.
+    const d = this.data, at = this._at + BONES.length * 12;
+    let mask = f.has('turban') ? SHOW.turban : SHOW.hair | (f.has('bun') ? SHOW.bun : 0) | (f.has('long') ? SHOW.long : 0);
+    if (f.has('beard')) mask |= SHOW.beard; else if (f.has('moustache')) mask |= SHOW.moustache;
+    for (const k of ['cap', 'skirt', 'kurta', 'pack']) if (f.has(k)) mask |= SHOW[k];
+    if (!far) mask |= SHOW.limbs; // limbs are a few pixels at range: skip them
+    for (let k = 0; k < 4; k++) {
+      d[at + k * 4] = o[SLOTS[k * 3]] ?? 0; d[at + k * 4 + 1] = o[SLOTS[k * 3 + 1]] ?? 0; d[at + k * 4 + 2] = o[SLOTS[k * 3 + 2]] ?? 0;
+      d[at + k * 4 + 3] = mask;
+    }
     // Joint angles for the current pose.
     let hipL = 0, hipR = 0, kneeL = 0.04, kneeR = 0.04, shL = 0.05, shR = 0.05, abL = 0.13, abR = -0.13, elL = -0.3, elR = -0.3;
     let lean = 0, bob = 0, pelvisY = 0.93, twist = 0, headYaw = h.lookYaw || 0;
@@ -430,39 +544,30 @@ export class Humans {
     _v.set(h.x, h.y + (pelvisY + bob) * sc, h.z);
     _s.set(sc, sc, sc);
     _root.compose(_v, _q, _s);
-    // Hips.
+    _s.set(1, 1, 1);
+    // Hips, torso, head.
     _hip.copy(_root);
-    this._emit('hips', _hip, o.pants);
-    if (f.has('skirt')) this._emit('skirt', _hip, o.extra);
-    if (f.has('kurta')) this._emit('kurta', _hip, o.shirt);
-    // Torso.
+    this._bone(B.hips, _hip);
     _torso.multiplyMatrices(_hip, local(_a, 0, 0.06, 0, lean, twist, 0));
-    this._emit('torso', _torso, o.shirt);
-    if (f.has('pack')) this._emit('pack', _torso, o.extra);
+    this._bone(B.torso, _torso);
     _m.multiplyMatrices(_torso, local(_a, 0, 0.53, 0, -lean * 0.5, headYaw, 0));
-    this._emit('head', _m, o.skin);
-    this._emit('face', _m, o.brow);
-    if (f.has('turban')) this._emit('turban', _m, o.extra);
-    else { this._emit('hair', _m, o.hair); if (f.has('bun')) this._emit('bun', _m, o.hair); if (f.has('long')) this._emit('long', _m, o.hair); }
-    if (f.has('beard')) this._emit('beard', _m, o.hair);
-    if (f.has('moustache') && !f.has('beard')) this._emit('moustache', _m, o.hair);
-    if (f.has('cap')) this._emit('cap', _m, o.cap);
-    if (far) return; // limbs are a few pixels at range: skip them
+    this._bone(B.head, _m);
+    if (far) return;
     // Arms.
-    for (const [sx, sh, ab, el] of [[0.235, shL, abL, elL], [-0.235, shR, abR, elR]]) {
+    for (const [sx, sh, ab, el, upper, lower] of [[0.235, shL, abL, elL, B.upperArmL, B.lowerArmL], [-0.235, shR, abR, elR, B.upperArmR, B.lowerArmR]]) {
       _a.multiplyMatrices(_torso, local(_b, sx, 0.47, 0, sh, 0, ab));
-      this._emit('upperArm', _a, o.sleeve);
+      this._bone(upper, _a);
       _m.multiplyMatrices(_a, local(_b, 0, -0.29, 0, el, 0, 0));
-      this._emit('lowerArm', _m, o.skin);
+      this._bone(lower, _m);
     }
     // Legs.
-    for (const [sx, hip, knee] of [[0.095, hipL, kneeL], [-0.095, hipR, kneeR]]) {
+    for (const [sx, hip, knee, thigh, shin, foot] of [[0.095, hipL, kneeL, B.thighL, B.shinL, B.footL], [-0.095, hipR, kneeR, B.thighR, B.shinR, B.footR]]) {
       _a.multiplyMatrices(_hip, local(_b, sx, -0.04, 0, hip, 0, 0));
-      this._emit('thigh', _a, o.pants);
+      this._bone(thigh, _a);
       _m.multiplyMatrices(_a, local(_b, 0, -0.43, 0, knee, 0, 0));
-      this._emit('shin', _m, o.legs);
+      this._bone(shin, _m);
       _a.multiplyMatrices(_m, local(_b, 0, -0.42, 0, -knee * 0.5 - hip * 0.3, 0, 0));
-      this._emit('foot', _a, o.shoes);
+      this._bone(foot, _a);
     }
   }
 }
