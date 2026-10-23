@@ -137,16 +137,18 @@ export class Game {
     const gl = this.renderer.getContext(), chunks = this.world.chunks, p = this.player.pos;
     const budget = 1000 / (q.fpsCap || 60);
     // Milliseconds per frame: the median of three short runs, so one busy moment can't decide.
+    // Reading back a pixel waits for the GPU to finish drawing; gl.finish() doesn't always.
+    const px = new Uint8Array(4), sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     const time = () => {
       // The nearest streets in first (the rest streams in during play anyway).
       for (const until = performance.now() + 700; chunks.queue.length && performance.now() < until;) chunks.update(p.x, p.z, 50);
       for (let i = 0; i < 5; i++) this.renderWorld(0, false); // compile, and let the GPU clock up
-      gl.finish();
+      sync();
       const runs = [];
       for (let k = 0; k < 3; k++) {
         const t0 = performance.now();
         for (let i = 0; i < 4; i++) this.renderWorld(0, false);
-        gl.finish();
+        sync();
         runs.push((performance.now() - t0) / 4);
       }
       return runs.sort((a, b) => a - b)[1];

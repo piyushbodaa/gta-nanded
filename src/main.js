@@ -49,7 +49,7 @@ async function boot() {
   await game.load((label, f) => status(label, f));
   // Compile the city's shaders on the GPU's own thread while the rest of the game is set up,
   // instead of stalling the first frame on them (KHR_parallel_shader_compile where available).
-  const compiled = game.renderer.compileAsync(game.scene, game.camera3).catch(() => {});
+  const compiled = game.renderer.extensions.has('KHR_parallel_shader_compile') ? game.renderer.compileAsync(game.scene, game.camera3).catch(() => {}) : null;
   game.hud = new Hud(game);
   game.effects = new Effects(game.scene);
   game.traffic = new Traffic(game);
