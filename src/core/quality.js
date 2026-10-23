@@ -17,7 +17,9 @@ export const ORDER = ['low', 'medium', 'high', 'ultra'];
 const KEY = 'gta-nanded-quality-v2', FPS_KEY = 'gta-nanded-fps-v1', LEARN_KEY = 'gta-nanded-auto-v1';
 /** The lowest resolution scale the governor goes to before it gives up a tier. */
 export const MIN_SCALE = 0.5;
-/** Frame-rate caps the player can pick: 0 follows the display. */
+/** The fewest cars, people and animals (a share of the tier's numbers) a slow processor thins them to. */
+export const MIN_CROWD = 0.4;
+/** Frame-rate caps the player can pick: 0 follows the display. Phones also have 'auto'. */
 export const FPS_CAPS = [0, 60, 30];
 
 const read = k => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -55,14 +57,17 @@ export class Quality {
     // Each tier as this device uses it.
     this.tiers = {};
     for (const k of ORDER) { const t = TIERS[k]; this.tiers[k] = { ...t, pr: this.phone ? t.phonePr : t.pr, msaa: t.msaa && !this.phone }; }
+    // Phones default to 'auto': 60 fps, or a steady 30 where the processor can't keep up.
     const fps = read(FPS_KEY);
-    this.fpsCap = fps !== null && FPS_CAPS.includes(Number(fps)) ? Number(fps) : this.phone ? 60 : 0;
+    this.fpsMode = fps === 'auto' ? 'auto' : fps !== null && FPS_CAPS.includes(Number(fps)) ? Number(fps) : this.phone ? 'auto' : 0;
+    this.autoCap = 60;
+    this.crowd = 1; // traffic, people and animals, as a share of the tier's numbers
     this.gpu = '';
     this.learned = null;
     this.autoTier = guessTier('', this.phone, navigator.hardwareConcurrency, navigator.deviceMemory);
     this.scale = 1; // dynamic resolution multiplier
     this.frames = []; this.windowT = 0; this.goodT = 0; this.slowWindows = 0;
-    this.ceiling = 1; this.ceilingT = 0; this.headroomT = 0;
+    this.ceiling = 1; this.ceilingT = 0; this.headroomT = 0; this.crowdT = 0; this.idleCpuT = 0;
     this.fps = 60;
   }
 
@@ -75,6 +80,8 @@ export class Quality {
       this.learned = l;
       this.autoTier = l.tier;
       this.scale = Math.min(1, Math.max(MIN_SCALE, l.scale ?? 1));
+      this.crowd = Math.min(1, Math.max(MIN_CROWD, l.crowd ?? 1));
+      this.autoCap = l.cap30 ? 30 : 60;
     } else this.autoTier = guessTier(this.gpu, this.phone, navigator.hardwareConcurrency, navigator.deviceMemory);
   }
 
@@ -85,7 +92,12 @@ export class Quality {
   /** How much the browser stretches our frame to fill the screen (1 = every device pixel drawn). */
   upscale() { return Math.max(1, (devicePixelRatio || 1) / this.pixelRatio()); }
   label() { return this.mode === 'auto' ? `Auto (${this.settings.name})` : this.settings.name; }
-  fpsLabel() { return this.fpsCap === 30 ? '30 fps · battery saver' : this.fpsCap === 60 ? '60 fps · smooth' : 'Unlimited'; }
+  /** The frame-rate cap in force (0: the display's rate). */
+  get fpsCap() { return this.fpsMode === 'auto' ? this.autoCap : this.fpsMode; }
+  fpsLabel() {
+    if (this.fpsMode === 'auto') return `Auto (${this.fpsCap} fps)`;
+    return this.fpsCap === 30 ? '30 fps · battery saver' : this.fpsCap === 60 ? '60 fps · smooth' : 'Unlimited';
+  }
   /** Tiers the automatic setting has found too heavy for this GPU. */
   get tooHeavy() { return this.learned?.tooHeavy || []; }
 
@@ -99,10 +111,10 @@ export class Quality {
   }
 
   cycleFps() {
-    // Phones choose between smooth and battery saver; desktops may also follow the display.
-    const caps = this.phone ? [60, 30] : FPS_CAPS;
-    this.fpsCap = caps[(caps.indexOf(this.fpsCap) + 1) % caps.length];
-    write(FPS_KEY, String(this.fpsCap));
+    // Phones: automatic, smooth or battery saver; desktops may also follow the display.
+    const modes = this.phone ? ['auto', 60, 30] : FPS_CAPS;
+    this.fpsMode = modes[(modes.indexOf(this.fpsMode) + 1) % modes.length];
+    write(FPS_KEY, String(this.fpsMode));
     this.frames.length = 0; this.windowT = 0; this.goodT = 0;
     return this.fpsLabel();
   }
@@ -110,7 +122,7 @@ export class Quality {
   /** Remember where the automatic setting settled for this GPU. */
   learn(extra = {}) {
     if (!this.gpu) return;
-    this.learned = { ...this.learned, gpu: this.gpu, tier: this.autoTier, scale: Math.round(this.scale * 100) / 100, ...extra };
+    this.learned = { ...this.learned, gpu: this.gpu, tier: this.autoTier, scale: Math.round(this.scale * 100) / 100, crowd: this.crowd, ...extra };
     write(LEARN_KEY, JSON.stringify(this.learned));
   }
 
@@ -130,6 +142,10 @@ export class Quality {
    * Feed raw frame times; steps resolution (and, as a last resort, tier) in auto mode.
    * Missed frames bring the resolution down at once; a run of frames that keep up raises
    * it again in small steps, but not back to a resolution that just failed for a minute.
+   * When the game's own work fills most of the frame, the processor is what can't keep up
+   * (budget phones on Firebase Test Lab spent 9-14 ms of a 16.7 ms frame there) and a
+   * blurrier picture wouldn't help: it thins the traffic and crowds instead, then, in auto
+   * frame-rate mode, settles for a steady 30 fps rather than a ragged 40-50.
    * Running at full resolution with time to spare for a minute and a half marks this GPU
    * for a tier up at the next launch (tier changes recompile shaders: never mid-game).
    * Browsers throttle hidden or covered tabs to a few frames a second: those windows say
@@ -150,8 +166,11 @@ export class Quality {
     const sorted = frames.sort((a, b) => a - b);
     const p80 = sorted[Math.floor(sorted.length * 0.8)];
     this.ceilingT = Math.max(0, this.ceilingT - spent);
+    const cpuBound = (game.cpuMs || 0) > target * 1000 * 0.55;
     if (p80 > target * 1.3) {
-      this.goodT = 0; this.headroomT = 0;
+      this.goodT = 0; this.headroomT = 0; this.idleCpuT = 0;
+      if (cpuBound && this.crowd > MIN_CROWD + 1e-3) { this.crowd = Math.max(MIN_CROWD, Math.round((this.crowd - 0.2) * 100) / 100); this.crowdT = 60; this.learn(); return; }
+      if (cpuBound && this.fpsMode === 'auto' && this.autoCap === 60) { this.autoCap = 30; this.learn({ cap30: true }); return; }
       this.ceiling = this.scale; this.ceilingT = 60;
       if (this.scale > MIN_SCALE + 1e-3) { this.scale = Math.max(MIN_SCALE, Math.round((this.scale - 0.1) * 100) / 100); game.resize(); this.learn(); }
       else if (++this.slowWindows >= 2) { this.slowWindows = 0; this.stepDown(game); }
@@ -160,6 +179,10 @@ export class Quality {
     this.slowWindows = 0;
     if (p80 > target * 1.05) return;
     this.goodT += spent;
+    // Crowds come back a step at a time once the frame has room again, never within a minute.
+    if (this.crowd < 1 && (this.crowdT -= spent) <= 0 && (game.cpuMs || 0) < target * 1000 * 0.4) { this.crowd = Math.min(1, Math.round((this.crowd + 0.1) * 100) / 100); this.crowdT = 20; this.learn(); }
+    // Settled at 30 but hardly busy for a minute and a half: try 60 again at the next launch.
+    if (this.fpsMode === 'auto' && this.autoCap === 30 && this.learned?.cap30 && (game.cpuMs || 0) < 7 && (this.idleCpuT += spent) >= 90) this.learn({ cap30: false });
     const top = this.ceilingT > 0 ? this.ceiling - 0.05 : 1;
     if (this.scale < top - 1e-3) {
       if (this.goodT >= 8) { this.scale = Math.min(top, Math.round((this.scale + 0.05) * 100) / 100); this.goodT = 0; game.resize(); this.learn(); }

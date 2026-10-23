@@ -88,7 +88,7 @@ export class Traffic {
 
   update(dt) {
     const g = this.game, focus = g.player.pos;
-    this.target = g.quality.settings.traffic * (g.trafficScale ?? 1);
+    this.target = g.quality.settings.traffic * (g.trafficScale ?? 1) * (g.quality.crowd ?? 1);
     // Despawn far traffic, spawn near the edge of view.
     for (let i = this.cars.length - 1; i >= 0; i--) {
       const v = this.cars[i];

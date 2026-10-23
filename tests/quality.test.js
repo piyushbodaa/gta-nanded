@@ -8,7 +8,7 @@ globalThis.document = { hidden: false };
 let coarse = true;
 globalThis.matchMedia = () => ({ matches: coarse });
 Object.assign(globalThis, { innerWidth: 915, innerHeight: 412, devicePixelRatio: 2.625 });
-const { Quality, gpuLabel, guessTier, MIN_SCALE } = await import('../src/core/quality.js');
+const { Quality, gpuLabel, guessTier, MIN_SCALE, MIN_CROWD } = await import('../src/core/quality.js');
 
 const phone = gpu => { coarse = true; globalThis.innerWidth = 915; globalThis.innerHeight = 412; globalThis.devicePixelRatio = 2.625; const q = new Quality(); q.setGpu(gpu); return q; };
 const game = () => ({ started: true, paused: false, resizes: 0, tiers: 0, resize() { this.resizes++; }, applyQuality() { this.tiers++; } });
@@ -42,9 +42,8 @@ test('phones draw more pixels than before, smooth edges in the final pass, and c
   assert.equal(q.tier, 'medium');
   assert.equal(q.pixelRatio(), 1.75, 'Balanced draws 1.75 pixels per CSS pixel on a phone (was 1)');
   assert.equal(q.settings.msaa, false, 'FXAA instead of MSAA on a phone');
-  assert.equal(q.fpsCap, 60);
-  assert.equal(q.cycleFps(), '30 fps · battery saver');
-  assert.equal(q.cycleFps(), '60 fps · smooth');
+  assert.equal(q.fpsCap, 60, 'auto starts at 60');
+  assert.deepEqual([q.cycleFps(), q.cycleFps(), q.cycleFps()], ['60 fps · smooth', '30 fps · battery saver', 'Auto (60 fps)']);
   store.clear();
   coarse = false; globalThis.innerWidth = 1600; globalThis.innerHeight = 900; globalThis.devicePixelRatio = 1;
   const d = new Quality(); d.setGpu('ANGLE (Intel, Iris(R) Xe Graphics)');
@@ -101,4 +100,35 @@ test('what was learned belongs to one GPU', () => {
   const other = phone('Mali-G57 MC2');
   assert.equal(other.scale, 1);
   assert.equal(other.tier, 'low');
+});
+
+test('a phone whose processor cannot keep up thins the crowds, then settles at 30 fps, and keeps its sharpness', () => {
+  // A budget phone on Test Lab: 9-14 ms of the game's own work in a 16.7 ms frame.
+  const q = phone('Mali-G57 MC2'), g = { ...game(), cpuMs: 12 };
+  run(q, g, 2.1, 25);
+  assert.equal(q.crowd, 0.8, 'fewer cars and people first');
+  run(q, g, 10, 25);
+  assert.equal(q.crowd, MIN_CROWD);
+  assert.equal(q.fpsCap, 30, 'then a steady 30 instead of a ragged 40');
+  assert.equal(q.scale, 1, 'the picture stays as sharp as it was');
+  assert.equal(g.resizes, 0);
+  const next = phone('Mali-G57 MC2');
+  assert.equal(next.fpsCap, 30, 'the next launch starts there');
+  assert.equal(next.crowd, MIN_CROWD);
+  // A phone whose graphics chip is the limit still trades resolution.
+  const gpu = phone('Mali-G68'), gg = { ...game(), cpuMs: 4 };
+  run(gpu, gg, 2.1, 25);
+  assert.equal(gpu.scale, 0.9);
+  assert.equal(gpu.crowd, 1);
+});
+
+test('crowds come back once there is room, a step at a time', () => {
+  const q = phone('Adreno 619'), g = { ...game(), cpuMs: 12 };
+  run(q, g, 2.1, 25);
+  assert.equal(q.crowd, 0.8);
+  g.cpuMs = 4;
+  run(q, g, 30, 16.7);
+  assert.equal(q.crowd, 0.8, 'not within a minute of thinning');
+  run(q, g, 40, 16.7);
+  assert.ok(q.crowd > 0.8, `back up after a minute (${q.crowd})`);
 });

@@ -76,7 +76,7 @@ export class Peds {
 
   update(dt) {
     const g = this.game, focus = g.player.pos;
-    const target = g.quality.settings.peds * (g.pedScale ?? 1);
+    const target = g.quality.settings.peds * (g.pedScale ?? 1) * (g.quality.crowd ?? 1);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
       if (dist(p.h.x, p.h.z, focus.x, focus.z) > 150 && !p.keep) { g.humans.remove(p.h); this.list.splice(i, 1); }
