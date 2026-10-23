@@ -1130,31 +1130,32 @@ function buildProp(ctx, i) {
     }
     case PROP.VENDOR: {
       // A sabzi vendor at the kerb: a handcart, a mat on the ground or a crate stall, piled with produce.
+      // y0: up on the footpath, where the street has one.
       const kind = hash2(i, 911) % 3, piles = [0xd63a2a, 0x4f8f3a, 0x9b4a5f, 0xb08a5a, 0xe8c33a, 0xf28c28, 0x5b2a5a, 0x2d7a2d, 0xe9e2c8];
-      const pile = (lx, lz, y, rx, rz) => { g.color(r.pick(piles), 0); g.blob(x + lx * c + lz * s, y, z - lx * s + lz * c, rx, 0.2, rz, i + lx * 7); };
+      const pile = (lx, lz, y, rx, rz) => { g.color(r.pick(piles), 0); g.blob(x + lx * c + lz * s, y0 + y, z - lx * s + lz * c, rx, 0.2, rz, i + lx * 7); };
       if (kind === 0) {
-        g.color(0x7a5a34, 0); g.cbox(x, 0.75, z, 1.0, 0.18, 0.6, rot);
+        g.color(0x7a5a34, 0); g.cbox(x, y0 + 0.75, z, 1.0, 0.18, 0.6, rot);
         g.color(0x2b2b2b, 0);
-        for (const [lx, lz] of [[-0.7, -0.66], [0.7, -0.66], [-0.7, 0.66], [0.7, 0.66]]) g.wheel(x + lx * c + lz * s, 0.36, z - lx * s + lz * c, 0.36, 0.07, s, c);
-        g.color(0x5a4630, 0); g.beam(x + 1.0 * c, 0.85, z - 1.0 * s, x + 1.7 * c, 0.65, z - 1.7 * s, 0.04);
+        for (const [lx, lz] of [[-0.7, -0.66], [0.7, -0.66], [-0.7, 0.66], [0.7, 0.66]]) g.wheel(x + lx * c + lz * s, y0 + 0.36, z - lx * s + lz * c, 0.36, 0.07, s, c);
+        g.color(0x5a4630, 0); g.beam(x + 1.0 * c, y0 + 0.85, z - 1.0 * s, x + 1.7 * c, y0 + 0.65, z - 1.7 * s, 0.04);
         for (const lx of [-0.55, 0, 0.55]) pile(lx, 0, 1.05, 0.38, 0.45);
       } else if (kind === 1) {
         g.color(r.pick([0x2f6fb5, 0xb03a2e, 0x2e8b57, 0x6a4c93]), 0);
-        const a = g.v(x - 1.1 * c - 0.8 * s, 0.1, z + 1.1 * s - 0.8 * c), b = g.v(x + 1.1 * c - 0.8 * s, 0.1, z - 1.1 * s - 0.8 * c);
-        const d = g.v(x + 1.1 * c + 0.8 * s, 0.1, z - 1.1 * s + 0.8 * c), e = g.v(x - 1.1 * c + 0.8 * s, 0.1, z + 1.1 * s + 0.8 * c);
+        const a = g.v(x - 1.1 * c - 0.8 * s, y0 + 0.1, z + 1.1 * s - 0.8 * c), b = g.v(x + 1.1 * c - 0.8 * s, y0 + 0.1, z - 1.1 * s - 0.8 * c);
+        const d = g.v(x + 1.1 * c + 0.8 * s, y0 + 0.1, z - 1.1 * s + 0.8 * c), e = g.v(x - 1.1 * c + 0.8 * s, y0 + 0.1, z + 1.1 * s + 0.8 * c);
         g.quad(a, b, d, e); g.quad(a, e, d, b);
         for (const [lx, lz] of [[-0.6, -0.35], [0, -0.35], [0.6, -0.35], [-0.35, 0.35], [0.35, 0.35]]) pile(lx, lz, 0.18, 0.3, 0.26);
       } else {
         g.color(0x9a7a4c, 0);
-        for (const lx of [-0.55, 0.55]) { g.cbox(x + lx * c, 0, z - lx * s, 0.5, 0.42, 0.4, rot); g.cbox(x + lx * c + 0.1 * s, 0.42, z - lx * s + 0.1 * c, 0.48, 0.4, 0.38, rot); }
+        for (const lx of [-0.55, 0.55]) { g.cbox(x + lx * c, y0, z - lx * s, 0.5, 0.42, 0.4, rot); g.cbox(x + lx * c + 0.1 * s, y0 + 0.42, z - lx * s + 0.1 * c, 0.48, 0.4, 0.38, rot); }
         for (const lx of [-0.55, 0.55]) pile(lx, 0.05, 0.92, 0.42, 0.34);
       }
       // A big umbrella over the goods, its pole behind them (local +z faces the road).
-      g.color(0x555555, 0); g.cyl(x - 0.9 * s, 0, z - 0.9 * c, 0.03, 2.3, 4);
-      g.color(r.pick([0xc0392b, 0x2f6fb5, 0xf1c40f, 0x27ae60, 0xe67e22, 0x8e44ad]), 0); g.cone(x - 0.35 * s, 2.15, z - 0.35 * c, 1.45, 0.5, 8);
+      g.color(0x555555, 0); g.cyl(x - 0.9 * s, y0, z - 0.9 * c, 0.03, 2.3, 4);
+      g.color(r.pick([0xc0392b, 0x2f6fb5, 0xf1c40f, 0x27ae60, 0xe67e22, 0x8e44ad]), 0); g.cone(x - 0.35 * s, y0 + 2.15, z - 0.35 * c, 1.45, 0.5, 8);
       // A weighing scale on the cart or the mat's corner.
-      g.color(0x8f9496, 0); g.beam(x - 0.2 * s, kind === 1 ? 0.6 : 1.4, z - 0.2 * c, x - 0.2 * s, kind === 1 ? 0.15 : 0.95, z - 0.2 * c, 0.02);
-      if ((i & 3) === 0) lightPool(pg, x, z, 3.5, 2.0);
+      g.color(0x8f9496, 0); g.beam(x - 0.2 * s, y0 + (kind === 1 ? 0.6 : 1.4), z - 0.2 * c, x - 0.2 * s, y0 + (kind === 1 ? 0.15 : 0.95), z - 0.2 * c, 0.02);
+      if ((i & 3) === 0) lightPool(pg, x, z, 3.5, 2.0, y0);
       break;
     }
     case PROP.HOARDING: {

@@ -504,10 +504,20 @@ function stairs(g, X, Z, rot, lx, lz, dir, top, bottom) {
 function train(g, X, Z, rot, lx0, lx1, lz) {
   const LOCO = 20, COACH = 23.5, GAP = 0.7, hw = 1.6;
   let x = lx1;
+  // Bogies: a frame over its axles and a wheel on each rail of the broad gauge (1.676 m).
+  const ux = X(0, 1) - X(0, 0), uz = Z(0, 1) - Z(0, 0);
+  const bogie = (bx, axles, spacing, r) => {
+    g.color(0x2a2a2a, 0); g.cbox(X(bx, lz), 0.1 + r, Z(bx, lz), ((axles - 1) * spacing) / 2 + 0.6, 0.45, 1.15, rot);
+    g.color(0x161616, 0);
+    for (let a = 0; a < axles; a++) {
+      const ax = bx + (a - (axles - 1) / 2) * spacing;
+      for (const side of [-1, 1]) g.wheel(X(ax, lz + side * 0.76), 0.2 + r, Z(ax, lz + side * 0.76), r, 0.14, ux, uz, 12);
+    }
+  };
   // The loco: red with a white band, a cab at each end, a pantograph.
   const loco = (x0, x1) => {
     const cx = (x0 + x1) / 2, half = (x1 - x0) / 2;
-    g.color(0x2a2a2a, 0); for (const k of [-1, 1]) g.cbox(X(cx + k * (half - 3.5), lz), 0.15, Z(cx + k * (half - 3.5), lz), 2.2, 0.95, 1.3, rot);
+    for (const k of [-1, 1]) bogie(cx + k * (half - 3.5), 3, 1.9, 0.55); // Co-Co: three axles a bogie
     g.color(0xb8322a, 0); g.cbox(X(cx, lz), 1.1, Z(cx, lz), half, 3.0, hw, rot);
     g.color(0xf2efe6, 0); g.cbox(X(cx, lz), 2.15, Z(cx, lz), half + 0.01, 0.35, hw + 0.01, rot);
     g.color(0x1d2b33, 0); for (const k of [-1, 1]) g.cbox(X(cx + k * (half - 0.05), lz), 2.7, Z(cx + k * (half - 0.05), lz), 0.06, 0.9, 1.25, rot);
@@ -516,7 +526,7 @@ function train(g, X, Z, rot, lx0, lx1, lz) {
   };
   const coach = (x0, x1) => {
     const cx = (x0 + x1) / 2, half = (x1 - x0) / 2;
-    g.color(0x262626, 0); for (const k of [-1, 1]) g.cbox(X(cx + k * (half - 3), lz), 0.15, Z(cx + k * (half - 3), lz), 1.6, 0.9, 1.25, rot);
+    for (const k of [-1, 1]) bogie(cx + k * (half - 3), 2, 2.56, 0.46);
     g.color(0x2f4e86, 0); g.cbox(X(cx, lz), 1.05, Z(cx, lz), half, 2.95, hw, rot);
     g.color(0xe9e6dc, 0); g.cbox(X(cx, lz), 2.25, Z(cx, lz), half + 0.01, 0.85, hw + 0.01, rot);
     g.color(0x22313b, 0);
