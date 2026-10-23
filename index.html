@@ -8,7 +8,11 @@
     <title>GTA Nanded — उगं नव्हं मय, नांदेड हाय नांदेड!</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GTA Nanded" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;700&family=Noto+Sans+Devanagari:wght@600;700;800&display=swap" />
@@ -68,6 +72,7 @@
       <div id="hud-big" class="big-message" hidden></div>
       <div id="hud-radio" class="radio-card" hidden></div>
       <div id="hud-hint" class="corner-hint"><kbd>ESC</kbd> Pause <kbd>M</kbd> Map</div>
+      <div id="hud-perf" class="perf-readout" hidden></div>
     </div>
 
     <div id="touch" class="touch" hidden>
@@ -129,6 +134,10 @@
         <div class="tab" data-pane="settings">
           <div class="settings">
             <label>Graphics <button id="set-quality" type="button"></button></label>
+            <label>Frame rate <button id="set-fps" type="button"></button></label>
+            <label>Performance readout <button id="set-perf" type="button"></button></label>
+            <label id="set-install-row" hidden>Home Screen <button id="set-install" type="button">Add to Home Screen</button></label>
+            <p id="set-install-help" class="small" hidden>Tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>. The game then opens full screen like an app, and your iPhone keeps your progress even if you don't play for a while.</p>
             <label>Sound <button id="set-sound" type="button"></button></label>
             <label>Music volume <input id="set-music" type="range" min="0" max="1" step="0.05" /></label>
             <label>Effects volume <input id="set-sfx" type="range" min="0" max="1" step="0.05" /></label>

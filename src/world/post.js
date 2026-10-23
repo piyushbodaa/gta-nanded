@@ -53,11 +53,46 @@ const FINAL = /* glsl */`
   uniform mat4 uProjInv, uCamWorld, uViewProj;
   uniform vec3 uCamPos;
   uniform float uBloom, uExposure, uFogDensity, uFogFalloff, uViewDist, uFogOn, uWet, uSSR;
-  uniform float uSaturation, uContrast, uVignette, uGrain, uTime;
+  uniform float uSaturation, uContrast, uVignette, uGrain, uTime, uAA, uSharpen, uNear, uFar;
   uniform vec3 uShadowTint, uHighTint;
-  uniform vec2 uResolution;
+  uniform vec2 uResolution, uTexel;
   ${ATMOSPHERE_GLSL}
   varying vec2 vUv;
+
+  // Edge smoothing (FXAA, Lottes) where there is no MSAA, and a light sharpen everywhere
+  // else when the browser is about to stretch the frame over more device pixels: both read
+  // the same four diagonal neighbours. Only outlines are smoothed, where the depth jumps:
+  // lettering, window bars and brickwork painted on a wall stay crisp. Luma is compressed
+  // so HDR highlights don't decide every edge, and the sharpen stays inside its neighbours'
+  // range so it never rings.
+  float lumaC(vec3 c) { float l = dot(c, vec3(0.299, 0.587, 0.114)); return l / (1.0 + l); }
+  float viewZ(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+  bool outline(vec2 uv) {
+    float z = viewZ(uv), jump = z * 0.03 + 0.05;
+    return abs(viewZ(uv + vec2(-1.0, -1.0) * uTexel) - z) > jump || abs(viewZ(uv + vec2(1.0, -1.0) * uTexel) - z) > jump
+      || abs(viewZ(uv + vec2(-1.0, 1.0) * uTexel) - z) > jump || abs(viewZ(uv + vec2(1.0, 1.0) * uTexel) - z) > jump;
+  }
+  vec3 filtered(vec2 uv) {
+    vec3 m = texture2D(tColor, uv).rgb;
+    vec3 nw = texture2D(tColor, uv + vec2(-1.0, -1.0) * uTexel).rgb;
+    vec3 ne = texture2D(tColor, uv + vec2(1.0, -1.0) * uTexel).rgb;
+    vec3 sw = texture2D(tColor, uv + vec2(-1.0, 1.0) * uTexel).rgb;
+    vec3 se = texture2D(tColor, uv + vec2(1.0, 1.0) * uTexel).rgb;
+    float lM = lumaC(m), lNW = lumaC(nw), lNE = lumaC(ne), lSW = lumaC(sw), lSE = lumaC(se);
+    float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+    float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+    if (uAA > 0.5 && lMax - lMin > max(0.0312, lMax * 0.125) && outline(uv)) {
+      vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+      float reduce = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
+      dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + reduce), -8.0, 8.0) * uTexel;
+      vec3 a = 0.5 * (texture2D(tColor, uv - dir / 6.0).rgb + texture2D(tColor, uv + dir / 6.0).rgb);
+      vec3 b = a * 0.5 + 0.25 * (texture2D(tColor, uv - dir * 0.5).rgb + texture2D(tColor, uv + dir * 0.5).rgb);
+      float lB = lumaC(b);
+      return lB < lMin || lB > lMax ? a : b;
+    }
+    vec3 lo = min(m, min(min(nw, ne), min(sw, se))), hi = max(m, max(max(nw, ne), max(sw, se)));
+    return clamp(m + (m - (nw + ne + sw + se) * 0.25) * uSharpen * 2.5, lo, hi);
+  }
 
   // Exponential height fog integrated along the view ray (Quilez).
   float heightFog(float camY, vec3 rd, float dist) {
@@ -124,7 +159,7 @@ const FINAL = /* glsl */`
   float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 
   void main() {
-    vec3 col = texture2D(tColor, vUv).rgb;
+    vec3 col = uAA > 0.5 || uSharpen > 0.0 ? filtered(vUv) : texture2D(tColor, vUv).rgb;
     float depth = texture2D(tDepth, vUv).x;
     if (uFogOn > 0.5 && depth < 1.0) {
       vec3 wp = worldAt(vUv, depth);
@@ -194,18 +229,25 @@ export class Post {
       uBloom: { value: 0.08 }, uExposure: { value: 1 }, uFogDensity: { value: 0.0013 }, uFogFalloff: { value: 0.012 }, uViewDist: { value: 540 }, uFogOn: { value: 1 },
       uSaturation: { value: 1.1 }, uContrast: { value: 1.06 }, uVignette: { value: 0.28 }, uGrain: { value: 0.012 }, uTime: { value: 0 },
       uShadowTint: { value: new THREE.Color(1, 1, 1) }, uHighTint: { value: new THREE.Color(1, 1, 1) }, uResolution: { value: new THREE.Vector2(1, 1) },
+      uTexel: { value: new THREE.Vector2(1, 1) }, uAA: { value: 0 }, uSharpen: { value: 0 }, uNear: { value: 0.3 }, uFar: { value: 900 },
       uSunDir: su.uSunDir, uZenith: su.uZenith, uHorizon: su.uHorizon, uSunColor: su.uSunColor, uNight: su.uNight, uGrey: su.uGrey, uCityGlow: su.uCityGlow,
     });
     this.rt = null;
     this.mips = [];
   }
 
-  /** Tier settings: { msaa, bloom, reflections }. */
-  configure({ msaa, bloom, reflections = bloom }) {
+  /**
+   * Tier settings: { msaa, bloom, reflections, aa, sharpen }. `aa` smooths edges in the final
+   * pass (by default whenever there is no MSAA); `sharpen` (0 to about 0.3) offsets the blur
+   * of the browser stretching a lower-resolution frame over the screen.
+   */
+  configure({ msaa, bloom, reflections = bloom, aa = !msaa, sharpen = 0 }) {
     const samples = msaa ? 4 : 0;
     if (samples !== this.msaa) { this.msaa = samples; this._dispose(); }
     this.bloomOn = Boolean(bloom);
     this.ssrOn = Boolean(reflections);
+    this.final.uniforms.uAA.value = aa ? 1 : 0;
+    this.final.uniforms.uSharpen.value = sharpen;
   }
 
   /** The city's detail texture: wet reflections follow the same puddles. */
@@ -265,6 +307,7 @@ export class Post {
       this.mips.push(new THREE.WebGLRenderTarget(mw, mh, { ...opts, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false }));
     }
     this.final.uniforms.uResolution.value.set(w, h);
+    this.final.uniforms.uTexel.value.set(1 / w, 1 / h);
   }
 
   /** Whether the GPU can draw into the HDR target (multisampled if asked) and the bloom chain. */
@@ -325,6 +368,7 @@ export class Post {
     u.uWet.value = this.sky.wet;
     u.uSSR.value = this.ssrOn ? 1 : 0;
     u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
+    u.uNear.value = camera.near; u.uFar.value = camera.far;
     u.uFogDensity.value = look.fogDensity;
     u.uViewDist.value = this.sky.viewDistance;
     u.uExposure.value = look.exposure;
