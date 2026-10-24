@@ -342,7 +342,7 @@ const BUILDERS = {
     b.box('fixed', 0, 1.06, 0.5, 0.66, 0.05, 0.05, BLACK);
     b.box('lights', 0, 0.98, 0.6, 0.14, 0.1, 0.06, HEAD);
     b.box('lights', 0, 0.7, -0.92, 0.12, 0.06, 0.04, TAIL);
-    return { b, wheels: [[0, 0.62, 0.24, true, 0.1], [0, -0.62, 0.24, false, 0.11]], seat: { x: 0, y: 0.72, z: -0.38, pose: 'ride' }, passengers: [[0, 0.78, -0.68]] };
+    return { b, wheels: [[0, 0.62, 0.24, true, 0.1], [0, -0.62, 0.24, false, 0.11]], seat: { x: 0, y: 0.72, z: -0.26, pose: 'ride' }, passengers: [[0, 0.78, -0.62]] };
   },
   bus() {
     const b = new VB();

@@ -2,6 +2,7 @@
 // wheels (politely or not), and driving it.
 import { clamp, damp, dampAngle, wrapAngle, dist } from '../core/math.js';
 import { makeOutfit } from './humans.js';
+import { GETUP_TIME } from './anim.js';
 import { speedOf, forwardSpeed } from './vehicle-physics.js';
 
 const WALK = 1.9, JOG = 4.4, SPRINT = 7.4;
@@ -120,8 +121,12 @@ export class Player {
     // Animate.
     h.x = this.x; h.y = this.y; h.z = this.z; h.yaw = this.heading;
     h.speed = this.speed;
-    h.pose = !this.onGround ? 'run' : this.speed > 0.3 ? (this.speed > 3.2 ? 'run' : 'walk') : 'idle';
-    h.punch = this.punchT > 0 ? 1 - this.punchT / 0.32 : 0;
+    h.pose = this.speed > 0.3 ? (this.speed > 3.2 ? 'run' : 'walk') : 'idle';
+    h.air = !this.onGround; h.vy = this.vy;
+    h.punch = this.punchT > 0 ? 1 - this.punchT / 0.32 : 0; h.combo = this.combo;
+    // Standing about, the head turns to look the way the camera does.
+    const look = wrapAngle(g.camera.facing - this.heading);
+    h.lookYaw = this.speed < 0.5 && Math.abs(look) < 1.7 ? clamp(look, -1.1, 1.1) * 0.8 : 0;
     h.t += dt;
   }
 
@@ -146,7 +151,7 @@ export class Player {
       const ux = (door.x - this.x) / d, uz = (door.z - this.z) / d;
       this.x += ux * Math.min(d, sp * dt); this.z += uz * Math.min(d, sp * dt);
       this.heading = Math.atan2(ux, uz);
-      h.x = this.x; h.z = this.z; h.yaw = this.heading; h.speed = sp; h.pose = 'run';
+      h.x = this.x; h.z = this.z; h.yaw = this.heading; h.speed = sp; h.pose = 'run'; h.air = false; h.lookYaw = 0;
       return;
     }
     // At the door: pull out whoever is driving, then get in.
@@ -166,7 +171,7 @@ export class Player {
     v.driver = this.human;
     this.human.pose = v.model.seat.pose;
     this.human.seatY = v.model.seat.y;
-    this.human.punch = 0;
+    this.human.punch = 0; this.human.air = false; this.human.lookYaw = 0;
     g.onEnteredVehicle?.(v);
   }
 
@@ -186,7 +191,7 @@ export class Player {
     this.state = 'foot';
     if (!instant && spd > 7) {
       // Bail out of a moving car: roll on the tarmac, the car rolls on without you.
-      this.state = 'down'; this.downT = 1.1;
+      this.state = 'down'; this.downT = 1.5;
       this.vx = v.vx * 0.5; this.vz = v.vz * 0.5;
       this.damage(Math.min(30, spd * 0.9), 'bail');
     }
@@ -204,8 +209,9 @@ export class Player {
     p.x = this.x; p.z = this.z;
     if (this.game.colliders.resolveCircle(p, 0.34, o)) { this.x = p.x; this.z = p.z; this.vx *= -0.2; this.vz *= -0.2; }
     h.x = this.x; h.z = this.z; h.y = this.game.city.groundHeight(this.x, this.z);
-    h.pose = 'lie'; h.pitch = -1.45 * clamp(this.downT * 2, 0, 1); h.speed = 0;
-    if (this.downT <= 0) { this.state = 'foot'; h.pitch = 0; }
+    // Down, then back up over the last moments (anim.js plays the fall and the get-up).
+    h.pose = this.downT > GETUP_TIME * 0.85 ? 'lie' : 'getup'; h.speed = 0; h.air = false; h.punch = 0;
+    if (this.downT <= 0) this.state = 'foot';
   }
 
   /** Knocked down by a car or a hard punch. */

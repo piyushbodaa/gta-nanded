@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { Humans, makeOutfit } from '../src/actors/humans.js';
 import { sendFirst } from '../src/core/buffers.js';
 
-const BLOCK = 13 * 3 + 4; // texels per person: 13 bones, then colours and the parts mask
+const BLOCK = 14 * 3 + 4; // texels per person: 14 bones, then colours and the parts mask
 
 // The soft shade under people is painted on a canvas; a stand-in is enough here.
 globalThis.document ??= { createElement: () => ({ getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }), fillRect() {} }) }) };
@@ -21,8 +21,8 @@ test('the whole crowd is one mesh, and each person is a row of bones, colours an
   humans.update(0.016, { x: 10, z: 10 }, null);
   assert.equal(humans.mesh.geometry.instanceCount, 3, 'everyone in view, nobody else');
   const row = i => humans.data.subarray(i * BLOCK * 4, (i + 1) * BLOCK * 4);
-  const colour = (r, slot) => r[(39 + Math.floor(slot / 3)) * 4 + (slot % 3)];
-  const mask = r => r[39 * 4 + 3];
+  const colour = (r, slot) => r[(42 + Math.floor(slot / 3)) * 4 + (slot % 3)];
+  const mask = r => r[42 * 4 + 3];
   // The sikh: a turban instead of hair, a beard, limbs drawn up close.
   const s = row(0);
   assert.ok(mask(s) & 8 && !(mask(s) & 1) && mask(s) & 32 && mask(s) & 1024);

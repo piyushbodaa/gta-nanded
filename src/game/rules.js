@@ -233,7 +233,7 @@ export function installRules(g) {
   g.wasted = cause => {
     if (g.player.state === 'dead' || g.respawning) return;
     g.player.state = 'dead';
-    g.player.human.pose = 'lie'; g.player.human.pitch = -1.45;
+    g.player.human.pose = 'lie';
     g.respawning = true;
     document.body.classList.add('wasted');
     g.hud.big('WASTED', cause === 'drowned' ? 'The Godavari wins this one' : '', 'wasted', 4.2);
