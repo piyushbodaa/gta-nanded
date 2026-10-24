@@ -247,13 +247,20 @@ export class Traffic {
     v.vx = (x - v.x) / Math.max(dt, 1e-4); v.vz = (z - v.z) / Math.max(dt, 1e-4);
     if (Math.hypot(v.vx, v.vz) > 40) { v.vx = 0; v.vz = 0; }
     v.x = x; v.z = z;
-    const dh = wrapAngle(heading - v.heading);
-    v.heading = wrapAngle(v.heading + dh * clamp(dt * 10, 0, 1));
+    const dh = wrapAngle(heading - v.heading), turn = dh * clamp(dt * 10, 0, 1);
+    v.heading = wrapAngle(v.heading + turn);
     v.w = 0;
     v.steer = clamp(dh * 3, -0.5, 0.5);
     v.wheelSpin += (a.speed / (v.spec.wheelR || 0.3)) * dt;
     v.braking = a.speed < a.cruise * 0.5 && a.speed > 0.2;
     if (v.spec.two) v.lean = clamp(v.steer * 0.8 * Math.min(1, a.speed / 6), -0.4, 0.4);
+    // The body rolls out of a turn, dips its nose braking and squats pulling away, as driven ones do.
+    if (dt > 0) {
+      const acc = (a.speed - (a.lastSpeed ?? a.speed)) / dt;
+      a.lastSpeed = a.speed;
+      v.roll += (clamp((a.speed * turn / dt) * 0.011, -0.07, 0.07) - v.roll) * clamp(dt * 6, 0, 1);
+      v.pitch += (clamp(-acc * 0.011, -0.06, 0.06) - v.pitch) * clamp(dt * 6, 0, 1);
+    }
   }
 
   /** At the end of a road: pick the next one (straight-ish, bigger roads), build a curve. */

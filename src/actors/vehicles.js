@@ -241,8 +241,10 @@ export class Vehicles {
         if ((pass === 0) !== inShadowBox(shadowBox, v.x, v.y, v.z, 8)) continue;
         const near = dx * dx + dz * dz < maxD2;
         const M = this.meshes[v.type];
-        // Body transform with suspension pitch/roll and two-wheeler lean.
-        const lean = v.spec.two ? -v.lean : v.roll;
+        // Body transform with suspension pitch/roll and two-wheeler lean. A two-wheeler stopped with
+        // a rider tips onto the rider's left foot.
+        if (v.spec.two) v.standLean = (v.standLean || 0) + ((v.driver && speedOf(v) < 0.8 ? 0.09 : 0) - (v.standLean || 0)) * Math.min(1, dt * 4);
+        const lean = v.spec.two ? -(v.lean + v.standLean) : v.roll;
         _e.set(v.pitch - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
         _q.setFromEuler(_e);
         const bob = v.kinematic ? 0 : Math.sin(this.time * 18 + v.id) * 0.006 * Math.min(1, speedOf(v) / 8);
@@ -315,13 +317,16 @@ export class Vehicles {
   }
 
   _seat(v, M) {
+    const speed = speedOf(v);
     const place = (h, sx, sy, sz) => {
       if (!h) return;
       _p.set(sx, 0, sz).applyMatrix4(M);
-      h.x = _p.x; h.y = _p.y - sy * 0 + (v.spec.two ? 0 : 0); h.z = _p.z;
+      h.x = _p.x; h.y = _p.y; h.z = _p.z;
       h.yaw = v.heading; h.speed = 0;
-      h.roll = v.spec.two ? -v.lean : 0;
-      h.pitch = 0;
+      h.roll = v.spec.two ? -(v.lean + (v.standLean || 0)) : 0;
+      h.pitch = 0; h.air = false;
+      // What anim.js needs to put hands on the bars and sway with the ride.
+      h.vType = v.type; h.vDriver = h === v.driver; h.vSteer = v.steer; h.vSpeed = speed; h.vLat = v.latAcc; h.vLong = v.longAcc;
     };
     const s = v.model.seat;
     place(v.driver, s.x, s.y, s.z);
