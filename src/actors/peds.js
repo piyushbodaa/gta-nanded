@@ -2,6 +2,7 @@
 // jump out of the way, get knocked down, and run, cower or fight back.
 import { clamp, dist, rng, hash2, wrapAngle, dampAngle, headingTo } from '../core/math.js';
 import { makeOutfit } from './humans.js';
+import { GETUP_TIME } from './anim.js';
 import { speedOf } from './vehicle-physics.js';
 import { ZONE } from '../world/citygen.js';
 
@@ -232,16 +233,15 @@ export class Peds {
         h.y = Math.max(0, (h.y || 0) + (p.vy || 0) * dt);
         h.x += p.vx * dt; h.z += p.vz * dt;
         p.vx *= Math.exp(-dt * (h.y > 0.05 ? 0.3 : 4)); p.vz *= Math.exp(-dt * (h.y > 0.05 ? 0.3 : 4));
-        h.pitch = -1.45 * clamp((2.6 - p.t) * 4, 0, 1);
-        if (p.t <= 0) { p.state = 'getup'; p.t = 0.7; }
+        if (p.t <= 0) { p.state = 'getup'; p.t = GETUP_TIME; }
         break;
       }
       case 'getup':
-        h.pose = 'cower'; h.pitch = -1.45 * clamp(p.t / 0.7, 0, 1);
-        if (p.t <= 0) { h.pitch = 0; p.state = p.after || 'flee'; p.t = p.state === 'cower' ? 5 : 10; if (p.state === 'fight') this.bark(p, 'fight'); }
+        h.pose = 'getup';
+        if (p.t <= 0) { p.state = p.after || 'flee'; p.t = p.state === 'cower' ? 5 : 10; if (p.state === 'fight') this.bark(p, 'fight'); }
         break;
       case 'dive':
-        h.x += p.vx * dt; h.z += p.vz * dt; h.pose = 'run'; h.speed = 6;
+        h.x += p.vx * dt; h.z += p.vz * dt; h.pose = 'dive'; h.speed = 6;
         h.yaw = Math.atan2(p.vx, p.vz);
         if (p.t <= 0) { p.state = Math.random() < 0.5 ? 'flee' : 'walk'; p.t = 4; }
         break;
@@ -290,6 +290,8 @@ export class Peds {
         break;
       default: this._walk(p, dt);
     }
+    // Fists up when squaring up to the player.
+    h.guard = p.state === 'fight' && dPlayer < 4 ? 1 : 0;
     // Global panic: wanted chases and crashes scatter people.
     if ((p.state === 'walk' || p.state === 'idle' || p.state === 'phone') && g.police?.level >= 2 && dPlayer < 14 && player.state === 'foot') { p.state = 'flee'; p.t = 6; }
     // Stay out of buildings (walkers do this in _walk, stepping round what they meet).

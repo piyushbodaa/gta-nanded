@@ -6,6 +6,7 @@ import { rng, clamp } from '../core/math.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { radialTexture } from '../world/citymat.js';
 import { sendFirst } from '../core/buffers.js';
+import { animate, C, BODY } from './anim.js';
 
 // ------------------------------------------------------------------ part geometry
 // Sculpted, smooth-shaded body parts built from lofted rings: a chest wider than
@@ -77,7 +78,7 @@ function limb(len, profile, flat = 0.92, seg = 9) {
 function torso() {
   // From the shirt hem over the belt, up through waist, chest and shoulders, to the collar.
   return loft([
-    [-0.08, 0.168, 0.112, 0.106], [0.02, 0.157, 0.103, 0.098], [0.14, 0.161, 0.108, 0.1, 0.004],
+    [-0.08, 0.168, 0.112, 0.106], [0.02, 0.157, 0.103, 0.098], [0.045, 0.158, 0.104, 0.098, 0.001], [0.14, 0.161, 0.108, 0.1, 0.004],
     [0.26, 0.175, 0.121, 0.104, 0.01], [0.36, 0.187, 0.125, 0.106, 0.008], [0.43, 0.197, 0.112, 0.106],
     [0.48, 0.172, 0.092, 0.096, -0.005], [0.52, 0.104, 0.072, 0.076, -0.008], [0.545, 0.06, 0.057, 0.057, -0.005],
     [0.565, 0.056, 0.053, 0.053, -0.005],
@@ -174,8 +175,9 @@ function pack() {
   return merge(loft([[0.08, 0.13, 0.05, 0.06], [0.2, 0.145, 0.06, 0.07], [0.38, 0.14, 0.055, 0.065], [0.44, 0.1, 0.045, 0.05]], 14).translate(0, 0, -0.17));
 }
 
-// The skeleton's bones; every part hangs from one (the limbs from one each side).
-const BONES = ['hips', 'torso', 'head', 'upperArmL', 'lowerArmL', 'upperArmR', 'lowerArmR', 'thighL', 'shinL', 'footL', 'thighR', 'shinR', 'footR'];
+// The skeleton's bones; every part hangs from one (the limbs from one each side). A sari or kurta
+// hangs from its own, which follows the thighs.
+const BONES = ['hips', 'torso', 'head', 'upperArmL', 'lowerArmL', 'upperArmR', 'lowerArmR', 'thighL', 'shinL', 'footL', 'thighR', 'shinR', 'footR', 'skirt'];
 // Parts only some people have, and the limbs (skipped at range): bits of each person's mask.
 const SHOW = { hair: 1, long: 2, bun: 4, turban: 8, cap: 16, beard: 32, moustache: 64, skirt: 128, kurta: 256, pack: 512, limbs: 1024 };
 const PARTS = [
@@ -188,10 +190,12 @@ const PARTS = [
   { key: 'cap', geo: () => merge(ellipsoid(0.072, 0.05, 0.122, 0.272, -0.01, 12, 6)), color: 'cap', bones: ['head'], show: SHOW.cap },
   { key: 'beard', geo: () => merge(ellipsoid(0.084, 0.072, 0.07, 0.11, 0.045, 12, 7)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.beard },
   { key: 'moustache', geo: () => merge(ellipsoid(0.031, 0.008, 0.012, 0.141, 0.1, 10, 5)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.moustache },
-  { key: 'torso', geo: torso, color: 'shirt', bones: ['torso'] },
+  // Below its belt line the shirt hangs from the hips, with the trousers' top (2 mm away): a twist
+  // at the waist then stretches the shirt above the belt instead of pushing one through the other.
+  { key: 'torso', geo: torso, color: 'shirt', bones: ['torso'], belt: 0.05 },
   { key: 'hips', geo: hips, color: 'pants', bones: ['hips'] },
-  { key: 'skirt', geo: () => skirt(0.86, 0.18, 0.28), color: 'extra', bones: ['hips'], show: SHOW.skirt },
-  { key: 'kurta', geo: () => skirt(0.44, 0.19, 0.235), color: 'shirt', bones: ['hips'], show: SHOW.kurta },
+  { key: 'skirt', geo: () => skirt(0.86, 0.18, 0.28), color: 'extra', bones: ['skirt'], show: SHOW.skirt },
+  { key: 'kurta', geo: () => skirt(0.44, 0.19, 0.235), color: 'shirt', bones: ['skirt'], show: SHOW.kurta },
   { key: 'pack', geo: pack, color: 'extra', bones: ['torso'], show: SHOW.pack },
   { key: 'upperArm', geo: () => limb(0.29, [[0, 0.058], [0.3, 0.054], [0.65, 0.048], [1, 0.043]], 0.94), color: 'sleeve', bones: ['upperArmL', 'upperArmR'], show: SHOW.limbs },
   { key: 'lowerArm', geo: hand, color: 'skin', mat: 'skin', bones: ['lowerArmL', 'lowerArmR'], show: SHOW.limbs },
@@ -199,6 +203,7 @@ const PARTS = [
   { key: 'shin', geo: () => limb(0.42, [[0, 0.054], [0.25, 0.059], [0.7, 0.045], [1, 0.039]], 0.95), color: 'legs', bones: ['shinL', 'shinR'], show: SHOW.limbs },
   { key: 'foot', geo: shoe, color: 'shoes', bones: ['footL', 'footR'], show: SHOW.limbs },
 ];
+const EXTRAS = ['cap', 'skirt', 'kurta', 'pack'];
 // Each person's colours, in the order the shader reads them, and how glossy each material is.
 const SLOTS = ['skin', 'brow', 'hair', 'extra', 'cap', 'shirt', 'pants', 'sleeve', 'legs', 'shoes'];
 const ROUGH = { cloth: 0.86, skin: 0.55, hair: 0.42 };
@@ -213,8 +218,11 @@ function crowdGeometry() {
     const g0 = p.geo(), g = g0.index ? g0.toNonIndexed() : g0;
     const P = g.attributes.position.array, N = g.attributes.normal.array;
     for (const bone of p.bones) {
-      for (let i = 0; i < P.length; i++) { pos.push(P[i]); nrm.push(N[i]); }
-      for (let i = 0; i < P.length / 3; i++) tag.push(BONES.indexOf(bone), SLOTS.indexOf(p.color), p.show || 0, ROUGH[p.mat || 'cloth']);
+      for (let i = 0; i < P.length; i += 3) {
+        const low = p.belt !== undefined && P[i + 1] < p.belt; // into the hips bone's space
+        pos.push(P[i], P[i + 1] + (low ? BODY.torsoY : 0), P[i + 2]); nrm.push(N[i], N[i + 1], N[i + 2]);
+        tag.push(BONES.indexOf(low ? 'hips' : bone), SLOTS.indexOf(p.color), p.show || 0, ROUGH[p.mat || 'cloth']);
+      }
     }
   }
   const geo = new THREE.BufferGeometry();
@@ -295,15 +303,44 @@ export function inShadowBox(b, x, y, z, margin) {
   const rx = x - b.cx, rz = z - b.cz, lim = b.half + margin;
   return Math.abs(rx * b.xx + rz * b.xz) <= lim && Math.abs(rx * b.yx + y * b.yy + rz * b.yz) <= lim;
 }
-const _m = new THREE.Matrix4(), _root = new THREE.Matrix4(), _hip = new THREE.Matrix4(), _torso = new THREE.Matrix4();
-const _a = new THREE.Matrix4(), _b = new THREE.Matrix4(), _e = new THREE.Euler();
+const _m = new THREE.Matrix4(), _e = new THREE.Euler();
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
 
-function local(out, x, y, z, rx = 0, ry = 0, rz = 0) {
-  _e.set(rx, ry, rz, 'XYZ');
-  out.makeRotationFromEuler(_e);
-  out.elements[12] = x; out.elements[13] = y; out.elements[14] = z;
-  return out;
+// Bones are 3x4 affine matrices, row-major, as the crowd texture stores them:
+// [r00 r01 r02 tx | r10 r11 r12 ty | r20 r21 r22 tz].
+const _root = new Float32Array(12), _l = new Float32Array(12);
+/** A rotation from Euler angles in three.js's YXZ order (yaw, then pitch, then roll). */
+function rotYXZ(m, x, y, z) {
+  const a = Math.cos(x), b = Math.sin(x), c = Math.cos(y), d = Math.sin(y), e = Math.cos(z), f = Math.sin(z);
+  const ce = c * e, cf = c * f, de = d * e, df = d * f;
+  m[0] = ce + df * b; m[1] = de * b - cf; m[2] = a * d;
+  m[4] = a * f; m[5] = a * e; m[6] = -b;
+  m[8] = cf * b - de; m[9] = df + ce * b; m[10] = a * c;
+  return m;
+}
+/** A rotation from Euler angles in XZY order (limbs: a twist about the limb, then abduction, then flexion). */
+function rotXZY(m, x, y, z) {
+  const a = Math.cos(x), b = Math.sin(x), c = Math.cos(y), d = Math.sin(y), e = Math.cos(z), f = Math.sin(z);
+  const ac = a * c, ad = a * d, bc = b * c, bd = b * d;
+  m[0] = c * e; m[1] = -f; m[2] = d * e;
+  m[4] = ac * f + bd; m[5] = a * e; m[6] = ad * f - bc;
+  m[8] = bc * f - ad; m[9] = b * e; m[10] = bd * f + ac;
+  return m;
+}
+/** A hinge (knee, elbow, ankle). */
+function rotX(m, x) {
+  const c = Math.cos(x), s = Math.sin(x);
+  m[0] = 1; m[1] = 0; m[2] = 0; m[4] = 0; m[5] = c; m[6] = -s; m[8] = 0; m[9] = s; m[10] = c;
+  return m;
+}
+/** d at o = the parent bone (p at po) carrying rotation l at (x, y, z) in its frame. */
+function bone(d, o, p, po, l, x, y, z) {
+  const a0 = p[po], a1 = p[po + 1], a2 = p[po + 2], a3 = p[po + 3], a4 = p[po + 4], a5 = p[po + 5];
+  const a6 = p[po + 6], a7 = p[po + 7], a8 = p[po + 8], a9 = p[po + 9], a10 = p[po + 10], a11 = p[po + 11];
+  const b0 = l[0], b1 = l[1], b2 = l[2], b4 = l[4], b5 = l[5], b6 = l[6], b8 = l[8], b9 = l[9], b10 = l[10];
+  d[o] = a0 * b0 + a1 * b4 + a2 * b8; d[o + 1] = a0 * b1 + a1 * b5 + a2 * b9; d[o + 2] = a0 * b2 + a1 * b6 + a2 * b10; d[o + 3] = a0 * x + a1 * y + a2 * z + a3;
+  d[o + 4] = a4 * b0 + a5 * b4 + a6 * b8; d[o + 5] = a4 * b1 + a5 * b5 + a6 * b9; d[o + 6] = a4 * b2 + a5 * b6 + a6 * b10; d[o + 7] = a4 * x + a5 * y + a6 * z + a7;
+  d[o + 8] = a8 * b0 + a9 * b4 + a10 * b8; d[o + 9] = a8 * b1 + a9 * b5 + a10 * b9; d[o + 10] = a8 * b2 + a9 * b6 + a10 * b10; d[o + 11] = a8 * x + a9 * y + a10 * z + a11;
 }
 
 // Each person's row in the crowd's data texture: three texels (a 3x4 matrix) per bone, then
@@ -402,15 +439,15 @@ export class Humans {
 
   add(outfit, x = 0, z = 0) {
     const h = {
-      outfit, x, y: 0, z, yaw: 0, pose: 'idle', phase: Math.random() * 6.28, speed: 0, t: 0,
-      pitch: 0, roll: 0, visible: true, punch: 0, wave: 0, lookYaw: 0, seatY: 0, armsUp: 0,
+      outfit, x, y: 0, z, yaw: 0, pose: 'idle', speed: 0, t: 0,
+      pitch: 0, roll: 0, visible: true, punch: 0, lookYaw: 0, seatY: 0, armsUp: 0, air: false, vy: 0, guard: 0,
     };
     this.list.push(h);
     return h;
   }
   remove(h) { const i = this.list.indexOf(h); if (i >= 0) this.list.splice(i, 1); }
 
-  /** Advance walk phases and write every visible person's bones and colours. */
+  /** Move everyone in view on (anim.js) and write their bones and colours. */
   update(dt, cam, shadowBox) {
     const maxD2 = this.drawDistance * this.drawDistance, blobD2 = 60 * 60;
     let n = 0, blobs = 0;
@@ -422,17 +459,17 @@ export class Humans {
         const dx = h.x - cam.x, dz = h.z - cam.z, d2 = dx * dx + dz * dz;
         if (d2 > maxD2 || (pass === 0) !== inShadowBox(shadowBox, h.x, h.y, h.z, 2.5)) continue;
         if (n >= this.capacity) break;
-        // Stride ~1.35 m per cycle walking, longer running.
-        const stride = h.speed > 3.2 ? 2.4 : 1.35;
-        h.phase += (h.speed / stride) * Math.PI * 2 * dt;
+        // Close up the whole body moves; a street away hands stay off handlebars; far off only the body shows.
         this._at = n * BLOCK * 4;
+        animate(h, dt, d2 > 3600 ? 2 : d2 > 900 ? 1 : 0);
         this._pose(h, d2 > 3600);
         n++;
         // Seated riders and drivers are covered by their vehicle's shade.
         if (this.blobsOn && d2 < blobD2 && h.pose !== 'sit' && h.pose !== 'ride') {
-          const lying = h.pose === 'lie', s = h.outfit.scale || 1;
+          const lying = h.pose === 'lie', s = h.outfit.scale || 1, A = h.anim, mid = A.out[C.RZ] * 0.5 * s;
           _e.set(0, h.yaw, 0); _q.setFromEuler(_e);
-          _v.set(h.x, h.y + 0.09, h.z); // above the road surface (6-7 cm)
+          // Under the body, which lies off its feet's spot; above the road surface (6-7 cm).
+          _v.set(h.x + A.root.x + Math.sin(h.yaw) * mid, h.y + A.root.y + 0.09, h.z + A.root.z + Math.cos(h.yaw) * mid);
           _s.set((lying ? 1.1 : 1.35) * s, 1, (lying ? 2.3 : 1.35) * s);
           this.blobs.setMatrixAt(blobs++, _m.compose(_v, _q, _s));
           _s.set(1, 1, 1);
@@ -468,106 +505,49 @@ export class Humans {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, BLOCK, this.n, gl.RGBA, gl.FLOAT, this.data, 0);
   }
 
-  /** One bone's matrix into this person's row (the three rows of its 3x4 part). */
-  _bone(bone, m) {
-    const d = this.data, e = m.elements, o = this._at + bone * 12;
-    d[o] = e[0]; d[o + 1] = e[4]; d[o + 2] = e[8]; d[o + 3] = e[12];
-    d[o + 4] = e[1]; d[o + 5] = e[5]; d[o + 6] = e[9]; d[o + 7] = e[13];
-    d[o + 8] = e[2]; d[o + 9] = e[6]; d[o + 10] = e[10]; d[o + 11] = e[14];
-  }
-
   _pose(h, far) {
     const o = h.outfit, f = o.flags, sc = o.scale;
     // Colours, and which of the optional parts this person shows.
     const d = this.data, at = this._at + BONES.length * 12;
     let mask = f.has('turban') ? SHOW.turban : SHOW.hair | (f.has('bun') ? SHOW.bun : 0) | (f.has('long') ? SHOW.long : 0);
     if (f.has('beard')) mask |= SHOW.beard; else if (f.has('moustache')) mask |= SHOW.moustache;
-    for (const k of ['cap', 'skirt', 'kurta', 'pack']) if (f.has(k)) mask |= SHOW[k];
+    for (const k of EXTRAS) if (f.has(k)) mask |= SHOW[k];
     if (!far) mask |= SHOW.limbs; // limbs are a few pixels at range: skip them
     for (let k = 0; k < 4; k++) {
       d[at + k * 4] = o[SLOTS[k * 3]] ?? 0; d[at + k * 4 + 1] = o[SLOTS[k * 3 + 1]] ?? 0; d[at + k * 4 + 2] = o[SLOTS[k * 3 + 2]] ?? 0;
       d[at + k * 4 + 3] = mask;
     }
-    // Joint angles for the current pose.
-    let hipL = 0, hipR = 0, kneeL = 0.04, kneeR = 0.04, shL = 0.05, shR = 0.05, abL = 0.13, abR = -0.13, elL = -0.3, elR = -0.3;
-    let lean = 0, bob = 0, pelvisY = 0.93, twist = 0, headYaw = h.lookYaw || 0;
-    const ph = h.phase, sp = h.speed;
-    switch (h.pose) {
-      case 'walk': case 'run': {
-        const run = sp > 3.2;
-        const amp = run ? 0.82 : clamp(sp / 1.5, 0.2, 1) * (f.has('skirt') ? 0.32 : 0.48);
-        const s1 = Math.sin(ph), c1 = Math.cos(ph);
-        hipL = -s1 * amp; hipR = s1 * amp;
-        kneeL = Math.max(0, c1) * (run ? 1.5 : 0.75) + 0.05; kneeR = Math.max(0, -c1) * (run ? 1.5 : 0.75) + 0.05;
-        shL = s1 * (run ? 0.9 : 0.42); shR = -s1 * (run ? 0.9 : 0.42);
-        elL = run ? -1.3 : -0.25; elR = elL;
-        bob = Math.abs(c1) * (run ? 0.07 : 0.03);
-        lean = run ? 0.2 : 0.03;
-        break;
-      }
-      case 'sit': // car driver / passenger
-        hipL = hipR = -1.45; kneeL = kneeR = 1.35; shL = shR = -0.95; elL = elR = -0.55; pelvisY = h.seatY || 0.55; abL = 0.05; abR = -0.05;
-        break;
-      case 'ride': // motorbike / scooter
-        hipL = hipR = -1.15; kneeL = kneeR = 1.2; shL = shR = -1.05; elL = elR = -0.25; lean = 0.22; pelvisY = h.seatY || 0.82; abL = 0.15; abR = -0.15;
-        break;
-      case 'lie':
-        hipL = 0.05; hipR = -0.05; abL = 1.1; abR = -1.1; elL = elR = -0.2; pelvisY = 0.15;
-        break;
-      case 'cower':
-        hipL = hipR = -1.2; kneeL = kneeR = 2.1; shL = shR = -2.4; elL = elR = -2.0; lean = 0.5; pelvisY = 0.5;
-        break;
-      case 'wave': {
-        const w = Math.sin(h.t * 9) * 0.25;
-        shR = -2.7; abR = -0.25 + w; elR = -0.35;
-        break;
-      }
-      case 'phone':
-        shR = -0.4; abR = -0.2; elR = -2.3;
-        break;
-      default: { // idle: breathing, weight on one leg
-        const br = Math.sin(h.t * 1.7 + ph) * 0.02;
-        shL = 0.05 + br; shR = 0.05 - br; bob = br * 0.3;
-        hipL = 0.05; kneeL = 0.12; hipR = -0.03;
-      }
-    }
-    if (h.punch > 0) {
-      // Jab: right arm drives forward, torso twists into it.
-      const p = Math.sin(clamp(h.punch, 0, 1) * Math.PI);
-      shR = -1.55 * p + shR * (1 - p); elR = -0.1 * p + elR * (1 - p); abR = -0.05; twist = -0.35 * p;
-    }
-    if (h.armsUp > 0) { shL = shR = -2.9 * h.armsUp; elL = elR = -0.2; }
-
-    // Root: ground position, heading, and any fall pitch/roll.
-    _e.set(h.pitch || 0, h.yaw, h.roll || 0, 'YXZ');
-    _q.setFromEuler(_e);
-    _v.set(h.x, h.y + (pelvisY + bob) * sc, h.z);
-    _s.set(sc, sc, sc);
-    _root.compose(_v, _q, _s);
-    _s.set(1, 1, 1);
-    // Hips, torso, head.
-    _hip.copy(_root);
-    this._bone(B.hips, _hip);
-    _torso.multiplyMatrices(_hip, local(_a, 0, 0.06, 0, lean, twist, 0));
-    this._bone(B.torso, _torso);
-    _m.multiplyMatrices(_torso, local(_a, 0, 0.53, 0, -lean * 0.5, headYaw, 0));
-    this._bone(B.head, _m);
+    // The bones, from this frame's pose (anim.js).
+    const A = h.anim, P = A.out, R = A.root, row = this._at;
+    // Root: on the ground at the person's spot, turned to their heading, the whole body
+    // pitched and rolled about the pelvis (falls, and a two-wheeler's lean).
+    const yaw = h.yaw + R.yaw, cy = Math.cos(yaw), sy = Math.sin(yaw), m = rotYXZ(_root, P[C.BP], yaw, (h.roll || 0) + P[C.BR]);
+    m[0] *= sc; m[1] *= sc; m[2] *= sc; m[4] *= sc; m[5] *= sc; m[6] *= sc; m[8] *= sc; m[9] *= sc; m[10] *= sc;
+    m[3] = h.x + R.x + (P[C.RX] * cy + P[C.RZ] * sy) * sc;
+    m[7] = h.y + R.y + P[C.PY] * sc;
+    m[11] = h.z + R.z + (P[C.RZ] * cy - P[C.RX] * sy) * sc;
+    // Pelvis, torso, head.
+    bone(d, row + B.hips * 12, m, 0, rotYXZ(_l, P[C.PP], P[C.PW], P[C.PR]), P[C.PX], 0, P[C.PZ]);
+    bone(d, row + B.torso * 12, d, row + B.hips * 12, rotYXZ(_l, P[C.TP], P[C.TW], P[C.TR]), 0, BODY.torsoY, 0);
+    bone(d, row + B.head * 12, d, row + B.torso * 12, rotYXZ(_l, P[C.HP], P[C.HW], P[C.HR]), 0, BODY.neck, 0);
+    // A sari or kurta follows the thighs: out over them when sitting, gathering shorter as it goes.
+    const fold = Math.max(0, (P[C.HF] + P[C.HF + 1]) * 0.42), gather = 1 - 0.42 * smooth(0.3, 1.25, fold);
+    rotX(_l, -fold); _l[1] *= gather; _l[5] *= gather; _l[9] *= gather;
+    bone(d, row + B.skirt * 12, d, row + B.hips * 12, _l, 0, 0, 0);
     if (far) return;
-    // Arms.
-    for (const [sx, sh, ab, el, upper, lower] of [[0.235, shL, abL, elL, B.upperArmL, B.lowerArmL], [-0.235, shR, abR, elR, B.upperArmR, B.lowerArmR]]) {
-      _a.multiplyMatrices(_torso, local(_b, sx, 0.47, 0, sh, 0, ab));
-      this._bone(upper, _a);
-      _m.multiplyMatrices(_a, local(_b, 0, -0.29, 0, el, 0, 0));
-      this._bone(lower, _m);
+    // Arms: the shoulder comes forward with a reach, and up with an arm raised overhead.
+    for (let s = 0; s < 2; s++) {
+      const side = s === 0 ? 1 : -1, ua = s === 0 ? B.upperArmL : B.upperArmR, sf = P[C.SF + s];
+      bone(d, row + ua * 12, d, row + B.torso * 12, rotXZY(_l, -sf, -side * P[C.ST + s], side * P[C.SA + s]),
+        side * BODY.shoulderX, BODY.shoulderY + 0.03 * smooth(1.6, 2.8, sf), 0.035 * clamp(sf / 1.6, -0.4, 1));
+      bone(d, row + (ua + 1) * 12, d, row + ua * 12, rotX(_l, -P[C.EL + s]), 0, -BODY.upperArm, 0);
     }
-    // Legs.
-    for (const [sx, hip, knee, thigh, shin, foot] of [[0.095, hipL, kneeL, B.thighL, B.shinL, B.footL], [-0.095, hipR, kneeR, B.thighR, B.shinR, B.footR]]) {
-      _a.multiplyMatrices(_hip, local(_b, sx, -0.04, 0, hip, 0, 0));
-      this._bone(thigh, _a);
-      _m.multiplyMatrices(_a, local(_b, 0, -0.43, 0, knee, 0, 0));
-      this._bone(shin, _m);
-      _a.multiplyMatrices(_m, local(_b, 0, -0.42, 0, -knee * 0.5 - hip * 0.3, 0, 0));
-      this._bone(foot, _a);
+    // Legs: thigh, shin, foot.
+    for (let s = 0; s < 2; s++) {
+      const side = s === 0 ? 1 : -1, th = s === 0 ? B.thighL : B.thighR;
+      bone(d, row + th * 12, d, row + B.hips * 12, rotXZY(_l, -P[C.HF + s], -side * P[C.HT + s], side * P[C.HA + s]), side * BODY.hipX, BODY.hipY, 0);
+      bone(d, row + (th + 1) * 12, d, row + th * 12, rotX(_l, P[C.KN + s]), 0, -BODY.thigh, 0);
+      bone(d, row + (th + 2) * 12, d, row + (th + 1) * 12, rotX(_l, P[C.AN + s]), 0, -BODY.shin, 0);
     }
   }
 }

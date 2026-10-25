@@ -188,7 +188,7 @@ export class Game {
     const h = this.vehicles.ejectDriver(v);
     if (!h) return;
     const door = this.vehicles.doorWorld(v);
-    h.x = door.x; h.z = door.z; h.pose = 'lie'; h.pitch = -1.4;
+    h.x = door.x; h.z = door.z; h.pose = 'lie';
     this.peds?.adoptEjected(h, v, player);
     this.onCarjack?.(v);
   }
