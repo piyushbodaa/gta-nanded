@@ -26,7 +26,8 @@ import { press } from './ui/controls.js';
 import { installKind } from './ui/install.js';
 
 const $ = id => document.getElementById(id);
-const status = (text, f) => { $('loading-status').textContent = text.toUpperCase(); if (f !== undefined) $('load-bar').style.width = `${Math.round(f * 100)}%`; };
+// Each stage is also a performance mark, so a profiler (or the phone benchmark) can time it.
+const status = (text, f) => { $('loading-status').textContent = text.toUpperCase(); performance.mark?.(`loading: ${text}`); if (f !== undefined) $('load-bar').style.width = `${Math.round(f * 100)}%`; };
 
 function fatal(msg) { $('fatal-msg').textContent = msg; $('fatal').hidden = false; }
 
@@ -95,9 +96,13 @@ async function boot() {
   const done = STORY.filter(m => game.save.done(m.id)).length;
   if (has) { $('menu-continue').hidden = false; $('menu-continue-meta').textContent = `${done}/${STORY.length} MISSIONS · ₹${game.save.cash.toLocaleString('en-IN')}`; }
   for (const id of ['menu-continue', 'menu-new', 'menu-free']) $(id).disabled = false;
+  // While the player reads the menu, compile the shaders that play would otherwise stop for.
+  let onMenu = true;
+  game.warmShaders(() => onMenu && !game.started);
 
   const begin = async mode => {
     if (game.started) return;
+    onMenu = false;
     fullscreen(); // while the tap still counts as a user gesture
     if (st.sound !== false) { try { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
     const play = () => startGame(game, mode);

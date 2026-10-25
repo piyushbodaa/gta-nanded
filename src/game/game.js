@@ -172,6 +172,36 @@ export class Game {
     q.learn({ tooHeavy: [...heavy], promote: false, frameMs: Math.round(ms * 10) / 10 });
   }
 
+  /**
+   * While the menu is up, compile one at a time the shaders of everything the city hasn't drawn
+   * yet. The crowd, cars and animals would otherwise compile the first time each comes into
+   * view, and a phone that can't compile in the background stops for every one (Test Lab,
+   * 2026-10-25: a dozen programs in the first seconds of play, frames of up to a second).
+   * `going()` says whether to carry on; whatever is left compiles on first use, as before.
+   */
+  warmShaders(going) {
+    const r = this.renderer, seen = new Set(), todo = [];
+    this.scene.traverse(o => {
+      const m = o.material;
+      if (!(o.isMesh || o.isLine || o.isPoints) || !m || Array.isArray(m) || seen.has(m)) return;
+      seen.add(m);
+      if (!r.properties.get(m).programs) todo.push(o);
+    });
+    const later = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 100 }) : setTimeout(f, 16));
+    const next = () => {
+      const o = todo.shift();
+      if (!o || !going()) return;
+      // The scene is drawn into the post-processing buffer, and the target decides the program
+      // (tone mapping, colour space): compiled for the screen, it would be compiled again.
+      const was = r.getRenderTarget();
+      r.setRenderTarget(this.post.enabled ? this.post.rt : null);
+      r.compile(o, this.camera3, this.scene);
+      r.setRenderTarget(was);
+      later(next);
+    };
+    later(next);
+  }
+
   // ---------------------------------------------------------------- helpers for actors
   nearestEnterable(x, z, radius) {
     let best = null, bd = radius;

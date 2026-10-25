@@ -5,8 +5,10 @@ Firebase Test Lab. It carries the game's production build in its assets and
 serves it to a WebView. A scripted run (`assets/bench.js`) then plays the
 game:
 
-1. a first launch, including the automatic tuning
-2. Free Roam with the performance readout on
+1. a first launch, including the automatic tuning, with the time each loading
+   stage began
+2. four seconds on the menu, as a player would spend, then Free Roam with the
+   performance readout on
 3. Hazur Sahib Nanded station, Hazur Sahib, Old Mondha and Shivaji Putla
 4. a fast drive down the longest wide road
 5. the 30 fps battery saver
