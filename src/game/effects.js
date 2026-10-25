@@ -184,6 +184,8 @@ export class Markers {
     this.arrow = new THREE.InstancedMesh(arrow, new THREE.MeshBasicMaterial({ color: 0xffc83d }), 32);
     this.arrow.count = 0; this.arrow.frustumCulled = false;
     scene.add(this.arrow);
+    // Coloured per instance from the start, so the shaders compiled ahead of play are the ones used.
+    for (const o of [this.column, this.ring, this.arrow]) o.setColorAt(0, new THREE.Color(0xffffff));
     this.list = [];
     this.t = 0;
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._c = new THREE.Color();

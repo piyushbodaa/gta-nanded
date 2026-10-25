@@ -173,33 +173,70 @@ export class Game {
   }
 
   /**
-   * While the menu is up, compile one at a time the shaders of everything the city hasn't drawn
-   * yet. The crowd, cars and animals would otherwise compile the first time each comes into
-   * view, and a phone that can't compile in the background stops for every one (Test Lab,
-   * 2026-10-25: a dozen programs in the first seconds of play, frames of up to a second).
-   * `going()` says whether to carry on; whatever is left compiles on first use, as before.
+   * While the menu is up, in the browser's idle time, rehearse the start. Play begins at one of
+   * `spots` (likeliest first), far from where the city was built for loading, and its first
+   * frame would build the streets there, compile shaders and send every new mesh to the
+   * graphics chip: 1.1 s on a Nord CE 3 Lite and 2.3 s on a Galaxy A15 (Test Lab, 2026-10-25).
+   * So, a slice at a time: the ground right around each spot, the shaders of everything not
+   * drawn yet, the first spot's traffic and people, and each spot drawn once behind the cover.
+   * `going()` says whether to carry on; whatever is left happens at the start, as before.
    */
-  warmShaders(going) {
-    const r = this.renderer, seen = new Set(), todo = [];
+  getReady(spots, going) {
+    const r = this.renderer, ready = (this.ready = { filled: null, done: false });
+    const tasks = spots.map(s => until => this.world.chunks.prepare(s.x, s.z, until));
+    // A shader for each material and the kind of mesh it is on (instanced, coloured per
+    // instance, skinned...), which picks the variant.
+    const seen = new Set();
     this.scene.traverse(o => {
-      const m = o.material;
-      if (!(o.isMesh || o.isLine || o.isPoints) || !m || Array.isArray(m) || seen.has(m)) return;
-      seen.add(m);
-      if (!r.properties.get(m).programs) todo.push(o);
+      const m = o.material, a = o.geometry?.attributes;
+      if (!(o.isMesh || o.isLine || o.isPoints) || !m || Array.isArray(m)) return;
+      const key = `${m.uuid} ${o.isInstancedMesh} ${!!o.instanceColor} ${o.isSkinnedMesh} ${a?.color?.itemSize} ${!!a?.tangent} ${!!a?.uv1}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      tasks.push(() => {
+        // The scene is drawn into the post-processing buffer, and the target decides the program
+        // (tone mapping, colour space): compiled for the screen, it would be compiled again.
+        const was = r.getRenderTarget();
+        r.setRenderTarget(this.post.enabled ? this.post.rt : null);
+        r.compile(o, this.camera3, this.scene);
+        r.setRenderTarget(was);
+        // Without KHR_parallel_shader_compile the link goes on in the background but the first
+        // draw waits for it: wait here instead, one shader at a time.
+        for (const p of r.properties.get(m).programs?.values() ?? []) p.getUniforms();
+        return true;
+      });
     });
+    const fill = this.fillStreets(), first = spots[0];
+    tasks.push(() => { this._standAt(first); return true; });
+    tasks.push(until => {
+      while (performance.now() < until) if (fill.next().done) { ready.filled = first.key; return true; }
+      return false;
+    });
+    for (const s of spots) tasks.push(() => { this._standAt(s); this.renderWorld(0, false); return true; });
     const later = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 100 }) : setTimeout(f, 16));
-    const next = () => {
-      const o = todo.shift();
-      if (!o || !going()) return;
-      // The scene is drawn into the post-processing buffer, and the target decides the program
-      // (tone mapping, colour space): compiled for the screen, it would be compiled again.
-      const was = r.getRenderTarget();
-      r.setRenderTarget(this.post.enabled ? this.post.rt : null);
-      r.compile(o, this.camera3, this.scene);
-      r.setRenderTarget(was);
-      later(next);
+    const run = idle => {
+      if (!going()) return;
+      const until = performance.now() + Math.max(5, idle?.timeRemaining?.() ?? 10);
+      while (tasks.length && performance.now() < until) if (tasks[0](until)) tasks.shift();
+      if (tasks.length) later(run);
+      else ready.done = true;
     };
-    later(next);
+    later(run);
+  }
+
+  /** The streets filled before the first frame: two seconds of traffic and people, a step at a time, then the parked cars. */
+  *fillStreets() {
+    for (let i = 0; i < 40; i++) { this.traffic.update(0.05); this.peds.update(0.05); yield; }
+    this.parked.t = 0; this.parked.update(1);
+  }
+
+  /** Stand the player at a spot, the camera behind and the streets as seen from there, as play would begin. */
+  _standAt(s) {
+    const P = this.player, h = P.human;
+    P.teleport(s.x, s.z, s.heading);
+    h.x = P.x; h.y = P.y; h.z = P.z; h.yaw = P.heading;
+    this.camera.update(0, this.input, { human: h, speed: 0, heading: P.heading, groundY: P.groundY });
+    this.world.chunks.showFrom(s.x, s.z);
   }
 
   // ---------------------------------------------------------------- helpers for actors
