@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Police } from '../src/game/police.js';
 import { Missions, Steps } from '../src/game/missions.js';
-import { STORY } from '../src/game/story.js';
+import { STORY, CHARACTERS } from '../src/game/story.js';
 import { Save } from '../src/game/save.js';
 
 function fakeGame() {
@@ -36,11 +36,26 @@ test('unseen crimes may be reported by witnesses a moment later', () => {
   assert.ok(p.pending.length > 0, 'witnesses are calling it in');
 });
 
-test('the story is eight missions in a playable order', () => {
-  assert.equal(STORY.length, 8);
+test('the story is ten missions in a playable order, each given by someone in it', () => {
+  assert.equal(STORY.length, 10);
   const ids = new Set(STORY.map(m => m.id));
   for (const m of STORY) for (const r of m.requires || []) assert.ok(ids.has(r), `${m.id} requires ${r}`);
-  assert.deepEqual(STORY.filter(m => !m.requires).map(m => m.id), ['m1']);
+  assert.deepEqual(STORY.filter(m => !m.requires).map(m => m.id), [STORY[0].id], 'one way in');
+  // Fresh ids: saves from the old story (m1-m8) don't skip any of it.
+  for (const m of STORY) assert.ok(!/^m\d$/.test(m.id), m.id);
+  for (const m of STORY) assert.ok(CHARACTERS[m.giver]?.initial, `${m.id} has a contact to mark on the map`);
+});
+
+test('every line of the story is spoken by a character it knows', () => {
+  const g = { ...fakeGame(), input: { mode: 'keyboard' }, settings: {} };
+  let n = 0;
+  for (const m of STORY) {
+    for (const step of m.steps(g)) {
+      const lines = [...(step.lines || []), ...(step.opts?.chatter || []).flatMap(([, l]) => l)];
+      for (const [who, text] of lines) { assert.ok(CHARACTERS[who], `${m.id}: ${who}`); assert.ok(text.length < 200, `${m.id}: a line short enough to read`); n++; }
+    }
+  }
+  assert.ok(n > 80, `${n} lines`);
 });
 
 test('a goTo step completes inside its radius and only once you stop', () => {
@@ -77,4 +92,18 @@ test('saves survive a round trip and reset cleanly', () => {
   assert.ok(again.done('m1'));
   again.reset();
   assert.equal(new Save().cash, 200);
+});
+
+test('every place the story sends you is on a road you can drive', async () => {
+  const { world } = await import('./helpers.js');
+  const { STORY_PLACES } = await import('../src/game/story.js');
+  const { net } = world();
+  for (const [name, p] of Object.entries(STORY_PLACES)) {
+    const n = net.nearest(p.x, p.z, 60, {}, r => !net.raised[r]);
+    assert.ok(n && Math.hypot(n.x - p.x, n.z - p.z) < 25, `${name} is ${n ? Math.hypot(n.x - p.x, n.z - p.z).toFixed(0) + ' m' : 'far'} from a road`);
+  }
+  for (const m of STORY) {
+    const s = typeof m.start === 'function' ? null : m.start;
+    if (s) assert.ok(net.nearest(s.x, s.z, 30, {}, r => !net.raised[r]), `${m.id} starts by a road`);
+  }
 });

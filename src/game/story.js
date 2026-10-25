@@ -1,5 +1,8 @@
-// The story: "Ghar Wapasi". All characters and events are fictional; real
-// places appear as public settings only and imply no endorsement.
+// The story: "Godavari Gold". A son comes home to a moneylender's debt and works his way into, and
+// out of, the sand racket on the Godavari. The crimes are the kinds Nanded's police deal with
+// (illegal moneylending, two-wheeler theft, matka, river sand, ganja on the Telangana road,
+// protection money); every character and event is fictional, and real places appear as public
+// settings only and imply no endorsement.
 import * as THREE from 'three';
 import { Steps as S } from './missions.js';
 import { dist, headingTo } from '../core/math.js';
@@ -8,14 +11,21 @@ import { key, pick, drivingHelp } from '../ui/controls.js';
 export const CHARACTERS = {
   YOU: { name: 'Sunny', color: '#ffffff' },
   PAKYA: { name: 'Pakya', color: '#7fd1ff', initial: 'P', markerColor: 0x7fd1ff },
+  BABA: { name: 'Baba (phone)', color: '#e0c3fc' },
+  SAVKAR: { name: 'Kaka Savkar', color: '#e6c15a' },
+  BUNTY: { name: 'Bunty', color: '#9be564', initial: 'B', markerColor: 0x9be564 },
+  BUNTY_PH: { name: 'Bunty (phone)', color: '#9be564' },
   ANNA: { name: 'Anna', color: '#ffb347', initial: 'A', markerColor: 0xffb347 },
-  PRIYA: { name: 'Priya', color: '#ff8fb1', initial: 'Pr', markerColor: 0xff8fb1 },
-  VICKY: { name: 'Vicky Deshmukh', color: '#ff5c5c', initial: 'V', markerColor: 0xff5c5c },
-  KADAM: { name: 'Inspector Kadam', color: '#c3e88d', initial: 'K' },
-  AAI: { name: 'Aai (phone)', color: '#e0c3fc' },
-  PAAJI: { name: 'Gurpreet Paaji', color: '#ffd27a', initial: 'G', markerColor: 0xffd27a },
+  SHERA: { name: 'Shera', color: '#ff7043', initial: 'S', markerColor: 0xff7043 },
+  SHERA_PH: { name: 'Shera (phone)', color: '#ff7043' },
+  MAMA: { name: 'Jaggu Mama', color: '#ffd54f', initial: 'M', markerColor: 0xffd54f },
+  MAMA_PH: { name: 'Jaggu Mama (phone)', color: '#ffd54f' },
+  TIGER: { name: 'Tiger', color: '#ff5c5c', initial: 'T', markerColor: 0xff5c5c },
+  KADAM: { name: 'Inspector Kadam', color: '#c3e88d', initial: 'K', markerColor: 0xc3e88d },
+  KADAM_PH: { name: 'Inspector Kadam (phone)', color: '#c3e88d' },
+  PAPPU: { name: 'Pappu', color: '#b0bec5' },
+  MUNSHI: { name: 'Site munshi', color: '#b9f6ca' },
   GOON: { name: 'Goon', color: '#ff9e80' },
-  PAANWALA: { name: 'Paan-wala', color: '#b9f6ca' },
 };
 
 export const HOME = { x: -935.4, z: -1834.1, name: 'Zenda Chowk' };
@@ -24,11 +34,23 @@ export const POLICE_STATION = { x: 195.9, z: 401.1, name: 'Vazirabad Police Stat
 export const GARAGE = { x: -299.8, z: -1113.2, name: "Anna's Rang Garage" };
 
 const P = {
-  station: { x: 5.3, z: 10.9 }, zenda: { x: -935.4, z: -1834.1 }, workshop: GARAGE, tarodaNaka: { x: -564.7, z: -1381.4 },
-  sarafa: { x: 544.4, z: 605.3 }, hingoliGate: { x: 290.5, z: -31.7 }, phule: { x: -261.5, z: -397.1 }, visava: { x: -257.4, z: -491.6 },
-  iib: { x: 6.7, z: -922.8 }, tajPatil: { x: -287.9, z: -508.7 }, gandhiPutla: { x: 112.2, z: 417.8 }, ghatBridge: { x: -96.4, z: 804.4 },
-  dam: { x: -1350.3, z: 1990.4 }, newMondha: { x: 354.1, z: -141.3 }, langar: { x: 264.5, z: 668.1 }, hazur: { x: 450.8, z: 462.2 }, fort: { x: 811.5, z: 1014.9 },
+  station: { x: 5.3, z: 10.9 }, zenda: HOME, workshop: GARAGE, police: POLICE_STATION,
+  taroda: { x: -564.7, z: -1381.4 }, // Taroda Naka
+  oldMondha: { x: 544.4, z: 605.3 }, // the old city's market lanes: Kaka Savkar's office
+  iib: { x: 6.7, z: -922.8 }, // coaching classes, Parnakuti
+  bhagya: { x: -30, z: -983 }, // Bhagya Nagar
+  phule: { x: -261.5, z: -397.1 }, // behind Phule Market: Shera's den
+  namaskar: { x: 766, z: -882 }, // Namaskar Chowk, the airport bypass
+  ghat: { x: -128, z: 894 }, // the sand ghat on the south bank below the Govardhan Ghat bridge
+  bridgeN: { x: -91, z: 722 }, // the bridge's city end, where the flying squad waits
+  site: { x: -262, z: -1316 }, // a builder's site near Raj Corner
+  yard: { x: -233, z: 84 }, // the impound yard behind the Central Bus Stand
+  latur: { x: -248, z: 1368 }, // Latur Phata
+  degloor: { x: 1038, z: 389 }, // Degloor Naka, on the road in from Telangana
+  gandhiPutla: { x: 112.2, z: 417.8 }, ghatBridge: { x: -96.4, z: 804.4 }, dam: { x: -1350.3, z: 1990.4 },
 };
+/** Every place the story sends you (checked against the road network in the tests). */
+export const STORY_PLACES = P;
 
 /** Spawn a vehicle at the kerb near a point, facing along the street. */
 function kerbSpawn(c, name, type, at, opts = {}) {
@@ -36,6 +58,23 @@ function kerbSpawn(c, name, type, at, opts = {}) {
   return c.spawnVehicle(name, type, rp.x, rp.z, rp.heading, opts);
 }
 function nearPed(c, name, kind, at, dx, dz, opts = {}) { return c.spawnPed(name, kind, at.x + dx, at.z + dz, opts); }
+/** Dress someone for their part: colours and build, plus flags to add or drop (never their shoes). */
+function dress(outfit, { add = [], drop = [], ...rest }) {
+  Object.assign(outfit, rest);
+  for (const f of add) outfit.flags.add(f);
+  for (const f of drop) outfit.flags.delete(f);
+  return outfit;
+}
+const LOOK = {
+  pakya: { shirt: 0x3f88c5, sleeve: 0x3f88c5, pants: 0x2b2b2b, legs: 0x2b2b2b },
+  savkar: { shirt: 0xf4f1e8, sleeve: 0xf4f1e8, pants: 0xf4f1e8, legs: 0xf4f1e8, heavy: 0.8, add: ['kurta', 'moustache'], drop: ['stubble', 'collar', 'belt'], code: 3 << 4 },
+  bunty: { shirt: 0x1f6f5c, sleeve: 0x1f6f5c, trim: 0xf4f1ea, code: 3 | (1 << 4), add: ['stubble'] },
+  shera: { shirt: 0x151515, sleeve: 0x151515, pants: 0x1b2631, legs: 0x1b2631, add: ['stubble'], heavy: 0.3 },
+  mama: { shirt: 0xf7f7f2, sleeve: 0xf7f7f2, pants: 0xf7f7f2, legs: 0xf7f7f2, heavy: 1, add: ['kurta', 'moustache'], drop: ['stubble', 'collar', 'belt'], code: 3 << 4 },
+  tiger: { shirt: 0x8e1b1b, sleeve: 0x8e1b1b, pants: 0x111111, legs: 0x111111, add: ['stubble'] },
+};
+/** Put a character's look on a vehicle's driver. */
+function driverAs(v, look) { if (v?.driver) dress(v.driver.outfit, look); return v; }
 
 /** Checkpoints every ~step metres along a road route through the given points. */
 function routeCheckpoints(g, pts, step = 300) {
@@ -55,256 +94,400 @@ function routeCheckpoints(g, pts, step = 300) {
   }
   return out;
 }
+const punch = g => pick(g, { keyboard: 'click or <kbd>J</kbd>', gamepad: key(g, 'attack'), touch: key(g, 'attack') });
+const night = h => S.call(c => { c.g.sky.hours = h; });
 
 export const STORY = [
   {
-    id: 'm1', giver: 'PAKYA', title: 'घरवापसी', subtitle: 'WELCOME HOME', reward: 500,
+    id: 'c1', giver: 'PAKYA', title: 'कर्ज', subtitle: 'THE DEBT', reward: 500,
     start: P.station,
     steps: g => [
       S.call(c => {
         kerbSpawn(c, 'auto', 'auto', P.station, { dx: 6, label: "Pakya's auto", color: 0x1d1d1d });
         const a = c.ent.auto;
-        nearPed(c, 'pakya', 'man', { x: a.x, z: a.z }, -Math.cos(a.heading) * 1.6, Math.sin(a.heading) * 1.6, { outfit: { shirt: 0x3f88c5, sleeve: 0x3f88c5, pants: 0x2b2b2b }, heading: a.heading + Math.PI / 2 });
+        nearPed(c, 'pakya', 'man', { x: a.x, z: a.z }, -Math.cos(a.heading) * 1.6, Math.sin(a.heading) * 1.6, { heading: a.heading + Math.PI / 2 });
+        dress(c.ent.pakya.h.outfit, LOOK.pakya);
         c.ent.pakya.blip = '#7fd1ff';
-        // Sunny turns toward the auto; Pakya turns to greet him.
         const me = c.g.player;
         me.heading = headingTo(me.x, me.z, a.x, a.z); me.human.yaw = me.heading;
         c.ent.pakya.h.yaw = headingTo(c.ent.pakya.h.x, c.ent.pakya.h.z, me.x, me.z);
       }),
       S.say([
-        ['PAKYA', 'Sunny Bhau! The Pune-wala hero is back in Nanded!'],
-        ['YOU', 'Pakya! You still drive this kachra rickshaw?'],
-        ['PAKYA', 'Kachra? This is a Mercedes, bhau. A black-yellow Mercedes.'],
-        ['PAKYA', 'My back is finished from passengers. You drive — home to Zenda Chowk. Aai is waiting with poha.'],
+        ['PAKYA', 'Sunny bhau! The Pune-wala is back!'],
+        ['YOU', 'The company shut down, Pakya. No job, no salary. Just this bag and a bus ticket.'],
+        ['PAKYA', "Then you haven't heard. Your Baba took two lakh from Kaka Savkar for the soybean. Ten rupees on every hundred — every month."],
+        ['PAKYA', "The rains failed. Savkar says it's six lakh now. Last week his boys took the tractor. And the land papers."],
+        ['YOU', 'Six lakh?! Take me to this Savkar. Now.'],
       ], {
         block: true,
         // A crane shot: high over the station forecourt, settling behind Sunny.
         shot: c => {
           const me = c.g.player, a = c.ent.auto;
           const mx = (me.x + a.x) / 2, mz = (me.z + a.z) / 2;
-          const away = Math.atan2(me.x - 5, me.z + 4); // from the station toward the forecourt
+          const away = Math.atan2(me.x - 5, me.z + 4);
           const dx = Math.sin(away), dz = Math.cos(away);
           return {
             from: new THREE.Vector3(mx + dx * 34 - dz * 12, 19, mz + dz * 34 + dx * 12),
             to: new THREE.Vector3(mx + dx * 9 - dz * 3, 3.2, mz + dz * 9 + dx * 3),
             look: new THREE.Vector3(mx - dx * 4, 2.2, mz - dz * 4),
-            duration: 11,
+            duration: 13,
           };
         },
       }),
       S.enter('auto', `Get in Pakya's <b>auto</b>. <i>(${key(g, 'enter')})</i>`),
       S.call(c => {
         const p = c.ent.pakya;
-        if (p) { c.g.peds.remove(p); delete c.ent.pakya; }
-        c.g.vehicles.addPassenger(c.ent.auto, Object.assign(c.g.peds.randomOutfit(), { shirt: 0x3f88c5, sleeve: 0x3f88c5, pants: 0x2b2b2b, kind: 'man', flags: new Set() }));
+        if (p) { const outfit = p.h.outfit; c.g.peds.remove(p); delete c.ent.pakya; c.g.vehicles.addPassenger(c.ent.auto, outfit); }
         c.g.hud.help(`${drivingHelp(c.g)} Follow the yellow route on the radar.`, 9);
       }),
-      S.goTo(P.zenda, 'Drive Pakya to <b>Zenda Chowk</b>, Taroda Khurd.', {
-        vehicle: 'auto', radius: 7,
+      S.goTo(P.oldMondha, "Drive to <b>Kaka Savkar's office</b> in the Old Mondha lanes.", {
+        vehicle: 'auto', radius: 8,
         chatter: [
-          [0.93, [['PAKYA', 'Hazur Sahib is behind us. On Gurpurab the whole old city glows gold.']]],
-          [0.7, [['PAKYA', 'Keep left, bhau! This is Nanded, not Pune. Here the horn is the indicator.']]],
-          [0.55, [['PAKYA', 'This side is the coaching zone. Half of Maharashtra comes here for NEET and JEE.'], ['YOU', 'And the other half?'], ['PAKYA', 'Sells them vada-pav.']]],
-          [0.3, [['PAKYA', 'Workshop Corner. Anna was asking about you. He has "work".'], ['YOU', 'Anna always has "work".']]],
-          [0.08, [['PAKYA', 'Zenda Chowk! Your galli, bhau. Nothing changes here.']]],
+          [0.85, [['PAKYA', 'Savkar lends to half the district. Farmers, students, auto-wale. Nobody ever finishes paying.']]],
+          [0.6, [['PAKYA', 'No licence, no receipts. A diary, a stamp paper, and boys with sticks.']]],
+          [0.35, [['PAKYA', "Careful, bhau. People say Savkar's money isn't his. Somebody bigger stands behind him."]]],
         ],
       }),
+      S.call(c => {
+        const at = c.roadPoint(P.oldMondha.x + 10, P.oldMondha.z, 1);
+        for (let i = 0; i < 3; i++) nearPed(c, `g${i}`, 'goon', at, Math.cos(i * 2.1) * 2.6, Math.sin(i * 2.1) * 2.6, {});
+        nearPed(c, 'savkar', 'man', at, 6, 4, {});
+        dress(c.ent.savkar.h.outfit, LOOK.savkar);
+      }),
+      S.say([['GOON', 'Office is closed, hero. Come back with money.'], ['YOU', "I've come for my father's papers."], ['SAVKAR', "Patil's boy, from Pune. Show him how Nanded does business."]]),
+      S.fight(['g0', 'g1', 'g2'], `Fight off <b>Savkar's men</b>. <i>(${punch(g)} to punch)</i>`),
       S.say([
-        ['AAI', 'Sunny! Are you coming or should I give your poha to the dog?'],
-        ['YOU', "Coming, Aai! Two minutes!"],
-        ['PAKYA', 'Go, go. And bhau — meet Anna at Workshop Corner. And that Joshi girl, Priya, was asking for you near Visava Garden.'],
+        ['SAVKAR', 'Strong boy. Good. Strong boys can earn.'],
+        ['SAVKAR', "Six lakh by Diwali, Patil, or the land is mine. And the interest starts tomorrow."],
+        ['PAKYA', "Bhau, let's go — before his friends in khaki turn up."],
+      ]),
+      S.goTo(P.zenda, 'Drive home to <b>Zenda Chowk</b>.', { vehicle: 'auto', radius: 7 }),
+      S.say([
+        ['BABA', "Sunny? You went to Savkar? Beta, don't fight them. Next they'll burn the crop."],
+        ['YOU', "Then I'll find six lakh, Baba. Somehow."],
+        ['PAKYA', 'Bhau… there is a man at Taroda Naka. Bunty. He pays cash for certain jobs. No questions.'],
       ]),
     ],
     onPass: g => g.hud.help(`New contacts are marked on your radar and map (${key(g, 'map')}) with their initials. Walk into a marker to start.`, 9),
   },
   {
-    id: 'm2', giver: 'ANNA', title: 'चहा आणि राडा', subtitle: 'CHAI & CHAOS', reward: 800, requires: ['m1'],
-    start: { x: P.workshop.x, z: P.workshop.z },
+    id: 'c2', giver: 'BUNTY', title: 'चोरीच्या गाड्या', subtitle: 'HOT WHEELS', reward: 1200, requires: ['c1'],
+    start: P.taroda,
     steps: g => [
       S.say([
-        ['ANNA', 'Sunny! Pune made you thin, re.'],
-        ['ANNA', "Listen. Vicky Deshmukh's boys took my Tejas bike right out of my garage. Called it 'protection money'."],
-        ['YOU', "Vicky Deshmukh? The neta's son? Still playing goonda?"],
-        ['ANNA', 'Worse. Now he has a white SUV and a "BOSS" sticker. His boys sit at Taroda Naka. Bring my bike back. Use your hands, not your mouth.'],
+        ['BUNTY', "Pakya's friend? Good. I take orders for bikes. Today's order: two Tejas 125s."],
+        ['BUNTY', 'Coaching students park outside the classes at Parnakuti all day. Half of them never lock the handle.'],
+        ['BUNTY', 'Take them to Anna at Workshop Corner. He changes the plates, I sell them in the villages.'],
+        ['YOU', "Students' bikes…"],
+        ['BUNTY', "Their fathers will buy new ones. Yours can't buy back his land."],
       ], { block: true }),
-      S.goTo(P.tarodaNaka, 'Go to <b>Taroda Naka</b>.', { radius: 16, stop: false }),
-      S.call(c => {
-        const b = kerbSpawn(c, 'bike', 'bike', P.tarodaNaka, { dx: 8, label: "Anna's Tejas", color: 0xb71c1c });
-        for (let i = 0; i < 3; i++) nearPed(c, `g${i}`, 'goon', { x: b.x, z: b.z }, Math.cos(i * 2.1) * 2.4, Math.sin(i * 2.1) * 2.4, { pose: 'idle' });
-      }),
-      S.say([['GOON', 'Ae hero! Anna sent you? Go home before you get hurt.'], ['YOU', 'Funny. Anna said the same about you.']]),
-      S.fight(['g0', 'g1', 'g2'], `Beat up Vicky's boys. <i>(${pick(g, { keyboard: 'click or <kbd>J</kbd>', gamepad: key(g, 'attack'), touch: key(g, 'attack') })} to punch)</i>`),
-      S.enter('bike', "Take back <b>Anna's bike</b>."),
-      S.goTo(P.workshop, 'Ride it back to <b>Workshop Corner</b>.', { vehicle: 'bike', radius: 7 }),
+      S.goTo(P.iib, 'Go to the coaching classes at <b>Parnakuti</b>.', { radius: 14, stop: false }),
+      S.call(c => kerbSpawn(c, 'bike1', 'bike', P.iib, { dx: 6, label: 'black Tejas', color: 0x151515 })),
+      S.enter('bike1', 'Steal the <b>black Tejas</b>.'),
+      S.call(c => { c.g.police.setLevel(1); c.g.hud.big('WANTED', 'A student saw you take it', 'wanted', 2.5); }),
+      S.goTo(P.workshop, "Ride it to <b>Anna's garage</b> at Workshop Corner.", { vehicle: 'bike1', radius: 7 }),
+      S.leave('Get off the bike.'),
       S.say([
-        ['ANNA', 'My Tejas! Not a scratch. Well… a few scratches.'],
-        ['ANNA', "Here's your money. And remember: if the police are on your tail, drive into my garage. New colour, new number plate, no questions."],
+        ['ANNA', "Another one of Bunty's \"orders\"… Sunny? You?"],
+        ['YOU', "Baba's land, Anna."],
+        ['ANNA', 'Hm. Leave it with me. And listen: police on your tail, drive straight into my garage. New colour, new plates, no questions.'],
+      ]),
+      S.call(c => {
+        c.g.save.data.garage = true; c.g.save.flush();
+        c.g.police.clear();
+        c.g.vehicles.remove(c.ent.bike1); delete c.ent.bike1;
+      }),
+      S.goTo(P.bhagya, 'One more: Bunty says another stands outside a class in <b>Bhagya Nagar</b>.', { radius: 14, stop: false }),
+      S.call(c => kerbSpawn(c, 'bike2', 'bike', P.bhagya, { dx: 5, label: 'Tejas', color: 0x1e3a8a })),
+      S.enter('bike2', 'Steal the second <b>Tejas</b>.'),
+      S.escape(2, "A constable saw you! Lose the police — or ride into <b>Anna's garage</b> for a respray."),
+      S.goTo(P.workshop, "Deliver it to <b>Anna's garage</b>.", { vehicle: 'bike2', radius: 7 }),
+      S.say([['BUNTY_PH', 'Two bikes. Forty thousand, minus my cut. Pakya was right about you.'], ['BUNTY_PH', 'Shera wants to meet you. Behind Phule Market. He runs the numbers in this town.']]),
+    ],
+    onPass: g => g.hud.help("Anna's <b>Rang Garage</b> is open: drive in while wanted to lose the police for ₹250 (it also repairs your ride).", 9),
+  },
+  {
+    id: 'c3', giver: 'SHERA', title: 'मटका', subtitle: 'THE NUMBERS GAME', reward: 1800, requires: ['c2'],
+    start: P.phule,
+    steps: g => [
+      S.call(c => {
+        const at = c.roadPoint(P.phule.x, P.phule.z, 1);
+        nearPed(c, 'shera', 'goon', at, 2, 2, {});
+        dress(c.ent.shera.h.outfit, LOOK.shera);
+        for (let i = 0; i < 2; i++) nearPed(c, `g${i}`, 'goon', at, -2 - i * 1.5, 3, {});
+        kerbSpawn(c, 'car', 'hatch', P.phule, { dx: -6, label: "Shera's car", color: 0x8e1b1b });
+      }),
+      S.say([
+        ['SHERA', "So you're Bunty's new boy. I'm Shera. I run the numbers — open, close, jodi. Every paan shop from here to Vazirabad takes my slips."],
+        ['SHERA', "Today my collector Pappu ran off with the day's takings. Red scooty, heading for the airport road."],
+        ['SHERA', "Take my car. Bring back the bag. Pappu, I don't care about."],
+      ], { block: true }),
+      S.call(c => driverAs(kerbSpawn(c, 'pappu', 'scooter', P.phule, { dx: 90, label: 'Pappu', color: 0xd32f2f, driver: true }), { shirt: 0xf0ad4e, sleeve: 0xf0ad4e })),
+      S.enter('car', "Get in <b>Shera's car</b>."),
+      S.chase('pappu', P.namaskar, 'Catch <b>Pappu</b> — ram his scooty till he gives up.', { driverAs: 'pappuMan', rams: 3 }),
+      S.fight(['pappuMan'], 'Get the bag off <b>Pappu</b>.', { pappuMan: 1 }),
+      S.say([['PAPPU', 'Okay, okay! Take it! Shera pays us peanuts, bhau!'], ['YOU', 'Then complain to Shera.']]),
+      S.goTo(P.phule, 'Take the bag back to <b>Shera</b> behind Phule Market.', { radius: 8 }),
+      S.say([
+        ['SHERA', 'All of it. Good.'],
+        ['SHERA', "Bad news: somebody called the police Khabar line about my den. Kadam's raid team is on its way."],
+        ['SHERA', "Get the cash box to Anna's before they seal the lane. Go!"],
+      ]),
+      S.call(c => kerbSpawn(c, 'cash', 'hatch', P.phule, { dx: 8, label: 'cash car', color: 0x4a4a4a })),
+      S.enter('cash', 'Get in the <b>cash car</b>.'),
+      S.call(c => c.g.police.setLevel(2)),
+      S.goTo(P.workshop, "Get the cash to <b>Anna's garage</b> before the raid team catches up.", { vehicle: 'cash', radius: 7, timer: 150, timerFail: "Kadam's team caught up with the cash." }),
+      S.say([['SHERA_PH', "The den was empty when Kadam walked in. He bought a paan and left. You've got a future, Patil."], ['SHERA_PH', 'Mama wants to see you. The sand ghat below the Govardhan bridge, south bank. After dark.']]),
+    ],
+  },
+  {
+    id: 'c4', giver: 'MAMA', title: 'पिवळं सोनं', subtitle: 'YELLOW GOLD', reward: 2500, requires: ['c3'],
+    start: P.ghat,
+    steps: g => [
+      night(21.5),
+      S.call(c => {
+        const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
+        nearPed(c, 'mama', 'man', at, 2.5, 2, {});
+        dress(c.ent.mama.h.outfit, LOOK.mama);
+        kerbSpawn(c, 'tipper', 'truck', P.ghat, { dx: 10, label: 'sand tipper', color: 0xc9a227 });
+      }),
+      S.say([
+        ['MAMA', 'So this is the boy who kept Shera\'s cash out of Kadam\'s hands. Sit, sit.'],
+        ['MAMA', "You know what Nanded is built on, Patil? Not cement. Sand. The Godavari's yellow gold."],
+        ['MAMA', 'The government auctions a few ghats a year. My boats work every night. A tipper of river sand is fifty thousand in the city.'],
+        ['MAMA', "This one goes to a builder's site near Raj Corner. The revenue flying squad sits on the bridges after midnight. Don't let them see you."],
+      ], { block: true }),
+      S.enter('tipper', 'Get in the <b>sand tipper</b>.'),
+      S.goTo(P.bridgeN, 'Cross the <b>Govardhan bridge</b> into the city.', { vehicle: 'tipper', radius: 16, stop: false }),
+      S.call(c => { c.g.police.setLevel(1); c.g.hud.big('FLYING SQUAD', 'They saw the tipper', 'wanted', 2.5); }),
+      S.escape(1, "Lose the flying squad — or get to <b>Anna's garage</b>."),
+      S.goTo(P.site, "Deliver the sand to the <b>builder's site</b> near Raj Corner.", { vehicle: 'tipper', radius: 10, maxDamage: 0.55, damageFail: 'The tipper is wrecked and the sand is all over the road.' }),
+      S.say([['MUNSHI', "Mama's sand? Tip it at the back. Here — cash for Mama."], ['MAMA_PH', 'Good boy. Ten thousand for you. There is more where the river comes from.']]),
+    ],
+  },
+  {
+    id: 'c5', giver: 'MAMA', title: 'जप्ती', subtitle: 'SEIZED', reward: 3000, requires: ['c4'],
+    start: { x: P.ghat.x + 3, z: P.ghat.z + 3 },
+    steps: g => [
+      night(22),
+      S.call(c => {
+        const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
+        nearPed(c, 'mama', 'man', at, 2.5, 2, {}); dress(c.ent.mama.h.outfit, LOOK.mama);
+        nearPed(c, 'shera', 'goon', at, -2, 2.5, {}); dress(c.ent.shera.h.outfit, LOOK.shera);
+      }),
+      S.say([
+        ['MAMA', "Last night the tehsildar's squad seized one of my tippers at Latur Phata. It is standing in the impound yard behind the bus stand."],
+        ['MAMA', 'Tomorrow they auction it. Tonight it comes home. Nobody gets hurt — you just drive it out.'],
+        ['SHERA', 'The watchman sleeps by ten. Mostly.'],
+      ], { block: true }),
+      S.goTo(P.yard, 'Go to the <b>impound yard</b> behind the Central Bus Stand.', { radius: 16, stop: false }),
+      S.call(c => kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227 })),
+      S.enter('seized', "Take back <b>Mama's tipper</b>."),
+      S.call(c => { c.g.police.setLevel(2); c.g.hud.big('WANTED', 'The watchman blew his whistle', 'wanted', 2.5); }),
+      S.escape(2, "Lose the police — <b>Anna's garage</b> resprays anything, even a tipper."),
+      S.goTo(P.ghat, "Bring the tipper home to <b>Mama's ghat</b>.", { vehicle: 'seized', radius: 12, maxDamage: 0.6, damageFail: 'The tipper is too smashed to work.' }),
+      S.say([
+        ['MAMA', 'Ha! Let them auction the air.'],
+        ['SHERA', 'Mama, Kadam will know it was us.'],
+        ['MAMA', 'Kadam knows everything. Knowing is free. Proving costs money.'],
       ]),
     ],
-    onPass: g => { g.save.data.garage = true; g.save.flush(); g.hud.help("Anna's <b>Rang Garage</b> is open: drive in while wanted to lose the police for ₹250 (it also repairs your ride).", 9); },
   },
   {
-    id: 'm3', giver: 'ANNA', title: 'गुटखा एक्सप्रेस', subtitle: 'GUTKHA EXPRESS', reward: 1500, requires: ['m2'],
-    start: { x: P.workshop.x + 4, z: P.workshop.z + 4 },
-    steps: g => [
-      S.say([
-        ['ANNA', 'Small job, Sunny. My friend at Old Mondha has some "supari" boxes for two paan shops.'],
-        ['YOU', 'Supari. Of course.'],
-        ['ANNA', "Don't ask, don't open, don't get caught. That stuff is banned in Maharashtra, haan."],
-      ], { block: true }),
-      S.goTo(P.sarafa, 'Go to <b>Old Mondha</b> in the old city.', { radius: 10, stop: false }),
-      S.call(c => kerbSpawn(c, 'tempo', 'tempo', P.sarafa, { dx: 6, label: 'tempo', color: 0xf2f2f2 })),
-      S.enter('tempo', 'Get in the <b>tempo</b>.'),
-      S.goTo(P.hingoliGate, 'Deliver to the paan shop at <b>Hingoli Gate</b>.', { vehicle: 'tempo', radius: 7, timer: 200, timerFail: 'The paan shops shut for the day.' }),
-      S.say([['PAANWALA', "Anna's boy? Wah. But careful — there's a police checkpost on the next road."]]),
-      S.call(c => { c.g.hud.big('WANTED', 'The checkpost spotted the tempo', 'wanted', 2.5); }),
-      S.escape(2, 'Lose the cops — or get a respray at <b>Anna\'s Rang Garage</b>.'),
-      S.goTo(P.phule, 'Deliver the last boxes at <b>Phule Market</b>.', { vehicle: 'tempo', radius: 7, timer: 200, timerFail: 'The paan shops shut for the day.' }),
-      S.say([['PAANWALA', 'Perfect timing. Tell Anna his "supari" is the best in Nanded.'], ['YOU', "I'm telling Anna nothing."]]),
-    ],
-  },
-  {
-    id: 'm4', giver: 'PRIYA', title: 'मॉक टेस्ट', subtitle: 'MOCK TEST MAYHEM', reward: 1000, requires: ['m1'],
-    start: P.visava,
-    steps: g => [
-      S.call(c => {
-        kerbSpawn(c, 'scooty', 'scooter', P.visava, { dx: 5, label: "Priya's scooty", color: 0xe53935 });
-        nearPed(c, 'priya', 'student', P.visava, 2, 1.5, { outfit: { flags: new Set(['kurta', 'bun', 'pack']), shirt: 0xff8fb1, sleeve: 0xff8fb1, pants: 0xf2f2f2, legs: 0xf2f2f2, extra: 0x1f3a93 }, pose: 'phone' });
-        c.ent.priya.blip = '#ff8fb1';
-      }),
-      S.say([
-        ['PRIYA', 'Sunny? Sunny Patil from seventh standard? Never mind. Do you have a vehicle?'],
-        ['YOU', 'I have… charm.'],
-        ['PRIYA', "I have a NEET mock test at IIB Parnakuti in a minute and a half. My scooty won't start for me. Maybe it likes boys. Drive!"],
-      ], { block: true }),
-      S.enter('scooty', "Get on <b>Priya's scooty</b>."),
-      S.call(c => {
-        const p = c.ent.priya;
-        if (p) { const outfit = p.h.outfit; c.g.peds.remove(p); delete c.ent.priya; c.g.vehicles.addPassenger(c.ent.scooty, outfit); }
-        c.ent.scooty.lastImpact = 0;
-      }),
-      guarded(S.goTo(P.iib, 'Get Priya to <b>IIB Parnakuti</b> before the test starts!', {
-        vehicle: 'scooty', radius: 7, timer: 95, timerFail: 'Priya missed her mock test.',
-        chatter: [
-          [0.85, [['PRIYA', 'Faster! Physics starts at ten sharp!']]],
-          [0.6, [['PRIYA', 'LEFT! The other left!']]],
-          [0.35, [['PRIYA', "If I get AIR 47, it's because of you. If I fail, also because of you."]]],
-        ],
-      }), c => {
-        const v = c.ent.scooty;
-        if (v && v.lastImpact > 7) return 'fail:Priya fell off. She is taking an auto — and not talking to you.';
-        if (v) v.lastImpact = 0;
-        return null;
-      }),
-      S.say([['PRIYA', "Made it! You're a menace on wheels, Patil. Thank you."], ['YOU', 'Best of luck. Bring me a laddoo when you top.']]),
-    ],
-  },
-  {
-    id: 'm5', giver: 'ANNA', title: 'बॉसची गाडी', subtitle: "THE BOSS'S SUV", reward: 2500, requires: ['m3', 'm4'],
-    start: { x: P.workshop.x - 4, z: P.workshop.z - 4 },
-    steps: g => [
-      S.say([
-        ['ANNA', 'Vicky came here this morning. Kicked my toolbox. Called me "buddha".'],
-        ['ANNA', 'His white SUV is parked outside Hotel Taj Patil while he gives a speech at ITI Corner.'],
-        ['ANNA', "Bring that SUV to my garage. In one piece. I'll give it a… makeover."],
-      ], { block: true }),
-      S.goTo(P.tajPatil, 'Go to <b>Hotel Taj Patil</b>, ITI Corner.', { radius: 18, stop: false }),
-      S.call(c => {
-        const v = kerbSpawn(c, 'boss', 'suv', P.tajPatil, { dx: -6, label: "Vicky's SUV", color: 0xf7f7f7, driver: true });
-        v.vital = true; v.vitalMsg = "Vicky's SUV was wrecked.";
-        nearPed(c, 'guard', 'goon', { x: v.x, z: v.z }, 2.5, 2.5, {});
-      }),
-      S.enter('boss', "Steal <b>Vicky's SUV</b>."),
-      S.call(c => {
-        c.g.police.setLevel(2);
-        const rp = c.roadPoint(P.tajPatil.x + 30, P.tajPatil.z + 10, 1);
-        const h = c.spawnVehicle('chaser', 'suv', rp.x, rp.z, rp.heading, { color: 0x111111, driver: true, label: "Vicky's boys" });
-        c.g.vehicles.addPassenger(h, Object.assign(c.g.peds.randomOutfit(), { kind: 'goon' }));
-      }),
-      S.hunters(['chaser']),
-      S.say([['VICKY', 'Who touched my gaadi?! Whoever you are, you are DEAD!']]),
-      S.goTo(P.workshop, "Take the SUV to <b>Anna's garage</b> — keep it in one piece.", { vehicle: 'boss', radius: 8, maxDamage: 0.55, damageFail: "Vicky's SUV is too smashed to sell." }),
-      S.say([['ANNA', 'Beautiful. By tomorrow it will be a Pune taxi. Here, your share.']]),
-      S.call(c => { c.g.police.clear(); }),
-    ],
-  },
-  {
-    id: 'm6', giver: 'VICKY', title: 'पुलावरची शर्यत', subtitle: 'THE BRIDGE RACE', reward: 3000, requires: ['m5'],
+    id: 'c6', giver: 'TIGER', title: 'नदीकाठची शर्यत', subtitle: 'RIVER RIGHTS', reward: 3500, requires: ['c5'],
     start: P.gandhiPutla,
     steps: g => {
       const cps = routeCheckpoints(g, [P.gandhiPutla, P.ghatBridge, P.dam], 320);
       return [
+        night(20.5),
         S.call(c => {
-          const a = kerbSpawn(c, 'racer', 'hatch', P.gandhiPutla, { dx: 4, label: 'your race car', color: 0xd62f2f });
-          const v = kerbSpawn(c, 'vicky', 'suv', P.gandhiPutla, { dx: 12, label: 'Vicky', color: 0xf7f7f7, driver: true });
-          const r2 = kerbSpawn(c, 'rival', 'bike', P.gandhiPutla, { dx: 18, label: 'a rival bike', driver: true });
-          v.blip = '#ff5c5c'; r2.blip = '#ff9e80'; void a;
+          kerbSpawn(c, 'racer', 'hatch', P.gandhiPutla, { dx: 4, label: 'your car', color: 0xd62f2f });
+          const t = driverAs(kerbSpawn(c, 'tiger', 'suv', P.gandhiPutla, { dx: 12, label: 'Tiger', color: 0x111111, driver: true }), LOOK.tiger);
+          const r = kerbSpawn(c, 'rival', 'bike', P.gandhiPutla, { dx: 18, label: "Tiger's boy", driver: true });
+          t.blip = '#ff5c5c'; r.blip = '#ff9e80';
         }),
         S.say([
-          ['VICKY', 'So you are the Pune-wala who stole my car. Fine. Race me. Vazirabad to Vishnupuri Dam, over the Govardhan Ghat bridge.'],
-          ['VICKY', 'You win, I forget the car. I win, you work for me. For life.'],
-          ['YOU', 'Deal. Try to keep up, Deshmukh.'],
+          ['TIGER', "So you're Mama's new boy. I'm Tiger. Upstream, every boat is mine."],
+          ['TIGER', 'From here, over the Govardhan bridge, to Vishnupuri Dam. Win, and Mama keeps the river this season. Lose, and it is mine.'],
+          ['MAMA_PH', 'Win this, Patil, and you get a share of every boat.'],
+          ['YOU', 'Try to keep up, Tiger.'],
         ], { block: true }),
-        S.enter('racer', 'Get in <b>your race car</b>.'),
+        S.enter('racer', 'Get in <b>your car</b>.'),
         S.wait(1),
-        S.race(cps, ['vicky', 'rival'], 'Win the race to <b>Vishnupuri Dam</b>.'),
-        S.say([['VICKY', 'You cheated! …Fine. A deal is a deal. For now.']]),
+        S.race(cps, ['tiger', 'rival'], 'Win the race to <b>Vishnupuri Dam</b>.'),
+        S.say([['TIGER', 'This river has a long memory, Patil.']]),
       ];
     },
   },
   {
-    id: 'm7', giver: 'PAAJI', title: 'लंगर सेवा', subtitle: 'LANGAR SEVA', reward: 0, passText: 'सेवा पूर्ण · FULL HEALTH · RESPECT +', requires: ['m2'],
-    start: P.hazur,
+    id: 'c7', giver: 'MAMA', title: 'कांदा एक्सप्रेस', subtitle: 'ONION EXPRESS', reward: 0, passText: 'माल पोलिसांकडे · THE LOAD IS WITH THE POLICE', requires: ['c6'],
+    start: { x: P.ghat.x - 3, z: P.ghat.z + 3 },
     steps: g => [
+      S.call(c => {
+        const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
+        nearPed(c, 'mama', 'man', at, 2.5, 2, {}); dress(c.ent.mama.h.outfit, LOOK.mama);
+      }),
       S.say([
-        ['PAAJI', 'Sat Sri Akal, puttar! Pakya says you drive like the wind.'],
-        ['PAAJI', 'The langar is short of atta for the evening sangat. The sacks are waiting at New Mondha.'],
-        ['PAAJI', 'Bring the tempo to Gurudwara Langar Sahib. Gently — no broken sacks, and no racing near the sangat.'],
+        ['MAMA', 'A tempo of onions is coming in from the Telangana side, through Degloor Naka. Under the onions… don\'t ask.'],
+        ['YOU', "Sand I can live with, Mama. What's under the onions?"],
+        ['MAMA', 'Ganja. Two hundred kilos, Odisha to Mumbai, and Nanded is on the way. Take it to my godown at Taroda Naka and half your father\'s debt is gone tonight.'],
       ], { block: true }),
-      S.goTo(P.newMondha, 'Go to <b>New Mondha</b>.', { radius: 12, stop: false }),
-      S.call(c => kerbSpawn(c, 'tempo', 'tempo', P.newMondha, { dx: 6, label: 'flour tempo', color: 0xfbc02d })),
-      S.enter('tempo', 'Get in the <b>flour tempo</b>.'),
-      S.goTo(P.langar, 'Drive to <b>Gurudwara Langar Sahib</b>. Gently!', { vehicle: 'tempo', radius: 8, timer: 210, timerFail: 'The sangat waited. Try again.', maxDamage: 0.3, damageFail: 'The atta sacks burst.' }),
-      S.say([['PAAJI', 'Waheguru! Right on time. Come, sit with the sangat and eat langar, puttar.'], ['YOU', 'Waheguru ji ka Khalsa, Waheguru ji ki Fateh.']]),
+      S.goTo(P.degloor, 'Go to <b>Degloor Naka</b>.', { radius: 14, stop: false }),
+      S.call(c => kerbSpawn(c, 'onions', 'tempo', P.degloor, { dx: 6, label: 'onion tempo', color: 0x7b5e3b })),
+      S.enter('onions', 'Get in the <b>onion tempo</b>.'),
+      S.call(c => {
+        driverAs(kerbSpawn(c, 'tigerCar', 'suv', P.degloor, { dx: -60, label: "Tiger's SUV", color: 0x111111, driver: true }), LOOK.tiger);
+      }),
+      S.hunters(['tigerCar']),
+      S.chat([['TIGER', "Mama's onions? Let's see how they bounce!"]]),
+      S.goTo(P.oldMondha, 'Head west for Taroda Naka, through the <b>old city</b>.', { vehicle: 'onions', radius: 40, stop: false, maxDamage: 0.75, damageFail: 'The tempo is wrecked and the load is all over the road.' }),
+      S.say([
+        ['KADAM_PH', 'Sunny Patil. Inspector Kadam. I know whose tempo you are driving, and what is under the onions.'],
+        ['KADAM_PH', 'Two hundred kilos is an NDPS case: ten years for the driver. Bring it to Vazirabad Police Station and walk away, and I forget your face.'],
+        ['YOU', "…Baba didn't raise a ganja runner."],
+      ]),
+      S.goTo(P.police, 'Drive the tempo to <b>Vazirabad Police Station</b>.', { vehicle: 'onions', radius: 9, maxDamage: 0.75, damageFail: 'The tempo is wrecked and the load is all over the road.' }),
+      S.leave('Get out and walk away from the tempo.'),
+      S.call(c => {
+        const t = c.ent.tigerCar;
+        if (t) { t.hunt = null; t.blip = null; c.g.controls.delete(t); }
+        c.g.police.clear();
+        nearPed(c, 'kadam', 'police', c.g.player.pos, 3, 2, {});
+      }),
+      S.say([
+        ['KADAM', 'Two hundred kilos. Good choice, Patil. Mama will not think so.'],
+        ['YOU', 'Mama will think Tiger tipped you off.'],
+        ['KADAM', 'Then let him think it. Keep your phone on.'],
+      ]),
     ],
-    onPass: g => { g.player.health = g.player.maxHealth; },
   },
   {
-    id: 'm8', giver: 'PRIYA', title: 'कदमांचा सापळा', subtitle: "KADAM'S TRAP", reward: 5000, requires: ['m6', 'm7'],
-    start: { x: HOME.x + 4, z: HOME.z + 3 },
-    policeLock: true,
+    id: 'c8', giver: 'ANNA', title: 'हफ्ता', subtitle: 'PROTECTION MONEY', reward: 2500, requires: ['c7'],
+    start: { x: P.workshop.x + 4, z: P.workshop.z + 4 },
     steps: g => [
+      S.call(c => kerbSpawn(c, 'annaCar', 'hatch', P.workshop, { dx: 6, label: "Anna's car", color: 0xb71c1c })),
       S.say([
-        ['PRIYA', "Sunny, don't panic. Vicky told Inspector Kadam that YOU stole his SUV and robbed Anna's garage."],
-        ['PRIYA', 'Kadam is coming with half the police station. Get to Nandgiri Fort. Pakya is waiting there. I have a plan.'],
-        ['KADAM', 'All units: suspect Sunny Patil. Bring him in. Alive, and preferably not on the news.'],
+        ['ANNA', "Sunny, Shera's boys came this morning. \"Hafta\": five thousand a week, or the garage burns. Mama's orders, they said."],
+        ['ANNA', 'Half the shops in the Old Mondha lanes already pay. Today they are collecting there.'],
+        ['YOU', 'Not any more.'],
+        ['ANNA', 'Then take my car. And bring it back with all four wheels.'],
       ], { block: true }),
-      S.call(c => { c.g.police.setLevel(3); c.g.police.lock = true; }),
-      S.goTo(P.fort, 'Get to <b>Nandgiri Fort</b> in Old Nanded.', { radius: 14, stop: false }),
+      S.enter('annaCar', "Take <b>Anna's car</b>."),
+      S.goTo(P.oldMondha, 'Drive to the <b>Old Mondha</b> lanes.', { vehicle: 'annaCar', radius: 14, stop: false }),
       S.call(c => {
-        c.g.police.lock = false; c.g.police.clear();
-        const f = P.fort;
-        nearPed(c, 'vicky', 'goon', f, 6, 8, { outfit: { shirt: 0xf7f7f7, sleeve: 0xf7f7f7, pants: 0x111111, legs: 0x111111 } });
-        for (let i = 0; i < 3; i++) nearPed(c, `g${i}`, 'goon', f, 3 + i * 2.5, 12, {});
+        const at = c.roadPoint(P.oldMondha.x - 8, P.oldMondha.z, 1);
+        for (let i = 0; i < 3; i++) nearPed(c, `g${i}`, 'goon', at, Math.cos(i * 2.1) * 2.5, Math.sin(i * 2.1) * 2.5, {});
+        nearPed(c, 'shera', 'goon', at, 5, 3, {}); dress(c.ent.shera.h.outfit, LOOK.shera);
       }),
-      S.say([['VICKY', 'You came yourself! You saved me the trouble, Patil.'], ['PAKYA', "Bhau! I'm recording everything! Priya's idea!"]]),
-      S.fight(['vicky', 'g0', 'g1', 'g2'], 'Take down <b>Vicky</b> and his boys.', { vicky: 3 }),
+      S.say([['SHERA', 'Look who it is. Mama\'s golden boy. Come to pay your hafta, Patil?'], ['YOU', 'Came to collect, Shera.']]),
+      S.fight(['g0', 'g1', 'g2'], "Beat <b>Shera's boys</b>."),
+      S.call(c => {
+        const s = c.ent.shera;
+        if (s) { c.g.peds.remove(s); delete c.ent.shera; }
+        // He sprints to his bike up the lane and is already moving off.
+        driverAs(kerbSpawn(c, 'sheraBike', 'bike', P.oldMondha, { dx: 30, label: 'Shera', color: 0x151515, driver: true }), LOOK.shera);
+      }),
+      S.say([['SHERA', 'Mama will skin you alive, Patil!']]),
+      S.enter('annaCar', "Shera is getting away! Back in <b>Anna's car</b>."),
+      S.chase('sheraBike', P.latur, 'Run <b>Shera</b> down.', { driverAs: 'sheraMan', rams: 3 }),
+      S.fight(['sheraMan'], 'Make <b>Shera</b> talk.', { sheraMan: 3 }),
       S.say([
-        ['KADAM', "Enough! Deshmukh, I heard everything — Pakya's phone, Priya's video, all of it."],
-        ['VICKY', 'Do you know who my father is?!'],
-        ['KADAM', 'Yes. He is the one who called me to arrest you.'],
-        ['KADAM', 'Patil — the SUV goes back. Anna\'s garage gets an inspection. And you: stay out of trouble.'],
-        ['YOU', 'In Nanded, saheb? Impossible.'],
+        ['SHERA', 'Okay! Okay! Mama thinks Tiger tipped off the police about the ganja.'],
+        ['SHERA', "And Savkar? Savkar is nothing. Every loan in his diary is Mama's sand money."],
+        ['YOU', 'Mama and Savkar. One snake, two heads.'],
+        ['SHERA', "The ledger is in Savkar's safe. Mama's name on every page. Now let me go!"],
+      ]),
+    ],
+  },
+  {
+    id: 'c9', giver: 'PAKYA', title: 'तिजोरी', subtitle: 'THE LEDGER', reward: 3000, requires: ['c8'],
+    start: { x: P.zenda.x + 4, z: P.zenda.z + 3 },
+    steps: g => [
+      night(20.5),
+      S.call(c => {
+        kerbSpawn(c, 'auto', 'auto', P.zenda, { dx: 6, label: "Pakya's auto", color: 0x1d1d1d });
+        nearPed(c, 'pakya', 'man', c.g.player.pos, 2, 1.5, {}); dress(c.ent.pakya.h.outfit, LOOK.pakya);
+      }),
+      S.say([
+        ['PAKYA', "Diwali night, bhau. Savkar's boys are full of sweets and liquor, and the old city is full of crackers. Nobody will hear a thing."],
+        ['PAKYA', 'The ledger is in his safe. Forty families\' debts, Mama\'s name on every page. And your Baba\'s land papers.'],
+        ['PAKYA', 'You drive, I keep watch. You go in the back. Then we vanish.'],
+      ], { block: true }),
+      S.enter('auto', "Get in <b>Pakya's auto</b>."),
+      S.call(c => {
+        const p = c.ent.pakya;
+        if (p) { const outfit = p.h.outfit; c.g.peds.remove(p); delete c.ent.pakya; c.g.vehicles.addPassenger(c.ent.auto, outfit); }
+      }),
+      S.goTo(P.oldMondha, "Drive to <b>Savkar's office</b>.", { vehicle: 'auto', radius: 9 }),
+      S.leave('Leave the auto with Pakya and go in on foot.'),
+      S.call(c => {
+        const at = c.roadPoint(P.oldMondha.x + 14, P.oldMondha.z + 6, -1);
+        c.vars.door = { x: at.x, z: at.z };
+        for (let i = 0; i < 2; i++) nearPed(c, `guard${i}`, 'goon', at, 1.5 + i * 2, 1.5, {});
+      }),
+      S.goTo(c => c.vars.door, "Sneak to <b>Savkar's back door</b>.", { radius: 3, onFoot: true }),
+      S.fight(['guard0', 'guard1'], 'Deal with the <b>guards</b>.'),
+      S.say([['YOU', "The safe… stamp papers, the diary — the ledger. And Baba's 7/12 papers!"], ['PAKYA', 'Bhau! Savkar called his people! Run!']]),
+      S.call(c => {
+        c.g.police.setLevel(1);
+        kerbSpawn(c, 'savkarCar', 'sedan', P.oldMondha, { dx: 50, label: "Savkar's men", color: 0xeeeeee, driver: true });
+      }),
+      S.hunters(['savkarCar']),
+      S.enter('auto', "Back to <b>Pakya's auto</b>!"),
+      S.escape(1, "Lose the police and Savkar's men."),
+      S.goTo(P.workshop, "Lie low at <b>Anna's garage</b>.", { vehicle: 'auto', radius: 8 }),
+      S.call(c => { const v = c.ent.savkarCar; if (v) { v.hunt = null; v.blip = null; c.g.controls.delete(v); } }),
+      S.say([['KADAM_PH', "Patil. I hear Savkar's office had visitors tonight. If you found something with Mama's name in it, bring it to Vazirabad Police Station."], ['KADAM_PH', 'Tonight, stay alive.']]),
+    ],
+  },
+  {
+    id: 'c10', giver: 'KADAM', title: 'गोदावरी', subtitle: 'GODAVARI', reward: 10000, requires: ['c9'],
+    start: { x: P.police.x + 3, z: P.police.z + 3 },
+    steps: g => [
+      night(23),
+      S.call(c => { nearPed(c, 'kadam', 'police', c.g.player.pos, 2, 2, {}); }),
+      S.say([
+        ['KADAM', "So this is Savkar's famous ledger. His loans… and Mama's sand money in every column."],
+        ['KADAM', 'With this, the seized tipper and a tempo of "onions", I can finally—'],
+        ['MAMA_PH', 'Patil. Your auto-wala friend is with me at the ghat. Bring what you took. Alone. Before the moon goes down.'],
+        ['KADAM', "Go. Take my car. I'll follow with the station — quietly."],
+      ], { block: true }),
+      S.call(c => kerbSpawn(c, 'car', 'sedan', P.police, { dx: 6, label: "Kadam's car", color: 0x2a2f36 })),
+      S.enter('car', "Take <b>Kadam's car</b>."),
+      S.goTo(P.ghat, 'Get to the <b>sand ghat</b> below the Govardhan bridge.', { radius: 16, stop: false, timer: 200, timerFail: "Mama didn't wait." }),
+      S.call(c => {
+        const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
+        nearPed(c, 'mama', 'man', at, 6, 6, {}); dress(c.ent.mama.h.outfit, LOOK.mama);
+        nearPed(c, 'pakya', 'man', at, 8, 4, {}); dress(c.ent.pakya.h.outfit, LOOK.pakya);
+        for (let i = 0; i < 4; i++) nearPed(c, `g${i}`, 'goon', at, 2 + Math.cos(i * 1.6) * 3, 3 + Math.sin(i * 1.6) * 3, {});
+      }),
+      S.say([
+        ['MAMA', 'You know what this river does to people who cross me, Patil? It keeps them.'],
+        ['YOU', 'It keeps a lot of things, Mama. Tonight it gives some back.'],
+        ['PAKYA', 'Bhau! Hit them!'],
+      ]),
+      S.fight(['g0', 'g1', 'g2', 'g3'], "Take down <b>Mama's men</b>."),
+      S.call(c => {
+        const m = c.ent.mama;
+        if (m) { c.g.peds.remove(m); delete c.ent.mama; }
+        // His SUV waits up the bank, clear of the fight, its engine running.
+        driverAs(kerbSpawn(c, 'mamaCar', 'suv', P.ghat, { dx: -30, label: 'Mama', color: 0xf7f7f7, driver: true }), LOOK.mama);
+      }),
+      S.say([['MAMA', 'Useless! All of you!']]),
+      S.enter('car', "Mama is running! Back in <b>Kadam's car</b>."),
+      S.chase('mamaCar', P.dam, 'Run <b>Mama</b> off the road.', { driverAs: 'mamaMan', rams: 4 }),
+      S.fight(['mamaMan'], 'Finish it.', { mamaMan: 3 }),
+      S.call(c => { nearPed(c, 'kadam', 'police', c.g.player.pos, 3, 3, {}); }),
+      S.say([
+        ['KADAM', "That's enough, Patil!"],
+        ['KADAM', "Jaggu Mama: illegal mining, a stolen seized tipper, two hundred kilos of ganja, and forty families' debts in one ledger. You're coming with me."],
+        ['MAMA', 'Do you know who I am, Kadam?'],
+        ['KADAM', "Yes. That's why I brought the whole station. Savkar's office is being sealed as we speak."],
+        ['KADAM', "Patil — your father's land papers stay with your father."],
+        ['YOU', 'And me, saheb?'],
+        ['KADAM', 'You stole bikes, ran sand and smashed up half the old city. …I will think about it. Go home.'],
       ], { block: true }),
     ],
-    onPass: g => setTimeout(() => g.hud.big('TO BE CONTINUED…', 'Free roam: the city is yours', 'title', 6), 5200),
+    onPass: g => setTimeout(() => g.hud.big('THE END', 'Free roam: the city is yours', 'title', 6), 5200),
   },
 ];
-
-/** Run `guard` before a step's own update; a non-null result ends the step. */
-function guarded(step, guard) {
-  return {
-    ...step,
-    update(c, dt) { return guard(c, dt) ?? step.update(c, dt); },
-  };
-}
