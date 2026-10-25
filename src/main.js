@@ -18,7 +18,7 @@ import { Police } from './game/police.js';
 import { Missions } from './game/missions.js';
 import { Jobs } from './game/jobs.js';
 import { Save } from './game/save.js';
-import { STORY, HOME } from './game/story.js';
+import { STORY, HOME, dressWorld } from './game/story.js';
 import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
 import { track } from './core/analytics.js';
@@ -61,6 +61,7 @@ async function boot() {
   game.animals = new Animals(game);
   game.police = new Police(game);
   game.missions = new Missions(game, STORY);
+  dressWorld(game);
   game.jobs = new Jobs(game);
   game.staticBlips = [...game.jobs.staticBlips(), ...game.city.pumps.map(p => ({ x: p.x, z: p.z, kind: 'icon', label: '⛽', color: '#f07c1e' }))];
   game.touch = new TouchControls(game);
@@ -123,9 +124,9 @@ function startGame(game, mode) {
   const P = game.player;
   game.save.data.started = true;
   if (mode === 'new') {
-    // The story opens on the station forecourt, Hazur Sahib Nanded, as night falls.
+    // The story opens on the station forecourt, Hazur Sahib Nanded, late in the afternoon.
     P.teleport(5.3 - 4, 10.9 + 2, Math.PI * 0.75);
-    game.sky.hours = 19.6;
+    game.sky.hours = 17.1;
   } else {
     const n = game.net.nearest(HOME.x, HOME.z, 30, {});
     P.teleport(HOME.x + (n ? n.dz * 4 : 0), HOME.z - (n ? n.dx * 4 : 0), n ? Math.atan2(n.dx, n.dz) : 0);
@@ -149,7 +150,8 @@ function startGame(game, mode) {
       game.hud.help('<b>Tip:</b> add GTA Nanded to your Home Screen — tap <b>Share</b>, then <b>Add to Home Screen</b>. It opens full screen, and your iPhone keeps your progress.', 9);
     }, 150000);
   }
-  if (mode === 'new') setTimeout(() => game.missions.start(STORY[0].id), 400);
+  // A new game: the story's title, then its first mission.
+  if (mode === 'new') { game.hud.big('गोदावरी गोल्ड', 'GODAVARI GOLD', 'title', 3.4); setTimeout(() => game.missions.start(STORY[0].id), 3600); }
   else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map, or find a contact marker to play the story.`, 7);
   else game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. Your next contact is on the radar.`, 6);
   game.canvas.focus();

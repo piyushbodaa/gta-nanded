@@ -689,7 +689,7 @@ function hoarding(g, kind) {
     g.text('हार्दिक शुभेच्छा!', 128, 70, 26, '#fff59d', { font: FONT_DEVA, weight: 800 });
     g.circle(128, 140, 46, '#ffe0c2'); g.rect(98, 96, 60, 18, '#222'); g.rect(104, 130, 48, 8, '#222');
     g.rect(80, 180, 96, 40, '#fafafa');
-    g.text('VICKY BHAU', 128, 236, 26, '#fff', { font: FONT_LATIN });
+    g.text('SHERA BHAU', 128, 236, 26, '#fff', { font: FONT_LATIN });
   } else if (kind === 'radio') {
     g.grad(4, 4, T - 8, T - 8, [[0, '#18334d'], [1, '#0b1a28']]);
     g.text('RADIO', 128, 70, 56, '#ffcf3f', { font: FONT_LATIN });

@@ -4,6 +4,7 @@
 // protection money); every character and event is fictional, and real places appear as public
 // settings only and imply no endorsement.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Steps as S } from './missions.js';
 import { dist, headingTo } from '../core/math.js';
 import { key, pick, drivingHelp } from '../ui/controls.js';
@@ -52,6 +53,30 @@ const P = {
 /** Every place the story sends you (checked against the road network in the tests). */
 export const STORY_PLACES = P;
 
+/**
+ * The story's mark on the city, made once at the start: heaps of river sand on the south bank by
+ * Mama's ghat, off the road and clear of buildings. One mesh, one draw call.
+ */
+export function dressWorld(g) {
+  const heaps = [];
+  for (let k = 0; k < 60 && heaps.length < 6; k++) {
+    const a = k * 2.39996, r = 10 + (k % 6) * 3.2;
+    const x = P.ghat.x + Math.cos(a) * r, z = P.ghat.z + 6 + Math.abs(Math.sin(a)) * r;
+    const n = g.net.nearest(x, z, 30, {}), s = 1.5 + (heaps.length % 3) * 0.45;
+    if (n && Math.hypot(n.x - x, n.z - z) < g.net.width[n.road] / 2 + s * 1.7 + 1) continue; // off the road
+    if (g.colliders.blocked(x, z, s * 1.7) || heaps.some(h => Math.hypot(h.x - x, h.z - z) < 6)) continue;
+    const cone = new THREE.ConeGeometry(s * 1.7, s, 16, 2);
+    cone.scale(1, 1, 0.75 + (heaps.length % 2) * 0.35).rotateY(a).translate(x, g.city.groundHeight(x, z) + s / 2 - 0.08, z);
+    heaps.push({ x, z, geo: cone });
+  }
+  if (!heaps.length) return null;
+  const mesh = new THREE.Mesh(mergeGeometries(heaps.map(h => h.geo)), new THREE.MeshStandardMaterial({ color: 0xc9ad7a, roughness: 1 }));
+  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.name = 'sand-heaps';
+  g.scene.add(mesh);
+  return mesh;
+}
+
 /** Spawn a vehicle at the kerb near a point, facing along the street. */
 function kerbSpawn(c, name, type, at, opts = {}) {
   const rp = c.roadPoint(at.x + (opts.dx || 0), at.z + (opts.dz || 0), opts.side ?? 1);
@@ -73,6 +98,17 @@ const LOOK = {
   mama: { shirt: 0xf7f7f2, sleeve: 0xf7f7f2, pants: 0xf7f7f2, legs: 0xf7f7f2, heavy: 1, add: ['kurta', 'moustache'], drop: ['stubble', 'collar', 'belt'], code: 3 << 4 },
   tiger: { shirt: 0x8e1b1b, sleeve: 0x8e1b1b, pants: 0x111111, legs: 0x111111, add: ['stubble'] },
 };
+/** Mama's ghat on the south bank: a tractor and a tipper waiting for the night's boats. */
+function ghatScene(c) {
+  kerbSpawn(c, 'ghatTractor', 'tractor', P.ghat, { dx: -14, color: 0x2e7d32 });
+  kerbSpawn(c, 'ghatTipper', 'truck', P.ghat, { dx: 24, color: 0xb8932a });
+}
+/** The impound yard behind the bus stand: what the squads have seized lately. */
+function yardScene(c) {
+  kerbSpawn(c, 'yardTractor', 'tractor', P.yard, { dx: -9, color: 0x1565c0 });
+  kerbSpawn(c, 'yardBike', 'bike', P.yard, { dx: 15, color: 0x6d4c41 });
+  kerbSpawn(c, 'yardAuto', 'auto', P.yard, { dx: 20, color: 0x1d1d1d });
+}
 /** Put a character's look on a vehicle's driver. */
 function driverAs(v, look) { if (v?.driver) dress(v.driver.outfit, look); return v; }
 
@@ -95,7 +131,6 @@ function routeCheckpoints(g, pts, step = 300) {
   return out;
 }
 const punch = g => pick(g, { keyboard: 'click or <kbd>J</kbd>', gamepad: key(g, 'attack'), touch: key(g, 'attack') });
-const night = h => S.call(c => { c.g.sky.hours = h; });
 
 export const STORY = [
   {
@@ -153,6 +188,7 @@ export const STORY = [
         for (let i = 0; i < 3; i++) nearPed(c, `g${i}`, 'goon', at, Math.cos(i * 2.1) * 2.6, Math.sin(i * 2.1) * 2.6, {});
         nearPed(c, 'savkar', 'man', at, 6, 4, {});
         dress(c.ent.savkar.h.outfit, LOOK.savkar);
+        kerbSpawn(c, 'savkarSuv', 'suv', P.oldMondha, { dx: 22, label: "Savkar's SUV", color: 0xf2f2f2 });
       }),
       S.say([['GOON', 'Office is closed, hero. Come back with money.'], ['YOU', "I've come for my father's papers."], ['SAVKAR', "Patil's boy, from Pune. Show him how Nanded does business."]]),
       S.fight(['g0', 'g1', 'g2'], `Fight off <b>Savkar's men</b>. <i>(${punch(g)} to punch)</i>`),
@@ -216,6 +252,8 @@ export const STORY = [
         dress(c.ent.shera.h.outfit, LOOK.shera);
         for (let i = 0; i < 2; i++) nearPed(c, `g${i}`, 'goon', at, -2 - i * 1.5, 3, {});
         kerbSpawn(c, 'car', 'hatch', P.phule, { dx: -6, label: "Shera's car", color: 0x8e1b1b });
+        // The runners' bikes outside the den.
+        kerbSpawn(c, 'runner1', 'bike', P.phule, { dx: 4, color: 0x151515 }); kerbSpawn(c, 'runner2', 'scooter', P.phule, { dx: 7, color: 0x1e88e5 });
       }),
       S.say([
         ['SHERA', "So you're Bunty's new boy. I'm Shera. I run the numbers — open, close, jodi. Every paan shop from here to Vazirabad takes my slips."],
@@ -237,25 +275,25 @@ export const STORY = [
       S.enter('cash', 'Get in the <b>cash car</b>.'),
       S.call(c => c.g.police.setLevel(2)),
       S.goTo(P.workshop, "Get the cash to <b>Anna's garage</b> before the raid team catches up.", { vehicle: 'cash', radius: 7, timer: 150, timerFail: "Kadam's team caught up with the cash." }),
-      S.say([['SHERA_PH', "The den was empty when Kadam walked in. He bought a paan and left. You've got a future, Patil."], ['SHERA_PH', 'Mama wants to see you. The sand ghat below the Govardhan bridge, south bank. After dark.']]),
+      S.say([['SHERA_PH', "The den was empty when Kadam walked in. He bought a paan and left. You've got a future, Patil."], ['SHERA_PH', 'Mama wants to see you. The sand ghat below the Govardhan bridge, on the south bank.']]),
     ],
   },
   {
     id: 'c4', giver: 'MAMA', title: 'पिवळं सोनं', subtitle: 'YELLOW GOLD', reward: 2500, requires: ['c3'],
     start: P.ghat,
     steps: g => [
-      night(21.5),
       S.call(c => {
         const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
         nearPed(c, 'mama', 'man', at, 2.5, 2, {});
         dress(c.ent.mama.h.outfit, LOOK.mama);
         kerbSpawn(c, 'tipper', 'truck', P.ghat, { dx: 10, label: 'sand tipper', color: 0xc9a227 });
+        kerbSpawn(c, 'ghatTractor', 'tractor', P.ghat, { dx: -14, color: 0x2e7d32 });
       }),
       S.say([
         ['MAMA', 'So this is the boy who kept Shera\'s cash out of Kadam\'s hands. Sit, sit.'],
         ['MAMA', "You know what Nanded is built on, Patil? Not cement. Sand. The Godavari's yellow gold."],
         ['MAMA', 'The government auctions a few ghats a year. My boats work every night. A tipper of river sand is fifty thousand in the city.'],
-        ['MAMA', "This one goes to a builder's site near Raj Corner. The revenue flying squad sits on the bridges after midnight. Don't let them see you."],
+        ['MAMA', "This one goes to a builder's site near Raj Corner. The revenue flying squad watches the bridges. Don't let them see you."],
       ], { block: true }),
       S.enter('tipper', 'Get in the <b>sand tipper</b>.'),
       S.goTo(P.bridgeN, 'Cross the <b>Govardhan bridge</b> into the city.', { vehicle: 'tipper', radius: 16, stop: false }),
@@ -269,19 +307,19 @@ export const STORY = [
     id: 'c5', giver: 'MAMA', title: 'जप्ती', subtitle: 'SEIZED', reward: 3000, requires: ['c4'],
     start: { x: P.ghat.x + 3, z: P.ghat.z + 3 },
     steps: g => [
-      night(22),
       S.call(c => {
         const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
         nearPed(c, 'mama', 'man', at, 2.5, 2, {}); dress(c.ent.mama.h.outfit, LOOK.mama);
         nearPed(c, 'shera', 'goon', at, -2, 2.5, {}); dress(c.ent.shera.h.outfit, LOOK.shera);
+        ghatScene(c);
       }),
       S.say([
         ['MAMA', "Last night the tehsildar's squad seized one of my tippers at Latur Phata. It is standing in the impound yard behind the bus stand."],
-        ['MAMA', 'Tomorrow they auction it. Tonight it comes home. Nobody gets hurt — you just drive it out.'],
-        ['SHERA', 'The watchman sleeps by ten. Mostly.'],
+        ['MAMA', 'Tomorrow they auction it. Today it comes home. Nobody gets hurt — you just drive it out.'],
+        ['SHERA', 'The watchman naps after his chai. Mostly.'],
       ], { block: true }),
       S.goTo(P.yard, 'Go to the <b>impound yard</b> behind the Central Bus Stand.', { radius: 16, stop: false }),
-      S.call(c => kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227 })),
+      S.call(c => { kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227 }); yardScene(c); }),
       S.enter('seized', "Take back <b>Mama's tipper</b>."),
       S.call(c => { c.g.police.setLevel(2); c.g.hud.big('WANTED', 'The watchman blew his whistle', 'wanted', 2.5); }),
       S.escape(2, "Lose the police — <b>Anna's garage</b> resprays anything, even a tipper."),
@@ -299,7 +337,6 @@ export const STORY = [
     steps: g => {
       const cps = routeCheckpoints(g, [P.gandhiPutla, P.ghatBridge, P.dam], 320);
       return [
-        night(20.5),
         S.call(c => {
           kerbSpawn(c, 'racer', 'hatch', P.gandhiPutla, { dx: 4, label: 'your car', color: 0xd62f2f });
           const t = driverAs(kerbSpawn(c, 'tiger', 'suv', P.gandhiPutla, { dx: 12, label: 'Tiger', color: 0x111111, driver: true }), LOOK.tiger);
@@ -326,6 +363,7 @@ export const STORY = [
       S.call(c => {
         const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
         nearPed(c, 'mama', 'man', at, 2.5, 2, {}); dress(c.ent.mama.h.outfit, LOOK.mama);
+        ghatScene(c);
       }),
       S.say([
         ['MAMA', 'A tempo of onions is coming in from the Telangana side, through Degloor Naka. Under the onions… don\'t ask.'],
@@ -403,13 +441,12 @@ export const STORY = [
     id: 'c9', giver: 'PAKYA', title: 'तिजोरी', subtitle: 'THE LEDGER', reward: 3000, requires: ['c8'],
     start: { x: P.zenda.x + 4, z: P.zenda.z + 3 },
     steps: g => [
-      night(20.5),
       S.call(c => {
         kerbSpawn(c, 'auto', 'auto', P.zenda, { dx: 6, label: "Pakya's auto", color: 0x1d1d1d });
         nearPed(c, 'pakya', 'man', c.g.player.pos, 2, 1.5, {}); dress(c.ent.pakya.h.outfit, LOOK.pakya);
       }),
       S.say([
-        ['PAKYA', "Diwali night, bhau. Savkar's boys are full of sweets and liquor, and the old city is full of crackers. Nobody will hear a thing."],
+        ['PAKYA', "It's Diwali, bhau. Savkar's boys are full of sweets and liquor, and the old city is full of crackers. Nobody will hear a thing."],
         ['PAKYA', 'The ledger is in his safe. Forty families\' debts, Mama\'s name on every page. And your Baba\'s land papers.'],
         ['PAKYA', 'You drive, I keep watch. You go in the back. Then we vanish.'],
       ], { block: true }),
@@ -437,19 +474,18 @@ export const STORY = [
       S.escape(1, "Lose the police and Savkar's men."),
       S.goTo(P.workshop, "Lie low at <b>Anna's garage</b>.", { vehicle: 'auto', radius: 8 }),
       S.call(c => { const v = c.ent.savkarCar; if (v) { v.hunt = null; v.blip = null; c.g.controls.delete(v); } }),
-      S.say([['KADAM_PH', "Patil. I hear Savkar's office had visitors tonight. If you found something with Mama's name in it, bring it to Vazirabad Police Station."], ['KADAM_PH', 'Tonight, stay alive.']]),
+      S.say([['KADAM_PH', "Patil. I hear Savkar's office had visitors. If you found something with Mama's name in it, bring it to Vazirabad Police Station."], ['KADAM_PH', 'Until then, stay alive.']]),
     ],
   },
   {
     id: 'c10', giver: 'KADAM', title: 'गोदावरी', subtitle: 'GODAVARI', reward: 10000, requires: ['c9'],
     start: { x: P.police.x + 3, z: P.police.z + 3 },
     steps: g => [
-      night(23),
       S.call(c => { nearPed(c, 'kadam', 'police', c.g.player.pos, 2, 2, {}); }),
       S.say([
         ['KADAM', "So this is Savkar's famous ledger. His loans… and Mama's sand money in every column."],
         ['KADAM', 'With this, the seized tipper and a tempo of "onions", I can finally—'],
-        ['MAMA_PH', 'Patil. Your auto-wala friend is with me at the ghat. Bring what you took. Alone. Before the moon goes down.'],
+        ['MAMA_PH', 'Patil. Your auto-wala friend is with me at the ghat. Bring what you took. Alone. And hurry.'],
         ['KADAM', "Go. Take my car. I'll follow with the station — quietly."],
       ], { block: true }),
       S.call(c => kerbSpawn(c, 'car', 'sedan', P.police, { dx: 6, label: "Kadam's car", color: 0x2a2f36 })),
@@ -460,6 +496,7 @@ export const STORY = [
         nearPed(c, 'mama', 'man', at, 6, 6, {}); dress(c.ent.mama.h.outfit, LOOK.mama);
         nearPed(c, 'pakya', 'man', at, 8, 4, {}); dress(c.ent.pakya.h.outfit, LOOK.pakya);
         for (let i = 0; i < 4; i++) nearPed(c, `g${i}`, 'goon', at, 2 + Math.cos(i * 1.6) * 3, 3 + Math.sin(i * 1.6) * 3, {});
+        ghatScene(c);
       }),
       S.say([
         ['MAMA', 'You know what this river does to people who cross me, Patil? It keeps them.'],
