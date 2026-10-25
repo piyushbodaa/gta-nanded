@@ -7,7 +7,7 @@ import { ik2, N, STAND } from '../src/actors/anim.js';
 // The soft shade under people is painted on a canvas; a stand-in is enough here.
 globalThis.document ??= { createElement: () => ({ getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }), fillRect() {} }) }) };
 
-const BLOCK = 14 * 3 + 4, FOOT = [9, 12], HAND = [4, 6], SHOULDER = [3, 5];
+const BLOCK = 14 * 3 + 5, FOOT = [9, 12], HAND = [4, 6], SHOULDER = [3, 5];
 const dt = 1 / 60;
 
 /** A crowd of one, and where a point on one of their bones is in the world. */
