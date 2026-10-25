@@ -103,8 +103,8 @@ test('what was learned belongs to one GPU', () => {
 });
 
 test('a phone whose processor cannot keep up thins the crowds, then settles at 30 fps, and keeps its sharpness', () => {
-  // A budget phone on Test Lab: 9-14 ms of the game's own work in a 16.7 ms frame.
-  const q = phone('Mali-G57 MC2'), g = { ...game(), cpuMs: 12 };
+  // The game's own work fills most of each 30 ms frame.
+  const q = phone('Mali-G57 MC2'), g = { ...game(), cpuMs: 24 };
   run(q, g, 2.1, 30);
   assert.equal(q.crowd, 1, 'one slow window is not a sustained load');
   run(q, g, 2.1, 30);
@@ -124,8 +124,19 @@ test('a phone whose processor cannot keep up thins the crowds, then settles at 3
   assert.equal(gpu.crowd, 1);
 });
 
+test('a busy processor in a frame it leaves half idle is the graphics chip\'s problem: resolution, not crowds', () => {
+  // A Galaxy A15 at the station on Test Lab: 12 ms of the game's work in each 29 ms frame.
+  const q = phone('Mali-G57 MC2'), g = { ...game(), cpuMs: 12 };
+  run(q, g, 2.1, 29);
+  assert.equal(q.scale, 0.9, 'the resolution comes down at once');
+  run(q, g, 20, 29);
+  assert.equal(q.scale, MIN_SCALE);
+  assert.equal(q.crowd, 1, 'the streets stay as full as they were');
+  assert.equal(q.fpsCap, 60);
+});
+
 test('crowds come back once there is room, a step at a time', () => {
-  const q = phone('Adreno 619'), g = { ...game(), cpuMs: 12 };
+  const q = phone('Adreno 619'), g = { ...game(), cpuMs: 20 };
   run(q, g, 4.2, 25);
   assert.equal(q.crowd, 0.8);
   g.cpuMs = 4;

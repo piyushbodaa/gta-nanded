@@ -143,10 +143,12 @@ export class Quality {
    * Feed raw frame times; steps resolution (and, as a last resort, tier) in auto mode.
    * Missed frames bring the resolution down at once; a run of frames that keep up raises
    * it again in small steps, but not back to a resolution that just failed for a minute.
-   * When the game's own work fills most of the frame, the processor is what can't keep up
-   * (budget phones on Firebase Test Lab spent 9-14 ms of a 16.7 ms frame there) and a
-   * blurrier picture wouldn't help: it thins the traffic and crowds instead, then, in auto
-   * frame-rate mode, settles for a steady 30 fps rather than a ragged 40-50.
+   * When the game's own work fills most of each frame, the processor is what can't keep up
+   * and a blurrier picture wouldn't help: it thins the traffic and crowds instead, then, in
+   * auto frame-rate mode, settles for a steady 30 fps rather than a ragged 40-50. A slow frame
+   * that leaves the processor idle for a third of it is waiting on the graphics chip, however
+   * busy the processor looks against 60 fps (Test Lab, 2026-10-25: a Galaxy A15 spent 12 ms of
+   * each 29 ms frame at the station, and thinning its crowd gained it nothing; resolution did).
    * Running at full resolution with time to spare for a minute and a half marks this GPU
    * for a tier up at the next launch (tier changes recompile shaders: never mid-game).
    * Browsers throttle hidden or covered tabs to a few frames a second: those windows say
@@ -170,7 +172,7 @@ export class Quality {
     const sorted = frames.sort((a, b) => a - b);
     const p80 = sorted[Math.floor(sorted.length * 0.8)];
     this.ceilingT = Math.max(0, this.ceilingT - spent);
-    const cpuBound = (game.cpuMs || 0) > target * 1000 * 0.55;
+    const cpu = game.cpuMs || 0, cpuBound = cpu > target * 1000 * 0.55 && cpu > (1000 / this.fps) * 0.7;
     if (p80 > target * 1.3) {
       this.goodT = 0; this.headroomT = 0; this.idleCpuT = 0;
       if (cpuBound) {
