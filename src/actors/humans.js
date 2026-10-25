@@ -78,7 +78,7 @@ function limb(len, profile, flat = 0.92, seg = 9) {
 function torso() {
   // From the shirt hem over the belt, up through waist, chest and shoulders, to the collar.
   return loft([
-    [-0.08, 0.168, 0.112, 0.106], [0.02, 0.157, 0.103, 0.098], [0.14, 0.161, 0.108, 0.1, 0.004],
+    [-0.08, 0.168, 0.112, 0.106], [0.02, 0.157, 0.103, 0.098], [0.045, 0.158, 0.104, 0.098, 0.001], [0.14, 0.161, 0.108, 0.1, 0.004],
     [0.26, 0.175, 0.121, 0.104, 0.01], [0.36, 0.187, 0.125, 0.106, 0.008], [0.43, 0.197, 0.112, 0.106],
     [0.48, 0.172, 0.092, 0.096, -0.005], [0.52, 0.104, 0.072, 0.076, -0.008], [0.545, 0.06, 0.057, 0.057, -0.005],
     [0.565, 0.056, 0.053, 0.053, -0.005],
@@ -190,7 +190,9 @@ const PARTS = [
   { key: 'cap', geo: () => merge(ellipsoid(0.072, 0.05, 0.122, 0.272, -0.01, 12, 6)), color: 'cap', bones: ['head'], show: SHOW.cap },
   { key: 'beard', geo: () => merge(ellipsoid(0.084, 0.072, 0.07, 0.11, 0.045, 12, 7)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.beard },
   { key: 'moustache', geo: () => merge(ellipsoid(0.031, 0.008, 0.012, 0.141, 0.1, 10, 5)), color: 'hair', mat: 'hair', bones: ['head'], show: SHOW.moustache },
-  { key: 'torso', geo: torso, color: 'shirt', bones: ['torso'] },
+  // Below its belt line the shirt hangs from the hips, with the trousers' top (2 mm away): a twist
+  // at the waist then stretches the shirt above the belt instead of pushing one through the other.
+  { key: 'torso', geo: torso, color: 'shirt', bones: ['torso'], belt: 0.05 },
   { key: 'hips', geo: hips, color: 'pants', bones: ['hips'] },
   { key: 'skirt', geo: () => skirt(0.86, 0.18, 0.28), color: 'extra', bones: ['skirt'], show: SHOW.skirt },
   { key: 'kurta', geo: () => skirt(0.44, 0.19, 0.235), color: 'shirt', bones: ['skirt'], show: SHOW.kurta },
@@ -216,8 +218,11 @@ function crowdGeometry() {
     const g0 = p.geo(), g = g0.index ? g0.toNonIndexed() : g0;
     const P = g.attributes.position.array, N = g.attributes.normal.array;
     for (const bone of p.bones) {
-      for (let i = 0; i < P.length; i++) { pos.push(P[i]); nrm.push(N[i]); }
-      for (let i = 0; i < P.length / 3; i++) tag.push(BONES.indexOf(bone), SLOTS.indexOf(p.color), p.show || 0, ROUGH[p.mat || 'cloth']);
+      for (let i = 0; i < P.length; i += 3) {
+        const low = p.belt !== undefined && P[i + 1] < p.belt; // into the hips bone's space
+        pos.push(P[i], P[i + 1] + (low ? BODY.torsoY : 0), P[i + 2]); nrm.push(N[i], N[i + 1], N[i + 2]);
+        tag.push(BONES.indexOf(low ? 'hips' : bone), SLOTS.indexOf(p.color), p.show || 0, ROUGH[p.mat || 'cloth']);
+      }
     }
   }
   const geo = new THREE.BufferGeometry();
