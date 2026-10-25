@@ -247,7 +247,7 @@ export const Steps = {
   /** Dialogue; with block, the player waits (cutscene) until it ends. */
   say(lines, { block = false, shot = null } = {}) {
     return {
-      kind: 'say',
+      kind: 'say', lines,
       enter(c) {
         c.say(lines);
         if (block) c.g.cutscene = true;
@@ -258,7 +258,7 @@ export const Steps = {
     };
   },
   /** Chatter that plays while the next steps continue. */
-  chat(lines) { return { kind: 'chat', enter(c) { c.say(lines); }, update() { return 'done'; } }; },
+  chat(lines) { return { kind: 'chat', lines, enter(c) { c.say(lines); }, update() { return 'done'; } }; },
   call(fn) { return { kind: 'call', enter: fn, update() { return 'done'; } }; },
   wait(seconds) { let t = 0; return { kind: 'wait', enter() { t = 0; }, update(c, dt) { t += dt; return t >= seconds ? 'done' : null; } }; },
 
@@ -406,6 +406,65 @@ export const Steps = {
         return null;
       },
       exit(c) { for (const n of rivals) { const v = c.ent[n]; if (v) c.g.controls.delete(v); } },
+    };
+  },
+
+  /**
+   * Run down a vehicle fleeing toward `to`: keep within `lose` metres (or it gets away) and ram it
+   * `rams` times (or batter it under `stopAt` health any other way). Its driver then bails out, as
+   * entity `driverAs` (for a fight on foot) when given.
+   */
+  chase(name, to, text, { lose = 170, loseAfter = 6, rams = 3, stopAt = 450, driverAs = null, speed = 0.85 } = {}) {
+    let far = 0, hits = 0, seen = 0, last = -9;
+    return {
+      kind: 'chase', vehicle: name,
+      enter(c) {
+        const v = c.ent[name];
+        if (!v) return;
+        const dest = typeof to === 'function' ? to(c) : to, r = c.g.net.route(v.x, v.z, dest.x, dest.z);
+        v.kinematic = false; v.role = 'mission'; v.vital = false; v.blip = '#ff4d4d'; v.arrow = true;
+        v.flee = c.driver(v, { aggression: 0.8, maxSpeed: v.spec.top * speed });
+        if (r) v.flee.setPath(r.points);
+        c.objective(text);
+        far = 0; hits = 0; seen = v.lastHit || 0; last = -9;
+      },
+      update(c, dt) {
+        const g = c.g, v = c.ent[name], pos = g.player.pos, mine = g.player.vehicle;
+        if (!v) return 'fail:They got away.';
+        c.m.target = { x: v.x, z: v.z, marker: false };
+        // A fresh knock while we're alongside counts as a ram (grinding along it counts once).
+        if ((v.lastHit || 0) !== seen) {
+          seen = v.lastHit;
+          if (mine && dist(mine.x, mine.z, v.x, v.z) < v.hd + mine.hd + 2.5 && c.m.time - last > 0.7) { hits++; last = c.m.time; }
+        }
+        if (hits >= rams || v.health < stopAt || v.wrecked) {
+          g.controls.delete(v);
+          v.flee = null; v.arrow = false; v.blip = null; v.role = 'abandoned';
+          const h = g.vehicles.ejectDriver(v);
+          if (h) {
+            const door = g.vehicles.doorWorld(v);
+            h.x = door.x; h.z = door.z; h.pose = 'lie';
+            const p = g.peds._make(h, h.x, h.z, null);
+            p.state = 'down'; p.t = 1.2; p.after = 'flee'; p.keep = true; p.mission = true;
+            if (driverAs) c.ent[driverAs] = p;
+          }
+          return 'done';
+        }
+        far = dist(pos.x, pos.z, v.x, v.z) > lose ? far + dt : 0;
+        if (far > loseAfter || !v.flee || v.flee.done) return `fail:${v.label || 'They'} got away.`;
+        g.controls.set(v, v.flee.control(dt));
+        return null;
+      },
+      exit(c) { const v = c.ent[name]; if (v) { c.g.controls.delete(v); v.arrow = false; } },
+    };
+  },
+
+  /** Get out of whatever you're driving. */
+  leave(text) {
+    return {
+      kind: 'leave',
+      enter(c) { c.objective(text); },
+      update(c) { return c.g.player.vehicle ? null : 'done'; },
     };
   },
 
