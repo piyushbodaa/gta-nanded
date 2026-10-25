@@ -96,15 +96,17 @@ async function boot() {
   const done = STORY.filter(m => game.save.done(m.id)).length;
   if (has) { $('menu-continue').hidden = false; $('menu-continue-meta').textContent = `${done}/${STORY.length} MISSIONS · ₹${game.save.cash.toLocaleString('en-IN')}`; }
   for (const id of ['menu-continue', 'menu-new', 'menu-free']) $(id).disabled = false;
-  // While the player reads the menu, compile the shaders that play would otherwise stop for.
+  // While the player reads the menu, get the start ready where they will likely begin: at home
+  // to continue a game, at the station for a first one (Free Roam begins at home too).
   let onMenu = true;
-  game.warmShaders(() => onMenu && !game.started);
+  game.getReady(has ? [startSpot(game, 'continue'), startSpot(game, 'new')] : [startSpot(game, 'new'), startSpot(game, 'free')], () => onMenu && !game.started);
 
-  const begin = async mode => {
+  const begin = mode => {
     if (game.started) return;
     onMenu = false;
     fullscreen(); // while the tap still counts as a user gesture
-    if (st.sound !== false) { try { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
+    // Sound starts with the tap, but the game doesn't wait for the phone's audio to open.
+    if (st.sound !== false) { try { game.audio.init().catch(() => {}); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
     const play = () => startGame(game, mode);
     if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
     else play();
@@ -124,26 +126,26 @@ async function boot() {
   if (import.meta.env.DEV) game.debugStart = mode => { if (mode === 'new') { const s2 = game.save.data.settings; game.save.reset(); game.save.data.settings = s2; } startGame(game, mode); };
 }
 
+/** Where play begins: a new story on the station forecourt, Hazur Sahib Nanded; anything else at home. */
+function startSpot(game, mode) {
+  if (mode === 'new') return { key: 'station', x: 5.3 - 4, z: 10.9 + 2, heading: Math.PI * 0.75 };
+  const n = game.net.nearest(HOME.x, HOME.z, 30, {});
+  return { key: 'home', x: HOME.x + (n ? n.dz * 4 : 0), z: HOME.z - (n ? n.dx * 4 : 0), heading: n ? Math.atan2(n.dx, n.dz) : 0 };
+}
+
 function startGame(game, mode) {
   track('game_start', { mode });
-  const P = game.player;
+  const P = game.player, spot = startSpot(game, mode);
   game.save.data.started = true;
-  if (mode === 'new') {
-    // The story opens on the station forecourt, Hazur Sahib Nanded, late in the afternoon.
-    P.teleport(5.3 - 4, 10.9 + 2, Math.PI * 0.75);
-    game.sky.hours = 17.1;
-  } else {
-    const n = game.net.nearest(HOME.x, HOME.z, 30, {});
-    P.teleport(HOME.x + (n ? n.dz * 4 : 0), HOME.z - (n ? n.dx * 4 : 0), n ? Math.atan2(n.dx, n.dz) : 0);
-    game.sky.hours = 9.5 + Math.random() * 7;
-  }
+  P.teleport(spot.x, spot.z, spot.heading);
+  // The story opens late in the afternoon.
+  game.sky.hours = mode === 'new' ? 17.1 : 9.5 + Math.random() * 7;
   if (mode === 'free') game.freeRoam = true;
   document.body.classList.add('playing');
   game.hud.show(true);
   game.touch.show(true);
-  // Populate the streets before the first frame.
-  for (let i = 0; i < 40; i++) { game.traffic.update(0.05); game.peds.update(0.05); }
-  game.parked.t = 0; game.parked.update(1);
+  // Populate the streets before the first frame, unless the menu already did.
+  if (game.ready?.filled !== spot.key) for (const _ of game.fillStreets());
   game.start();
   game.save.flush();
   // Ask the browser to keep the save through storage clean-ups (granted quietly where it is).

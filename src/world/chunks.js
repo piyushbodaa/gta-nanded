@@ -19,7 +19,7 @@ const FLOOR = 3.2;
 const ROAD_Y = [0.07, 0.068, 0.066, 0.064, 0.062, 0.06];
 const PAD_Y = 0.074;
 // Chunks within this many metres of the player are built at once, budget or not.
-const RUSH = 48;
+export const RUSH = 48;
 // A build slice hands control back after about this long (between buildings, trees or props).
 const SLICE_MS = 0.75;
 // Levels of detail. A chunk is built close-up when its near side comes within NEAR_D metres,
@@ -27,6 +27,9 @@ const SLICE_MS = 0.75;
 // drops it for good half a chunk further out.
 export const NEAR = 0, FAR = 1;
 const NEAR_D = 150, FAR_D = 190;
+
+/** How far (x, z) is from a chunk's square (0 standing on it). */
+const gapTo = (cx, cz, x, z) => Math.hypot(Math.max(cx * CHUNK - x, 0, x - (cx + 1) * CHUNK), Math.max(cz * CHUNK - z, 0, z - (cz + 1) * CHUNK));
 
 /** One chunk's builds: a close-up and a far level, each a group of meshes, either still to come. */
 class Chunk {
@@ -68,11 +71,11 @@ export class ChunkManager {
     // Everything here was built last time and the player has hardly moved: nothing to do.
     const idle = this._idle;
     if (idle && !this.job && idle.r === r && Math.abs(x - idle.x) < 8 && Math.abs(z - idle.z) < 8) { this.lastMs = 0; return 0; }
+    this._prep = null; // a chunk half-built ahead of play gives way: the builders are shared
     this.x = x; this.z = z;
     const cx0 = Math.floor((x - r) / C), cx1 = Math.floor((x + r) / C);
     const cz0 = Math.floor((z - r) / C), cz1 = Math.floor((z + r) / C);
-    // How far (x, z) is from a chunk's square (0 standing on it).
-    const gap = (cx, cz) => Math.hypot(Math.max(cx * C - x, 0, x - (cx + 1) * C), Math.max(cz * C - z, 0, z - (cz + 1) * C));
+    const gap = (cx, cz) => gapTo(cx, cz, x, z);
     const want = [];
     for (let cx = cx0; cx <= cx1; cx++) {
       for (let cz = cz0; cz <= cz1; cz++) {
@@ -159,6 +162,38 @@ export class ChunkManager {
     });
   }
 
+  /**
+   * Build the ground right around (x, z), where play is about to start, ahead of time: in
+   * slices, until `deadline`, while nothing else streams (the menu). The first update there
+   * then has nothing to build at once. It drops nothing; that update tidies up. True once
+   * it is all built.
+   */
+  prepare(x, z, deadline) {
+    const C = CHUNK;
+    for (;;) {
+      if (!this._prep) {
+        let best = null;
+        for (let cx = Math.floor((x - RUSH) / C); cx <= Math.floor((x + RUSH) / C); cx++) {
+          for (let cz = Math.floor((z - RUSH) / C); cz <= Math.floor((z + RUSH) / C); cz++) {
+            const gap = gapTo(cx, cz, x, z);
+            if (gap < RUSH && !this.chunks.get(`${cx},${cz}`)?.levels[NEAR] && !(best && best.gap <= gap)) best = { cx, cz, gap };
+          }
+        }
+        if (!best) return true;
+        this.job = null; // its shared builders are about to be reused
+        this._prep = this._steps(`${best.cx},${best.cz}`, best.cx, best.cz, NEAR);
+      }
+      if (this._prep.next().done) this._prep = null;
+      if (performance.now() > deadline) return false;
+    }
+  }
+
+  /** Show each chunk at the level it has from (x, z), as the first update there will (to draw it ahead of play). */
+  showFrom(x, z) {
+    this.x = x; this.z = z;
+    for (const ch of this.chunks.values()) this._pick(ch, this._dist(ch.cx, ch.cz));
+  }
+
   _dispose(key, ch) {
     for (const lod of [NEAR, FAR]) if (ch.levels[lod]) this._drop(ch, lod);
     this.chunks.delete(key);
@@ -172,7 +207,7 @@ export class ChunkManager {
 
   /** Build one chunk at once (loading screen, tools). */
   _build(key, cx, cz, lod = NEAR) {
-    this.job = null; // its shared builders are about to be reused
+    this.job = this._prep = null; // their shared builders are about to be reused
     for (const _ of this._steps(key, cx, cz, lod));
   }
 
