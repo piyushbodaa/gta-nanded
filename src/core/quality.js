@@ -6,12 +6,13 @@
 // Phones draw more pixels than a desktop at the same tier: their screens pack two to
 // three device pixels into every CSS pixel, and the browser stretches whatever we draw
 // over all of them. They smooth edges in the final pass (FXAA) instead of multisampling,
-// which costs a phone GPU far more memory bandwidth.
+// which costs a phone GPU far more memory bandwidth. People within nearRadius metres (the
+// nearest nearPeople of them) get the detailed body.
 const TIERS = {
-  low: { name: 'Fast', pr: 0.75, phonePr: 1.5, msaa: false, bloom: false, shadows: 0, dynamicShadows: false, viewDistance: 340, traffic: 14, peds: 20 },
-  medium: { name: 'Balanced', pr: 1, phonePr: 1.75, msaa: true, bloom: true, shadows: 1024, dynamicShadows: false, viewDistance: 440, traffic: 24, peds: 32 },
-  high: { name: 'High', pr: 1.25, phonePr: 2, msaa: true, bloom: true, shadows: 2048, dynamicShadows: true, viewDistance: 540, traffic: 32, peds: 44 },
-  ultra: { name: 'Ultra', pr: 2, phonePr: 2.25, msaa: true, bloom: true, shadows: 2048, dynamicShadows: true, viewDistance: 680, traffic: 42, peds: 60 },
+  low: { name: 'Fast', pr: 0.75, phonePr: 1.5, msaa: false, bloom: false, shadows: 0, dynamicShadows: false, viewDistance: 340, traffic: 14, peds: 20, nearRadius: 10, nearPeople: 4 },
+  medium: { name: 'Balanced', pr: 1, phonePr: 1.75, msaa: true, bloom: true, shadows: 1024, dynamicShadows: false, viewDistance: 440, traffic: 24, peds: 32, nearRadius: 16, nearPeople: 8 },
+  high: { name: 'High', pr: 1.25, phonePr: 2, msaa: true, bloom: true, shadows: 2048, dynamicShadows: true, viewDistance: 540, traffic: 32, peds: 44, nearRadius: 22, nearPeople: 14 },
+  ultra: { name: 'Ultra', pr: 2, phonePr: 2.25, msaa: true, bloom: true, shadows: 2048, dynamicShadows: true, viewDistance: 680, traffic: 42, peds: 60, nearRadius: 30, nearPeople: 24 },
 };
 export const ORDER = ['low', 'medium', 'high', 'ultra'];
 const KEY = 'gta-nanded-quality-v2', FPS_KEY = 'gta-nanded-fps-v1', LEARN_KEY = 'gta-nanded-auto-v1';

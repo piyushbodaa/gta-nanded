@@ -295,6 +295,7 @@ export class Game {
     // a static one would leave their shadows behind as they move.
     const q = this.quality.settings, casters = q.dynamicShadows ? w.sky.shadowBox : NO_SHADOW_BOX;
     this.humans.blobsOn = !q.dynamicShadows;
+    this.humans.nearRadius = q.nearRadius; this.humans.nearMax = q.nearPeople;
     this.vehicles.render(dt, cam.position, casters);
     this.humans.update(dt, cam.position, casters);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });

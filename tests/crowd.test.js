@@ -4,22 +4,23 @@ import * as THREE from 'three';
 import { Humans, makeOutfit } from '../src/actors/humans.js';
 import { sendFirst } from '../src/core/buffers.js';
 
-const BLOCK = 14 * 3 + 4; // texels per person: 14 bones, then colours and the parts mask
+const BLOCK = 14 * 3 + 5; // texels per person: 14 bones, colours with the parts mask, then build and style
 
 // The soft shade under people is painted on a canvas; a stand-in is enough here.
 globalThis.document ??= { createElement: () => ({ getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }), fillRect() {} }) }) };
 
-test('the whole crowd is one mesh, and each person is a row of bones, colours and parts', () => {
+test('the whole crowd is two meshes, and each person is a row of bones, colours and parts', () => {
   const scene = new THREE.Scene(), humans = new Humans(scene, 16);
   const crowd = scene.children.filter(o => o.name.startsWith('human-') && o.name !== 'human-shade');
-  assert.equal(crowd.length, 1, 'one mesh for everyone');
+  assert.equal(crowd.length, 3, 'a detailed body up close (for men, and for women) and a simple one for everyone else');
   const sikh = humans.add(makeOutfit('sikh', 7), 10, 20);
   const woman = humans.add(makeOutfit('woman', 3), 12, 20);
   const far = humans.add(makeOutfit('man', 5), 10, 120);
   const hidden = humans.add(makeOutfit('man', 6), 11, 20);
   hidden.visible = false;
   humans.update(0.016, { x: 10, z: 10 }, null);
-  assert.equal(humans.mesh.geometry.instanceCount, 3, 'everyone in view, nobody else');
+  assert.equal(humans.meshes.reduce((n, m) => n + m.geometry.instanceCount, 0), 3, 'everyone in view, nobody else');
+  assert.deepEqual(humans.meshes.map(m => m.geometry.instanceCount), [1, 1, 1], 'the two ten metres off in detail, the man and the woman each in theirs');
   const row = i => humans.data.subarray(i * BLOCK * 4, (i + 1) * BLOCK * 4);
   const colour = (r, slot) => r[(42 + Math.floor(slot / 3)) * 4 + (slot % 3)];
   const mask = r => r[42 * 4 + 3];
