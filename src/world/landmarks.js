@@ -4,7 +4,7 @@
 // from the street, and that every college and coaching class has its board up.
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2 } from '../core/math.js';
-import { STATION_HD, BUS_STAND, MAL_TEKDI_R, KAMANS, LANGAR_HALL, campusWing, mallSize } from './citygen.js';
+import { STATION_HD, BUS_STAND, KAMANS, LANGAR_HALL, campusWing, mallSize } from './citygen.js';
 import { LEAF } from './foliage.js';
 
 const FLOOR = 3.2;
@@ -13,8 +13,9 @@ const GOLD = 0xe2a93b, MARBLE = 0xf4f1ea, SAFFRON = 0xff8c1a, STONE = 0x6a635b;
 const GURUDWARA = { 'nagina-ghat': 0.75, 'langar-sahib': 0.8, 'sangat-sahib': 0.7, 'mata-sahib': 0.75, 'hira-ghat': 0.6, 'shikar-ghat': 0.6, 'banda-ghat': 0.65 };
 // Mal Tekdi's foot, where hillTemple's two jittered blobs meet the ground: circles [dx, dz, r]
 // at full size, in world axes like the blobs. Fitted to the drawn mesh (its jitter is fixed) so a
-// body stops within about 0.7 m of the visible foot all round; the foot scales with the hill's fit.
-const MAL_TEKDI_FOOT = [[6.1, -5.1, 18.7], [-1.4, 4.7, 23.6]];
+// body stops within about 0.7 m of the visible foot all round, neither short of it nor into the
+// slope; the foot scales with the hill's fit. Redo the fit if hillTemple's blobs change.
+const MAL_TEKDI_FOOT = [[-2.9, 3.9, 23.2], [3.7, -2.5, 21.6]];
 
 /** Rotation that turns a place's front (toward its approach) to local -z. */
 export const placeRot = p => p.rot + Math.PI;

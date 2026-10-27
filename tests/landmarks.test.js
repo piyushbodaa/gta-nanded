@@ -4,6 +4,7 @@ import { world, place } from './helpers.js';
 import { PUMP_HW, PUMP_HD, KAMANS, MAL_TEKDI_R, segBoxDist, campusWing } from '../src/world/citygen.js';
 import { Colliders } from '../src/world/colliders.js';
 import { buildPlace, placeColliders } from '../src/world/landmarks.js';
+import { Geo } from '../src/world/geo.js';
 
 // A place's local frame (its front, toward the approach, is local -z), as landmarks.js draws it.
 const frame = p => { const r = p.rot + Math.PI, c = Math.cos(r), s = Math.sin(r); return { X: (lx, lz) => p.x + lx * c + lz * s, Z: (lx, lz) => p.z - lx * s + lz * c }; };
@@ -126,7 +127,43 @@ test('Mal Tekdi keeps off the streets, and its stamp marker stands in the open',
   assert.ok(Math.hypot(p.ax - p.x, p.az - p.z) > R, 'the approach is outside the hill');
   const L = city.lots;
   for (let i = 0; i < L.count; i++) assert.ok(Math.hypot(L.x[i] - p.x, L.z[i] - p.z) > R, `lot ${i} under the hill`);
-  assert.ok(pushed(city, p, 0, R * 0.8) > 0, 'the hill is solid');
+});
+
+test('Mal Tekdi is solid right to its drawn foot, with no invisible wall before it', () => {
+  const { city, net } = world();
+  const p = place(city, 'mal-tekdi');
+  // Where the drawn hill meets the ground: its triangles' crossings of y = 0.
+  const V = [], feet = [];
+  const g = new Proxy({}, { get: (_, k) => {
+    if (k === 'n') return V.length;
+    if (k === 'v') return (x, y, z) => V.push([x, y, z]) - 1;
+    if (k === 'blob') return Geo.prototype.blob;
+    if (k === 'tri') return (...t) => {
+      const cut = [];
+      for (let i = 0; i < 3; i++) {
+        const u = V[t[i]], w = V[t[(i + 1) % 3]];
+        if (u[1] > 0 !== w[1] > 0) { const f = u[1] / (u[1] - w[1]); cut.push([u[0] + (w[0] - u[0]) * f, u[2] + (w[2] - u[2]) * f]); }
+      }
+      if (cut.length === 2) feet.push(cut);
+      return g;
+    };
+    return () => g;
+  } });
+  buildPlace({ g, sg: g, pg: g, fg: null, wires: [], city, net, signSlots: new Map() }, p, city.places.indexOf(p));
+  colliders ??= new Colliders(city);
+  for (let a = 0; a < 72; a++) {
+    const dx = Math.cos((a / 72) * Math.PI * 2), dz = Math.sin((a / 72) * Math.PI * 2);
+    let foot = 0;
+    for (const [[x1, z1], [x2, z2]] of feet) {
+      const ex = x2 - x1, ez = z2 - z1, ox = x1 - p.x, oz = z1 - p.z, den = dx * ez - dz * ex;
+      const t = (ox * ez - oz * ex) / den, s = (ox * dz - oz * dx) / den;
+      if (t > 0 && s >= 0 && s <= 1) foot = Math.max(foot, t);
+    }
+    // A body (radius 0.35) whose front is 0.8 m into the slope is pushed out; one whose front is 0.8 m short of it is free.
+    const at = d => { const x = p.x + dx * d, z = p.z + dz * d, pos = { x, z }; colliders.resolveCircle(pos, 0.35, {}); return Math.hypot(pos.x - x, pos.z - z); };
+    assert.ok(at(foot + 0.35 - 0.8) > 0, `${a * 5} deg: walks into the slope past the hill's foot at ${foot.toFixed(1)} m`);
+    assert.equal(at(foot + 0.35 + 0.8), 0, `${a * 5} deg: stopped short of the hill's foot at ${foot.toFixed(1)} m`);
+  }
 });
 
 test('nothing at a ghat stands in the road', () => {
