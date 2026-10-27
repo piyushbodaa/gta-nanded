@@ -445,7 +445,7 @@ async function runStory() {
     for (let k = 0; k < 8 && net.jRoads[j].length === 2; k++) { r = net.jRoads[j].find(o => o !== r); j = net.otherEnd(r, j); }
     return net.jRoads[j].length === 1;
   };
-  const problems = [], spawns = {}, check = (ok, msg) => { if (!ok) problems.push(msg); };
+  const problems = [], spawns = {}, voices = {}, check = (ok, msg) => { if (!ok) problems.push(msg); };
   for (const def of STORY) {
     const list = [];
     const g = { ...fakeGame(), net, colliders, city, input: { mode: 'keyboard' }, settings: {} };
@@ -488,13 +488,34 @@ async function runStory() {
         if (v) { const n = onRoad(t.x, t.z); Object.assign(v, { x: n.x, z: n.z, heading: Math.atan2(n.dx, n.dz) }); P.vehicle = v; P.pos = v; } else walkTo(t);
       } else if (step.kind === 'enter') { P.vehicle = m.ent[step.vehicle]; P.pos = P.vehicle; }
       else if (step.kind === 'leave' && P.vehicle) walkTo(onRoad(P.vehicle.x, P.vehicle.z));
+      else if (step.kind === 'say') {
+        // Someone of the cast who speaks in person (not on the phone) is there to be seen.
+        for (const [who] of step.lines) {
+          const e = m.ent[who.toLowerCase()];
+          if (e?.h) (voices[def.id] ??= []).push({ step: i, who, d: Math.hypot(e.h.x - P.pos.x, e.h.z - P.pos.z), on: onRoad(e.h.x, e.h.z) });
+        }
+      }
     }
   }
-  return { problems, spawns };
+  return { problems, spawns, voices };
 }
 
 test('story people never stand inside walls, and story vehicles never appear on top of anything, or nosed into a dead end', async () => {
   assert.deepEqual((await storyDryRun()).problems, []);
+});
+
+test('the cast speak in person only where you can see them', async () => {
+  const { world } = await import('./helpers.js');
+  const { net } = world();
+  const { voices } = await storyDryRun();
+  for (const [id, list] of Object.entries(voices)) {
+    for (const v of list) assert.ok(v.d < 25, `${id} step ${v.step}: ${v.who} speaks from ${v.d.toFixed(0)} m away`);
+  }
+  // c5 ends with the tipper parked on the main road: Mama and Shera wait for it on the footpath,
+  // not down the ghat lanes, nor where it pulls in.
+  const home = voices.c5.filter(v => v.step === voices.c5.at(-1).step);
+  assert.deepEqual([...new Set(home.map(v => v.who))].sort(), ['MAMA', 'SHERA']);
+  for (const v of home) assert.ok(v.on.dist > net.width[v.on.road] / 2, `${v.who} stands ${v.on.dist.toFixed(1)} m from the middle of a ${net.width[v.on.road]} m road`);
 });
 
 test("Mama's tippers load on the main road: no hairpin a truck can't turn between the ghat and the bridge", async () => {

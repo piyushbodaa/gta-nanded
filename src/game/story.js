@@ -120,6 +120,18 @@ function kerbTaken(g, at, half) {
   return g.vehicles.list.some(v => dist(v.x, v.z, at.x, at.z) < v.hd + half + 0.5);
 }
 function nearPed(c, name, kind, at, dx, dz, opts = {}) { return c.spawnPed(name, kind, at.x + dx, at.z + dz, opts); }
+/**
+ * Stand a story actor somewhere else in the scene, on their feet and facing (fx, fz), whatever
+ * a scare left them doing. Only while the player is far away: they don't walk there, they're there.
+ */
+function standAt(c, name, x, z, fx, fz) {
+  const p = c.ent[name];
+  if (!p?.h) return;
+  const h = p.h;
+  h.x = x; h.z = z; h.yaw = Math.atan2(fx - x, fz - z);
+  h.pose = 'idle'; h.speed = 0; h.roll = h.pitch = 0;
+  p.state = 'scripted'; p.t = 999; p.role = null; p.homeX = p.homeZ = undefined; p.vx = p.vz = 0;
+}
 /** Dress someone for their part: colours and build, plus flags to add or drop (never their shoes). */
 function dress(outfit, { add = [], drop = [], ...rest }) {
   Object.assign(outfit, rest);
@@ -364,6 +376,15 @@ export const STORY = [
       S.goTo(P.yard, 'Go to the <b>impound yard</b> behind the Central Bus Stand.', { radius: 16, stop: false }),
       S.call(c => { kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227 }); yardScene(c); }),
       S.enter('seized', "Take back <b>Mama's tipper</b>."),
+      // Mama and Shera go up to the main road to see it home, where you park it (on the kerb
+      // you pull in at off the bridge), not down the ghat lanes out of sight. You're across town.
+      S.call(c => {
+        const at = c.roadPoint(P.ghatRoad.x, P.ghatRoad.z, 1);
+        // On the footpath behind that kerb: to the left of the way the traffic there faces.
+        const ox = Math.cos(at.heading), oz = -Math.sin(at.heading), fx = Math.sin(at.heading), fz = Math.cos(at.heading);
+        standAt(c, 'mama', at.x + ox * 2.4 + fx * 1.5, at.z + oz * 2.4 + fz * 1.5, at.x, at.z);
+        standAt(c, 'shera', at.x + ox * 2.4 - fx * 1.5, at.z + oz * 2.4 - fz * 1.5, at.x, at.z);
+      }),
       S.call(c => { c.g.police.setLevel(2); c.g.hud.big('WANTED', 'The watchman blew his whistle', 'wanted', 2.5); }),
       S.escape(2, "Lose the police — <b>Anna's garage</b> resprays anything, even a tipper."),
       S.goTo(P.ghatRoad, "Bring the tipper home: park it on the main road above <b>Mama's ghat</b>.", { vehicle: 'seized', radius: 12, maxDamage: 0.6, damageFail: 'The tipper is too smashed to work.' }),
