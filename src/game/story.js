@@ -44,6 +44,9 @@ const P = {
   phule: { x: -261.5, z: -397.1 }, // behind Phule Market: Shera's den
   namaskar: { x: 766, z: -882 }, // Namaskar Chowk, the airport bypass
   ghat: { x: -128, z: 894 }, // the sand ghat on the south bank below the Govardhan Ghat bridge
+  // The main road up from the ghat, by the bridge: where Mama's tippers load and unload. The
+  // ghat's own 4.8 m lanes meet everything at hairpins no truck can turn.
+  ghatRoad: { x: -164, z: 972 },
   bridgeN: { x: -91, z: 722 }, // the bridge's city end, where the flying squad waits
   site: { x: -262, z: -1316 }, // a builder's site near Raj Corner
   yard: { x: -233, z: 84 }, // the impound yard behind the Central Bus Stand
@@ -82,16 +85,34 @@ export function dressWorld(g) {
 /** Spawn a vehicle at the kerb near a point, facing along the street. */
 function kerbSpawn(c, name, type, at, opts = {}) {
   const x = at.x + (opts.dx || 0), z = at.z + (opts.dz || 0), half = VEHICLE_TYPES[type].L / 2;
-  const first = c.roadPoint(x, z, opts.side ?? 1);
+  let side = opts.side ?? 1, first = c.roadPoint(x, z, side);
+  // Never nosed into a dead end: a tipper can't turn in a 4.8 m lane, and a hunter or a getaway
+  // would only wedge at its end. The other kerb, facing out.
+  if (deadAhead(c.g.net, first)) {
+    const out = c.roadPoint(x, z, -side);
+    if (!deadAhead(c.g.net, out)) { first = out; side = -side; }
+  }
   // Something already on that spot (a scene vehicle, traffic, the player): a car length further
   // along the kerb, then back, rather than on top of it.
   let rp = first;
   for (let k = 1; kerbTaken(c.g, rp, half); k++) {
     if (k > 6) { rp = first; break; } // nowhere free close by: where the script says
     const along = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (half * 2 + 1.5);
-    rp = c.roadPoint(x + Math.sin(first.heading) * along, z + Math.cos(first.heading) * along, opts.side ?? 1);
+    rp = c.roadPoint(x + Math.sin(first.heading) * along, z + Math.cos(first.heading) * along, side);
   }
   return c.spawnVehicle(name, type, rp.x, rp.z, rp.heading, opts);
+}
+/** Does the street a kerb spot faces down end in a dead end (through any plain bends) before a junction? */
+function deadAhead(net, { road, dir }) {
+  if (road == null) return false;
+  let r = road, j = dir > 0 ? net.rb[road] : net.ra[road];
+  for (let k = 0; k < 8; k++) {
+    const roads = net.jRoads[j];
+    if (roads.length !== 2) return roads.length === 1;
+    r = roads[0] === r ? roads[1] : roads[0];
+    j = net.otherEnd(r, j);
+  }
+  return false;
 }
 function kerbTaken(g, at, half) {
   const P = g.player;
@@ -99,6 +120,18 @@ function kerbTaken(g, at, half) {
   return g.vehicles.list.some(v => dist(v.x, v.z, at.x, at.z) < v.hd + half + 0.5);
 }
 function nearPed(c, name, kind, at, dx, dz, opts = {}) { return c.spawnPed(name, kind, at.x + dx, at.z + dz, opts); }
+/**
+ * Stand a story actor somewhere else in the scene, on their feet and facing (fx, fz), whatever
+ * a scare left them doing. Only while the player is far away: they don't walk there, they're there.
+ */
+function standAt(c, name, x, z, fx, fz) {
+  const p = c.ent[name];
+  if (!p?.h) return;
+  const h = p.h;
+  h.x = x; h.z = z; h.yaw = Math.atan2(fx - x, fz - z);
+  h.pose = 'idle'; h.speed = 0; h.roll = h.pitch = 0;
+  p.state = 'scripted'; p.t = 999; p.role = null; p.homeX = p.homeZ = undefined; p.vx = p.vz = 0;
+}
 /** Dress someone for their part: colours and build, plus flags to add or drop (never their shoes). */
 function dress(outfit, { add = [], drop = [], ...rest }) {
   Object.assign(outfit, rest);
@@ -114,10 +147,13 @@ const LOOK = {
   mama: { shirt: 0xf7f7f2, sleeve: 0xf7f7f2, pants: 0xf7f7f2, legs: 0xf7f7f2, heavy: 1, add: ['kurta', 'moustache'], drop: ['stubble', 'collar', 'belt'], code: 3 << 4 },
   tiger: { shirt: 0x8e1b1b, sleeve: 0x8e1b1b, pants: 0x111111, legs: 0x111111, add: ['stubble'] },
 };
-/** Mama's ghat on the south bank: a tractor and a tipper waiting for the night's boats. */
-function ghatScene(c) {
-  kerbSpawn(c, 'ghatTractor', 'tractor', P.ghat, { dx: -14, color: 0x2e7d32 });
-  kerbSpawn(c, 'ghatTipper', 'truck', P.ghat, { dx: 10, color: 0xb8932a }); // on the ghat lane (further east is the bridge)
+/**
+ * Mama's ghat on the south bank: a tractor and a tipper waiting for the night's boats, down the
+ * stub lane by the bridge railing, clear of the lane in from the main road.
+ */
+function ghatScene(c, { tipper = true } = {}) {
+  kerbSpawn(c, 'ghatTractor', 'tractor', P.ghat, { dx: 1, dz: -13, color: 0x2e7d32 });
+  if (tipper) kerbSpawn(c, 'ghatTipper', 'truck', P.ghat, { dx: 10, color: 0xb8932a });
 }
 /** The impound yard behind the bus stand: what the squads have seized lately. */
 function yardScene(c) {
@@ -304,21 +340,22 @@ export const STORY = [
         const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
         nearPed(c, 'mama', 'man', at, 2.5, 2, {});
         dress(c.ent.mama.h.outfit, LOOK.mama);
-        kerbSpawn(c, 'tipper', 'truck', P.ghat, { dx: 10, label: 'sand tipper', color: 0xc9a227 });
-        kerbSpawn(c, 'ghatTractor', 'tractor', P.ghat, { dx: -14, color: 0x2e7d32 });
+        ghatScene(c, { tipper: false });
+        // Loaded and waiting up on the main road, facing the bridge.
+        kerbSpawn(c, 'tipper', 'truck', P.ghatRoad, { side: -1, label: 'sand tipper', color: 0xc9a227 });
       }),
       S.say([
         ['MAMA', 'So this is the boy who kept Shera\'s cash out of Kadam\'s hands. Sit, sit.'],
         ['MAMA', "You know what Nanded is built on, Patil? Not cement. Sand. The Godavari's yellow gold."],
         ['MAMA', 'The government auctions a few ghats a year. My boats work every night. A tipper of river sand is fifty thousand in the city.'],
-        ['MAMA', "This one goes to a builder's site near Raj Corner. The revenue flying squad watches the bridges. Don't let them see you."],
+        ['MAMA', "The tipper up on the road goes to a builder's site near Raj Corner. The revenue flying squad watches the bridges. Don't let them see you."],
       ], { block: true }),
-      S.enter('tipper', 'Get in the <b>sand tipper</b>.'),
+      S.enter('tipper', 'Get in the <b>sand tipper</b> up on the main road.'),
       S.goTo(P.bridgeN, 'Cross the <b>Govardhan bridge</b> into the city.', { vehicle: 'tipper', radius: 16, stop: false }),
       S.call(c => { c.g.police.setLevel(1); c.g.hud.big('FLYING SQUAD', 'They saw the tipper', 'wanted', 2.5); }),
       S.escape(1, "Lose the flying squad — or get to <b>Anna's garage</b>."),
       S.goTo(P.site, "Deliver the sand to the <b>builder's site</b> near Raj Corner.", { vehicle: 'tipper', radius: 10, maxDamage: 0.55, damageFail: 'The tipper is wrecked and the sand is all over the road.' }),
-      S.say([['MUNSHI', "Mama's sand? Tip it at the back. Here — cash for Mama."], ['MAMA_PH', 'Good boy. Ten thousand for you. There is more where the river comes from.']]),
+      S.say([['MUNSHI', "Mama's sand? Tip it at the back. Here — cash for Mama."], ['MAMA_PH', 'Good boy. Twenty-five hundred for you. There is more where the river comes from.']]),
     ],
   },
   {
@@ -339,9 +376,18 @@ export const STORY = [
       S.goTo(P.yard, 'Go to the <b>impound yard</b> behind the Central Bus Stand.', { radius: 16, stop: false }),
       S.call(c => { kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227 }); yardScene(c); }),
       S.enter('seized', "Take back <b>Mama's tipper</b>."),
+      // Mama and Shera go up to the main road to see it home, where you park it (on the kerb
+      // you pull in at off the bridge), not down the ghat lanes out of sight. You're across town.
+      S.call(c => {
+        const at = c.roadPoint(P.ghatRoad.x, P.ghatRoad.z, 1);
+        // On the footpath behind that kerb: to the left of the way the traffic there faces.
+        const ox = Math.cos(at.heading), oz = -Math.sin(at.heading), fx = Math.sin(at.heading), fz = Math.cos(at.heading);
+        standAt(c, 'mama', at.x + ox * 2.4 + fx * 1.5, at.z + oz * 2.4 + fz * 1.5, at.x, at.z);
+        standAt(c, 'shera', at.x + ox * 2.4 - fx * 1.5, at.z + oz * 2.4 - fz * 1.5, at.x, at.z);
+      }),
       S.call(c => { c.g.police.setLevel(2); c.g.hud.big('WANTED', 'The watchman blew his whistle', 'wanted', 2.5); }),
       S.escape(2, "Lose the police — <b>Anna's garage</b> resprays anything, even a tipper."),
-      S.goTo(P.ghat, "Bring the tipper home to <b>Mama's ghat</b>.", { vehicle: 'seized', radius: 12, maxDamage: 0.6, damageFail: 'The tipper is too smashed to work.' }),
+      S.goTo(P.ghatRoad, "Bring the tipper home: park it on the main road above <b>Mama's ghat</b>.", { vehicle: 'seized', radius: 12, maxDamage: 0.6, damageFail: 'The tipper is too smashed to work.' }),
       S.say([
         ['MAMA', 'Ha! Let them auction the air.'],
         ['SHERA', 'Mama, Kadam will know it was us.'],
@@ -392,7 +438,9 @@ export const STORY = [
       S.call(c => kerbSpawn(c, 'onions', 'tempo', P.degloor, { dx: 6, label: 'onion tempo', color: 0x7b5e3b })),
       S.enter('onions', 'Get in the <b>onion tempo</b>.'),
       S.call(c => {
-        driverAs(kerbSpawn(c, 'tigerCar', 'suv', P.degloor, { dx: -60, label: "Tiger's SUV", color: 0x111111, driver: true }), LOOK.tiger);
+        // Coming in behind you on the Telangana road (the way the tempo came), on the carriageway
+        // you are about to take: not in the back lane behind the shops, where he could only rock.
+        driverAs(kerbSpawn(c, 'tigerCar', 'suv', P.degloor, { dx: 62, dz: 45, label: "Tiger's SUV", color: 0x111111, driver: true }), LOOK.tiger);
       }),
       S.hunters(['tigerCar']),
       S.chat([['TIGER', "Mama's onions? Let's see how they bounce!"]]),
@@ -403,7 +451,7 @@ export const STORY = [
         ['YOU', "…Baba didn't raise a ganja runner."],
       ]),
       S.goTo(P.police, 'Drive the tempo to <b>Vazirabad Police Station</b>.', { vehicle: 'onions', radius: 9, maxDamage: 0.75, damageFail: 'The tempo is wrecked and the load is all over the road.' }),
-      S.leave('Get out and walk away from the tempo.'),
+      S.leave('Get out and leave the tempo with the police.'),
       S.call(c => {
         const t = c.ent.tigerCar;
         if (t) { t.hunt = null; t.blip = null; c.g.controls.delete(t); }
