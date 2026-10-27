@@ -148,6 +148,25 @@ test('a beaten enemy stays beaten: the one still on the ground cowers when it ge
   assert.equal(goon.grudge, 0);
 });
 
+test('a rider thrown at the end of a chase lands and gets up before the fight, not snapped upright', () => {
+  const g = fakeGame();
+  g.hud.bark = () => {};
+  const peds = new Peds(g);
+  g.peds = peds;
+  const m = stepContext(g);
+  const pappu = peds._make({ x: 1, z: 0, outfit: { kind: 'man' } }, 1, 0, null);
+  pappu.state = 'down'; pappu.t = 1.2; pappu.after = 'flee'; // as Steps.chase leaves him
+  m.ent.pappuMan = pappu;
+  const step = Steps.fight(['pappuMan'], 'Get the bag', { pappuMan: 1 });
+  step.enter(m.ctx);
+  assert.equal(pappu.state, 'down', 'still falling');
+  assert.equal(pappu.after, 'fight', 'and up swinging once he gets up');
+  assert.equal(pappu.needHits, 1);
+  pappu.state = 'getup'; pappu.after = 'flee';
+  assert.equal(step.update(m.ctx, 0.1), null);
+  assert.equal(pappu.after, 'fight', 'getting up, he still means to fight');
+});
+
 test('carjacking the car you chase wins the chase: its AI lets go and its driver is the one to beat', () => {
   const g = fakeGame();
   const pilot = { x: 0, z: 0 }, me = { x: 0, z: 0 };

@@ -357,7 +357,15 @@ export const Steps = {
       kind: 'fight', names,
       enter(c) {
         c.objective(text);
-        for (const n of names) { const p = c.ent[n]; if (p) { p.state = 'fight'; p.t = 60; p.grudge = 3; p.blip = '#ff4d4d'; p.hits = 0; p.needHits = hits[n] ?? 2; } }
+        for (const n of names) {
+          const p = c.ent[n];
+          if (!p) continue;
+          p.grudge = 3; p.blip = '#ff4d4d'; p.hits = 0; p.needHits = hits[n] ?? 2;
+          // Thrown off a bike at the end of a chase (or pulled from a car): down first, then up
+          // swinging, not snapped upright mid-fall.
+          if (p.state === 'down' || p.state === 'getup') p.after = 'fight';
+          else { p.state = 'fight'; p.t = 60; }
+        }
       },
       update(c) {
         let left = 0;
@@ -374,7 +382,7 @@ export const Steps = {
           }
           left++;
           if (p.state === 'flee' || p.state === 'walk' || p.state === 'cower') { p.state = 'fight'; p.t = 60; }
-          if (p.state === 'down') p.after = 'fight';
+          if (p.state === 'down' || p.state === 'getup') p.after = 'fight';
         }
         c.m.target = null;
         return left ? null : 'done';
