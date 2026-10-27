@@ -18,7 +18,7 @@ export class Missions {
     this.routeT = 0;
     this.cooldown = 0;
     this._leftovers = []; // the last mission's cast and props, cleared when the next one starts
-    this._driven = new WeakSet(); // mission vehicles the player has driven: theirs to keep
+    this._driven = new WeakSet(); // every vehicle the player has driven: theirs to keep, never cleared away
   }
 
   get byId() { return this._byId || (this._byId = new Map(this.defs.map(d => [d.id, d]))); }
