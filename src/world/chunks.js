@@ -635,16 +635,11 @@ function buildBridgeSpan(ctx, p, q, o0, o1, e0, e1, median, d0 = 0, d1 = 0) {
   const a = g.v(ax + nx0 * l0, u0, az + nz0 * l0), b = g.v(bx + nx1 * l1, u1, bz + nz1 * l1);
   const c = g.v(bx - nx1 * r1, u1, bz - nz1 * r1), d = g.v(ax - nx0 * r0, u0, az - nz0 * r0);
   g.quad(a, b, c, d);
-  // Piers every ~18 m where the riverbed is below.
-  const steps = Math.floor(len / 18);
-  for (let k = 0; k <= steps; k++) {
-    const t = steps ? k / steps : 0.5;
-    const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-    const gh = city.groundHeight(x, z);
-    if (gh > -0.8) continue;
+  // Piers every ~18 m where the riverbed is below (colliders.js stands the same ones in the way).
+  city.riverPiers(ax, az, bx, bz, hw, (x, z, y0, y1, hx, hz, rot) => {
     g.color(0xa39d90, 0);
-    g.cbox(x, gh - 1.5, z, hw * 0.75, -1.1 - gh + 1.5, 0.9, Math.atan2(bx - ax, bz - az) + Math.PI / 2);
-  }
+    g.cbox(x, y0, z, hx, y1 - y0, hz, rot);
+  });
 }
 
 function buildJunction(ctx, j) {
@@ -732,14 +727,12 @@ function band(g, X, Z, hw, hd, on, y0, y1, out, trim = 0, under = true) {
  * A building on the river valley's slope stands on a stone plinth carried down to the ground
  * (its walls start at the street's level), so its river side doesn't hang over the bank.
  */
-function foundation(ctx, X, Z, hw, hd, color, sb) {
+function foundation(ctx, i, X, Z, hw, hd, color, sb) {
   const { g, city } = ctx;
-  // Most lots in a chunk the river runs through stand well back from it.
-  if (!ctx.valley || city.riverDistance(X(0, 0), Z(0, 0), ctx._rd || (ctx._rd = {})).d > Math.hypot(hw, hd) + 14 + GROUND_CELL * 1.5) return 0;
+  // Down to the lowest corner's ground (colliders.js stands the building from there too).
+  const low = ctx.valley ? city.footing(i) : 0;
+  if (!low) return 0;
   const P = CORNERS(hw, hd);
-  let low = 0;
-  for (const [lx, lz] of P) low = Math.min(low, city.groundHeight(X(lx, lz), Z(lx, lz)));
-  if (low > -0.05) return 0;
   g.setTint(mix(color, 0x6b6359, 0.5), sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
   for (const [a, b] of WALLS) {
     const ax = X(P[a][0], P[a][1]), az = Z(P[a][0], P[a][1]), bx = X(P[b][0], P[b][1]), bz = Z(P[b][0], P[b][1]);
@@ -794,7 +787,7 @@ function buildLot(ctx, i) {
   const c = Math.cos(rot), s = Math.sin(rot);
   const X = (lx, lz) => x + lx * c + lz * s, Z = (lx, lz) => z - lx * s + lz * c;
   const sb = seed & 255;
-  const footing = foundation(ctx, X, Z, hw, hd, color, sb);
+  const footing = foundation(ctx, i, X, Z, hw, hd, color, sb);
   g.setTint(color, sb);
 
   if (style === STYLE.SHED || style === STYLE.HUT) return buildShed(ctx, x, z, hw, hd, rot, h, color, sb, style, r);

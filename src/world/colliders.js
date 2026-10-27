@@ -54,7 +54,9 @@ export class Colliders {
     const { city } = this;
     const L = city.lots;
     for (let i = 0; i < L.count; i++) {
-      this.addBox(L.x[i], L.z[i], L.hw[i], L.hd[i], L.rot[i], L.h[i] + 1);
+      // A building on the river valley's slope stands on its plinth, down to the ground.
+      const base = city.footing(i);
+      this.addBox(L.x[i], L.z[i], L.hw[i], L.hd[i], L.rot[i], L.h[i] + 1 - base, base);
       const c = Math.cos(L.rot[i]), s = Math.sin(L.rot[i]);
       const front = (lz, d) => [L.x[i] + (lz - d / 2) * s, L.z[i] + (lz - d / 2) * c];
       // The raised platform along a shop front (too high to drive or walk through).
@@ -82,7 +84,11 @@ export class Colliders {
       { const [px, pz] = at(-PUMP_HW * k + 1.2, -PUMP_HD * k + 0.2); this.addBox(px, pz, 0.95, 0.4, rot, 6.4); }
     }
     const T = city.trees;
-    for (let i = 0; i < T.count; i++) this.addCircle(T.x[i], T.z[i], T.kind[i] === 2 ? 0.75 : T.kind[i] === 5 ? 0.6 : 0.32, T.kind[i] === 5 ? 1.2 : 2.5);
+    for (let i = 0; i < T.count; i++) {
+      // A tree down the riverbank stands from the ground there, as tall as ever above the street.
+      const base = Math.min(0, city.groundHeight(T.x[i], T.z[i]));
+      this.addCircle(T.x[i], T.z[i], T.kind[i] === 2 ? 0.75 : T.kind[i] === 5 ? 0.6 : 0.32, (T.kind[i] === 5 ? 1.2 : 2.5) - base, base);
+    }
     const P = city.props;
     for (let i = 0; i < P.count; i++) {
       const k = P.kind[i], x = P.x[i], z = P.z[i], rot = P.rot[i];
@@ -123,6 +129,16 @@ export class Colliders {
         } else if (median) this.addBox(p.x, p.z, 0.35, half, rot, 0.35);
       }
       if (lift) for (const pier of net.deckPiers(r)) this.addCircle(pier.x, pier.z, 0.6, pier.d - 1.1);
+      // A river bridge's piers, span by span as chunks.js draws them: in the way down on the bank.
+      else if (bridge) {
+        for (let i = net.ptStart[r]; i < net.ptStart[r + 1] - 1; i++) {
+          const sa = Math.max(net.cum[i], s0), sb = Math.min(net.cum[i + 1], s1);
+          if (sb - sa < 0.05) continue;
+          const a = net.pointAt(r, sa, {}), b = net.pointAt(r, sb, {});
+          const hw = Math.max(net.edgeAt(r, sa, 1), net.edgeAt(r, sa, -1), net.edgeAt(r, sb, 1), net.edgeAt(r, sb, -1));
+          city.riverPiers(a.x, a.z, b.x, b.z, hw, (x, z, y0, y1, hx, hz, rot) => this.addBox(x, z, hx, hz, rot, y1 - y0, y0));
+        }
+      }
     }
   }
 

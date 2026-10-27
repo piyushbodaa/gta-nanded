@@ -189,7 +189,7 @@ export class Player {
     const g = this.game, v = this.vehicle;
     if (!v) return;
     const spd = speedOf(v);
-    const door = g.vehicles.doorWorld(v);
+    const door = this._exitPoint(v);
     v.driver = null;
     v.role = 'abandoned';
     this.vehicle = null;
@@ -209,6 +209,28 @@ export class Player {
     g.onExitedVehicle?.(v, spd);
   }
 
+  /**
+   * Where to step out of v: its door, unless that side is up against a bridge's or a flyover's
+   * railing (stepping out there lands beyond it, down on the riverbed or the street below),
+   * then the door on the other side.
+   */
+  _exitPoint(v) {
+    const g = this.game, door = g.vehicles.doorWorld(v);
+    const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
+    // Where the walls at v's level leave someone stepping out at (x, z): still up on that level?
+    const onLevel = (x, z) => {
+      p.x = x; p.z = z;
+      g.colliders.resolveCircle(p, 0.34, o, Infinity, v.y);
+      return g.net.surfaceAt(p.x, p.z, v.y) > v.y - 1;
+    };
+    if (onLevel(door.x, door.z)) return door;
+    // The same door mirrored across the vehicle's length.
+    const c = Math.cos(v.heading), s = Math.sin(v.heading), side = (door.x - v.x) * c - (door.z - v.z) * s;
+    const x = door.x - 2 * side * c, z = door.z + 2 * side * s;
+    if (onLevel(x, z)) { door.x = x; door.z = z; }
+    return door;
+  }
+
   _down(dt) {
     const h = this.human;
     this.downT -= dt;
@@ -216,7 +238,8 @@ export class Player {
     this.vx = damp(this.vx, 0, 3, dt); this.vz = damp(this.vz, 0, 3, dt);
     const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
     p.x = this.x; p.z = this.z;
-    if (this.game.colliders.resolveCircle(p, 0.34, o)) { this.x = p.x; this.z = p.z; this.vx *= -0.2; this.vz *= -0.2; }
+    // The walls at our level: a flyover's railings ride on its deck.
+    if (this.game.colliders.resolveCircle(p, 0.34, o, Infinity, this.groundY ?? 0)) { this.x = p.x; this.z = p.z; this.vx *= -0.2; this.vz *= -0.2; }
     // Down on whatever is underneath (a bridge deck, a flyover, the bank), and out of the river.
     this.y = this.groundY = this.game.net.surfaceAt(this.x, this.z, this.groundY ?? 0);
     this._keepOutOfRiver(dt);
