@@ -14,6 +14,7 @@ export class PauseMenu {
     this.root = $('pause');
     this.open = false;
     this.tab = 'map';
+    this.hold = null; // a promise close() waits for: the screen going full screen again (main.js)
     this.map = new CityMap(game, $('city-map'));
     this.map.onPick = (x, z) => this.setWaypoint(x, z);
     this._bind();
@@ -50,9 +51,10 @@ export class PauseMenu {
     $('set-time').addEventListener('click', () => { g.sky.hours = (g.sky.hours + 3) % 24; g.renderer.shadowMap.needsUpdate = true; this._settings(); });
     $('set-weather').addEventListener('click', () => { g.sky.cycleWeather(); this._settings(); });
     $('set-reset').addEventListener('click', () => {
-      if (this._confirmReset) { g.save.reset(); location.reload(); return; }
-      this._confirmReset = true; $('set-reset').textContent = `${verb(g) === 'tap' ? 'Tap' : 'Click'} again to erase everything`;
-      setTimeout(() => { this._confirmReset = false; $('set-reset').textContent = 'Start over (erase progress)'; }, 4000);
+      // The second tap must be a deliberate one, not the other half of a double tap (as NEW STORY on the cover).
+      if (this._resetArmedAt) { if (performance.now() - this._resetArmedAt >= 600) { g.save.reset(); location.reload(); } return; }
+      this._resetArmedAt = performance.now(); $('set-reset').textContent = `${verb(g) === 'tap' ? 'Tap' : 'Click'} again to erase everything`;
+      setTimeout(() => { this._resetArmedAt = 0; $('set-reset').textContent = 'Start over (erase progress)'; }, 4000);
     });
     addEventListener('resize', () => { if (this.open && this.tab === 'map') this._drawMap(); });
   }
@@ -78,9 +80,14 @@ export class PauseMenu {
     const p = g.player.pos;
     this.map.focus(p.x, p.z, this.map.zoom || 0.35);
     this.show(tab);
+    // Focus moves into the menu, so Tab steps through its buttons (on the street it is the map key).
+    this.root.querySelector(`[data-tab="${tab}"]`)?.focus({ preventScroll: true });
   }
   close() {
     const g = this.game;
+    // Full screen coming back after an app switch: stay paused until the screen has settled, then
+    // close, unless the player has gone again meanwhile.
+    if (this.hold) { this.hold.then(() => { if (this.open && !document.hidden) this.close(); }); return; }
     this.open = false;
     this.root.hidden = true;
     g.paused = false;

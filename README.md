@@ -10,7 +10,7 @@ Steal an auto-rickshaw outside Hazur Sahib Nanded station, weave through Shyam N
 | --- | --- | --- | --- |
 | Move / steer | `W A S D` / arrows | left stick | floating stick (left thumb) |
 | Look | mouse (click to lock) · drag | right stick | drag the right half |
-| Sprint · Jump · Punch | `Shift` · `Space` · click / `J` | X · A · B | RUN · JUMP · PUNCH |
+| Sprint · Jump · Punch | `Shift` · `Space` · click / `J` | L3 · A · B | RUN · JUMP · PUNCH |
 | Get in / jack / get out | `F` (or `E`) | Y | ENTER / EXIT |
 | Gas · Brake/reverse · Handbrake | `W` · `S` · `Space` | RT · LT · A | GAS · BRAKE · DRIFT |
 | Horn · Radio · Look back | `H` · `R` · `C` | L3 · RB · R3 | HORN · 📻 |

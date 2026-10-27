@@ -42,7 +42,12 @@ export class GameCamera {
   update(dt, input, subject) {
     this.time += dt;
     const cam = this.camera;
-    if (this.cinematic) return this._cinematic(dt);
+    if (this.cinematic) {
+      // The shot owns the camera: drags and wheel turns during it are dropped, not saved up
+      // to swing the view somewhere random the moment it ends.
+      input.look.x = input.look.y = 0; input.zoom = 0;
+      return this._cinematic(dt);
+    }
     const look = input.look;
     const manual = Math.abs(look.x) + Math.abs(look.y) > 1e-5;
     if (manual) this.lastManual = this.time;
