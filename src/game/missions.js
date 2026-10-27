@@ -75,7 +75,7 @@ export class Missions {
     }
     // Vital entities.
     for (const [name, e] of Object.entries(m.ent)) {
-      if (e && e.vital && e.wrecked) { this.fail(e.vitalMsg || `${e.label || 'The vehicle'} was wrecked.`); return; }
+      if (e && e.vital && e.wrecked) { this.fail(e.vitalMsg || `${cap(the(e.label))} was wrecked.`); return; }
     }
     const step = m.steps[m.i];
     if (!step) { this.pass(); return; }
@@ -282,6 +282,10 @@ export class Missions {
   }
 }
 
+/** A vehicle's label in a sentence: "the onion tempo", but "Pakya's auto" and "your car" as they are. */
+const the = label => !label ? 'the vehicle' : /'s\b|^(your|my)\b/i.test(label) ? label : `the ${label}`;
+const cap = s => s[0].toUpperCase() + s.slice(1);
+
 /**
  * Scripted people never step out of a wall by themselves, so one asked to stand inside a wall
  * moves toward the player (who stands somewhere clear) until free, appearing on the player's side.
@@ -361,7 +365,7 @@ export const Steps = {
         if (opts.vehicle) {
           const v = c.ent[opts.vehicle];
           if (v && P.vehicle !== v) {
-            c.objective(`Get back in the ${v.label || 'vehicle'}.`);
+            c.objective(`Get back in ${the(v.label)}.`);
             c.m.target = { x: v.x, z: v.z, marker: false };
             v.arrow = true;
             return null;

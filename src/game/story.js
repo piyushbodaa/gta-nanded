@@ -343,7 +343,7 @@ export const STORY = [
       S.call(c => { c.g.police.setLevel(1); c.g.hud.big('FLYING SQUAD', 'They saw the tipper', 'wanted', 2.5); }),
       S.escape(1, "Lose the flying squad — or get to <b>Anna's garage</b>."),
       S.goTo(P.site, "Deliver the sand to the <b>builder's site</b> near Raj Corner.", { vehicle: 'tipper', radius: 10, maxDamage: 0.55, damageFail: 'The tipper is wrecked and the sand is all over the road.' }),
-      S.say([['MUNSHI', "Mama's sand? Tip it at the back. Here — cash for Mama."], ['MAMA_PH', 'Good boy. Ten thousand for you. There is more where the river comes from.']]),
+      S.say([['MUNSHI', "Mama's sand? Tip it at the back. Here — cash for Mama."], ['MAMA_PH', 'Good boy. Twenty-five hundred for you. There is more where the river comes from.']]),
     ],
   },
   {
@@ -430,7 +430,7 @@ export const STORY = [
         ['YOU', "…Baba didn't raise a ganja runner."],
       ]),
       S.goTo(P.police, 'Drive the tempo to <b>Vazirabad Police Station</b>.', { vehicle: 'onions', radius: 9, maxDamage: 0.75, damageFail: 'The tempo is wrecked and the load is all over the road.' }),
-      S.leave('Get out and walk away from the tempo.'),
+      S.leave('Get out and leave the tempo with the police.'),
       S.call(c => {
         const t = c.ent.tigerCar;
         if (t) { t.hunt = null; t.blip = null; c.g.controls.delete(t); }

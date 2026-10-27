@@ -261,6 +261,27 @@ test('a step that fails leaves no GPS line to its target', () => {
   assert.equal(routed, 0);
 });
 
+test("out of the car you must drive: 'Get back in Pakya's auto', not 'the Pakya's auto'", () => {
+  const g = fakeGame();
+  let shown = '';
+  g.hud.objective = t => { shown = t; };
+  const m = stepContext(g);
+  for (const [label, text] of [["Pakya's auto", "Get back in Pakya's auto."], ['onion tempo', 'Get back in the onion tempo.'], ['your car', 'Get back in your car.'], [undefined, 'Get back in the vehicle.']]) {
+    m.ent.v = { id: 1, x: 50, z: 0, label };
+    const step = Steps.goTo({ x: 500, z: 0 }, 'Drive.', { vehicle: 'v' });
+    step.enter(m.ctx);
+    assert.equal(step.update(m.ctx, 0.1), null);
+    assert.equal(shown, text);
+  }
+  const missions = new Missions(g, [{ id: 'x', giver: 'PAKYA', start: { x: 0, z: 0 }, steps: () => [Steps.wait(9)] }]);
+  let failed = '';
+  g.hud.big = (title, sub) => { failed = sub; };
+  missions.start('x');
+  missions.active.ent.cash = { id: 2, x: 0, z: 0, label: 'cash car', vital: true, wrecked: true };
+  missions.update(0.1);
+  assert.equal(failed, 'The cash car was wrecked.');
+});
+
 test('a mission that ends lets its cast go, and a retry clears what is left of the last one', () => {
   const g = fakeGame();
   const vlist = [], removed = [];
