@@ -368,3 +368,29 @@ test('a jacked car\'s passengers get out on their own side, clear of it as it ro
     assert.deepEqual(sides, [1, -1], 'each out of their own side');
   }
 });
+
+test('a jacked two-wheeler\'s pillion gets off the left, behind the rider, not into the traffic lane', () => {
+  const g = rulesGame();
+  // vehicles.js doorWorld: a two-wheeler is got on and off from its left (local +x), the stand side.
+  const hw = 0.36, hd = 1, seatZ = -0.28;
+  const local = (v, lx, lz) => ({ x: v.x + lx * Math.cos(v.heading) + lz * Math.sin(v.heading), z: v.z - lx * Math.sin(v.heading) + lz * Math.cos(v.heading) });
+  Object.assign(g.vehicles, { ejectDriver(v) { const h = v.driver; v.driver = null; return h; }, doorWorld: v => local(v, hw + 0.5, seatZ) });
+  Object.assign(g.peds, { adoptEjected() {}, _make: (h, x, z) => { const p = { h, x, z }; g.peds.list.push(p); return p; } });
+  let wall = false;
+  g.colliders.blocked = () => wall;
+  const jack = heading => {
+    g.peds.list = [];
+    const bike = jeep({ type: 'bike', role: 'traffic', x: 5, z: -3, heading, hw, hd, spec: { two: true }, driver: {}, passengers: [{}], model: { seat: { x: 0, z: seatZ }, passengers: [[0, 0.86, -0.62]] } });
+    g.carjack(bike, g.player);
+    const [{ h }] = g.peds.list, c = Math.cos(heading), s = Math.sin(heading), dx = h.x - bike.x, dz = h.z - bike.z;
+    return [dx * c - dz * s, dx * s + dz * c];
+  };
+  for (const heading of [0, 1.1, -2.4]) {
+    const [lx, lz] = jack(heading);
+    assert.ok(lx > hw + 0.3, 'on the left, clear of the bike');
+    assert.ok(lz < seatZ - 0.4, 'a step behind the rider, who is put down at the door');
+  }
+  wall = true;
+  const [lx, lz] = jack(0.5);
+  assert.ok(Math.abs(lx) < 0.01 && lz < -hd, 'against a wall, behind the bike');
+});

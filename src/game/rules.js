@@ -76,15 +76,17 @@ export function installRules(g) {
     else if (!storyCar(v)) g.police.report('carjack', v.x, v.z);
     // Passengers bail out of their own side, clear of the body: one dropped in the path of a car
     // still rolling (the player's now) was run over at once, a hit-and-run on top of the carjack.
-    // A pillion gets off the other side from the rider; against a wall, behind the car. A police
-    // jeep's second officer stays on the job, as when its crew gets out (police._dismount).
+    // A pillion (a seat down the middle) gets off the rider's side, a step behind the rider: on a
+    // two-wheeler that is the left, the stand side, not the traffic lane and the exhaust. Against a
+    // wall, behind the vehicle. A police jeep's second officer stays on the job, as when its crew
+    // gets out (police._dismount).
     const seats = v.model?.passengers || [], c = Math.cos(v.heading), s = Math.sin(v.heading);
     const doorSide = Math.sign((door.x - v.x) * c - (door.z - v.z) * s) || -1; // local +x is the vehicle's left
     v.passengers.splice(0).forEach((ph, i) => {
       const [sx = 0, , sz = 0] = seats[i] || [];
-      const lx = (Math.sign(sx) || -doorSide) * (v.hw + 0.55);
-      ph.x = v.x + lx * c + sz * s; ph.z = v.z - lx * s + sz * c;
-      if (g.colliders?.blocked(ph.x, ph.z, 0.3, v.y || 0)) { const lz = -(v.hd + 0.6); ph.x = v.x + lz * s; ph.z = v.z + lz * c; }
+      const lx = (Math.sign(sx) || doorSide) * (v.hw + 0.55), lz = sx ? sz : sz - 0.5;
+      ph.x = v.x + lx * c + lz * s; ph.z = v.z - lx * s + lz * c;
+      if (g.colliders?.blocked(ph.x, ph.z, 0.3, v.y || 0)) { const back = -(v.hd + 0.6); ph.x = v.x + back * s; ph.z = v.z + back * c; }
       const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6;
       if (v.type === 'police' && g.police.level > 0) { Object.assign(pp, { state: 'fight', t: 30, keep: true, cop: true, grudge: 2 }); g.police.foot.push(pp); }
     });
