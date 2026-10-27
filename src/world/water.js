@@ -21,6 +21,7 @@ export function createRivers(scene, city, sky) {
   const material = new THREE.ShaderMaterial({
     uniforms,
     fog: true,
+    side: THREE.DoubleSide, // a strip folded at a sharp bend still covers the water there
     vertexShader: /* glsl */`
       #include <fog_pars_vertex>
       varying vec3 vWorld;
@@ -70,7 +71,7 @@ export function createRivers(scene, city, sky) {
       }`,
   });
 
-  const meshes = [];
+  const meshes = [], rd = {};
   for (const river of city.rivers) {
     const pts = river.p;
     const n = pts.length / 2;
@@ -85,9 +86,19 @@ export function createRivers(scene, city, sky) {
       let dx = nx2 - px, dz = nz2 - pz;
       const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
       const ox = dz, oz = -dx;
+      // At a bend the outside edge is mitred, so the strip keeps its full width round it. (The
+      // inside of a sharp bend on short reaches folds over itself, so the material is two-sided.)
+      const ix = x - px, iz = z - pz, il = Math.hypot(ix, iz), jx = nx2 - x, jz = nz2 - z, jl = Math.hypot(jx, jz);
+      const cosA = Math.min(il ? (ix * dx + iz * dz) / il : 1, jl ? (jx * dx + jz * dz) / jl : 1);
+      const miter = 1 / Math.max(cosA, 0.5);
+      const inX = (jl ? jx / jl : 0) - (il ? ix / il : 0), inZ = (jl ? jz / jl : 0) - (il ? iz / il : 0); // toward the inside
+      const outer = ox * inX + oz * inZ < 0 ? 1 : -1;
       for (const k of [-1, -0.5, 0, 0.5, 1]) {
-        pos.push(x + ox * hw * k, WATER_Y, z + oz * hw * k);
-        edge.push(1 - Math.abs(k));
+        const o = hw * k * (k * outer > 0 ? miter : 1), vx = x + ox * o, vz = z + oz * o;
+        pos.push(vx, WATER_Y, vz);
+        // How far into the water the vertex really is (0 at the bank, 1 mid-river), not where
+        // it sits across the strip: where a fold puts an edge vertex midstream, no foam follows it.
+        edge.push(THREE.MathUtils.clamp(1 - (city.riverDistance(vx, vz, rd).d + river.w / 2) / hw, 0, 1));
       }
     }
     for (let i = 0; i < n - 1; i++) {

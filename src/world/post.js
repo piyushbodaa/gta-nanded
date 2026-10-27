@@ -208,6 +208,7 @@ export class Post {
     this.supported = Boolean(this.format);
     this.enabled = this.supported;
     this.msaa = 4;
+    this.msaaRefused = false; // the GPU can't multisample the HDR target
     this.bloomOn = true;
     this.ssrOn = true;
     this.levels = 6;
@@ -242,11 +243,13 @@ export class Post {
    * of the browser stretching a lower-resolution frame over the screen.
    */
   configure({ msaa, bloom, reflections = bloom, aa = !msaa, sharpen = 0 }) {
-    const samples = msaa ? 4 : 0;
+    // A GPU that refused multisampled HDR targets once isn't asked again (on every resize).
+    const samples = msaa && !this.msaaRefused ? 4 : 0;
     if (samples !== this.msaa) { this.msaa = samples; this._dispose(); }
     this.bloomOn = Boolean(bloom);
     this.ssrOn = Boolean(reflections);
-    this.final.uniforms.uAA.value = aa ? 1 : 0;
+    // Without the MSAA it asked for, the frame is smoothed in the final pass instead.
+    this.final.uniforms.uAA.value = aa || (msaa && this.msaaRefused) ? 1 : 0;
     this.final.uniforms.uSharpen.value = sharpen;
   }
 
@@ -285,7 +288,11 @@ export class Post {
       for (const samples of msaa ? [msaa, 0] : [0]) {
         this.format = format; this.msaa = samples;
         this._create(w, h);
-        if (this._complete()) return;
+        if (this._complete()) {
+          // MSAA refused: remember it, and smooth the frame in the final pass instead.
+          if (msaa && !samples) { this.msaaRefused = true; this.final.uniforms.uAA.value = 1; }
+          return;
+        }
         this._dispose();
       }
     }

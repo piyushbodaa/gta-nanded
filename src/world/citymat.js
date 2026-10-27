@@ -14,7 +14,7 @@
 // the facades, wet asphalt in the monsoon), and a cheap ambient occlusion
 // darkens the sky light near the ground, where walls and streets meet.
 import * as THREE from 'three';
-import { ATLAS_COLS, ATLAS_ROWS, TILE_PX, SIGN_COLS, SIGN_ROWS } from './atlas.js';
+import { ATLAS_COLS, ATLAS_ROWS, TILE_PX, SIGN_COLS, SIGN_ROWS, SIGN_W, SIGN_H } from './atlas.js';
 
 export const cityUniforms = {
   uNight: { value: 0 }, // 0 day .. 1 night: drives window and shop lighting
@@ -23,8 +23,10 @@ export const cityUniforms = {
 };
 
 export function createAtlasTextures(atlas, signs, renderer, detailCanvas) {
-  const map = new THREE.DataTexture(atlas.data, atlas.width, atlas.height, THREE.RGBAFormat);
+  // A layer per tile: a repeating tile wraps round within itself, mipmaps and all.
+  const map = new THREE.DataArrayTexture(atlas.data, atlas.tile, atlas.tile, atlas.layers);
   map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
   map.magFilter = THREE.LinearFilter;
   map.minFilter = THREE.LinearMipmapLinearFilter;
   map.generateMipmaps = true;
@@ -76,7 +78,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform sampler2D cityAtlas;
+        uniform ${signs ? 'sampler2D' : 'sampler2DArray'} cityAtlas;
         uniform sampler2D cityEmissive;
         uniform sampler2D cityDetail;
         uniform float uNight;
@@ -131,12 +133,20 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               coord = vCityWorld.xz / 6.4;
               f = fract(coord);
             }
-            const vec2 pad = vec2(${pad.toFixed(5)});
+            const vec2 pad = vec2(${pad[0].toFixed(5)}, ${pad[1].toFixed(5)});
             vec2 g2 = f * (1.0 - 2.0 * pad) + pad;
             vec2 auv = vec2((origin.x + g2.x) / ${cols.toFixed(1)}, (origin.y + 1.0 - g2.y) / ${rows.toFixed(1)});
-            vec2 gscale = vec2(1.0 / ${cols.toFixed(1)}, 1.0 / ${rows.toFixed(1)}) * (1.0 - 2.0 * pad.x);
-            vec2 gx = dFdx(coord) * gscale, gy = dFdy(coord) * gscale;
-            vec4 tex = textureGrad(cityAtlas, auv, gx, gy);
+            vec2 gscale = vec2(1.0 / ${cols.toFixed(1)}, 1.0 / ${rows.toFixed(1)}) * (1.0 - 2.0 * pad);
+            // Derivatives are taken here, never inside the per-pixel branches below: there they
+            // are undefined, wherever neighbouring pixels take different sides of the branch.
+            vec2 cdx = dFdx(coord), cdy = dFdy(coord);
+            vec2 gx = cdx * gscale, gy = cdy * gscale;
+            ${signs ? 'vec4 tex = textureGrad(cityAtlas, auv, gx, gy);' : `
+            // A tile that repeats wraps round within its own layer; only an axis clamped to one
+            // picture keeps the inset from the tile's edge.
+            vec2 clamped = mode < 1.5 ? vec2(0.0) : mode < 2.5 ? vec2(1.0) : mode < 3.5 ? vec2(1.0, 0.0) : vec2(0.0);
+            vec2 tuv = mix(f, g2, clamped), flip = vec2(1.0, -1.0);
+            vec4 tex = textureGrad(cityAtlas, vec3(tuv.x, 1.0 - tuv.y, origin.y * ${cols.toFixed(1)} + origin.x), cdx * flip, cdy * flip);`}
             vec3 painted = mix(tex.rgb, tex.rgb * paint * 1.12, tex.a);
             ${signs ? 'painted = tex.rgb;' : ''}
             diffuseColor.rgb *= painted;
@@ -144,6 +154,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
             if (mode < 2.5) e = textureGrad(cityEmissive, auv, gx, gy).rgb;
             if (mode < 1.5) {
               // Walls: each building has its own age, from fresh paint to decades of monsoons.
+              vec3 faceN = normalize(cross(dFdx(vCityWorld), dFdy(vCityWorld)));
               float age = fract(vTint.a * 7.31 + 0.17);
               float wallDetail = texture2D(cityDetail, vTUv * 1.3).b;
               // Sun-bleached paint.
@@ -166,9 +177,10 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               float rowWear = vTile.y < 0.5 ? 0.5 : vTile.y < 1.5 ? 0.4 : vTile.y < 2.5 ? 1.0 : vTile.y < 3.5 ? 0.0 : vTile.y < 4.5 ? 0.25 : 0.6;
               float wear = rowWear * (0.25 + 0.75 * age);
               if (wear > 0.05 && tex.a > 0.5) {
-                vec3 wn = normalize(cross(dFdx(vCityWorld), dFdy(vCityWorld)));
-                vec2 wc = coord + vTint.a * vec2(37.1, 11.3) + wn.xz * 17.3;
-                float n = texture2D(cityDetail, wc * vec2(0.24, 0.34)).b * 0.72 + texture2D(cityDetail, wc * vec2(1.9, 2.6)).g * 0.28;
+                // (faceN is the same all over a face, so wc changes across the screen as coord does.)
+                vec2 wc = coord + vTint.a * vec2(37.1, 11.3) + faceN.xz * 17.3;
+                const vec2 k1 = vec2(0.24, 0.34), k2 = vec2(1.9, 2.6);
+                float n = textureGrad(cityDetail, wc * k1, cdx * k1, cdy * k1).b * 0.72 + textureGrad(cityDetail, wc * k2, cdx * k2, cdy * k2).g * 0.28;
                 float foot = 1.0 - smoothstep(0.3, 1.8, vCityWorld.y);
                 float slab = smoothstep(0.8, 0.97, fract(vCityWorld.y / 3.2));
                 float t = 0.8 - wear * (0.15 + 0.1 * foot + 0.05 * slab);
@@ -177,7 +189,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
                 // A grey scratch coat at the edge of the break, brick inside it.
                 vec2 bc = coord * vec2(15.0, 42.0);
                 bc.x += 0.5 * mod(floor(bc.y), 2.0);
-                vec2 bq = fract(bc), bw = fwidth(bc);
+                vec2 bq = fract(bc), bw = (abs(cdx) + abs(cdy)) * vec2(15.0, 42.0); // fwidth(bc)
                 float joint = (1.0 - smoothstep(0.0, 0.14, min(bq.y, 1.0 - bq.y))) + (1.0 - smoothstep(0.0, 0.07, min(bq.x, 1.0 - bq.x)));
                 joint = mix(min(joint, 1.0), 0.24, smoothstep(0.2, 0.55, max(bw.x, bw.y)));
                 vec3 brick = vec3(0.45, 0.25, 0.18) * (0.75 + 0.4 * cityHash(floor(bc) + vTint.a * 3.3));
@@ -194,7 +206,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               // of the bay and storey and shade whichever wall, floor or ceiling it meets.
               roomGlass = glass * (1.0 - smoothstep(0.1, 0.22, dot(tex.rgb, vec3(0.3, 0.59, 0.11))));
               if (roomGlass > 0.01) {
-                vec3 wn = normalize(cross(dFdx(vCityWorld), dFdy(vCityWorld)));
+                vec3 wn = faceN;
                 vec3 wt = vec3(wn.z, 0.0, -wn.x);
                 vec3 vd = normalize(vCityWorld - cameraPosition);
                 vec3 rd = vec3(dot(vd, wt), vd.y, dot(vd, wn));
@@ -278,16 +290,17 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += cityGlow;`);
   };
-  material.customProgramCacheKey = () => (signs ? 'city-signs-v6' : 'city-v6');
+  material.customProgramCacheKey = () => (signs ? 'city-signs-v7' : 'city-v7');
   return material;
 }
 
 export function createCityMaterials(tex) {
   const city = patch(new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.85, metalness: 0 }), {
-    map: tex.map, emissive: tex.emissive, detail: tex.detail, cols: ATLAS_COLS, rows: ATLAS_ROWS, pad: 3 / TILE_PX,
+    map: tex.map, emissive: tex.emissive, detail: tex.detail, cols: ATLAS_COLS, rows: ATLAS_ROWS, pad: [3 / TILE_PX, 3 / TILE_PX],
   });
   const signs = patch(new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.5, metalness: 0 }), {
-    map: tex.signMap, emissive: tex.signEmissive, detail: tex.detail, cols: SIGN_COLS, rows: SIGN_ROWS, pad: 0.004, signs: true,
+    // Signs are stacked 64 px apart: two pixels in from the top and bottom, a sign never shows a strip of the next.
+    map: tex.signMap, emissive: tex.signEmissive, detail: tex.detail, cols: SIGN_COLS, rows: SIGN_ROWS, pad: [2 / SIGN_W, 2 / SIGN_H], signs: true,
   });
   // Night: pools of sodium light on the road under every street lamp.
   const glowTex = radialTexture();
