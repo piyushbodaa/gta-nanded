@@ -33,9 +33,13 @@ export class Save {
   complete(id) { if (!this.done(id)) this.data.story.push(id); this.dirty(); this.flush(); }
   stat(k, d = 1) { this.data.stats[k] = (this.data.stats[k] || 0) + d; this.dirty(); }
   dirty() { this._dirty = true; }
+  /** Write the progress out. The first time storage refuses, `onFail` lets the game tell the player. */
   flush() {
     if (!this._dirty) return true;
-    try { localStorage.setItem(KEY, JSON.stringify(this.data)); this._dirty = false; return true; } catch { this.available = false; return false; }
+    try { localStorage.setItem(KEY, JSON.stringify(this.data)); this._dirty = false; return true; } catch {
+      if (this.available) { this.available = false; this.onFail?.(); }
+      return false;
+    }
   }
   reset() { this.data = DEFAULT(); this._dirty = true; this.flush(); }
 }

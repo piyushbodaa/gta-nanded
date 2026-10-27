@@ -43,14 +43,21 @@ export class Game {
     this._frameMs = 0;
     this.cpuMs = 0; // the game's own work per frame, smoothed (the performance readout)
     this.perf = { n: 0, t: 0, worst: 0, fps: 0, ms: 0, worstMs: 0 };
-    this._nextFrame = 0;
+    this._fails = 0; // frames in a row that threw
     this.energy = 0;
     addEventListener('resize', () => this.resize());
     addEventListener('blur', () => { if (this.started && !this.paused && !this.respawning) this.pause?.openMenu(this.pause.tab); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden && this.started && !this.paused && !this.respawning) this.pause?.openMenu(this.pause.tab); });
+    // A hidden page may never come back (Android discards background tabs): keep what was
+    // earned since the last autosave, whether or not the game was paused already.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.save?.flush();
+      if (document.hidden && this.started && !this.paused && !this.respawning) this.pause?.openMenu(this.pause.tab);
+    });
+    addEventListener('pagehide', () => this.save?.flush());
   }
 
   resize() {
+    this._pauseDrawn = false; // a resized canvas is blank: draw it again even behind the menu
     this.camera3.aspect = innerWidth / innerHeight;
     this.camera3.updateProjectionMatrix();
     this.renderer.setPixelRatio(this.quality.pixelRatio());
@@ -67,7 +74,10 @@ export class Game {
   async load(stage) {
     const spawn = { x: 463, z: 300 };
     const q = this.quality;
-    this.world = await createWorld(this.scene, this.renderer, { stage, focus: spawn, sharp: !(q.phone && q.tier === 'low') });
+    // Only a phone settled on Fast paints the city at half resolution. A first guess may not
+    // last: calibration, before play, often moves a first launch (or a promoted one) off Fast.
+    const settled = q.mode !== 'auto' || (q.learned && !q.learned.promote);
+    this.world = await createWorld(this.scene, this.renderer, { stage, focus: spawn, sharp: !(q.phone && q.tier === 'low' && settled) });
     const w = this.world;
     this.city = w.city; this.net = w.net; this.colliders = w.colliders; this.sky = w.sky;
     this.post = new Post(this.renderer, this.sky);
@@ -84,6 +94,7 @@ export class Game {
 
   applyQuality() {
     const q = this.quality.settings;
+    this._pauseDrawn = false;
     this.renderer.setPixelRatio(this.quality.pixelRatio());
     this.renderer.setSize(innerWidth, innerHeight, false);
     this.world.chunks.setRadius(q.viewDistance);
@@ -101,6 +112,9 @@ export class Game {
     if (q.shadows > 0 && sun.shadow.mapSize.x !== q.shadows) {
       sun.shadow.mapSize.set(q.shadows, q.shadows);
       sun.shadow.map?.dispose(); sun.shadow.map = null;
+    } else if (q.shadows === 0 && sun.shadow.map) {
+      // A tier without shadows gives back the map's memory too (it's made again if they return).
+      sun.shadow.map.dispose(); sun.shadow.map = null;
     }
     this.renderer.shadowMap.needsUpdate = true;
   }
@@ -109,20 +123,44 @@ export class Game {
     this.started = true;
     this.paused = false;
     this.clock.getDelta();
+    // A browser that won't keep the game's data (blocked site storage): say so once, rather
+    // than let the player find a fresh save next time.
+    if (this.save) {
+      this.save.onFail = () => this.hud?.toast("<b>Progress isn't being saved:</b> this browser blocks the game's storage.", 8);
+      if (!this.save.available) this.save.onFail();
+    }
     if (!this._loop) {
-      this._loop = () => {
+      this._loop = t => {
         // The frame-rate cap: on 90 and 120 Hz screens, and in battery saver, skip the display
-        // refreshes that come too early instead of drawing frames nobody needs.
-        const cap = this.quality.fpsCap;
-        if (cap) {
-          const now = performance.now(), step = 1000 / cap;
-          if (now < this._nextFrame - 2) return;
-          this._nextFrame = Math.max(this._nextFrame + step, now + step - 2);
+        // refreshes that come too early instead of drawing frames nobody needs. Timed by the
+        // refresh (the browser's timestamp), not by when this callback got to run.
+        if (!this.quality.frameDue(t ?? performance.now())) return;
+        try {
+          this.frame();
+          this._fails = 0;
+        } catch (err) {
+          // One fault in one system mustn't stop the whole game: three.js asks for the next frame
+          // only after this one returns. Drop what the broken frame left half done and carry on;
+          // a fault that comes back every frame for a second stops the game with a message.
+          console.error('GTA Nanded: a frame failed', err);
+          this.controls.clear();
+          this.input.endFrame();
+          this.save?.flush();
+          if (++this._fails >= 60) this._fatal(err);
         }
-        this.frame();
       };
       this.renderer.setAnimationLoop(this._loop);
     }
+  }
+
+  /** A fault that won't go away: stop, and say so instead of leaving a frozen picture. */
+  _fatal(err) {
+    this.renderer.setAnimationLoop(null);
+    const box = document.getElementById('fatal');
+    if (!box) return;
+    box.querySelector('h2').textContent = 'The game stopped on an error.';
+    document.getElementById('fatal-msg').textContent = `${err?.message || err}. Reload to carry on from your last save.`;
+    box.hidden = false;
   }
 
   /**
@@ -131,9 +169,20 @@ export class Game {
    * launches start where the governor last settled, unless it found room for a tier up.
    * Tier changes recompile shaders, which belongs here, not in the middle of a chase.
    */
-  calibrate() {
+  calibrate(spot) {
     const q = this.quality;
     if (q.mode !== 'auto' || (q.learned && !q.learned.promote)) return;
+    // Time the view play opens on: the player at `spot`, the camera behind them, the streets
+    // filled. Before the first frame the camera sits at the origin at road level and draws a
+    // fraction of what play does, and a tier picked from that frame doesn't hold in play.
+    if (spot) {
+      const P = this.player, h = P.human;
+      P.teleport(spot.x, spot.z, spot.heading);
+      h.x = P.x; h.y = P.y; h.z = P.z; h.yaw = P.heading;
+      this.camera.update(0, this.input, { human: h, speed: 0, heading: P.heading, groundY: P.groundY });
+      for (let i = 0; i < 40; i++) { this.traffic?.update(0.05); this.peds?.update(0.05); }
+      if (this.parked) { this.parked.t = 0; this.parked.update(1); }
+    }
     const gl = this.renderer.getContext(), chunks = this.world.chunks, p = this.player.pos;
     const budget = 1000 / (q.fpsCap || 60);
     // Milliseconds per frame: the median of three short runs, so one busy moment can't decide.
@@ -304,7 +353,11 @@ export class Game {
     this.audio?.update(dt, this);
     input.endFrame();
     if (skipRender) { this.vehicles.render(dt, this.camera3.position); return; }
+    // Behind the pause menu nothing moves and the menu all but covers it: draw the city once,
+    // then let the phone's graphics chip rest until play resumes.
+    if (this.paused && this._pauseDrawn) return;
     this.renderWorld(this.paused ? 0 : dt);
+    this._pauseDrawn = this.paused;
   }
 
   renderWorld(dt, stream = true) {
