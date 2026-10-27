@@ -261,6 +261,44 @@ test('a step that fails leaves no GPS line to its target', () => {
   assert.equal(routed, 0);
 });
 
+test('a mission that ends lets its cast go, and a retry clears what is left of the last one', () => {
+  const g = fakeGame();
+  const vlist = [], removed = [];
+  g.vehicles = {
+    list: vlist,
+    spawn(type, x, z, heading, o) { const v = { id: vlist.length + 1, type, x, z, heading, role: o.role, driver: null, passengers: [] }; vlist.push(v); return v; },
+    remove(v) { removed.push(v); vlist.splice(vlist.indexOf(v), 1); },
+  };
+  const resnapped = [];
+  g.peds = { list: [], _make(h) { const p = { h }; this.list.push(p); return p; }, remove(p) { this.list.splice(this.list.indexOf(p), 1); }, _resnap(p) { resnapped.push(p); } };
+  g.humans = { add: (outfit, x, z) => ({ x, z, outfit }) };
+  const def = {
+    id: 'x', giver: 'SHERA', start: { x: 0, z: 0 },
+    steps: () => [Steps.call(c => {
+      c.spawnPed('shera', 'goon', 3, 0); c.spawnPed('goon', 'goon', 4, 0);
+      c.spawnVehicle('car', 'hatch', 10, 0, 0); c.spawnVehicle('bike', 'bike', 14, 0, 0);
+    }), Steps.wait(60)],
+  };
+  const missions = new Missions(g, [def]);
+  missions.start('x');
+  missions.update(0.1);
+  const first = missions.active.ent;
+  first.goon.state = 'cower'; first.goon.t = 999; // beaten
+  g.player.vehicle = first.car; missions.update(0.1); g.player.vehicle = null; // drove Shera's car a while
+  missions.fail('Pappu got away.');
+  assert.equal(first.shera.state, 'walk', 'nobody stands frozen in a scene that is over');
+  assert.ok(resnapped.includes(first.shera));
+  assert.ok(first.goon.t < 10, 'the beaten get up before long');
+  assert.ok(!first.shera.keep && !first.shera.mission && first.shera.role == null);
+  assert.equal(first.bike.role, 'abandoned');
+  missions.cooldown = 0;
+  missions.start('x');
+  missions.update(0.1);
+  assert.ok(!g.peds.list.includes(first.shera) && !g.peds.list.includes(first.goon), 'one Shera, not two');
+  assert.deepEqual(removed, [first.bike], 'the old bike goes; the car you drove is yours to keep');
+  assert.equal(g.peds.list.length, 2);
+});
+
 test('a contact marker waits while you lie WASTED, or while a witness is still calling a crime in', () => {
   const g = fakeGame();
   const def = { id: 'x', giver: 'PAKYA', start: { x: 0, z: 0 }, steps: () => [Steps.wait(5)] };

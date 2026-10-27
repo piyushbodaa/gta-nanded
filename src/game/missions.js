@@ -51,6 +51,7 @@ export class Missions {
     const g = this.game;
     this._dialog(dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
+    if (g.player.vehicle) this._driven.add(g.player.vehicle);
     if (!this.active) {
       // Walk or drive (slowly) into a start marker. Not while lying WASTED or BUSTED, nor with the
       // police after you or a witness still calling a crime in (it would land mid-cutscene).
@@ -101,6 +102,7 @@ export class Missions {
   start(id) {
     const g = this.game, def = this.byId.get(id);
     if (!def || this.active) return;
+    this._clearLeftovers();
     g.jobs?.stop?.(true);
     const m = {
       def, i: -1, time: 0, timer: null, timerLabel: '', vars: {}, ent: {}, target: null, steps: def.steps(g),
@@ -184,13 +186,27 @@ export class Missions {
       } else if (e.id) {
         e.vital = false; e.arrow = false; e.blip = null; e.keep = false;
         if (e.role === 'mission' || e.role === 'rival') { e.role = 'abandoned'; g.controls.delete(e); }
-        if (!this._driven.has(e)) this._leftovers.push(e);
+        this._leftovers.push(e);
       }
     }
     if (m.def.policeLock) { g.police.lock = false; }
     g.camera.cinematic = null;
     g.cutscene = false;
     void passed;
+  }
+
+  /**
+   * The last mission's cast and cars go when the next one starts: a retry where it failed would
+   * otherwise stand a second Shera on the first and drop the new cars onto the old ones. Not a
+   * car the player is in, walking to or has driven (theirs now), nor anything claimed since.
+   */
+  _clearLeftovers() {
+    const g = this.game, P = g.player;
+    for (const e of this._leftovers) {
+      if (e.h) { if (!e.keep) g.peds.remove(e); }
+      else if (!e.keep && e !== P.vehicle && e !== P.enterTarget && e.role !== 'player' && !this._driven.has(e)) { g.vehicles.remove(e); g.controls.delete(e); }
+    }
+    this._leftovers = [];
   }
 
   // ---------------------------------------------------------------- dialogue
