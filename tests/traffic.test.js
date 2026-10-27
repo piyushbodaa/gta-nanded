@@ -453,6 +453,45 @@ test('a car that went on through amber and was held up over the line goes on, in
   assert.ok(checked >= 8, `checked ${checked} approaches`);
 });
 
+test('traffic never appears where it could not stop for a red or amber light: none stands on the zebra or drives into the crossing', () => {
+  const { net } = world();
+  const { g, traffic } = streets(0, 0);
+  g.quality.settings.traffic = 0;
+  let watched = 0;
+  for (const sig of new Set(traffic.signals.values())) {
+    const j0 = sig.junctions[0];
+    g.player.pos = { x: net.jx[j0], z: net.jz[j0] };
+    // Through the whole cycle, a crowd of cars appearing around the crossing, watched for 4 s.
+    for (let t = 0; t < 22; t += 2.75) {
+      g.time = t;
+      g.vehicles.list.length = 0; traffic.cars.length = 0;
+      for (let k = 0; k < 60; k++) traffic._spawnOne(g.player.pos, 0, 45);
+      // Those that appeared on a road into the crossing with the light against them, until it changes.
+      const seen = [];
+      for (const car of traffic.cars) {
+        const { road, dir } = car.ai, j = dir > 0 ? net.rb[road] : net.ra[road];
+        if (!sig.junctions.includes(j) || traffic.signalState(j, road, t) === 'green') continue;
+        const len = net.length[road], end = len - (dir > 0 ? net.trimEnd(road) : net.trimStart(road));
+        // On a road too short to hold it short of the zebra, it waits with its tail clear of the junction behind.
+        if (net.length[road] - net.trimStart(road) - net.trimEnd(road) < 2 * car.hd + ZEBRA_OUT + 0.5) continue;
+        seen.push({ car, road, j, end, light: traffic.signalState(j, road, t) });
+      }
+      let ran = null;
+      run(g, traffic, 4, () => {
+        for (const w of seen) if (!ran && traffic.signalState(w.j, w.road, g.time) !== 'green' && (w.car.ai.turn || w.car.ai.road !== w.road)) ran = w;
+      });
+      for (const w of seen) {
+        if (traffic.signalState(w.j, w.road, g.time) === 'green') continue;
+        watched++;
+        assert.ok(!ran, `road ${ran?.road} into junction ${ran?.j}: a ${ran?.car.type} that appeared on ${ran?.light} drove into the crossing`);
+        const nose = w.end - w.car.ai.s - w.car.hd;
+        assert.ok(!(w.car.ai.speed < 0.3 && nose < ZEBRA_OUT), `road ${w.road} into junction ${w.j}: a ${w.car.type} that appeared on ${w.light} stands with its nose ${nose.toFixed(1)} m out`);
+      }
+    }
+  }
+  assert.ok(watched > 200, `watched ${watched} cars`);
+});
+
 test('turning onto a short road with a red light at its far end, a car slows in the turn and stops short of the zebra', () => {
   const { net, city } = world();
   const { g, traffic } = streets(0, 0);

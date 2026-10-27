@@ -3,6 +3,7 @@
 // Plus DynamicDriver: a path-following controller for physics vehicles (police, rivals).
 import { clamp, dist, rng, hash2, wrapAngle, headingTo } from '../core/math.js';
 import { speedOf, forwardSpeed } from './vehicle-physics.js';
+import { VEHICLE_TYPES } from './vehicle-types.js';
 
 // Traffic mix on Indian streets: mostly two-wheelers and autos.
 const MIX = [['bike', 26], ['scooter', 14], ['auto', 20], ['hatch', 16], ['sedan', 8], ['suv', 6], ['tempo', 4], ['bus', 2.5], ['truck', 2], ['tractor', 1], ['ambulance', 0.5]];
@@ -103,17 +104,19 @@ export class Traffic {
    * held up already over it goes on when it can, rather than stand on the zebra through the red.
    */
   _forLight(v, j, road, toEnd, time) {
-    const net = this.net, a = v.ai;
-    const lane = net.length[road] - net.trimStart(road) - net.trimEnd(road);
-    const toLine = toEnd - Math.min(v.hd + STOP_LINE, Math.max(2, lane - v.hd));
+    const a = v.ai, toLine = this._toLine(v.hd, road, toEnd);
     if (toLine > 45) return Infinity;
     const light = this.signalState(j, road, time);
     if (light === 'amber' && a.speed * a.speed > 2 * 7 * toLine) a.goOn = j;
     else if (light === 'green' || (a.speed < 1 && toLine > 0)) a.goOn = -1;
     if (light === 'green' || a.goOn === j) return Infinity;
-    // About 3.5 m/s² down to walking pace, then easing in over the last few metres.
-    const d = Math.max(0, toLine);
-    return Math.min(0.9 * d, Math.sqrt(7 * d));
+    return stopFor(toLine);
+  }
+
+  /** How far a car of half-length hd, its middle toEnd metres short of the end of `road`'s lane, is short of where it stops for a light. */
+  _toLine(hd, road, toEnd) {
+    const net = this.net, lane = net.length[road] - net.trimStart(road) - net.trimEnd(road);
+    return toEnd - Math.min(hd + STOP_LINE, Math.max(2, lane - hd));
   }
 
   update(dt) {
@@ -157,14 +160,23 @@ export class Traffic {
     const s = clamp(dir > 0 ? n.s : len - n.s, startTrim(net, road, dir) + 1, len - endTrim(net, road, dir) - 1);
     if (!(s > 0 && s < len)) return false;
     const lane = net.lanes[road] > 1 && r.chance(0.5) ? 1 : 0;
+    const cruise = Math.min(TYPE_CAP[type] ?? 99, CRUISE[net.type[road]] * r.range(0.85, 1.15));
+    let speed = cruise * 0.7;
+    // Coming up to a light that is red or amber: never over its line (it would stand on the zebra, or
+    // in the crossing, through the whole red), and already slowing for it as a car driven there would
+    // be, so it stops short of the zebra gently instead of braking hard the moment it appears.
+    const j = dir > 0 ? net.rb[road] : net.ra[road];
+    if (this.signals.has(j) && this.signalState(j, road, g.time) !== 'green') {
+      const toLine = this._toLine(VEHICLE_TYPES[type].L / 2, road, len - endTrim(net, road, dir) - s);
+      if (toLine < 1) return false;
+      speed = Math.min(speed, stopFor(toLine));
+    }
     const p = net.lanePoint(road, dir, s, net.laneOffset(road, lane, dir > 0 ? s : len - s), this._p);
     // Keep clear of everything else.
     for (const o of g.vehicles.list) if (dist(o.x, o.z, p.x, p.z) < 9) return false;
     if (dist(p.x, p.z, focus.x, focus.z) < minD * 0.8) return false;
     const v = g.vehicles.spawn(type, p.x, p.z, p.heading, { role: 'traffic', seed: hash2(this.seed, 3) });
-    const cap = TYPE_CAP[type] ?? 99;
-    v.ai = { road, dir, s, lane, speed: 0, cruise: Math.min(cap, CRUISE[net.type[road]] * r.range(0.85, 1.15)), turn: null, wait: 0, blocked: 0, honk: r.range(4, 20), weave: type === 'bike' || type === 'scooter' ? r.range(-0.6, 0.6) : 0, dodge: 0, dodgeWant: 0 };
-    v.ai.speed = v.ai.cruise * 0.7;
+    v.ai = { road, dir, s, lane, speed, cruise, turn: null, wait: 0, blocked: 0, honk: r.range(4, 20), weave: type === 'bike' || type === 'scooter' ? r.range(-0.6, 0.6) : 0, dodge: 0, dodgeWant: 0 };
     if ((type === 'bike' || type === 'scooter') && r.chance(0.35)) g.vehicles.addPassenger(v, g.peds?.randomOutfit?.(r()) ?? undefined);
     if (type === 'auto' && r.chance(0.6)) g.vehicles.addPassenger(v, g.peds?.randomOutfit?.(r()));
     this.cars.push(v);
@@ -477,6 +489,10 @@ export class Traffic {
     v.kinematic = true; v.vx = v.vz = 0; v.w = 0;
   }
 }
+
+// The speed that stops a car d metres short of where it must: about 3.5 m/s² down to walking pace,
+// then easing in over the last few metres.
+const stopFor = d => { d = Math.max(0, d); return Math.min(0.9 * d, Math.sqrt(7 * d)); };
 
 function pickWeighted(list, r) {
   let total = 0; for (const [, w] of list) total += w;
