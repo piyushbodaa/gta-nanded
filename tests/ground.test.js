@@ -321,6 +321,30 @@ test('down every ghat the feet are on its steps as drawn, a step at a time', () 
   assert.ok(frames > 2000, `${frames} frames on the steps`);
 });
 
+test('pushing on into the river from the last ghat tread, the feet stay on top of it', () => {
+  const { city } = world();
+  let walks = 0, frames = 0;
+  for (const { id, ghat: G } of city.places.filter(p => p.ghat)) {
+    // Across the whole width of the stairs: where the water's edge runs slantwise to them, the
+    // river turns you back onto the last tread just short of its end, above the lower bank past it.
+    for (let lat = -0.9; lat < 0.95; lat += 0.15) {
+      const lx = lat * G.hw, at = d => ({ x: G.x + lx * G.uz + d * G.ux, z: G.z - lx * G.ux + d * G.uz });
+      const from = at(G.end - 6), to = at(G.end + 6);
+      const w = walker(from.x, from.z, city.groundHeight(from.x, from.z));
+      let sunk = 0, where = '';
+      w.walk(6, P => {
+        const under = city.groundHeight(P.x, P.z);
+        if (under - P.y > sunk) { sunk = under - P.y; where = `(${P.x.toFixed(1)}, ${P.z.toFixed(1)})`; }
+        frames++;
+        return to;
+      });
+      walks++;
+      assert.ok(sunk < 0.01, `${id} at ${lat.toFixed(2)}: feet ${sunk.toFixed(2)} m into the ground at ${where}`);
+    }
+  }
+  assert.ok(walks >= 70 && frames > 20000, `${walks} walks, ${frames} frames`);
+});
+
 test('down on the riverbank, trees, buildings on their plinths and bridge piers stand in the way', () => {
   const { city } = world();
   const C = colliders(), T = city.trees, L = city.lots;
