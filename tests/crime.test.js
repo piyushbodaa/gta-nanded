@@ -180,6 +180,33 @@ test('a car you never rammed blowing up is not your crime', () => {
   assert.equal(g.police.level, 0);
 });
 
+test("the story's own cars are part of the job, even once the chase has let them go", () => {
+  const g = rulesGame();
+  g.player.x = 100;
+  // c10: the last ram ends the chase, which marks Mama's SUV 'abandoned' and leaves it burning;
+  // the player's car, still rolling, shunts it again, and it blows up while the fight goes on.
+  const ramAndBlow = car => {
+    const mine = jeep({ type: 'hatch', role: 'player', driver: null, vz: 9 });
+    g.time += 2; g.vehicles.onImpact(car, 9, mine);
+    car.wrecked = true; car.explodeAt = g.time + 1;
+    g.time += 2; g.hooks[0](1 / 60);
+    assert.ok(car.exploded);
+  };
+  g.vehicles.list.push(jeep({ x: 20, role: 'police-idle' }));
+  const suv = jeep({ type: 'suv', role: 'abandoned', z: 4, health: 200, driver: null });
+  g.vehicles.list.push(suv);
+  g.missions.active = { ent: { mamaCar: suv } };
+  ramAndBlow(suv);
+  assert.equal(g.police.level, 0);
+  assert.equal(g.police.pending.length, 0);
+  // Once the mission is over, an abandoned car is anyone's, and wrecking one is a crime again.
+  g.missions.active = null;
+  const left = jeep({ type: 'suv', role: 'abandoned', z: 4, health: 200, driver: null });
+  g.vehicles.list.push(left);
+  ramAndBlow(left);
+  assert.equal(g.police.level, 1);
+});
+
 test('WASTED in a mission shows its card, then MISSION FAILED after the respawn; the fee is what was paid', () => {
   const g = rulesGame();
   mock.timers.enable({ apis: ['setTimeout'] });

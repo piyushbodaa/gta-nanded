@@ -94,13 +94,16 @@ export function installRules(g) {
     const theirs = -((v.vx0 ?? v.vx) * dx + (v.vz0 ?? v.vz) * dz) / d;
     return mine > 3 && mine > theirs;
   };
+  // Barging a mission's or a race's own cars is part of the job, not a crime: for the whole
+  // mission, not just while the car is still 'mission' (a chase marks its target 'abandoned' the
+  // frame the last ram lands, with the shunt still going and the car maybe burning).
+  const storyCar = v => v.role === 'mission' || v.role === 'rival' || Object.values(g.missions.active?.ent || {}).includes(v);
 
   g.vehicles.onImpact = (v, speed, other) => {
     if (v.role === 'player' || other?.role === 'player') {
       const k = clamp(speed / 20, 0.1, 1);
       if (v.role === 'player') { g.camera.addShake(k * 0.7); g.audio.sfx('crash', k); g.save.stat('crashes'); }
-      // (Barging a mission's or a race's own cars is part of the job, not a crime.)
-      if (other?.role === 'player' && v.role !== 'mission' && v.role !== 'rival' && playerRammed(v, other)) {
+      if (other?.role === 'player' && !storyCar(v) && playerRammed(v, other)) {
         const fresh = g.time - (v.rammedT ?? -9) > 1; // one shunt (and its bounces) is one crime
         v.rammedT = g.time; // and if it blows up, that's the player's doing too (explode)
         if (fresh && v.type === 'police' && !v.wrecked) g.police.report('ramPolice', v.x, v.z, { cop: true });
