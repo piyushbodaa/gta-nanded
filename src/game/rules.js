@@ -55,6 +55,11 @@ export function installRules(g) {
     g.camera.addShake(0.1);
   };
 
+  // A mission's or a race's own cars are part of the job, not a crime to barge or to take: for the
+  // whole mission, not just while the car is still 'mission' (a chase marks its target 'abandoned'
+  // the frame the last ram lands, with the shunt still going and the car maybe burning).
+  const storyCar = v => v.role === 'mission' || v.role === 'rival' || Object.values(g.missions?.active?.ent || {}).includes(v);
+
   g.carjack = (v, player) => {
     const h = g.vehicles.ejectDriver(v);
     if (!h) return;
@@ -64,15 +69,25 @@ export function installRules(g) {
     g.save.stat('jacked');
     g.audio.sfx('door');
     if (v.type === 'police') g.police.report('hitCop', v.x, v.z, { cop: true });
-    // A car off the street is a crime. Pulling out a mission's own driver (the man you chase, the
-    // one hunting you) is the job: it ends a chase, and a star then would bring police to the fight.
-    else if (v.role === 'traffic') g.police.report('carjack', v.x, v.z);
-    // Passengers bail out too; a police jeep's second officer stays on the job, as when its crew
-    // gets out (police._dismount).
-    for (const ph of v.passengers.splice(0)) {
-      ph.x = door.x + 1; ph.z = door.z + 1; const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6;
+    // Pulling someone out of their car is a crime wherever it waited: in traffic, at the station's
+    // auto stand, filling up at a pump. Pulling out a mission's own driver (the man you chase, the
+    // one hunting you) or a race rival is the job: it ends a chase, and a star then would bring
+    // police to the fight.
+    else if (!storyCar(v)) g.police.report('carjack', v.x, v.z);
+    // Passengers bail out of their own side, clear of the body: one dropped in the path of a car
+    // still rolling (the player's now) was run over at once, a hit-and-run on top of the carjack.
+    // A pillion gets off the other side from the rider; against a wall, behind the car. A police
+    // jeep's second officer stays on the job, as when its crew gets out (police._dismount).
+    const seats = v.model?.passengers || [], c = Math.cos(v.heading), s = Math.sin(v.heading);
+    const doorSide = Math.sign((door.x - v.x) * c - (door.z - v.z) * s) || -1; // local +x is the vehicle's left
+    v.passengers.splice(0).forEach((ph, i) => {
+      const [sx = 0, , sz = 0] = seats[i] || [];
+      const lx = (Math.sign(sx) || -doorSide) * (v.hw + 0.55);
+      ph.x = v.x + lx * c + sz * s; ph.z = v.z - lx * s + sz * c;
+      if (g.colliders?.blocked(ph.x, ph.z, 0.3, v.y || 0)) { const lz = -(v.hd + 0.6); ph.x = v.x + lz * s; ph.z = v.z + lz * c; }
+      const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6;
       if (v.type === 'police' && g.police.level > 0) { Object.assign(pp, { state: 'fight', t: 30, keep: true, cop: true, grudge: 2 }); g.police.foot.push(pp); }
-    }
+    });
   };
 
   g.onBeginEnter = v => { if (v.driver && v.ai) { v.ai.wait = 3; } };
@@ -100,11 +115,6 @@ export function installRules(g) {
     const theirs = -((v.vx0 ?? v.vx) * dx + (v.vz0 ?? v.vz) * dz) / d;
     return mine > 3 && mine > theirs;
   };
-  // Barging a mission's or a race's own cars is part of the job, not a crime: for the whole
-  // mission, not just while the car is still 'mission' (a chase marks its target 'abandoned' the
-  // frame the last ram lands, with the shunt still going and the car maybe burning).
-  const storyCar = v => v.role === 'mission' || v.role === 'rival' || Object.values(g.missions.active?.ent || {}).includes(v);
-
   g.vehicles.onImpact = (v, speed, other) => {
     if (v.role === 'player' || other?.role === 'player') {
       const k = clamp(speed / 20, 0.1, 1);
@@ -231,6 +241,7 @@ export function installRules(g) {
     if (inp.pressed('camera')) g.camera.cycleView();
     if (inp.pressed('photo')) g.takePhoto(null);
     if (inp.pressed('action') && P.state === 'foot') { const a = g.contextAction(); a?.run?.(); }
+    if (cheatCars.size) towCheatCars();
     saveT += dt;
     if (saveT > 10) { saveT = 0; g.save.flush(); }
   }];
@@ -250,9 +261,24 @@ export function installRules(g) {
   function spawnNear(type, msg) {
     const P = g.player, pos = P.pos, n = g.net.nearest(pos.x + Math.sin(P.heading) * 8, pos.z + Math.cos(P.heading) * 8, 40, {}, r => !g.net.raised[r]);
     if (!n) return null;
+    // No more of a kind than can be drawn: one past its instance slots would be solid but invisible.
+    const M = g.vehicles.meshes?.[type];
+    if (M && g.vehicles.list.filter(o => o.type === type).length >= M.cap) return null;
     const v = g.vehicles.spawn(type, n.x, n.z, Math.atan2(n.dx, n.dz) + (g.net.oneway[n.road] < 0 ? Math.PI : 0), { role: 'parked', driver: false });
     v.kinematic = true;
+    cheatCars.add(v);
     return msg;
+  }
+  // A cheat car waits for the player with its handbrake on, like any parked car, but no street or
+  // stand owns it to tidy it away: left untaken, it is towed once the player is well away (taken and
+  // left, it is an abandoned car, towed with the others: traffic.js).
+  const cheatCars = new Set();
+  function towCheatCars() {
+    const pos = g.player.pos;
+    for (const v of cheatCars) {
+      if (v.removed || v.role !== 'parked') cheatCars.delete(v);
+      else if (dist(v.x, v.z, pos.x, pos.z) > 280) { g.vehicles.remove(v); cheatCars.delete(v); }
+    }
   }
   /** Run a cheat by name (Settings has a box for it on phones): its message, null if it had no effect, '' if unknown. */
   g.cheat = code => {

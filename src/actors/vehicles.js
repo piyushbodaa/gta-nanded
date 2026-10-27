@@ -9,7 +9,9 @@ import { WATER_Y } from '../world/water.js';
 import { clamp, rng } from '../core/math.js';
 import { sendFirst } from '../core/buffers.js';
 
-const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 14, auto: 48, bike: 50, scooter: 40, bus: 16, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
+// Instance slots per type. Police: a 5-star hunt's 8 units, the jeeps officers left at the
+// roadside, a wreck or two and a stolen one (police.js spawns no unit past this).
+const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 20, auto: 48, bike: 50, scooter: 40, bus: 16, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
 const _m = new THREE.Matrix4(), _w = new THREE.Matrix4(), _t = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const WRECK = 0x2a2624;

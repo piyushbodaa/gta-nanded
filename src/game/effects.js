@@ -5,6 +5,10 @@ import { radialTexture } from '../world/citymat.js';
 import { sendFirst } from '../core/buffers.js';
 
 const MAX = 2400;
+// Scratch for skid marks and markers, laid down every few frames while sliding and every frame a
+// marker shows: new ones each time were garbage for a cheap phone's collector.
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _ONE = new THREE.Vector3(1, 1, 1);
+const _UP = new THREE.Vector3(0, 1, 0);
 
 export class Effects {
   constructor(scene) {
@@ -47,7 +51,6 @@ export class Effects {
     this.skids.count = 0; this.skids.visible = false; this.skids.frustumCulled = false; this.skidI = 0; this.skidN = SK;
     this.skids.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.skids);
-    this.lastSkid = new Map();
     // --- rain: a column of streaks that follows the camera.
     const RN = 4200;
     const rg = new THREE.BufferGeometry();
@@ -107,19 +110,15 @@ export class Effects {
   }
 
   skid(vehicle, x, z, heading, width = 0.22) {
-    const key = vehicle.id * 10 + Math.round(x * 0) ;
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
     // On the road under the wheels: a flyover's deck, or the street (less any hop off a hump).
-    m.compose(new THREE.Vector3(x, (vehicle.y || 0) - (vehicle.hop || 0) + 0.085, z), q, new THREE.Vector3(width, 1, 0.55));
-    this.skids.setMatrixAt(this.skidI, m);
+    _m.compose(_p.set(x, (vehicle.y || 0) - (vehicle.hop || 0) + 0.085, z), _q.setFromAxisAngle(_UP, heading), _s.set(width, 1, 0.55));
+    this.skids.setMatrixAt(this.skidI, _m);
     this.skidI = (this.skidI + 1) % this.skidN;
     this.skids.count = Math.min(this.skidN, this.skids.count + 1);
     this.skids.visible = true;
     // Send just this mark (three.js merges the ranges of a frame's marks into one upload).
     this.skids.instanceMatrix.addUpdateRange(((this.skidI + this.skidN - 1) % this.skidN) * 16, 16);
     this.skids.instanceMatrix.needsUpdate = true;
-    void key;
   }
 
   update(dt, camera, weather = {}) {
@@ -192,34 +191,35 @@ export class Markers {
     scene.add(this.arrow);
     this.list = [];
     this.t = 0;
-    this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._c = new THREE.Color();
+    this._c = new THREE.Color();
+    this._parts = [this.column, this.ring, this.arrow];
   }
   /** kind: 'column' (go here), 'arrow' (target above x/y/z). color hex. */
   set(list) { this.list = list; }
   update(dt) {
     this.t += dt;
     let c = 0, a = 0;
-    const m = this._m, q = this._q;
+    const m = _m, q = _q;
     for (const mk of this.list) {
       const col = this._c.set(mk.color ?? 0xffc83d);
       if (mk.kind === 'arrow') {
         if (a >= 32) continue;
-        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.t * 2.5);
-        m.compose(new THREE.Vector3(mk.x, (mk.y ?? 2.6) + Math.sin(this.t * 4) * 0.25, mk.z), q, new THREE.Vector3(1, 1, 1));
+        q.setFromAxisAngle(_UP, this.t * 2.5);
+        m.compose(_p.set(mk.x, (mk.y ?? 2.6) + Math.sin(this.t * 4) * 0.25, mk.z), q, _ONE);
         this.arrow.setMatrixAt(a, m); this.arrow.setColorAt(a, col); a++;
       } else {
         if (c >= 32) continue;
         const r = mk.r ?? 2.5, h = mk.h ?? 3.2;
         q.identity();
-        m.compose(new THREE.Vector3(mk.x, (mk.y ?? 0) + 0.05, mk.z), q, new THREE.Vector3(r, h * (0.94 + Math.sin(this.t * 3) * 0.06), r));
+        m.compose(_p.set(mk.x, (mk.y ?? 0) + 0.05, mk.z), q, _s.set(r, h * (0.94 + Math.sin(this.t * 3) * 0.06), r));
         this.column.setMatrixAt(c, m); this.column.setColorAt(c, col);
-        m.compose(new THREE.Vector3(mk.x, (mk.y ?? 0) + 0.12, mk.z), q, new THREE.Vector3(r, 1, r));
+        m.compose(_p.set(mk.x, (mk.y ?? 0) + 0.12, mk.z), q, _s.set(r, 1, r));
         this.ring.setMatrixAt(c, m); this.ring.setColorAt(c, col);
         c++;
       }
     }
     this.column.count = c; this.ring.count = c; this.arrow.count = a;
     this.column.visible = this.ring.visible = c > 0; this.arrow.visible = a > 0; // no empty instanced draws
-    for (const o of [this.column, this.ring, this.arrow]) { sendFirst(o.instanceMatrix, o.count); if (o.instanceColor) sendFirst(o.instanceColor, o.count); }
+    for (const o of this._parts) { sendFirst(o.instanceMatrix, o.count); if (o.instanceColor) sendFirst(o.instanceColor, o.count); }
   }
 }

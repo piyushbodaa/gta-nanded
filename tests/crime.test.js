@@ -234,3 +234,125 @@ test('a frozen player is not beaten up during a cutscene', () => {
   g.pedAttacks({ h: { x: 0.5, z: 0, yaw: 0 }, cop: true }, 7);
   assert.ok(g.hurt);
 });
+
+test('a witness calls a crime in where it happened: the search starts there, with the player unseen', () => {
+  const g = policeGame(), p = g.police;
+  g.colliders.raycast = () => 0; // walls between any unit and the player
+  g.player.x = 150; // drove off before the call came in
+  p.pending.push({ t: 0.01, heat: 1, x: 10, z: 0 });
+  run(g, 0.05);
+  assert.equal(p.level, 1);
+  assert.deepEqual([p.lastSeen.x, p.lastSeen.z, p.seen], [10, 0, false], 'searching the crime scene, not the player');
+  // On the player's trail already, a later call adds heat but doesn't send the search back.
+  p.lastSeen.x = 120;
+  p.pending.push({ t: 0.01, heat: 1, x: 10, z: 0 });
+  run(g, 0.05);
+  assert.equal(p.level, 2);
+  assert.deepEqual([p.lastSeen.x, p.seen], [120, false]);
+  // An officer who sees a crime knows where the player is.
+  p.clear();
+  p.report('hitCop', 150, 0, { cop: true });
+  assert.deepEqual([p.lastSeen.x, p.seen], [150, true]);
+});
+
+test('a witness still calling a crime in is too late once the player steps into a mission marker', () => {
+  const g = policeGame(), p = g.police;
+  const def = { id: 'c1', start: { x: 0, z: 0 } };
+  g.missions = { active: null, cooldown: 0, available: () => [def], startPoint: d => d.start };
+  const call = () => { p.clear(); p.pending.push({ t: 3, heat: 1, x: 40, z: 0 }); };
+  // Walked up to it: the mission starts (missions.js waits for no call), and no star lands there.
+  call();
+  g.player.x = 30; run(g, 1);
+  assert.equal(p.pending.length, 1, 'still calling while the player is on the way');
+  g.player.x = 1; run(g, 6);
+  assert.deepEqual([p.pending.length, p.level], [0, 0]);
+  // Driven across it without stopping, it is not started: the call comes in.
+  call();
+  g.player.vehicle = { vx: 12, vz: 0 }; run(g, 6);
+  assert.equal(p.level, 1);
+  g.player.vehicle = null;
+  // Nor once a mission is under way: a crime in it is a crime.
+  call();
+  g.missions.active = {}; run(g, 6);
+  assert.equal(p.level, 1);
+});
+
+test('no police jeep past its instance slots: a unit waits until one is towed', () => {
+  const g = policeGame(), p = g.police;
+  g.vehicles.meshes = { police: { cap: 3 } };
+  g.net = { nearest: () => ({ x: 120, z: 0, dx: 1, dz: 0, road: 0 }), route: () => null, raised: [], width: [8] };
+  g.vehicles.spawn = (type, x, z, heading, { role }) => { const v = jeep({ type, role, x, z, heading }); g.vehicles.list.push(v); return v; };
+  p.level = 1;
+  // A wreck, a jeep its officers got out of, and the one the player stole.
+  const wreck = jeep({ x: 40, role: 'abandoned', wrecked: true });
+  g.vehicles.list.push(wreck, jeep({ x: 30, role: 'police-parked', driver: null }), jeep({ role: 'player' }));
+  assert.equal(p._spawnUnit(g.player), null);
+  assert.equal(g.vehicles.list.length, 3);
+  g.vehicles.remove(wreck);
+  assert.ok(p._spawnUnit(g.player), 'a slot is free again');
+  assert.equal(g.vehicles.list.filter(v => v.type === 'police').length, 3);
+});
+
+test('pulling a driver out at a petrol pump or a stand is a carjack; the story\'s or a race\'s own car is not', () => {
+  const g = rulesGame();
+  Object.assign(g.vehicles, { ejectDriver(v) { const h = v.driver; v.driver = null; return h; }, doorWorld: v => ({ x: v.x - 1.4, z: v.z }) });
+  Object.assign(g.peds, { adoptEjected() {}, _make: h => ({ h }) });
+  g.vehicles.list.push(jeep({ x: 6, role: 'police-idle' })); // an officer looking on
+  const car = role => jeep({ type: 'hatch', role, heading: 0, driver: {} });
+  const jack = v => { g.police.clear(); g.carjack(v, g.player); return g.police.level; };
+  assert.equal(jack(car('parked')), 1, 'a hatch filling up at a pump, an auto at the station stand');
+  assert.equal(jack(car('traffic')), 1);
+  assert.equal(jack(car('abandoned')), 1, 'a car left on the street with its driver in it');
+  assert.equal(jack(car('mission')), 0, 'the man you chase');
+  assert.equal(jack(car('rival')), 0, 'a race rival');
+  const target = car('abandoned');
+  g.missions.active = { ent: { target } };
+  assert.equal(jack(target), 0, 'a chase target the chase has let go, while its mission lasts');
+});
+
+test('a cheat car waits parked, is towed once left far behind untaken, and none past what can be drawn', () => {
+  const g = rulesGame();
+  g.net = { nearest: () => ({ x: 8, z: 0, dx: 0, dz: 1, road: 0 }), oneway: [0], raised: [] };
+  g.player.heading = 0;
+  g.vehicles.meshes = { auto: { cap: 2 } };
+  g.vehicles.spawn = (type, x, z, heading, { role, driver }) => { const v = jeep({ type, role, x, z, heading, driver: driver ? {} : null }); g.vehicles.list.push(v); return v; };
+  g.vehicles.remove = v => { g.vehicles.list.splice(g.vehicles.list.indexOf(v), 1); v.removed = true; };
+  assert.ok(g.cheat('RICKSHAW'));
+  const [auto] = g.vehicles.list;
+  assert.deepEqual([auto.type, auto.role, auto.driver, auto.kinematic], ['auto', 'parked', null, true]);
+  assert.ok(g.cheat('RICKSHAW'));
+  assert.equal(g.cheat('RICKSHAW'), null, 'a third auto would be invisible');
+  assert.equal(g.vehicles.list.length, 2);
+  // The player rides off in one and leaves it (an abandoned car now: traffic tows those); the other
+  // stays put while they're about, and is towed once they're well away.
+  const [, taken] = g.vehicles.list;
+  taken.role = 'player';
+  g.hooks[0](1 / 60);
+  taken.role = 'abandoned';
+  g.player.x = 200; g.hooks[0](1 / 60);
+  assert.equal(g.vehicles.list.length, 2);
+  g.player.x = 400; g.hooks[0](1 / 60);
+  assert.deepEqual(g.vehicles.list, [taken]);
+});
+
+test('a jacked car\'s passengers get out on their own side, clear of it as it rolls on', () => {
+  const g = rulesGame();
+  const hw = 0.7, hd = 1.4;
+  Object.assign(g.vehicles, { ejectDriver(v) { const h = v.driver; v.driver = null; return h; }, doorWorld: v => ({ x: v.x - (hw + 0.55) * Math.cos(v.heading), z: v.z + (hw + 0.55) * Math.sin(v.heading) }) });
+  Object.assign(g.peds, { adoptEjected() {}, _make: (h, x, z) => { const p = { h, x, z }; g.peds.list.push(p); return p; } });
+  g.colliders.blocked = () => false;
+  for (const heading of [0, 0.8, 2, -2.6]) {
+    g.peds.list = [];
+    // An auto still rolling at 8 m/s with two in the back (vehicle-models.js: [x left, y, z ahead]).
+    const auto = jeep({ type: 'auto', role: 'traffic', x: 5, z: -3, heading, hw, hd, vx: Math.sin(heading) * 8, vz: Math.cos(heading) * 8, driver: {}, passengers: [{}, {}], model: { passengers: [[0.3, 0.88, -0.75], [-0.3, 0.88, -0.75]] } });
+    g.carjack(auto, g.player);
+    const c = Math.cos(heading), s = Math.sin(heading);
+    const sides = g.peds.list.map(({ h }) => {
+      const dx = h.x - auto.x, dz = h.z - auto.z, lx = dx * c - dz * s, lz = dx * s + dz * c;
+      assert.ok(Math.abs(lx) > hw + 0.3 || Math.abs(lz) > hd + 0.3, 'outside the body (Peds: run over inside hw + 0.3, hd + 0.3)');
+      assert.ok(lz < hd, 'not in its path');
+      return Math.sign(lx);
+    });
+    assert.deepEqual(sides, [1, -1], 'each out of their own side');
+  }
+});
