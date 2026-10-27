@@ -297,7 +297,7 @@ body.touch-ui #photo-close { margin-left: auto; }
   .help-box { padding: 8px 10px; }
   .radio-card strong { font-size: 20px; }
   .radio-card span { font-size: 12px; line-height: 1.25; }
-  body.touch-ui .radio-card strong { white-space: nowrap; }
+  body.touch-ui .radio-card strong { font-size: 19px; } /* one line in the 186 px column: the longest station is 187 px at 20 px */
   body.touch-ui .radio-card span { display: none; }
   body.touch-ui .vehicle-name { bottom: calc(10px + var(--safe-b)); }
   body.touch-ui .vehicle-name strong { font-size: 22px; }

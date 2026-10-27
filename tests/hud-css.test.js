@@ -59,7 +59,7 @@ test('on the shortest phones the vehicle name sits under the first drive\'s colu
     - px(at('body.touch-ui .vehicle-name span', 'margin-top', h)) - px(at('body.touch-ui .vehicle-name span', 'font-size', h)) * 1.2;
   assert.ok(nameTop(320) >= 255 + 6, `the vehicle name starts ${nameTop(320)} px down`);
   assert.equal(at('body.touch-ui .radio-card span', 'display', 320), 'none');
-  assert.equal(at('body.touch-ui .radio-card strong', 'white-space', 320), 'nowrap');
+  assert.equal(at('body.touch-ui .radio-card strong', 'font-size', 320), '19px');
   // Taller phones keep the name where it was, and the DJ's line.
   assert.equal(at('body.touch-ui .vehicle-name', 'bottom', 360), 'calc(58px + var(--safe-b))');
   assert.equal(at('body.touch-ui .radio-card span', 'display', 360), undefined);
