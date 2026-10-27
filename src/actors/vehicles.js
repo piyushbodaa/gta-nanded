@@ -15,6 +15,9 @@ const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color()
 const WRECK = 0x2a2624;
 
 let nextId = 1;
+// In the river: how hard the water holds a body back (per second, once it is 0.6 m deep), and
+// how long under before its engine has drowned and it is a write-off.
+const WATER_DRAG = 3, DROWNED = 1.5;
 
 export class Vehicles {
   constructor(scene, humans, colliders, city) {
@@ -180,6 +183,15 @@ export class Vehicles {
         // Water: down the bank and into the channel, a body sinks. A bridge deck stands clear of it.
         const rd = this.city.riverDistance(v.x, v.z, this._rd || (this._rd = {}));
         if (rd.d < -1.5 && v.y < WATER_Y) v.sinking = (v.sinking || 0) + h; else v.sinking = 0;
+        // The water holds it back, the deeper the harder: rolled in, it stops a few metres out
+        // instead of crossing the riverbed and climbing the far bank.
+        const depth = WATER_Y - v.y;
+        if (depth > 0) {
+          const k = Math.exp(-WATER_DRAG * Math.min(1, depth / 0.6) * h);
+          v.vx *= k; v.vz *= k; v.w *= k;
+        }
+        // Under for good, its engine drowned: a write-off where it lies, and nothing burns under the river.
+        if (v.sinking > DROWNED) { v.wrecked = true; v.onFire = 0; v.explodeAt = 0; }
       }
       // Lane traffic was placed where it will be at the end of the frame: meet it where it is now.
       this._collidePairs(dt - (k + 1) * h);
@@ -331,8 +343,8 @@ export class Vehicles {
         _e.set(v.pitch - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
         _q.setFromEuler(_e);
         const bob = v.kinematic ? 0 : Math.sin(this.time * 18 + v.id) * 0.006 * Math.min(1, speedOf(v) / 8);
-        const sink = v.sinking ? Math.min(2.5, v.sinking * 0.8) : 0;
-        _p.set(v.x, v.y + bob - sink, v.z);
+        // Sunk, it lies on the riverbed (where v.y already is), not below it.
+        _p.set(v.x, v.y + bob, v.z);
         _s.set(1, 1, 1);
         _m.compose(_p, _q, _s);
         // Seat people even when the body is far (they're culled by their own distance check).

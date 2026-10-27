@@ -8,7 +8,7 @@ import { CHUNK, GROUND_CELL } from '../src/world/citygen.js';
 import { WATER_Y } from '../src/world/water.js';
 import { DECK_H } from '../src/world/roadnet.js';
 import { Vehicles } from '../src/actors/vehicles.js';
-import { createBody } from '../src/actors/vehicle-physics.js';
+import { createBody, speedOf } from '../src/actors/vehicle-physics.js';
 import { Player } from '../src/actors/player.js';
 
 // The ground people walk and drive on is the ground that is drawn: the river valleys, the
@@ -116,6 +116,34 @@ test('cars cross the Godavari bridges without sinking, and sink in the river bes
   H.list = [v];
   for (let k = 0; k < 60; k++) H.step(dt, none);
   assert.ok(v.y < WATER_Y && v.sinking > 0.9, `in the river: y ${v.y.toFixed(2)}, sinking ${v.sinking.toFixed(2)}`);
+});
+
+test('a car rolled or driven into the river stops a few metres out and drowns there, nowhere near the far bank', () => {
+  const { net, city } = world();
+  const H = host(), dt = 1 / 60;
+  let runs = 0;
+  // Down the bank from 12 m up at 12 m/s, toward the water: left to roll (bailed out of), or
+  // driven in flat out.
+  for (let i = 0; i < city.waterSegs.length && runs < 12; i += 17) {
+    const [ax, az, bx, bz, w] = city.waterSegs[i], l = Math.hypot(bx - ax, bz - az);
+    const x = (ax + bx) / 2 + ((bz - az) / l) * (w / 2 + 12), z = (az + bz) / 2 - ((bx - ax) / l) * (w / 2 + 12);
+    const rd = city.riverDistance(x, z);
+    if (w < 40 || Math.abs(rd.d - 12) > 1.5 || net.nearest(x, z, 25, {})) continue;
+    for (const role of ['abandoned', 'player']) {
+      const v = createBody('hatch', x, z, Math.atan2(-rd.nx, -rd.nz));
+      v.y = city.groundHeight(x, z); v.role = role; v.vx = -rd.nx * 12; v.vz = -rd.nz * 12;
+      H.list = [v];
+      const ctl = new Map(role === 'player' ? [[v, { throttle: 1, brake: 0, steer: 0, handbrake: false }]] : []);
+      let farthest = Infinity;
+      for (let t = 0; t < 8; t += dt) { H.step(dt, ctl); farthest = Math.min(farthest, city.riverDistance(v.x, v.z).d); }
+      if (v.y > WATER_Y) continue; // a tree on the bank stopped it short of the water
+      runs++;
+      assert.ok(farthest > -10, `${role} car at ${i}: ${(-farthest).toFixed(1)} m out into the ${w} m channel`);
+      assert.ok(speedOf(v) < 0.05, `${role} car at ${i}: still going at ${speedOf(v).toFixed(2)} m/s`);
+      assert.ok(v.wrecked && v.sinking > 1.5 && !v.onFire, `${role} car at ${i}: drowned where it lies`);
+    }
+  }
+  assert.ok(runs >= 10, `${runs} cars into the river`);
 });
 
 /** The real Player in a minimal game, walked by a stick held toward `aim(player)`. */
