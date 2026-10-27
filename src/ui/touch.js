@@ -99,8 +99,11 @@ export class TouchControls {
     setButton('tb-enter', near && (near.driver ? 'JACK' : 'ENTER'));
     const act = g.contextAction?.();
     setButton('tb-action', !driving && act && (act.label.length > 18 ? act.label.split('·')[0].trim() : act.label));
-    setButton('tb-job', driving && act?.key === 'N' && (g.jobs?.active ? 'STOP JOB' : act.label.startsWith('Start race') ? 'START RACE' : 'START JOB'));
-    setButton('tb-siren', driving && v && (v.type === 'police' || v.type === 'ambulance') && (v.sirenOn ? 'SIREN OFF' : 'SIREN'));
+    const job = driving && act?.key === 'N' && (g.jobs?.active ? 'STOP JOB' : act.label.startsWith('Start race') ? 'START RACE' : 'START JOB');
+    setButton('tb-job', job);
+    // One wide button beside EXIT: a third row would push EXIT up over the wanted stars and cash. So in a police
+    // jeep or ambulance at a race start, or racing, the siren waits for START RACE / STOP JOB to go.
+    setButton('tb-siren', driving && !job && v && (v.type === 'police' || v.type === 'ambulance') && (v.sirenOn ? 'SIREN OFF' : 'SIREN'));
   }
 }
 
