@@ -1228,13 +1228,14 @@ function buildProp(ctx, i) {
       break;
     }
     case PROP.STALL: {
-      // Tea stall: tin box, overhanging roof, a bench and a kettle on the counter.
+      // Tea stall: tin box, overhanging roof, a bench and a kettle on the counter (local -z faces the road).
       const col = r.pick([0x2f6fb5, 0x2e8b57, 0xc0392b, 0xd4a017, 0x1f9aa8]);
       g.color(col, 0); g.cbox(x, 0, z, 1.0, 2.1, 0.8, rot);
       g.color(0x8d9ea4, 0); g.cbox(x - s * 0.5, 2.1, z - c * 0.5, 1.4, 0.08, 1.4, rot);
       g.color(0x7a5a3c, 0); g.cbox(x - s * 1.0, 0.9, z - c * 1.0, 1.0, 0.1, 0.22, rot);
       g.color(0xc0c4c6, 0); g.cyl(x - s * 0.95, 1.0, z - c * 0.95, 0.18, 0.3, 6);
-      g.color(0x6d4c33, 0); g.cbox(x - s * 2.2 + c * 0.3, 0, z - c * 2.2 - s * 0.3, 0.9, 0.45, 0.2, rot);
+      // The bench stands along the stall's side: the stall is 1.8 m back from the road, so in front it would stand on it.
+      g.color(0x6d4c33, 0); g.cbox(x + c * 1.35 - s * 0.6, 0, z - s * 1.35 - c * 0.6, 0.2, 0.45, 0.75, rot);
       lightPool(pg, x - s * 1.2, z - c * 1.2, 4, 2.0);
       break;
     }

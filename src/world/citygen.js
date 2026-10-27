@@ -938,7 +938,8 @@ export class City {
         // Along a bridge, or a flyover's deck and ramps: lamps on the parapets, standing on the deck.
         for (let s = 6; s < len - 6; s += 24) {
           net.pointAt(road, s, p);
-          for (const side of kerb ? [kerb] : [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI), PROP.LAMP, road, net.deckAt(road, s));
+          // Turned like the lamps beside a street, so the arm and its pool reach over the deck.
+          for (const side of kerb ? [kerb] : [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road, net.deckAt(road, s));
         }
         continue;
       }
@@ -998,7 +999,9 @@ export class City {
           if (net.roadClearance(x, z, 10) < (kind === PROP.HOARDING ? 1.2 : 0.4) || this._overlapsLots(x, z, rad, rad * 0.6, 0, 0) || !clear(x, z)) continue;
           // A lamp placed later keeps off it through lotGrid; one placed already has to be looked for.
           if (kind === PROP.CART && nearPost(x, z, 1.5)) continue;
-          add(x, z, Math.atan2(-p.dz * side, p.dx * side), kind, road, onPath ? WALK_Y : 0);
+          // Local -z toward the road: buildProp draws a stall's counter, a shrine's niche and a
+          // hoarding's face on that side.
+          add(x, z, Math.atan2(p.dz * side, -p.dx * side), kind, road, onPath ? WALK_Y : 0);
           this.lotGrid.insertRect(-200000 - P.x.length, x - rad, z - rad, x + rad, z + rad);
         }
       }
