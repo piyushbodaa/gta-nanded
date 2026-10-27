@@ -11,6 +11,10 @@ const FLOOR = 3.2;
 const GOLD = 0xe2a93b, MARBLE = 0xf4f1ea, SAFFRON = 0xff8c1a, STONE = 0x6a635b;
 // The gurudwaras' scale (Hazur Sahib has its own), shared by the drawing and the colliders.
 const GURUDWARA = { 'nagina-ghat': 0.75, 'langar-sahib': 0.8, 'sangat-sahib': 0.7, 'mata-sahib': 0.75, 'hira-ghat': 0.6, 'shikar-ghat': 0.6, 'banda-ghat': 0.65 };
+// Mal Tekdi's foot, where hillTemple's two jittered blobs meet the ground: circles [dx, dz, r]
+// at full size, in world axes like the blobs. Fitted to the drawn mesh (its jitter is fixed) so a
+// body stops within about 0.7 m of the visible foot all round; the foot scales with the hill's fit.
+const MAL_TEKDI_FOOT = [[6.1, -5.1, 18.7], [-1.4, 4.7, 23.6]];
 
 /** Rotation that turns a place's front (toward its approach) to local -z. */
 export const placeRot = p => p.rot + Math.PI;
@@ -115,8 +119,8 @@ export function placeColliders(p) {
       if (!A) return [];
       return [-A.span, A.span].map(lx => ({ x: A.x + lx * Math.cos(A.rot), z: A.z - lx * Math.sin(A.rot), hw: K.hw, hd: K.hd, rot: A.rot, h: K.h }));
     }
-    // The hill's steep foot (it can't be climbed).
-    case 'mal-tekdi': return [post(0, 0, 0.85 * MAL_TEKDI_R * (p.fit ?? 1), 8)];
+    // The hill's steep foot (it can't be climbed), following the outline of its two blobs.
+    case 'mal-tekdi': { const k = p.fit ?? 1; return MAL_TEKDI_FOOT.map(([dx, dz, r]) => ({ x: p.x + dx * k, z: p.z + dz * k, r: r * k, h: 8 })); }
     case 'shivaji-putla': case 'gandhi-putla': case 'ambedkar-chowk-latur-phata': return [{ x: p.x, z: p.z, r: 4.3, h: 1.2 }, box(0, 0, 2.2, 2.2, 10)];
     case 'vishnupuri-dam': return [];
     case 'old-mondha-clock-tower': return [box(0, 0, 2.6, 2.6, 22)];

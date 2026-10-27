@@ -849,7 +849,14 @@ export class City {
     // and the odd tea stall, handcart or shrine near busy corners.
     const P = (this.props = { x: [], z: [], rot: [], kind: [], road: [], y: [] });
     const net = this.net, p = {};
-    const add = (x, z, rot, kind, road, y = 0) => { P.x.push(x); P.z.push(z); P.rot.push(rot); P.kind.push(kind); P.road.push(road); P.y.push(y); };
+    // Lamp posts and electric poles aren't in lotGrid (they'd crowd out half the street), but a
+    // handcart's or vendor's umbrella, 1.35-1.45 m round, must not stand round one.
+    const posts = new SpatialGrid(8);
+    const add = (x, z, rot, kind, road, y = 0) => {
+      P.x.push(x); P.z.push(z); P.rot.push(rot); P.kind.push(kind); P.road.push(road); P.y.push(y);
+      if (kind === PROP.LAMP || kind === PROP.POLE) posts.insertPoint(P.x.length - 1, x, z);
+    };
+    const nearPost = (x, z, r) => posts.query(x - r, z - r, x + r, z + r, i => (P.x[i] - x) ** 2 + (P.z[i] - z) ** 2 < r * r);
     // Nothing stands on the street under a flyover's deck.
     const clear = (x, z) => net.deckOver(x, z) < 0.3;
     for (let road = 0; road < net.count; road++) {
@@ -921,12 +928,14 @@ export class City {
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           const rad = kind === PROP.HOARDING ? 3 : 1.4;
           if (net.roadClearance(x, z, 10) < (kind === PROP.HOARDING ? 1.2 : 0.4) || this._overlapsLots(x, z, rad, rad * 0.6, 0, 0) || !clear(x, z)) continue;
+          // A lamp placed later keeps off it through lotGrid; one placed already has to be looked for.
+          if (kind === PROP.CART && nearPost(x, z, 1.5)) continue;
           add(x, z, Math.atan2(-p.dz * side, p.dx * side), kind, road, onPath ? WALK_Y : 0);
           this.lotGrid.insertRect(-200000 - P.x.length, x - rad, z - rad, x + rad, z + rad);
         }
       }
     }
-    this._placeMarkets(add, clear);
+    this._placeMarkets(add, clear, nearPost);
     for (const k of ['x', 'z', 'rot', 'y']) P[k] = Float32Array.from(P[k]);
     P.kind = Uint8Array.from(P.kind);
     P.road = Int32Array.from(P.road);
@@ -937,7 +946,7 @@ export class City {
    * Sabzi markets: on busy old-town and market streets, vendors line the kerb with handcarts
    * and mats of vegetables and fruit. this.markets = [{ x, z, vendors: [prop index] }].
    */
-  _placeMarkets(add, clear) {
+  _placeMarkets(add, clear, nearPost) {
     const net = this.net, P = this.props, p = {}, markets = (this.markets = []);
     const known = ['sarafa-bazar', 'old-mondha-clock-tower', 'hazur-sahib', 'shivaji-putla'].map(id => this.places.find(q => q.id === id)).filter(Boolean);
     const cands = [];
@@ -963,6 +972,8 @@ export class City {
           const off = w / 2 + 0.95;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           if (!clear(x, z) || this._overlapsLots(x, z, 1.1, 0.9, Math.atan2(p.dx, p.dz), 0) || net.roadClearance(x, z, 10) < 0.25) continue;
+          // Its umbrella, 1.45 m round, is centred 0.35 m back from the goods.
+          if (nearPost(x + p.dz * side * 0.35, z - p.dx * side * 0.35, 1.6)) continue;
           // Local +z toward the road: the goods face the street.
           add(x, z, Math.atan2(-p.dz * side, p.dx * side), PROP.VENDOR, road, this.pavementAt(p.seg, off));
           vendors.push(P.x.length - 1);

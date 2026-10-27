@@ -65,6 +65,22 @@ test('a handcart on a footpath stands wholly on the paving', () => {
   assert.ok(onPath > 100, `${onPath} carts on footpaths`);
 });
 
+test('no lamp post or electric pole stands through a handcart or a vendor\'s umbrella', () => {
+  const { city } = world();
+  const P = city.props, posts = [];
+  for (let i = 0; i < P.count; i++) if (P.kind[i] === PROP.LAMP || P.kind[i] === PROP.POLE) posts.push(i);
+  for (let i = 0; i < P.count; i++) {
+    const cart = P.kind[i] === PROP.CART;
+    if (!cart && P.kind[i] !== PROP.VENDOR) continue;
+    // The umbrellas (chunks.js buildProp): a cart's 1.35 m round over its middle, a vendor's
+    // 1.45 m round and 0.35 m back. A pole is up to 0.14 m thick.
+    const back = cart ? 0 : 0.35, x = P.x[i] - back * Math.sin(P.rot[i]), z = P.z[i] - back * Math.cos(P.rot[i]);
+    const r = cart ? 1.49 : 1.59;
+    const j = posts.find(j => (P.x[j] - x) ** 2 + (P.z[j] - z) ** 2 < r * r);
+    assert.equal(j, undefined, `prop ${i} (kind ${P.kind[i]}) round pole ${j}`);
+  }
+});
+
 test('zones follow the neighbourhoods', () => {
   const { city } = world();
   assert.equal(city.zoneAt(480, 610), ZONE.OLD); // Old Mondha
