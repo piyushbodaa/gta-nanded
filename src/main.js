@@ -33,23 +33,34 @@ function fatal(msg) { $('fatal-msg').textContent = msg; $('fatal').hidden = fals
 
 let wentFull = false; // full screen was granted once: this is a device that plays that way
 
-/** Phones and tablets play full screen, sideways. Browsers that can't (iPhone Safari) carry on as they are. */
+/**
+ * Phones and tablets play full screen, sideways. Browsers that can't (iPhone Safari) carry on as they are.
+ * Returns a promise that settles once the screen is full and turned (or the browser said no), or null if nothing was asked.
+ */
 function fullscreen() {
   const el = document.documentElement;
-  if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement || !el.requestFullscreen) return;
-  el.requestFullscreen({ navigationUI: 'hide' }).then(() => { wentFull = true; return screen.orientation?.lock?.('landscape'); }).catch(() => {});
+  if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement || !el.requestFullscreen) return null;
+  return el.requestFullscreen({ navigationUI: 'hide' }).then(() => { wentFull = true; return screen.orientation?.lock?.('landscape'); }).catch(() => {});
 }
 
 /**
  * Android leaves full screen when the player switches apps (the game pauses itself) or swipes
- * back. Pause then too, and go full screen again on the next tap in the pause menu: a user
- * gesture, and never mid-drive, where the screen resizing would stall a frame.
+ * back. Pause then too, and go full screen again on the next tap in the pause menu, a user
+ * gesture. That tap is usually RESUME, so the menu holds its close until the screen has settled:
+ * two frames drawn at the new size, 1.5 s at most. The stall of the screen changing size (about
+ * a second on a budget phone) then comes while paused, not in the traffic just after.
  */
 function keepFullscreen(game) {
   document.addEventListener('fullscreenchange', () => {
     if (wentFull && !document.fullscreenElement && game.started && !game.paused && !game.respawning) game.pause.openMenu(game.pause.tab);
   });
-  addEventListener('pointerup', () => { if (wentFull && game.started && game.paused) fullscreen(); }, { capture: true, passive: true });
+  addEventListener('pointerup', () => {
+    if (!wentFull || !game.started || !game.paused || game.pause.hold) return;
+    const going = fullscreen();
+    if (!going) return;
+    const drawn = going.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+    game.pause.hold = Promise.race([drawn, new Promise(r => setTimeout(r, 1500))]).then(() => { game.pause.hold = null; });
+  }, { capture: true, passive: true });
 }
 
 async function boot() {

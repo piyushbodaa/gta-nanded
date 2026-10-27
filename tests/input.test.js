@@ -28,7 +28,7 @@ function fire(target, type, props = {}) {
   return e;
 }
 const key = (type, code, target = document.body) => fire(target, type, { code });
-const pad = pressed => ({ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: pressed.includes(i), value: pressed.includes(i) ? 1 : 0 })) });
+const pad = (pressed, axes = [0, 0, 0, 0], index = 0) => ({ index, connected: true, axes, buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: pressed.includes(i), value: pressed.includes(i) ? 1 : 0 })) });
 
 function fresh() {
   win.on = {}; document.on = {}; // only this test's Input is listening
@@ -122,14 +122,46 @@ test('a gamepad button held while the pause menu opens is one press, not two', (
 
 test('gamepad X is the action and L3 the sprint, so running past a stall buys nothing', () => {
   const { input } = fresh();
-  pads = [pad([2])];
+  const ahead = [0, -1, 0, 0];
+  pads = [pad([2], ahead)];
   input.update();
   assert.equal(input.state.sprint, false);
   assert.equal(input.pressed('action'), true);
-  pads = [pad([10])];
+  pads = [pad([10], ahead)];
   input.update();
   assert.equal(input.state.sprint, true);
   assert.equal(input.pressed('action'), false);
+  pads = [];
+});
+
+test('a click of L3 keeps the run going without holding the stick in, until the stick lets go', () => {
+  const { input } = fresh();
+  const ahead = [0, -1, 0, 0], other = pad([], [0, 0, 0, 0], 1); // a second pad, idle
+  pads = [pad([10], ahead), other];
+  input.update();
+  for (let i = 0; i < 3; i++) {
+    pads = [pad([], ahead), other]; // the click has slipped out at full tilt
+    input.update();
+    assert.equal(input.state.sprint, true, 'still running');
+  }
+  pads = [pad([10], ahead), other]; // a second click ends it
+  input.update();
+  assert.equal(input.state.sprint, false);
+  pads = [pad([], ahead), other];
+  input.update();
+  pads = [pad([10], ahead), other];
+  input.update();
+  assert.equal(input.state.sprint, true);
+  pads = [pad([], [0, 0.05, 0, 0]), other]; // the stick back in the middle: the run is over
+  input.update();
+  pads = [pad([], ahead), other];
+  input.update();
+  assert.equal(input.state.sprint, false, 'pushing on again is a jog');
+  pads = [pad([10], [0, 0, 0, 0]), other]; // a click standing still is not a run
+  input.update();
+  pads = [pad([], ahead), other];
+  input.update();
+  assert.equal(input.state.sprint, false);
   pads = [];
 });
 

@@ -15,6 +15,7 @@ export class Input {
     this.held = new Set();
     this.keys = new Set(); // physical keys down (codes), so W and ArrowUp can share 'up'
     this.padHeld = new Set(); // gamepad buttons down, for one-shot presses on the way down
+    this.padRun = new Set(); // gamepads whose L3 click started a run (their index)
     this.events = new Set();
     this.state = { moveX: 0, moveY: 0, throttle: 0, brake: 0, steer: 0, handbrake: false, sprint: false, horn: false, lookBack: false, attackHeld: false };
     this.look = { x: 0, y: 0 }; // accumulated look delta (radians), consumed by the camera
@@ -123,6 +124,7 @@ export class Input {
   clear() {
     this.held.clear();
     this.keys.clear();
+    this.padRun.clear();
     this.events.clear();
     Object.assign(this.touch, { moveX: 0, moveY: 0, gas: 0, brake: 0, handbrake: false, sprint: false, horn: false });
   }
@@ -162,11 +164,17 @@ export class Input {
       throttle = Math.max(throttle, val(7));
       brake = Math.max(brake, val(6));
       if (rx || ry) { this.look.x -= rx * 0.05 * this.lookScale; this.look.y -= ry * 0.04 * this.lookScale; this.lastLookAt = performance.now(); }
-      // L3 runs on foot and sounds the horn at the wheel; X is the action (snacks, photos, siren), so a sprint buys nothing.
-      handbrake ||= btn(0); sprint ||= btn(10); horn ||= btn(10); lookBack ||= btn(11);
-      const edge = (i, a) => { const k = `pad${i}`; if (btn(i) && !this.padHeld.has(k)) { this.events.add(a); this.padHeld.add(k); } else if (!btn(i)) this.padHeld.delete(k); };
+      handbrake ||= btn(0); horn ||= btn(10); lookBack ||= btn(11);
+      // True on the frame a button goes down (and queues its action, if it has one). Kept per pad.
+      const edge = (i, a) => { const k = `${pad.index}.${i}`; if (btn(i) && !this.padHeld.has(k)) { if (a) this.events.add(a); this.padHeld.add(k); return true; } if (!btn(i)) this.padHeld.delete(k); return false; };
       edge(0, 'jump'); edge(3, 'enter'); edge(1, 'attack'); edge(9, 'pause'); edge(8, 'map'); edge(2, 'action'); edge(5, 'radio'); edge(4, 'camera');
       edge(12, 'job'); edge(13, 'photo');
+      // L3 runs on foot (X is the action: snacks, photos, the siren, so a run buys nothing). A click
+      // starts the run and another ends it, as does letting the stick come back to the middle: held
+      // in, a stick pushed to its edge slips out of the click. At the wheel L3 is the horn, held.
+      if (edge(10)) this.padRun.has(pad.index) ? this.padRun.delete(pad.index) : this.padRun.add(pad.index);
+      if (!lx && !ly) this.padRun.delete(pad.index);
+      sprint ||= this.padRun.has(pad.index);
     }
     const l = Math.hypot(mx, my);
     if (l > 1) { mx /= l; my /= l; }
