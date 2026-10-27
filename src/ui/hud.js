@@ -65,14 +65,16 @@ export class Hud {
     // On touch screens the help box sits mid-screen, where a big card (MISSION PASSED, WANTED) goes: it waits for the card.
     if (this.timers.big > 0 && this.game.input.touch?.active) { this.helpLater = [html, seconds]; return; }
     this.el.help.innerHTML = html; this.el.help.hidden = false; this.timers.help = seconds;
-    this._helpFits();
+    this._fitColumn();
   }
   subtitle(speaker, text, seconds = 4.5, color = '#ffd27a') {
     this.el.subtitle.innerHTML = speaker ? `<b style="color:${color}">${speaker}:</b> ${text}` : text;
     this.el.subtitle.hidden = false; this.timers.subtitle = seconds;
-    this._helpFits(); this._placeBig();
+    this._fitColumn();
   }
   clearSubtitle() { this.el.subtitle.hidden = true; this.timers.subtitle = 0; this._helpBack(); }
+  /** Something came up in the middle column, or grew: on a touch screen, make room in it and under it. */
+  _fitColumn() { this._checkRadio(); this._helpFits(); this._placeBig(); this._clearUnderColumn(); }
   /**
    * On a touch screen the help box stacks with the subtitle, a toast and the radio card in the middle column.
    * On the shortest phones they can run off the bottom of the screen, cutting off the help or the card under
@@ -100,10 +102,10 @@ export class Hud {
     if (text === this.objText) return;
     this.objText = text;
     this.el.objective.innerHTML = text; this.el.objective.hidden = !text;
-    this._placeBig();
+    this._fitColumn();
   }
   bark(text) { this.el.bark.textContent = text; this.el.bark.hidden = false; this.timers.bark = 2.6; this.el.bark.classList.remove('pop'); void this.el.bark.offsetWidth; this.el.bark.classList.add('pop'); }
-  toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; this._helpFits(); this._placeBig(); }
+  toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; this._fitColumn(); }
   big(title, sub = '', kind = 'passed', seconds = 4.5) {
     const el = this.el.big;
     // The line under the title is a sentence, even when it starts with a name ('Sand tipper was wrecked.').
@@ -141,10 +143,39 @@ export class Hud {
     const { big, area, vehicle } = this.el;
     if (shown !== big && shareRows(shown, big)) { this._drop(shown); return; }
     for (const el of [area, vehicle]) if (el !== shown && shareRows(el, shown)) this._drop(el);
+    this._clearUnderColumn();
+  }
+  /**
+   * ...and a name the middle column reaches down to goes too: the column is what there is to read (a new
+   * district's name comes with a toast that names it). On the shortest phones the names sit at the bottom,
+   * where a long column ends.
+   */
+  _clearUnderColumn() {
+    const { area, vehicle } = this.el;
+    this._checkRadio(); // first: a station card that goes doesn't push the column down onto the vehicle's name
+    if (!this.game.input.touch?.active || (area.hidden && vehicle.hidden)) return;
+    const end = this.el.help.parentElement.getBoundingClientRect().bottom;
+    for (const el of [area, vehicle]) if (!el.hidden && el.getBoundingClientRect().top < end + 4) this._drop(el);
   }
   _drop(el) {
     el.hidden = true;
     for (const k in this.timers) if (this.el[k] === el) this.timers[k] = 0;
+  }
+  /**
+   * The radio puts up its station card as a song starts, the first one as you get in, while the vehicle's name
+   * card is up: on a phone the end of the middle column, where the station card goes, can reach that card. It
+   * names the station already, so on a touch screen the station card goes; one for another station (📻
+   * tapped) means the name card is out of date, and that goes instead.
+   */
+  _checkRadio() {
+    const { radio, vehicle } = this.el;
+    if (radio.hidden || vehicle.hidden) { this.radioSeen = ''; return; }
+    if (radio.textContent === this.radioSeen) return;
+    this.radioSeen = radio.textContent;
+    if (!this.game.input.touch?.active) return;
+    const station = radio.querySelector('strong')?.textContent;
+    if (station && vehicle.textContent.includes(station)) radio.hidden = true;
+    else this._drop(vehicle);
   }
   /** A countdown (red in its last 10 s), or a stopwatch with urgent false: counting up never runs out. */
   setTimer(seconds, label = '', urgent = seconds < 10) {
@@ -195,23 +226,12 @@ export class Hud {
         if (k === 'big' || k === 'subtitle' || k === 'toast') this._helpBack();
       }
     }
-    // The radio puts up its station card as a song starts, the first one as you get in, where on a phone it can
-    // meet the vehicle's name card. That card names the station already, so the station card goes; one for
-    // another station (📻 tapped) means the name card is out of date, and that goes instead.
-    const { radio, vehicle } = this.el;
-    if (radio.hidden || vehicle.hidden) this.radioSeen = '';
-    else if (radio.textContent !== this.radioSeen) {
-      this.radioSeen = radio.textContent;
-      if (g.input.touch?.active && shareRows(radio, vehicle)) {
-        const station = radio.querySelector('strong')?.textContent;
-        if (station && vehicle.textContent.includes(station)) radio.hidden = true;
-        else this._drop(vehicle);
-      }
-    }
+    this._checkRadio();
     // The station card in the middle column, like a toast: room for it, and the help back once it has gone.
+    const radio = this.el.radio;
     if (this.radioUp !== !radio.hidden) {
       this.radioUp = !radio.hidden;
-      if (this.radioUp) { this._helpFits(); this._placeBig(); } else this._helpBack();
+      if (this.radioUp) this._fitColumn(); else this._helpBack();
     }
     // Cash counts up like a slot machine.
     const cash = g.save?.cash ?? 0;

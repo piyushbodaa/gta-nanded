@@ -288,7 +288,8 @@ body.touch-ui #photo-close { margin-left: auto; }
    long objective and the first drive's help fill it nearly to the bottom, so: the help box is more compact
    (and steps aside while a subtitle or toast would push the column off the screen, hud.js); the radio card is
    one line, the station, without the DJ's line that took three more; and the vehicle's name, smaller, goes
-   down to the area name's place at the bottom, clear of the column (when both are up, hud.js keeps the newer). */
+   down to the area name's place at the bottom, clear of the column. (hud.js keeps one of the two names when
+   both are up, and drops a name a long column reaches.) */
 @media (max-height: 340px) {
   .radar { height: 84px; }
   .tb.pedal { height: 76px; }
@@ -301,4 +302,7 @@ body.touch-ui #photo-close { margin-left: auto; }
   body.touch-ui .vehicle-name { bottom: calc(10px + var(--safe-b)); }
   body.touch-ui .vehicle-name strong { font-size: 22px; }
   body.touch-ui .vehicle-name span { font-size: 13px; margin-top: 2px; }
+  /* A big card goes under the speedometer and a long column, down among the round buttons: centred on the
+     screen left of them (over the resting stick's faint ring), its line stays readable, not under DRIFT. */
+  body.touch-ui .big-message { top: 60%; right: calc(218px + var(--safe-r)); }
 }

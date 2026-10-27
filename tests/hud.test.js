@@ -164,12 +164,11 @@ test('on the shortest phones the help box steps aside while a subtitle, toast or
 
 test("on a phone the station card that only repeats the vehicle card's station goes; another station's replaces the vehicle card", () => {
   const g = fakeGame('touch'), hud = hudFor(g), radio = els['hud-radio'], vehicle = els['hud-vehicle'];
-  // 800 x 360: the vehicle's name under the middle column, the station card at the column's end, meeting it.
   vehicle.box = { top: 249, bottom: 302 };
   hud.vehicleName('Nanded Auto', 'रिक्षा · 📻 Radio Godavari 92.7');
-  const station = (name, line) => { radio.innerHTML = `<strong style="color:#ffcf3f">📻 ${name}</strong><span>${line}</span>`; radio.hidden = false; };
+  const station = (name, line) => { const r = els['hud-radio']; r.innerHTML = `<strong style="color:#ffcf3f">📻 ${name}</strong><span>${line}</span>`; r.hidden = false; };
+  // The radio's DJ card as the first song starts (at 800 x 360 the column's end met the vehicle's name).
   station('Radio Godavari 92.7', 'Next up on Radio Godavari 92.7: a brand-new track, made in Nanded.');
-  radio.box = { top: 197, bottom: 262 };
   hud.update(0.1);
   assert.equal(radio.hidden, true, 'the vehicle card names the station already');
   assert.equal(vehicle.hidden, false);
@@ -179,13 +178,30 @@ test("on a phone the station card that only repeats the vehicle card's station g
   assert.equal(radio.hidden, false);
   assert.equal(vehicle.hidden, true);
   assert.equal(hud.timers.vehicle, 0);
-  // 915 x 412: they don't meet, so both stay.
-  vehicle.box = { top: 298, bottom: 359 }; radio.box = { top: 158, bottom: 223 };
-  hud.vehicleName('Nanded Auto', 'रिक्षा · 📻 Lavani Express 98.3');
+  // With the vehicle card gone, a station card stays; with a keyboard, both do (they are far apart).
   station('Lavani Express 98.3', 'You are tuned to Lavani Express 98.3.');
   hud.update(0.1);
   assert.equal(radio.hidden, false);
-  assert.equal(vehicle.hidden, false);
+  // 568 x 320, getting in for the first drive: the station card comes up, and in the same frame the first drive's
+  // help, before the HUD's own update. The station card goes first, so the column (objective and help) stays
+  // clear of the vehicle's name at the bottom instead of reaching it and dropping it.
+  const p = hudFor(fakeGame('touch'));
+  columnAt568();
+  els['hud-vehicle'].box = { top: 270, bottom: 310 };
+  p.objective("Drive to <b>Kaka Savkar's office</b> in the Old Mondha lanes.");
+  p.vehicleName('Nanded Auto', 'रिक्षा · 📻 Radio Godavari 92.7');
+  station('Radio Godavari 92.7', 'Radio Godavari 92.7 — chai cutting, volume full.');
+  p.help('Hold GAS to drive and steer with your left thumb.', 9);
+  assert.equal(els['hud-radio'].hidden, true);
+  assert.equal(els['hud-vehicle'].hidden, false);
+  assert.equal(els['hud-help'].hidden, false);
+  const k = hudFor(fakeGame('keyboard'));
+  els['hud-vehicle'].box = { top: 249, bottom: 302 };
+  k.vehicleName('Nanded Auto', 'रिक्षा · 📻 Radio Godavari 92.7');
+  station('Radio Godavari 92.7', 'Radio Godavari 92.7 — chai cutting, volume full.');
+  k.update(0.1);
+  assert.equal(els['hud-radio'].hidden, false);
+  assert.equal(els['hud-vehicle'].hidden, false);
 });
 
 test('on a phone a big card goes under the middle column, and further down when the column grows under it', () => {
@@ -209,7 +225,7 @@ test('on a phone a big card goes under the middle column, and further down when 
   assert.equal(els['hud-big'].style.top, '');
 });
 
-test('on a phone the area and vehicle names keep the newer where they meet, and a big card beats both', () => {
+test('on a phone the area and vehicle names keep the newer where they meet; a big card and the middle column beat both', () => {
   const g = fakeGame('touch'), hud = hudFor(g), area = els['hud-area'], vehicle = els['hud-vehicle'], big = els['hud-big'];
   // 568 x 320: both names at the bottom of the screen.
   area.box = { top: 284, bottom: 308 }; vehicle.box = { top: 270, bottom: 310 };
@@ -233,6 +249,18 @@ test('on a phone the area and vehicle names keep the newer where they meet, and 
   hud.vehicleName('Bike', 'बाईक'); hud.area('Taroda Khurd');
   assert.equal(vehicle.hidden, false);
   assert.equal(area.hidden, false);
+  // The middle column reaching down to a name (a new district's toast under the first drive's help, at
+  // 568 x 320): the name goes, the column stays whole.
+  hud.update(5);
+  area.box = { top: 284, bottom: 308 };
+  hud.area('Doctor Lane');
+  column.bottom = () => 311;
+  hud.toast('New neighbourhood: Doctor Lane · 1/53 · +₹50');
+  assert.equal(area.hidden, true);
+  assert.equal(els['hud-toast'].hidden, false);
+  // A name that comes while the column is that long doesn't show.
+  hud.vehicleName('Bike', 'बाईक');
+  assert.equal(vehicle.hidden, true);
 });
 
 test('a big card reads as a sentence and a second cash change restarts its animation', () => {
