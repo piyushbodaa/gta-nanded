@@ -64,7 +64,9 @@ export function installRules(g) {
     g.save.stat('jacked');
     g.audio.sfx('door');
     if (v.type === 'police') g.police.report('hitCop', v.x, v.z, { cop: true });
-    else if (v.role === 'traffic' || v.role === 'mission') g.police.report('carjack', v.x, v.z);
+    // A car off the street is a crime. Pulling out a mission's own driver (the man you chase, the
+    // one hunting you) is the job: it ends a chase, and a star then would bring police to the fight.
+    else if (v.role === 'traffic') g.police.report('carjack', v.x, v.z);
     // Passengers bail out too; a police jeep's second officer stays on the job, as when its crew
     // gets out (police._dismount).
     for (const ph of v.passengers.splice(0)) {

@@ -164,6 +164,27 @@ test('carjacking the car you chase wins the chase: its AI lets go and its driver
   assert.equal(car.vital, false, 'the car you chased in is no longer needed');
 });
 
+test("pulling out the story's own driver is no crime, under a policeman's nose; a car off the street still is", async () => {
+  // rules.js wires up the photo panel and the cheat keys as it installs.
+  const el = () => ({ addEventListener() {}, hidden: true });
+  globalThis.document ??= { getElementById: el, body: { classList: { add() {}, remove() {} } } };
+  globalThis.addEventListener ??= () => {};
+  const { installRules } = await import('../src/game/rules.js');
+  const g = fakeGame();
+  Object.assign(g, { city: { places: [] }, audio: { sfx() {} } });
+  g.save.stat = () => {};
+  g.police = new Police(g);
+  const jeep = { type: 'police', role: 'police-idle', x: 6, z: 0, driver: {} }; // an officer watching
+  g.vehicles = { list: [jeep], ejectDriver(v) { const h = v.driver; v.driver = null; return h; }, doorWorld: v => ({ x: v.x + 1, z: v.z }) };
+  g.peds = { list: [], adoptEjected() {} };
+  installRules(g);
+  const car = role => ({ type: 'suv', role, x: 0, z: 0, driver: { x: 0, z: 0 }, passengers: [] });
+  g.carjack(car('mission'), g.player); // Mama's SUV mid-chase, or a hunter
+  assert.deepEqual([g.police.level, g.police.heat, g.police.pending.length], [0, 0, 0]);
+  g.carjack(car('traffic'), g.player);
+  assert.equal(g.police.level, 1);
+});
+
 test('a rammed chase target bails out its own driver, and the chasing car may burn now', () => {
   const g = fakeGame();
   const pilot = { x: 0, z: 0 };
