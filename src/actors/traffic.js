@@ -374,7 +374,9 @@ export class Traffic {
   _disturbed(v, dt) {
     const a = v.ai, net = this.net;
     v.stunned = (v.stunned || 0) - dt;
-    this.game.controls.set(v, { throttle: 0, brake: 1, steer: 0, handbrake: false });
+    // Braking whichever way it was knocked (held at a stop, the brake pedal reversed it away for good).
+    const f = forwardSpeed(v);
+    this.game.controls.set(v, { throttle: f < -0.5 ? 1 : 0, brake: f > 0.5 ? 1 : 0, steer: 0, handbrake: true });
     if (v.stunned > 0 || speedOf(v) > 0.6 || v.wrecked) return;
     // The nearest road on the car's own level: a flyover deck and the street under or beside it are both near.
     const level = n => n && Math.abs(net.deckAt(n.road, n.s) - v.y) < 1.5;
