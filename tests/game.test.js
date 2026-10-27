@@ -421,6 +421,11 @@ test('a race rival heads for the checkpoint it owes, and one wedged out of sight
   const d = tiger.raceDriver;
   assert.deepEqual(d.goal, cps[0], 'its re-plans head for the first checkpoint, not the finish');
   assert.equal(d.path.at(-1), 200, 'and its line runs on through the next');
+  // Its driver re-plans by itself (wedged), to the checkpoint alone: on through the next again, or
+  // it brakes to a stop there, and wedged on that last stretch it counts as arriving, never stuck.
+  d.setPath([0, -20, 0, 100]);
+  step.update(m.ctx, 0.1);
+  assert.deepEqual([d.path.at(-1), d.goal], [200, cps[0]]);
   Object.assign(tiger, { x: 0, z: 95 });
   step.update(m.ctx, 0.1);
   assert.equal(tiger.raceIdx, 1);

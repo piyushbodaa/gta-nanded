@@ -483,6 +483,10 @@ export const Steps = {
           if (!v || v.wrecked || g.player.vehicle === v) continue;
           const rp = points[Math.min(v.raceIdx, points.length - 1)];
           if (dist(v.x, v.z, rp.x, rp.z) < 14 && ++v.raceIdx < points.length) planLegs(g, v, points);
+          // Its driver re-planned by itself (wedged, or off its line), to the checkpoint alone: on
+          // through the one after too. A line ending there brakes to a stop at it, and a car wedged
+          // on the last stretch before it counts as arriving, never stuck, so it sat there for good.
+          else if (v.raceDriver.path !== v.racePath && v.raceIdx < points.length) planLegs(g, v, points);
           if (v.raceIdx >= points.length) { if (!c.m.vars.lost) { c.m.vars.lost = true; } return `fail:${v.label || 'A rival'} won the race.`; }
           const theirs = v.raceIdx * 1e5 - dist(v.x, v.z, rp.x, rp.z);
           if (theirs > mine) ahead++;
@@ -593,9 +597,8 @@ function planLegs(g, v, points) {
   const pts = [];
   let from = v;
   for (const p of points.slice(v.raceIdx, v.raceIdx + 2)) { const r = g.net.route(from.x, from.z, p.x, p.z); if (r) pts.push(...r.points); from = p; }
-  if (pts.length < 4) return;
-  v.raceDriver.setPath(pts);
-  v.raceDriver.goal = points[v.raceIdx];
+  if (pts.length >= 4) { v.raceDriver.setPath(pts); v.raceDriver.goal = points[v.raceIdx]; }
+  v.racePath = v.raceDriver.path; // (planned, or tried: not again every frame)
 }
 
 const _view = new THREE.Frustum(), _pv = new THREE.Matrix4(), _ball = new THREE.Sphere();
