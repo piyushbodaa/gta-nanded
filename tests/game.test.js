@@ -350,6 +350,35 @@ test('the story race shows your place and the checkpoints left', () => {
   assert.match(shown, /^Win\. Position <b>2\/2<\/b> · checkpoint 1\/2$/);
 });
 
+test('a race rival heads for the checkpoint it owes, and one wedged out of sight is put back on its route', () => {
+  const g = fakeGame();
+  g.net = {
+    route: (x0, z0, x1, z1) => ({ points: [x0, z0, (x0 + x1) / 2, (z0 + z1) / 2, x1, z1] }),
+    nearest: (x, z) => ({ x, z, road: 0 }), raised: [], deckOver: () => 0,
+  };
+  const m = stepContext(g);
+  const tiger = { id: 1, x: 0, z: -20, spec: { top: 40 }, heading: 0 };
+  m.ent.tiger = tiger;
+  g.vehicles.list = [tiger];
+  m.ctx.driver = () => ({ i: 0, setPath(p) { this.path = p; this.goal = { x: p.at(-2), z: p.at(-1) }; }, control: () => ({}) });
+  const cps = [{ x: 0, z: 100 }, { x: 0, z: 200 }, { x: 0, z: 300 }];
+  const step = Steps.race(cps, ['tiger'], 'Win.');
+  step.enter(m.ctx);
+  const d = tiger.raceDriver;
+  assert.deepEqual(d.goal, cps[0], 'its re-plans head for the first checkpoint, not the finish');
+  assert.equal(d.path.at(-1), 200, 'and its line runs on through the next');
+  Object.assign(tiger, { x: 0, z: 95 });
+  step.update(m.ctx, 0.1);
+  assert.equal(tiger.raceIdx, 1);
+  assert.deepEqual(d.goal, cps[1]);
+  // Wedged 150 m off: back on its route, facing along it. In sight, left to unstick itself.
+  Object.assign(tiger, { x: 30, z: 150, vx: 3 });
+  assert.equal(d.onStuck(), true);
+  assert.deepEqual([tiger.x, tiger.vx, Math.round(tiger.heading * 100)], [0, 0, 0]);
+  Object.assign(tiger, { x: 20, z: 10 });
+  assert.equal(d.onStuck(), false);
+});
+
 test('the river race crosses the Govardhan bridge once, straight on to the dam', async () => {
   const { world } = await import('./helpers.js');
   const { net } = world();
