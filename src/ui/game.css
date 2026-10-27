@@ -162,14 +162,16 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
 }
 /* Landscape phones: the button grid grows up the right-hand side, and a column that wraps a long line grows
    down into it (the help box and radio card under 📻 and DRIFT). So the column ends where the grid starts
-   (--clear-r: its width, 200 px up to 420 px tall, 248 px above, plus its margin), and stays centred while
+   (--clear-r: its width, 248 px, 200 px with the small buttons, plus its margin), and stays centred while
    it can be 360 px wide; on narrower phones it moves left, up to the radar, rather than under the buttons. */
 @media (max-height: 500px) and (orientation: landscape) {
-  body.touch-ui .hud-stack { --clear-r: calc(218px + var(--safe-r)); width: min(calc(100vw - 164px - var(--safe-l) - var(--clear-r)), max(360px, calc(100vw - 2 * var(--clear-r)))); margin-left: auto; margin-right: var(--clear-r); }
+  body.touch-ui .hud-stack { --clear-r: calc(266px + var(--safe-r)); width: min(calc(100vw - 164px - var(--safe-l) - var(--clear-r)), max(360px, calc(100vw - 2 * var(--clear-r)))); margin-left: auto; margin-right: var(--clear-r); }
   body.touch-ui .hud-stack > .help-box { max-width: min(520px, 100%); } /* the column keeps it clear */
 }
-@media (min-height: 421px) and (max-height: 500px) and (orientation: landscape) {
-  body.touch-ui .hud-stack { --clear-r: calc(266px + var(--safe-r)); }
+/* The same height test that shrinks the buttons (below), so no height gets one without the other: phones
+   can be a fraction of a pixel over 420 tall, which a (min-height: 421px) test would leave out. */
+@media (max-height: 420px) and (orientation: landscape) {
+  body.touch-ui .hud-stack { --clear-r: calc(218px + var(--safe-r)); }
 }
 
 /* ---------------------------------------------------------------- pause menu */
