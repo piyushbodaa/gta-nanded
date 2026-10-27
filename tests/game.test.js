@@ -342,7 +342,14 @@ test('the river race crosses the Govardhan bridge once, straight on to the dam',
   assert.ok(len < direct * 1.08, `${len.toFixed(0)} m of racing for a ${direct.toFixed(0)} m drive`);
 });
 
-test('story people never stand inside walls, and story vehicles never appear on top of anything', async () => {
+/**
+ * Each mission's scripted spawns on the real city: its calls run, and between them the player just
+ * arrives where the steps send them (on foot, or in the step's vehicle, on the road there). Returns
+ * what looked wrong, and where each mission's vehicles first stood: { problems, spawns }. Run once.
+ */
+let dryRun = null;
+const storyDryRun = () => (dryRun ??= runStory());
+async function runStory() {
   const { world } = await import('./helpers.js');
   const { Colliders, obbSat } = await import('../src/world/colliders.js');
   const { VEHICLE_TYPES } = await import('../src/actors/vehicle-types.js');
@@ -350,8 +357,14 @@ test('story people never stand inside walls, and story vehicles never appear on 
   const colliders = new Colliders(city);
   const onRoad = (x, z) => net.nearest(x, z, 80, {}, r => !net.raised[r]);
   const overlap = (a, b) => obbSat(a.x, a.z, a.hw, a.hd, Math.cos(a.heading), Math.sin(a.heading), b.x, b.z, b.hw, b.hd, Math.cos(b.heading), Math.sin(b.heading), {});
-  // Each mission's scripted spawns on the real city: its calls run, and between them the player just
-  // arrives where the steps send them (on foot, or in the step's vehicle, on the road there).
+  // Facing the dead end of the street it is parked in (through any plain bends)?
+  const nosedIn = v => {
+    const n = onRoad(v.x, v.z);
+    let r = n.road, j = Math.cos(v.heading - Math.atan2(n.dx, n.dz)) > 0 ? net.rb[r] : net.ra[r];
+    for (let k = 0; k < 8 && net.jRoads[j].length === 2; k++) { r = net.jRoads[j].find(o => o !== r); j = net.otherEnd(r, j); }
+    return net.jRoads[j].length === 1;
+  };
+  const problems = [], spawns = {}, check = (ok, msg) => { if (!ok) problems.push(msg); };
   for (const def of STORY) {
     const list = [];
     const g = { ...fakeGame(), net, colliders, city, input: { mode: 'keyboard' }, settings: {} };
@@ -379,13 +392,15 @@ test('story people never stand inside walls, and story vehicles never appear on 
       if (step.kind === 'call') {
         const before = new Set(list);
         step.enter(m.ctx);
-        for (const [name, e] of Object.entries(m.ent)) if (e?.h) assert.ok(!colliders.blocked(e.h.x, e.h.z, 0.25), `${def.id} step ${i}: ${name} stands inside a wall`);
+        for (const [name, e] of Object.entries(m.ent)) if (e?.h) check(!colliders.blocked(e.h.x, e.h.z, 0.25), `${def.id} step ${i}: ${name} stands inside a wall`);
         for (const v of list.filter(v => !before.has(v))) {
-          for (const o of list) assert.ok(o === v || !overlap(v, o), `${def.id} step ${i}: a ${v.type} appears on a ${o.type}`);
-          if (!P.vehicle) assert.ok(!overlap(v, { x: P.x, z: P.z, hw: 0.34, hd: 0.34, heading: 0 }), `${def.id} step ${i}: a ${v.type} appears on the player`);
+          for (const o of list) check(o === v || !overlap(v, o), `${def.id} step ${i}: a ${v.type} appears on a ${o.type}`);
+          if (!P.vehicle) check(!overlap(v, { x: P.x, z: P.z, hw: 0.34, hd: 0.34, heading: 0 }), `${def.id} step ${i}: a ${v.type} appears on the player`);
           const wall = colliders.boxContact(v.x, v.z, v.hw, v.hd, v.heading, {});
-          assert.ok(!wall || wall.depth < 0.3, `${def.id} step ${i}: a ${v.type} appears ${wall?.depth.toFixed(2)} m into a wall`);
+          check(!wall || wall.depth < 0.3, `${def.id} step ${i}: a ${v.type} appears ${wall?.depth.toFixed(2)} m into a wall`);
+          check(!nosedIn(v), `${def.id} step ${i}: a ${v.type} is parked facing a dead end`);
         }
+        for (const [name, e] of Object.entries(m.ent)) if (e?.id) (spawns[def.id] ??= {})[name] ??= { ...e };
       } else if (step.kind === 'goTo') {
         const t = typeof step.target === 'function' ? step.target(m.ctx) : step.target;
         const v = step.opts.vehicle && m.ent[step.opts.vehicle];
@@ -394,6 +409,31 @@ test('story people never stand inside walls, and story vehicles never appear on 
       else if (step.kind === 'leave' && P.vehicle) walkTo(onRoad(P.vehicle.x, P.vehicle.z));
     }
   }
+  return { problems, spawns };
+}
+
+test('story people never stand inside walls, and story vehicles never appear on top of anything, or nosed into a dead end', async () => {
+  assert.deepEqual((await storyDryRun()).problems, []);
+});
+
+test("Mama's tippers load on the main road: no hairpin a truck can't turn between the ghat and the bridge", async () => {
+  const { world } = await import('./helpers.js');
+  const { net } = world();
+  const P = STORY_PLACES;
+  const sharpest = (from, to) => {
+    const p = net.route(from.x, from.z, to.x, to.z).points;
+    let worst = 0;
+    for (let i = 2; i + 5 < p.length; i += 2) { // (the last point is the goal itself, off the road)
+      const d = Math.atan2(p[i + 2] - p[i], p[i + 3] - p[i + 1]) - Math.atan2(p[i] - p[i - 2], p[i + 1] - p[i - 1]);
+      worst = Math.max(worst, Math.abs(Math.atan2(Math.sin(d), Math.cos(d))));
+    }
+    return worst * 180 / Math.PI;
+  };
+  const tipper = (await storyDryRun()).spawns.c4.tipper;
+  assert.ok(sharpest(tipper, P.bridgeN) < 60, `c4: a ${sharpest(tipper, P.bridgeN).toFixed(0)}° turn on the way to the bridge`);
+  const home = STORY.find(m => m.id === 'c5').steps({ input: { mode: 'keyboard' }, settings: {} }).filter(s => s.kind === 'goTo').at(-1).target;
+  // Coming back over the bridge (its southbound carriageway) with the seized one.
+  assert.ok(sharpest(P.ghatBridge, home) < 60, `c5: a ${sharpest(P.ghatBridge, home).toFixed(0)}° turn bringing the tipper home`);
 });
 
 test('Continue and Free Roam never put you inside a contact marker', async () => {
