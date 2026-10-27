@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Steps as S } from './missions.js';
 import { dist, headingTo } from '../core/math.js';
 import { key, pick, drivingHelp } from '../ui/controls.js';
+import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 
 export const CHARACTERS = {
   YOU: { name: 'Sunny', color: '#ffffff' },
@@ -48,7 +49,8 @@ const P = {
   yard: { x: -233, z: 84 }, // the impound yard behind the Central Bus Stand
   latur: { x: -248, z: 1368 }, // Latur Phata
   degloor: { x: 1038, z: 389 }, // Degloor Naka, on the road in from Telangana
-  gandhiPutla: { x: 112.2, z: 417.8 }, ghatBridge: { x: -96.4, z: 804.4 }, dam: { x: -1350.3, z: 1990.4 },
+  gandhiPutla: { x: 112.2, z: 417.8 }, dam: { x: -1350.3, z: 1990.4 },
+  ghatBridge: { x: -88.8, z: 803.8 }, // mid-bridge on the southbound carriageway, the way the race crosses
 };
 /** Every place the story sends you (checked against the road network in the tests). */
 export const STORY_PLACES = P;
@@ -79,8 +81,22 @@ export function dressWorld(g) {
 
 /** Spawn a vehicle at the kerb near a point, facing along the street. */
 function kerbSpawn(c, name, type, at, opts = {}) {
-  const rp = c.roadPoint(at.x + (opts.dx || 0), at.z + (opts.dz || 0), opts.side ?? 1);
+  const x = at.x + (opts.dx || 0), z = at.z + (opts.dz || 0), half = VEHICLE_TYPES[type].L / 2;
+  const first = c.roadPoint(x, z, opts.side ?? 1);
+  // Something already on that spot (a scene vehicle, traffic, the player): a car length further
+  // along the kerb, then back, rather than on top of it.
+  let rp = first;
+  for (let k = 1; kerbTaken(c.g, rp, half); k++) {
+    if (k > 6) { rp = first; break; } // nowhere free close by: where the script says
+    const along = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (half * 2 + 1.5);
+    rp = c.roadPoint(x + Math.sin(first.heading) * along, z + Math.cos(first.heading) * along, opts.side ?? 1);
+  }
   return c.spawnVehicle(name, type, rp.x, rp.z, rp.heading, opts);
+}
+function kerbTaken(g, at, half) {
+  const P = g.player;
+  if (!P.vehicle && dist(P.x, P.z, at.x, at.z) < half + 1) return true;
+  return g.vehicles.list.some(v => dist(v.x, v.z, at.x, at.z) < v.hd + half + 0.5);
 }
 function nearPed(c, name, kind, at, dx, dz, opts = {}) { return c.spawnPed(name, kind, at.x + dx, at.z + dz, opts); }
 /** Dress someone for their part: colours and build, plus flags to add or drop (never their shoes). */
@@ -101,7 +117,7 @@ const LOOK = {
 /** Mama's ghat on the south bank: a tractor and a tipper waiting for the night's boats. */
 function ghatScene(c) {
   kerbSpawn(c, 'ghatTractor', 'tractor', P.ghat, { dx: -14, color: 0x2e7d32 });
-  kerbSpawn(c, 'ghatTipper', 'truck', P.ghat, { dx: 24, color: 0xb8932a });
+  kerbSpawn(c, 'ghatTipper', 'truck', P.ghat, { dx: 10, color: 0xb8932a }); // on the ghat lane (further east is the bridge)
 }
 /** The impound yard behind the bus stand: what the squads have seized lately. */
 function yardScene(c) {
@@ -231,6 +247,8 @@ export const STORY = [
       S.call(c => {
         c.g.save.data.garage = true; c.g.save.flush();
         c.g.police.clear();
+        // Anna keeps the bike, even if you hopped back on while he talked.
+        if (c.g.player.vehicle === c.ent.bike1) c.g.player.leaveVehicle(true);
         c.g.vehicles.remove(c.ent.bike1); delete c.ent.bike1;
       }),
       S.goTo(P.bhagya, 'One more: Bunty says another stands outside a class in <b>Bhagya Nagar</b>.', { radius: 14, stop: false }),
@@ -439,7 +457,7 @@ export const STORY = [
   },
   {
     id: 'c9', giver: 'PAKYA', title: 'तिजोरी', subtitle: 'THE LEDGER', reward: 3000, requires: ['c8'],
-    start: { x: P.zenda.x + 4, z: P.zenda.z + 3 },
+    start: { x: P.zenda.x + 6, z: P.zenda.z - 6 }, // a few steps from where Continue puts you, not under you
     steps: g => [
       S.call(c => {
         kerbSpawn(c, 'auto', 'auto', P.zenda, { dx: 6, label: "Pakya's auto", color: 0x1d1d1d });
@@ -493,7 +511,7 @@ export const STORY = [
       S.goTo(P.ghat, 'Get to the <b>sand ghat</b> below the Govardhan bridge.', { radius: 16, stop: false, timer: 200, timerFail: "Mama didn't wait." }),
       S.call(c => {
         const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
-        nearPed(c, 'mama', 'man', at, 6, 6, {}); dress(c.ent.mama.h.outfit, LOOK.mama);
+        nearPed(c, 'mama', 'man', at, 7, 2, {}); dress(c.ent.mama.h.outfit, LOOK.mama); // by Pakya, out in the open
         nearPed(c, 'pakya', 'man', at, 8, 4, {}); dress(c.ent.pakya.h.outfit, LOOK.pakya);
         for (let i = 0; i < 4; i++) nearPed(c, `g${i}`, 'goon', at, 2 + Math.cos(i * 1.6) * 3, 3 + Math.sin(i * 1.6) * 3, {});
         ghatScene(c);
@@ -514,7 +532,9 @@ export const STORY = [
       S.enter('car', "Mama is running! Back in <b>Kadam's car</b>."),
       S.chase('mamaCar', P.dam, 'Run <b>Mama</b> off the road.', { driverAs: 'mamaMan', rams: 4 }),
       S.fight(['mamaMan'], 'Finish it.', { mamaMan: 3 }),
-      S.call(c => { nearPed(c, 'kadam', 'police', c.g.player.pos, 3, 3, {}); }),
+      // Kadam arrives with the whole station. A new name: the Kadam left at the station is still
+      // the mission's, and goes when it ends.
+      S.call(c => { c.g.police.clear(); nearPed(c, 'kadam2', 'police', c.g.player.pos, 3, 3, {}); }),
       S.say([
         ['KADAM', "That's enough, Patil!"],
         ['KADAM', "Jaggu Mama: illegal mining, a stolen seized tipper, two hundred kilos of ganja, and forty families' debts in one ledger. You're coming with me."],
