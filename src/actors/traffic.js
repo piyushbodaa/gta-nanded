@@ -150,7 +150,7 @@ export class Traffic {
     // Look ahead for anything in our path.
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     let gap = Infinity, blockedByPlayer = false;
-    a.dodgeWant = 0;
+    a.dodgeWant = 0; a.waitFor = null;
     // len: the thing's half-length (for the gap); ohw: its half-extent across our path.
     const consider = (ox, oz, len, isPlayer, oncoming = false, ohw = 0.3) => {
       const dx = ox - v.x, dz = oz - v.z;
@@ -169,16 +169,30 @@ export class Traffic {
       if (dx * dx + dz * dz > 1200) continue;
       const f = dx * fx + dz * fz, facing = Math.cos(o.heading - v.heading);
       // Its half-extent across our path: a car side-on to us blocks with its length.
-      const across = Math.abs(facing) * o.hw + Math.abs(Math.sin(o.heading - v.heading)) * o.hd;
-      // A parked, crashed or abandoned vehicle standing in the lane: squeeze past it towards the
-      // middle of the road, the way everyone does, instead of queueing forever (slowing while
-      // still in its way). Anything moving is followed like traffic instead.
-      if ((!o.ai || !o.kinematic) && o.role !== 'player' && speedOf(o) < 1 && f > -(v.hd + o.hd) && f < 26 && Math.abs(Math.sin(o.heading - v.heading)) < 0.6) {
+      let across = Math.abs(facing) * o.hw + Math.abs(Math.sin(o.heading - v.heading)) * o.hd;
+      // A parked, crashed or abandoned vehicle standing in the lane, at whatever angle (a scooter
+      // nosed onto the footpath sticks its tail out): squeeze past it towards the middle of the
+      // road, the way everyone does, instead of queueing forever (slowing while still in its way).
+      // Anything moving is followed like traffic instead.
+      if ((!o.ai || !o.kinematic) && o.role !== 'player' && speedOf(o) < 1 && f > -(v.hd + o.hd) && f < 26) {
         // Where it stands across our lane (+ to the right), however far we have moved over already.
         const l = -dx * fz + dz * fx + (a.turn ? 0 : a.dodge || 0), clear = v.hw + across + 0.35;
         if (Math.abs(l) < clear) {
           if (a.turn) continue; // a turn's curve can't swerve: it is soon past it
-          const dodge = this._passBy(v, l, clear);
+          let dodge = this._passBy(v, l, clear);
+          // No room either side (a car left in the middle of a narrow street): after a few seconds
+          // stood behind it, go by closer, wheels up on the verge where nothing solid stands, and out
+          // to the right only once nothing coming the other way needs that gap. Then keep to that
+          // side until past.
+          if (dodge === null && (a.blocked > 3 || a.squeezing?.has(o.id))) {
+            const side = a.squeezing?.get(o.id);
+            let coming = null;
+            dodge = this._passBy(v, l, clear - 0.25, 0.6, d => side ? Math.sign(d) === side :
+              this._clearBeside(v, d, f, o.hd + v.hd) && (d < 0 || !(coming = this._oncoming(v, d, f + o.hd + v.hd + 16))));
+            // It is in our way only until we have moved over that far.
+            if (dodge !== null) { (a.squeezing ||= new Map()).set(o.id, Math.sign(dodge)); across -= 0.25; }
+            else { a.squeezing?.delete(o.id); if (coming) a.waitFor = coming.id; }
+          }
           if (dodge !== null && Math.abs(dodge) > Math.abs(a.dodgeWant)) a.dodgeWant = dodge;
         }
       }
@@ -195,7 +209,11 @@ export class Traffic {
     if (g.player.state !== 'driving' && Math.abs(g.player.y - v.y) < 2) consider(g.player.x, g.player.z, 0.6, true);
     if (v.y < 1) {
       g.peds?.forEachNear(v.x, v.z, 20, ped => { if (!ped.onRoadOk) consider(ped.h.x, ped.h.z, 0.5, false); });
-      g.animals?.forEachNear(v.x, v.z, 22, a => consider(a.x, a.z, a.cow ? 1.2 : 0.4, false, false, a.cow ? 0.45 : 0.25));
+      g.animals?.forEachNear(v.x, v.z, 22, an => {
+        // Its half-extent across our path: a cow sitting across the street blocks with its length.
+        const c = Math.abs(Math.cos(an.heading - v.heading)), s = Math.abs(Math.sin(an.heading - v.heading));
+        consider(an.x, an.z, an.cow ? 1.2 : 0.4, false, false, an.cow ? c * 0.55 + s * 1.1 : c * 0.25 + s * 0.4);
+      });
     }
 
     // Desired speed.
@@ -235,7 +253,7 @@ export class Traffic {
         return;
       }
       // Out of the curve onto the new road, with what is left of this frame's step already taken.
-      a.road = T.road; a.dir = T.dir; a.s = T.s0 + (T.u - 1) * T.len; a.turn = null; a.pushPast = null;
+      a.road = T.road; a.dir = T.dir; a.s = T.s0 + (T.u - 1) * T.len; a.turn = null; a.pushPast = a.squeezing = null;
       a.cruise = Math.min(TYPE_CAP[v.type] ?? 99, CRUISE[net.type[a.road]] * (0.85 + ((v.id * 37) % 30) / 100));
     } else a.s += step;
     // The road we are on now (it may have just changed): where its lane ends, and the junction there.
@@ -339,14 +357,43 @@ export class Traffic {
    * Where to pass something standing l metres right (+) of our lane, `clear` being the sideways
    * room the two need: the dodge (+ right of the lane) on its right, towards the middle of the
    * road, or on its left when only the kerb side has room; null when neither stays on the road.
+   * `over`: how far the car's side may go past an edge onto the verge (not a median, nor a raised
+   * footpath where people walk); `ok`: whether a dodge will do.
    */
-  _passBy(v, l, clear) {
+  _passBy(v, l, clear, over = 0, ok = null) {
     const net = this.net, a = v.ai, s = a.dir > 0 ? a.s : net.length[a.road] - a.s;
-    // How far the car can move over each way before its side reaches the edge of the road.
+    if (over && this.game.city.footpathRoad(a.road, v.x, v.z)) over = 0;
+    // How far the car can move over each way before its side reaches the edge of the road (or the verge).
     const lane = net.laneOffset(a.road, a.lane, s) + (a.weave || 0);
-    const right = net.edgeAt(a.road, s, -a.dir) + lane - v.hw, left = net.edgeAt(a.road, s, a.dir) - lane - v.hw;
-    if (l + clear <= right) return l + clear;
-    if (clear - l <= left) return l - clear;
+    const right = net.edgeAt(a.road, s, -a.dir) + lane - v.hw + (net.paired[a.road] ? 0 : over);
+    const left = net.edgeAt(a.road, s, a.dir) - lane - v.hw + over;
+    if (l + clear <= right && (!ok || ok(l + clear))) return l + clear;
+    if (clear - l <= left && (!ok || ok(l - clear))) return l - clear;
+    return null;
+  }
+
+  /**
+   * Nothing solid (a pole, a wall, a shop's platform) where we would drive alongside something f
+   * metres ahead, moved `dodge` right of our lane; `len`: half the stretch we are alongside it.
+   */
+  _clearBeside(v, dodge, f, len) {
+    const net = this.net, a = v.ai, s = Math.min(a.s + f, net.length[a.road]), at = a.dir > 0 ? s : net.length[a.road] - s;
+    const q = net.lanePoint(a.road, a.dir, s, net.laneOffset(a.road, a.lane, at) + (a.weave || 0) - dodge, this._side || (this._side = {}));
+    return !this.game.colliders?.boxContact(q.x, q.z, v.hw, len, q.heading, this._hit || (this._hit = {}), v.y);
+  }
+
+  /**
+   * The traffic coming the other way within `reach` metres ahead, where we would be once moved
+   * `dodge` metres right of our lane, or null. Of two cars each waiting for the other to come
+   * through, the lower id goes first.
+   */
+  _oncoming(v, dodge, reach) {
+    const a = v.ai, fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+    for (const o of this.game.vehicles.list) {
+      if (o === v || !o.ai || Math.cos(o.heading - v.heading) > -0.3 || (o.ai.waitFor === v.id && v.id < o.id)) continue;
+      const dx = o.x - v.x, dz = o.z - v.z, f = dx * fx + dz * fz;
+      if (f > -(v.hd + o.hd) && f < reach && Math.abs(-dx * fz + dz * fx + (a.dodge || 0) - dodge) < v.hw + o.hw + 0.3) return o;
+    }
     return null;
   }
 
@@ -389,7 +436,7 @@ export class Traffic {
     }
     // Rejoin: snap to the nearest lane, facing the way the car points (or the only way a one-way road allows).
     const dir = net.oneway[n.road] || (Math.cos(v.heading - Math.atan2(n.dx, n.dz)) >= 0 ? 1 : -1);
-    a.road = n.road; a.dir = dir; a.s = dir > 0 ? n.s : net.length[n.road] - n.s; a.turn = null; a.speed = 0; a.lane = 0; a.pushPast = null;
+    a.road = n.road; a.dir = dir; a.s = dir > 0 ? n.s : net.length[n.road] - n.s; a.turn = null; a.speed = 0; a.lane = 0; a.pushPast = a.squeezing = null;
     v.kinematic = true; v.vx = v.vz = 0; v.w = 0;
   }
 }
