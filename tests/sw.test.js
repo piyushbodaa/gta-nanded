@@ -7,13 +7,15 @@ import vm from 'node:vm';
 // Cache Storage and a fake gta.nanded.fun, and play visits through it the way a phone would.
 const source = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 const ORIGIN = 'https://gta.nanded.fun';
-const page = release => `<script type="module" crossorigin src="/assets/index-${release}.js"></script>
-<link rel="modulepreload" crossorigin href="/assets/three-A.js"><link rel="stylesheet" crossorigin href="/assets/index-${release}.css">`;
+const page = release => `<meta property="og:image" content="${ORIGIN}/media/key-art.webp" />
+<script type="module" crossorigin src="/assets/index-${release}.js"></script>
+<link rel="modulepreload" crossorigin href="/assets/three-A.js"><link rel="stylesheet" crossorigin href="/assets/index-${release}.css">
+<img src="/media/chase.webp" alt="" />`;
 const site = release => ({
   '/': { body: page(release) }, '/manifest.webmanifest': { body: '{}' }, '/icon.svg': { body: '<svg/>' },
   [`/assets/index-${release}.js`]: { body: `js ${release}` }, [`/assets/index-${release}.css`]: { body: `css ${release}` },
   '/assets/three-A.js': { body: 'three' }, '/data/world.json': { body: '{"roads":[]}' }, '/analytics.js': { body: '//' },
-  '/media/chase.webp': { body: 'art 1', etag: '"1"' },
+  '/media/chase.webp': { body: 'art 1', etag: '"1"' }, '/media/key-art.webp': { body: 'share image' },
 });
 
 function phone(files, { oldCaches = {} } = {}) {
@@ -72,9 +74,11 @@ test('one visit online is enough to play offline, and the old edition\'s cache g
   assert.deepEqual(await p.caches.keys(), ['gta-nanded-v3-2026-10-27']);
   p.net.online = false;
   assert.equal(await (await p.get('/', { mode: 'navigate' })).text(), page('B'));
-  for (const file of ['/assets/index-B.js', '/assets/index-B.css', '/assets/three-A.js', '/data/world.json']) {
+  for (const file of ['/assets/index-B.js', '/assets/index-B.css', '/assets/three-A.js', '/data/world.json', '/media/chase.webp']) {
     assert.equal((await p.get(file)).status, 200, file);
   }
+  // The share image is named only by full address in og:image; the page never loads it.
+  assert.ok(!p.paths().includes('/media/key-art.webp'));
 });
 
 test('a world that fails to download does not stop the install, and offline it is a network error, not the page', async () => {

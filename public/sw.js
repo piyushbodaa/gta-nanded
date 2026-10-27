@@ -6,8 +6,8 @@
      instead of letting them pile up on the phone.
    - Media keep their names when they are replaced: shown from the cache at once,
      and checked in the background so the next visit has the new file.
-   Installing caches the page, its build files and the world, so one visit online is
-   enough to play offline. Range requests (audio seeking) always go to the network.
+   Installing caches the page, its build files, its cover art and the world, so one visit
+   online is enough to play offline. Range requests (audio seeking) always go to the network.
    VERSION only needs a bump to clear everything at once; releases do not need one. */
 const VERSION = 'gta-nanded-v3-2026-10-27';
 const CORE = ['/', '/manifest.webmanifest', '/icon.svg'];
@@ -15,6 +15,8 @@ const WORLD = '/data/world.json';
 
 // The build files a page loads: its script, module preloads and stylesheet.
 const releaseFiles = html => [...new Set(html.match(/\/assets\/[\w.-]+/g) || [])];
+// The art the page itself loads (src/href), not the share image named by full address in og:image.
+const pageArt = html => [...new Set([...html.matchAll(/(?:src|href)="(\/media\/[\w.-]+)"/g)].map(m => m[1]))];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
@@ -23,7 +25,8 @@ self.addEventListener('install', event => {
     // These mostly come from the HTTP cache the page has just filled. A miss is not fatal:
     // the file is cached when the page next asks for it.
     const page = await cache.match('/');
-    const files = [...(page ? releaseFiles(await page.text()) : []), WORLD];
+    const html = page ? await page.text() : '';
+    const files = [...releaseFiles(html), ...pageArt(html), WORLD];
     await Promise.all(files.map(file => cache.add(file).catch(() => {})));
     await self.skipWaiting();
   })());
