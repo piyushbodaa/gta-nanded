@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { world } from './helpers.js';
 import { RoadNet } from '../src/world/roadnet.js';
-import { City, ZONE, segBoxDist, FOOTPATH_W } from '../src/world/citygen.js';
+import { City, ZONE, PROP, segBoxDist, FOOTPATH_W } from '../src/world/citygen.js';
+import { obbOverlap } from '../src/core/math.js';
 
 test('the generated city is dense and deterministic', () => {
   const { city, data } = world();
@@ -24,6 +25,44 @@ test('no building stands on a street', () => {
       assert.ok(d >= net.width[net.ptRoad[k]] / 2 - 0.01, `lot ${i} clears road ${net.ptRoad[k]}`);
     });
   }
+});
+
+test('mapped buildings, turned to face the street, keep the ground they were checked on', () => {
+  const { city, net, data } = world();
+  const L = city.lots, mapped = new Set(data.footprints.map(([x, z]) => `${Math.fround(x)},${Math.fround(z)}`));
+  const ov = {};
+  let n = 0;
+  for (let i = 0; i < L.count; i++) {
+    if (!mapped.has(`${L.x[i]},${L.z[i]}`)) continue;
+    n++;
+    const c = Math.cos(L.rot[i]), s = Math.sin(L.rot[i]), ext = Math.max(L.hw[i], L.hd[i]) * 1.5 + 8;
+    net.grid.query(L.x[i] - ext, L.z[i] - ext, L.x[i] + ext, L.z[i] + ext, k => {
+      const d = segBoxDist(net.px[k], net.pz[k], net.px[k + 1], net.pz[k + 1], L.x[i], L.z[i], L.hw[i], L.hd[i], c, s);
+      assert.ok(d >= net.width[net.ptRoad[k]] / 2 - 0.01, `mapped lot ${i} stands ${(net.width[net.ptRoad[k]] / 2 - d).toFixed(2)} m into road ${net.ptRoad[k]}`);
+    });
+    city.lotGrid.query(L.x[i] - ext, L.z[i] - ext, L.x[i] + ext, L.z[i] + ext, j => {
+      if (j < 0 || j === i) return;
+      assert.ok(!obbOverlap(L.x[i], L.z[i], L.hw[i] - 0.3, L.hd[i] - 0.3, L.rot[i], L.x[j], L.z[j], L.hw[j], L.hd[j], L.rot[j], ov), `mapped lot ${i} inside lot ${j}`);
+    });
+  }
+  assert.ok(n > 500, `${n} mapped buildings`);
+});
+
+test('a handcart on a footpath stands wholly on the paving', () => {
+  const { city, net } = world();
+  const P = city.props, near = {};
+  let onPath = 0;
+  for (let i = 0; i < P.count; i++) {
+    if (P.kind[i] !== PROP.CART) continue;
+    const c = Math.cos(P.rot[i]), s = Math.sin(P.rot[i]), own = r => r === P.road[i];
+    for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) {
+      // Measured from the cart's own street, whose footpath it stands on.
+      const x = P.x[i] + lx * c + lz * s, z = P.z[i] - lx * s + lz * c, n = net.nearest(x, z, 20, near, own);
+      if (n) assert.ok(Math.abs(city.pavementAt(n.seg, n.dist) - P.y[i]) < 0.01, `cart ${i}: a wheel at another height than the cart`);
+    }
+    if (P.y[i] > 0) onPath++;
+  }
+  assert.ok(onPath > 100, `${onPath} carts on footpaths`);
 });
 
 test('zones follow the neighbourhoods', () => {

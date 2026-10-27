@@ -1225,14 +1225,14 @@ function buildProp(ctx, i) {
       break;
     }
     case PROP.CART: {
-      // Vada-pav / fruit handcart with a big umbrella.
-      g.color(0x8a6a3a, 0); g.cbox(x, 0.7, z, 0.9, 0.25, 0.55, rot);
+      // Vada-pav / fruit handcart with a big umbrella (y0: up on the footpath, where it stands on one).
+      g.color(0x8a6a3a, 0); g.cbox(x, y0 + 0.7, z, 0.9, 0.25, 0.55, rot);
       g.color(0x2b2b2b, 0);
-      for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) g.wheel(x + lx * c + lz * s, 0.32, z - lx * s + lz * c, 0.32, 0.07, s, c);
+      for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) g.wheel(x + lx * c + lz * s, y0 + 0.32, z - lx * s + lz * c, 0.32, 0.07, s, c);
       const goods = r.pick([0xe67e22, 0xf1c40f, 0xc0392b, 0x27ae60]);
-      g.color(goods, 0); g.blob(x, 1.05, z, 0.7, 0.18, 0.4, i);
-      g.color(0x555555, 0); g.cyl(x, 0.95, z, 0.03, 1.6, 4);
-      g.color(r.pick([0xc0392b, 0xf1c40f, 0x2f6fb5, 0x8e44ad]), 0); g.cone(x, 2.4, z, 1.35, 0.55, 8);
+      g.color(goods, 0); g.blob(x, y0 + 1.05, z, 0.7, 0.18, 0.4, i);
+      g.color(0x555555, 0); g.cyl(x, y0 + 0.95, z, 0.03, 1.6, 4);
+      g.color(r.pick([0xc0392b, 0xf1c40f, 0x2f6fb5, 0x8e44ad]), 0); g.cone(x, y0 + 2.4, z, 1.35, 0.55, 8);
       break;
     }
     case PROP.SHRINE: {

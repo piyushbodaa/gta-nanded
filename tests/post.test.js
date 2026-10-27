@@ -42,6 +42,26 @@ test('the HDR target and bloom chain are replaced, not leaked, on every resize a
   }
 });
 
+test('a GPU that refuses multisampled targets gets FXAA instead, and is not asked again on every resize', () => {
+  let asked = 0;
+  // Only multisampled targets are refused.
+  const { post, size, ensure } = rig(() => { asked++; return !post.rt.samples; });
+  post.configure({ msaa: true, bloom: true });
+  assert.equal(post.final.uniforms.uAA.value, 0, 'MSAA asked for: no FXAA yet');
+  ensure();
+  assert.deepEqual([post.format, post.msaa], ['r11g11b10', 0]);
+  assert.equal(post.final.uniforms.uAA.value, 1, 'edges are smoothed without MSAA');
+  for (const [w, h] of [[1600, 900], [960, 540], [1280, 720]]) {
+    post.configure({ msaa: true, bloom: true });
+    size.w = w; size.h = h;
+    asked = 0;
+    ensure();
+    assert.equal(post.rt.samples, 0);
+    assert.equal(asked, 2, `${w}x${h}: only the plain target and the bloom chain are checked`);
+    assert.equal(post.final.uniforms.uAA.value, 1);
+  }
+});
+
 test('targets the GPU refuses are disposed before the next option, and the last resort draws directly', () => {
   let refusals = 3; // R11G11B10 with and without MSAA, then half floats with MSAA
   const a = rig(() => refusals-- <= 0);

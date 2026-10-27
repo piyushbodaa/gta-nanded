@@ -285,13 +285,21 @@ export class Sky {
     u.uNight.value = this.night; u.uTime.value += dt; u.uCloud.value = this.w.clouds; u.uGrey.value = grey;
     u.uCityGlow.value = this.night;
 
-    // The light comes from the sun by day and the moon by night.
-    const lightDir = this.sunDir.y > -0.02 ? this.sunDir : this._moon || (this._moon = new THREE.Vector3());
-    if (this.sunDir.y <= -0.02) this._moon.copy(this.sunDir).negate().setY(Math.abs(this.sunDir.y) + 0.35).normalize();
-    this.sun.color.copy(K.sun);
-    this.sun.intensity = sunI * this.w.light;
-    this.bounce.color.copy(K.sun).multiply(DUST);
-    this.bounce.intensity = this.bounceOn ? sunI * this.w.light * BOUNCE : 0;
+    // The light comes from the sun by day and the moon by night. It swaps sides of the sky
+    // just after sunset (and before sunrise), so neither may be strong then: the sun's light
+    // fades out as it sets, and moonlight fades in after it, in the -6° keyframe's colour,
+    // until the keyframes take over at nightfall.
+    const sunLit = this.sunDir.y > -0.02;
+    const lightDir = sunLit ? this.sunDir : this._moon || (this._moon = new THREE.Vector3());
+    if (!sunLit) this._moon.copy(this.sunDir).negate().setY(Math.abs(this.sunDir.y) + 0.35).normalize();
+    const dusk = KEYS[1];
+    let lightI = sunI, lightCol = K.sun;
+    if (sunLit) lightI *= smoothstep(-0.02, 0.01, this.sunDir.y);
+    else if (elDeg > dusk.el) { lightI = dusk.sunI * smoothstep(-0.02, Math.sin(dusk.el * Math.PI / 180), this.sunDir.y); lightCol = dusk.sun; }
+    this.sun.color.copy(lightCol);
+    this.sun.intensity = lightI * this.w.light;
+    this.bounce.color.copy(lightCol).multiply(DUST);
+    this.bounce.intensity = this.bounceOn ? lightI * this.w.light * BOUNCE : 0;
     this.hemi.color.copy(K.sky);
     this.hemi.groundColor.copy(K.gnd);
     // Daylight ambient comes from the sky cube map; the hemisphere fills in moonlight.

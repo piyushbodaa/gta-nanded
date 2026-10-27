@@ -479,7 +479,9 @@ export class City {
         p.fit = 1;
         this.reserved.push({ x: p.x, z: p.z, hw: p.w / 2 + 2, hd: p.d / 2 + 2, rot, place: i });
       }
+      if (KAMANS[p.id]) this._siteArch(p, KAMANS[p.id], i);
     }
+    this.places.forEach((p, i) => this._reserveParts(p, i));
     // The airfield: nothing is built on the runway strip, the taxiways or the aprons.
     const af = this.world.airfield;
     if (af) {
@@ -513,11 +515,67 @@ export class City {
       if (this._overlapsLots(x, z, hw, hd, yaw)) continue;
       const floors = clamp(Math.round(h / 3.2), 1, 6);
       const style = typeStyle[type] ?? STYLE.HOUSE;
-      this._addLot(x, z, hw, hd, this._faceRoad(x, z, yaw), floors, style, hash2(Math.round(x * 10), Math.round(z * 10)), -1);
+      // A quarter turn swaps width and depth, so the lot keeps the very box that was checked.
+      const rot = this._faceRoad(x, z, yaw), odd = Math.round((rot - yaw) / (Math.PI / 2)) & 1;
+      this._addLot(x, z, odd ? hd : hw, odd ? hw : hd, rot, floors, style, hash2(Math.round(x * 10), Math.round(z * 10)), -1);
     }
   }
 
-  /** Choose the box rotation (of the 4 symmetric ones) whose front (-z) faces the nearest road. */
+  /**
+   * Ground for the parts a landmark draws beyond its catalogue box: a mall's whole block and
+   * atrium, the langar hall, and a campus's rear wing, which is left off (p.wing = false) where
+   * it would stand on a street or on another place.
+   */
+  _reserveParts(p, i) {
+    const rot = p.rot + Math.PI, c = Math.cos(rot), s = Math.sin(rot);
+    const part = ([lx, lz, hw, hd]) => ({ x: p.x + lx * c + lz * s, z: p.z - lx * s + lz * c, hw: hw + 1, hd: hd + 1, rot, place: i });
+    if (p.category === 'college' || p.category === 'school') {
+      const wing = part(campusWing(p)), ov = {};
+      p.wing = this._clearOfStreets(wing.x, wing.z, wing.hw - 1, wing.hd - 1, rot, 0.3)
+        && !this.reserved.some(q => q.place !== i && obbOverlap(wing.x, wing.z, wing.hw, wing.hd, rot, q.x, q.z, q.hw, q.hd, q.rot, ov));
+      if (p.wing) this.reserved.push(wing);
+    } else if (p.category === 'cinema' || p.category === 'shopping') {
+      // (Sarafa Bazaar is drawn as shops, not a mall, but its stalls stand about as far out in front.)
+      const [hw, hd] = mallSize(p);
+      this.reserved.push(part([0, 0, hw, hd]), part([0, -hd - 1, hw * 0.4, 1]));
+    } else if (p.id === 'langar-sahib') this.reserved.push(part(LANGAR_HALL));
+  }
+
+  /**
+   * A kaman spans the street at its place's approach: the nearest street on the ground (never a
+   * flyover or bridge), slid along it until neither pillar stands on another road or the railway
+   * and no deck passes over the arch, or else the next nearest street. p.arch = { x, z, rot, span }, local
+   * x across the street; none if no spot nearby fits. The pillars' ground is reserved.
+   */
+  _siteArch(p, K, i) {
+    const net = this.net, q = {}, tried = new Set();
+    const ext = Math.hypot(K.hw, K.hd) + 8;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const n = net.nearest(p.ax, p.az, 40, {}, r => !net.raised[r] && !net.bridge[r] && !tried.has(r));
+      if (!n) return;
+      const road = n.road, len = net.length[road], span = net.width[road] / 2 + K.out;
+      tried.add(road);
+      const pillarBlocked = (x, z, rot) => this.railDistance(x, z) < Math.hypot(K.hw, K.hd) + 3 // off the track and its ballast
+        || net.grid.query(x - ext, z - ext, x + ext, z + ext, k => net.ptRoad[k] !== road
+          && segBoxDist(net.px[k], net.pz[k], net.px[k + 1], net.pz[k + 1], x, z, K.hw, K.hd, Math.cos(rot), Math.sin(rot)) < net.width[net.ptRoad[k]] / 2 + 0.3);
+      for (let k = 0; k <= 16; k++) {
+        const s = n.s + Math.ceil(k / 2) * (k % 2 ? 3 : -3); // 0, +3, -3, +6, -6, ... out to 24 m
+        if (s < net.trimStart(road) + K.hd || s > len - net.trimEnd(road) - K.hd) continue;
+        net.pointAt(road, s, q);
+        const rot = Math.atan2(q.dx, q.dz), c = Math.cos(rot), sn = Math.sin(rot);
+        const X = (lx, lz) => q.x + lx * c + lz * sn, Z = (lx, lz) => q.z - lx * sn + lz * c;
+        if ([-span, span].some(lx => pillarBlocked(X(lx, 0), Z(lx, 0), rot))) continue;
+        let open = true;
+        for (let lx = -span - K.hw; lx <= span + K.hw && open; lx += 1) for (const lz of [-K.hd, 0, K.hd]) if (net.deckOver(X(lx, lz), Z(lx, lz)) > 0.3) open = false;
+        if (!open) continue;
+        p.arch = { x: q.x, z: q.z, rot, span };
+        for (const lx of [-span, span]) this.reserved.push({ x: X(lx, 0), z: Z(lx, 0), hw: K.hw + 0.5, hd: K.hd + 0.5, rot, place: i });
+        return;
+      }
+    }
+  }
+
+  /** Choose the box rotation (of the 4 that cover the same ground) whose front (-z) faces the nearest road. */
   _faceRoad(x, z, yaw) {
     const n = this.net.nearest(x, z, 80, {});
     if (!n) return yaw;
@@ -856,11 +914,14 @@ export class City {
           net.pointAt(road, s, p);
           const side = kerb || (r.chance(0.5) ? 1 : -1);
           const kind = r.pick([PROP.STALL, PROP.STALL, PROP.CART, PROP.CART, PROP.SHRINE, PROP.HOARDING]);
-          const off = w / 2 + (kind === PROP.HOARDING ? 3.5 : 1.8);
+          // A handcart's wheels can't straddle the edge of a footpath: where there is one, it
+          // stands on it, like the sabzi vendors' carts.
+          const onPath = kind === PROP.CART && this.footpathAt(p.seg);
+          const off = w / 2 + (kind === PROP.HOARDING ? 3.5 : onPath ? 0.95 : 1.8);
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           const rad = kind === PROP.HOARDING ? 3 : 1.4;
           if (net.roadClearance(x, z, 10) < (kind === PROP.HOARDING ? 1.2 : 0.4) || this._overlapsLots(x, z, rad, rad * 0.6, 0, 0) || !clear(x, z)) continue;
-          add(x, z, Math.atan2(-p.dz * side, p.dx * side), kind, road);
+          add(x, z, Math.atan2(-p.dz * side, p.dx * side), kind, road, onPath ? WALK_Y : 0);
           this.lotGrid.insertRect(-200000 - P.x.length, x - rad, z - rad, x + rad, z + rad);
         }
       }
@@ -962,12 +1023,33 @@ const HERITAGE_R = 140;
 export const STATION_HD = 11.75;
 // The bus stand's: [half width, half depth] for its bays, shed and building.
 export const BUS_STAND = [26, 13];
+// Mal Tekdi's hill: about the radius of its foot at full size (it shrinks to the ground it has).
+export const MAL_TEKDI_R = 32;
 
 // Landmarks that need more ground than their catalogue footprint: [half width, half depth, min scale].
 export const BIG_PLACES = {
   'hazur-sahib': [26, 26, 0.42], 'sggs-stadium': [21, 17.5], 'nanded-station': [34, STATION_HD], 'nandgiri-fort': [34, 14],
   'visava-garden': [18.5, 17], 'nanded-bus-stand': BUS_STAND, 'kaleshwar-temple': [10, 13, 0.6], 'nanded-airport': [22, 12],
   'langar-sahib': [12, 14], 'nagina-ghat': [8, 8], 'sangat-sahib': [8, 8], 'mata-sahib': [8, 8], 'old-mondha-clock-tower': [3.4, 3.4],
+  'mal-tekdi': [MAL_TEKDI_R, MAL_TEKDI_R, 0.3],
+};
+
+// Parts some landmarks draw beyond their catalogue box. Their ground is reserved too, and
+// landmarks.js draws and collides them from the same numbers.
+/** A college or school's rear wing behind its main block, as a local box [lx, lz, hw, hd]. */
+export function campusWing(p) {
+  const hw = Math.max(4, p.w / 2), hd = Math.max(3.5, p.d / 2);
+  return [hw * 0.6, hd + 6, hw * 0.55, 4];
+}
+/** A mall or multiplex block, larger than its catalogue box: [half width, half depth]. A glass atrium stands 2 m out in front. */
+export const mallSize = p => [p.w / 2 + 4, p.d / 2 + 3];
+/** Langar Sahib's dining hall behind the gurudwara: [lx, lz, hw, hd]. */
+export const LANGAR_HALL = [0, 14, 10, 5];
+// Gateway arches (kamans) over the street: how far each pillar stands outside the kerb, and
+// its half size across and along the street, and height.
+export const KAMANS = {
+  'hingoli-gate': { out: 2.2, hw: 1.6, hd: 2.6, h: 9.5 },
+  'bhagya-nagar-kaman': { out: 1.6, hw: 0.9, hd: 0.9, h: 8 },
 };
 
 export const PROP = { LAMP: 0, MEDIAN_LAMP: 1, POLE: 2, STALL: 3, CART: 4, SHRINE: 5, HOARDING: 6, SIGNAL: 7, VENDOR: 8 };
