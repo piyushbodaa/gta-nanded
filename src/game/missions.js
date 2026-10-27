@@ -461,12 +461,12 @@ export const Steps = {
           const v = c.ent[n];
           if (!v) continue;
           v.kinematic = false; v.role = 'rival';
-          const pts = [];
-          let from = { x: v.x, z: v.z };
-          for (const p of points) { const r = c.g.net.route(from.x, from.z, p.x, p.z); if (r) pts.push(...r.points); from = p; }
           v.raceDriver = c.driver(v, { aggression: 0.75, maxSpeed: v.spec.top * 0.92 });
-          v.raceDriver.setPath(pts);
           v.raceIdx = 0;
+          planLegs(c.g, v, points);
+          // Wedged (a turn into a lane missed at speed, a wall): out of sight, back on the road
+          // a little further on, as police.js does for its jeeps.
+          v.raceDriver.onStuck = () => putBack(c.g, v, v.raceDriver);
         }
       },
       update(c, dt) {
@@ -479,7 +479,7 @@ export const Steps = {
           const v = c.ent[n];
           if (!v || v.wrecked || g.player.vehicle === v) continue;
           const rp = points[Math.min(v.raceIdx, points.length - 1)];
-          if (dist(v.x, v.z, rp.x, rp.z) < 14) v.raceIdx++;
+          if (dist(v.x, v.z, rp.x, rp.z) < 14 && ++v.raceIdx < points.length) planLegs(g, v, points);
           if (v.raceIdx >= points.length) { if (!c.m.vars.lost) { c.m.vars.lost = true; } return `fail:${v.label || 'A rival'} won the race.`; }
           const mine = idx * 1e5 - dist(pos.x, pos.z, p.x, p.z), theirs = v.raceIdx * 1e5 - dist(v.x, v.z, rp.x, rp.z);
           if (theirs > mine) ahead++;
@@ -580,6 +580,39 @@ export const Steps = {
     };
   },
 };
+
+/**
+ * A race rival's route: to the checkpoint it owes next and on through the one after, planned again
+ * as it passes each. Its driver's own re-plans (lost the line, wedged) head for that checkpoint,
+ * not straight for the finish, which skips the one mid-bridge and leaves it never able to win.
+ */
+function planLegs(g, v, points) {
+  const pts = [];
+  let from = v;
+  for (const p of points.slice(v.raceIdx, v.raceIdx + 2)) { const r = g.net.route(from.x, from.z, p.x, p.z); if (r) pts.push(...r.points); from = p; }
+  if (pts.length < 4) return;
+  v.raceDriver.setPath(pts);
+  v.raceDriver.goal = points[v.raceIdx];
+}
+
+/**
+ * A rival wedged where the player can't see it is put back on the road a few points further along
+ * its route, facing along it (police.js does the same for its jeeps). Never on or under a flyover,
+ * nor onto another car. Returns true when handled.
+ */
+function putBack(g, v, driver) {
+  const P = g.player.pos, path = driver.path, net = g.net;
+  if (!path || dist(v.x, v.z, P.x, P.z) < 45) return false;
+  const k = Math.min(path.length / 2 - 1, driver.i + 3), x = path[k * 2], z = path[k * 2 + 1];
+  if (net.deckOver(x, z) > 0.3 || dist(x, z, P.x, P.z) < 45) return false;
+  const n = net.nearest(x, z, 20, {}, r => !net.raised[r]);
+  if (!n || g.vehicles.list.some(o => o !== v && dist(o.x, o.z, n.x, n.z) < 6)) return false;
+  const ahead = Math.min(path.length / 2 - 1, k + 1);
+  v.x = n.x; v.z = n.z; v.y = 0; v.vx = v.vz = 0; v.w = 0;
+  v.heading = Math.atan2(path[ahead * 2] - n.x, path[ahead * 2 + 1] - n.z);
+  driver.i = k; driver.reverseT = 0; driver.stuck = 0;
+  return true;
+}
 
 /** Drive hunter vehicles each frame (called from the game loop while a mission is active). */
 export function driveHunters(game, dt) {
