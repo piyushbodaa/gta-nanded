@@ -60,7 +60,9 @@ export class TouchControls {
     const end = e => {
       if (!this.stick || e.pointerId !== this.stick.id) return;
       this.stick = null; t.moveX = 0; t.moveY = 0;
+      // The resting ring goes home (its CSS place, which follows rotation) rather than staying where the thumb lifted.
       this.knob.style.transform = ''; this.base.classList.remove('on');
+      this.base.style.left = ''; this.base.style.top = '';
     };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) this.stickZone.addEventListener(ev, end);
 
@@ -79,6 +81,11 @@ export class TouchControls {
       const up = () => { b.classList.remove('down'); if (hold) t[hold] = hold === 'gas' || hold === 'brake' ? 0 : false; };
       for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
     }
+    // Everything here acts on pointerdown, so the click a tap makes afterwards is a ghost: MAP and ❚❚ open the
+    // pause menu under the finger, and the click would land on whatever tab is there (📷: on Share). Cancelling
+    // the touchend stops that click; touch events stay with the button the finger went down on. (A touchend
+    // after a drag on the stick can't be cancelled, and makes no click; asking anyway only warns in the console.)
+    this.root.addEventListener('touchend', e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
   }
 
   /** Swap button sets for on foot / driving and show contextual ones. */

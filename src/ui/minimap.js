@@ -291,7 +291,9 @@ export class CityMap {
     const c = this.canvas, ctx = this.ctx;
     const r = c.getBoundingClientRect();
     const dpr = Math.min(2, devicePixelRatio || 1);
-    if (c.width !== Math.round(r.width * dpr)) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); }
+    // Either side may change (a shorter window changes only the height): a stale buffer is stretched and taps miss.
+    const bw = Math.round(r.width * dpr), bh = Math.round(r.height * dpr);
+    if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; }
     const W = c.width, H = c.height, z = this.zoom * dpr;
     ctx.fillStyle = '#26302a'; ctx.fillRect(0, 0, W, H);
     const b = this.bounds, k = this.cacheK;
