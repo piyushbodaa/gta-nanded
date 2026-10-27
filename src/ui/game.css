@@ -305,4 +305,8 @@ body.touch-ui #photo-close { margin-left: auto; }
   /* A big card goes under the speedometer and a long column, down among the round buttons: centred on the
      screen left of them (over the resting stick's faint ring), its line stays readable, not under DRIFT. */
   body.touch-ui .big-message { top: 60%; right: calc(218px + var(--safe-r)); }
+  /* It is 350 px wide at 568 x 320, so its title stays on one line (hud.js makes a long one smaller to fit) and
+     a title card's line drops its wide letter-spacing: a card that wraps is too tall for its place here. */
+  body.touch-ui .big-message strong { white-space: nowrap; }
+  body.touch-ui .big-message.title span { font-size: 22px; letter-spacing: 2px; }
 }

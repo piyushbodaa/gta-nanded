@@ -117,18 +117,34 @@ export class Hud {
     if (!this.game.input.touch?.active) return;
     // A help box already up on a touch screen steps aside, and comes back after the card with the time it had left.
     if (!this.el.help.hidden && this.timers.help > 0) this._helpAside();
+    this._fitBigTitle();
     this._placeBig();
   }
   /**
+   * On the shortest phones the card is narrow (left of the round buttons) and keeps its title on one line
+   * (game.css): a long title ('NEW COLOUR, NEW LIFE', a race's name) gets smaller until it fits, rather than
+   * wrapping into a card too tall for the screen. One too long even then wraps after all.
+   */
+  _fitBigTitle() {
+    const t = this.el.big.querySelector('strong');
+    for (let i = 0; i < 4 && t.scrollWidth > t.clientWidth; i++) {
+      const size = parseFloat(getComputedStyle(t).fontSize);
+      if (size <= 26) { t.style.whiteSpace = 'normal'; return; }
+      t.style.fontSize = `${Math.max(26, Math.floor(size * t.clientWidth / t.scrollWidth) - 1)}px`;
+    }
+  }
+  /**
    * On a touch screen a big card goes under the middle column, not across it: lower than its usual place when
-   * the column reaches that far down (a long objective and a subtitle, on the shortest phones), as low as the
-   * card's height allows. When the column grows under it (the next line of dialogue), it moves down again.
+   * the column reaches that far down (a long objective and a subtitle, on the shortest phones). When the column
+   * grows under it (the next line of dialogue), it moves down again. But never past the bottom of the screen:
+   * a card too tall for its place there (one whose line wraps) moves up as far as it has to.
    */
   _placeBig() {
     const el = this.el.big;
     if (el.hidden || !this.game.input.touch?.active) return;
-    const below = this.el.help.parentElement.getBoundingClientRect().bottom + 6;
-    if (el.offsetTop < below) el.style.top = `${Math.max(el.offsetTop, Math.min(below, innerHeight - el.offsetHeight - 8))}px`;
+    const below = Math.ceil(this.el.help.parentElement.getBoundingClientRect().bottom + 6);
+    const top = Math.max(0, Math.min(Math.max(el.offsetTop, below), innerHeight - el.offsetHeight - 8));
+    if (top !== el.offsetTop) el.style.top = `${top}px`;
     this._makeRoom(el);
   }
   area(name) { this.el.area.innerHTML = name; this.el.area.hidden = false; this.timers.area = 4; this.el.area.classList.remove('fade'); void this.el.area.offsetWidth; this.el.area.classList.add('fade'); this._makeRoom(this.el.area); }

@@ -225,6 +225,34 @@ test('on a phone a big card goes under the middle column, and further down when 
   assert.equal(els['hud-big'].style.top, '');
 });
 
+test('on the shortest phones a big card never runs off the bottom, and a long title shrinks to stay on one line', () => {
+  const g = fakeGame('touch'), hud = hudFor(g), big = els['hud-big'];
+  // 568 x 320: the card's place is 60% down (192 px). A card whose line wraps (the c7 pass card, a mission
+  // failed) is 120 px tall there, and ran 312 px down; a 2-line title made the respray card 135 px, past 320.
+  big.offsetTop = 192; big.offsetHeight = 135;
+  column.bottom = () => 76; // a 1-line objective
+  hud.big('MISSION FAILED', 'The tempo is wrecked and the load is all over the road.', 'failed', 5);
+  assert.equal(big.style.top, '177px', 'moved up as far as it has to');
+  // Under a long column it moves down only as far as the screen allows, as before.
+  big.offsetTop = 192; big.offsetHeight = 101; column.bottom = () => 228;
+  hud.big('WANTED', 'A student saw you take it', 'wanted', 2.5);
+  assert.equal(big.style.top, '211px');
+  // The title is kept to one line in the 350 px card (game.css): 'NEW COLOUR, NEW LIFE' is 410 px at 44 px.
+  const title = { style: {}, clientWidth: 350, get scrollWidth() { return Math.round(410 * this.size() / 44); }, size() { return parseFloat(this.style.fontSize || '44px'); } };
+  globalThis.getComputedStyle = el => ({ fontSize: `${el.size()}px` });
+  big.querySelector = () => title;
+  hud.big('NEW COLOUR, NEW LIFE', "Anna's Rang Garage · −₹500", 'passed', 3);
+  assert.ok(title.scrollWidth <= title.clientWidth, `${title.style.fontSize} is ${title.scrollWidth} px wide`);
+  assert.ok(title.size() >= 34, `no smaller than it has to be: ${title.style.fontSize}`);
+  assert.equal(title.style.whiteSpace, undefined);
+  // One that can't fit even small wraps after all.
+  const long = { ...title, style: {}, get scrollWidth() { return Math.round(900 * this.size() / 44); } };
+  big.querySelector = () => long;
+  hud.big('A TITLE FAR TOO LONG FOR ANY PHONE', '', 'title', 3);
+  assert.equal(long.style.whiteSpace, 'normal');
+  delete big.querySelector; delete globalThis.getComputedStyle;
+});
+
 test('on a phone the area and vehicle names keep the newer where they meet; a big card and the middle column beat both', () => {
   const g = fakeGame('touch'), hud = hudFor(g), area = els['hud-area'], vehicle = els['hud-vehicle'], big = els['hud-big'];
   // 568 x 320: both names at the bottom of the screen.
