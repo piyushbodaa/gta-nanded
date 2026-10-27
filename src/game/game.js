@@ -327,7 +327,7 @@ export class Game {
     this.humans.blobsOn = !q.dynamicShadows;
     this.humans.nearRadius = q.nearRadius; this.humans.nearMax = q.nearPeople;
     this.vehicles.render(dt, cam.position, casters);
-    this.humans.update(dt, cam.position, casters);
+    this.humans.update(dt, cam.position, casters, cam);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     if (q.shadows > 0) {

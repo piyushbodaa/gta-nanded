@@ -142,6 +142,13 @@ export function inShadowBox(b, x, y, z, margin) {
 }
 const _m = new THREE.Matrix4(), _e = new THREE.Euler();
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
+const _view = new THREE.Frustum(), _pv = new THREE.Matrix4(), _ball = new THREE.Sphere();
+
+/** Whether a person, give or take `margin` metres, is inside the camera's view (_view, set each frame). */
+function inView(h, margin) {
+  _ball.center.set(h.x, (h.y || 0) + 0.9, h.z); _ball.radius = margin;
+  return _view.intersectsSphere(_ball);
+}
 
 // Bones are 3x4 affine matrices, row-major, as the crowd texture stores them:
 // [r00 r01 r02 tx | r10 r11 r12 ty | r20 r21 r22 tz].
@@ -555,20 +562,29 @@ export class Humans {
   }
   remove(h) { const i = this.list.indexOf(h); if (i >= 0) this.list.splice(i, 1); }
 
-  /** Move everyone in view on (anim.js) and write their bones and colours. */
-  update(dt, cam, shadowBox) {
+  /**
+   * Move everyone in view on (anim.js) and write their bones and colours. `cam` is the camera's
+   * position; the camera itself, when given, keeps the detailed bodies for people it can see.
+   */
+  update(dt, cam, shadowBox, camera = null) {
     const maxD2 = this.drawDistance * this.drawDistance, blobD2 = 60 * 60, vis = this._vis, D = this._d2;
-    // Who is in view, and who is close enough for the detailed body: inside its radius (a little
-    // further for those already detailed, so nobody flickers between the two at the edge), the
-    // nearest first if there are more than it allows.
+    // Who is in view, and who is close enough for the detailed body: inside its radius and in the
+    // camera's view (a little further and wider for those already detailed, so nobody flickers
+    // between the two at the edges), the nearest first if there are more than it allows. Everyone
+    // around is posed, seen or not: their shadows fall into view, and a camera swung round finds
+    // them mid-stride.
+    if (camera) {
+      camera.updateMatrixWorld();
+      _view.setFromProjectionMatrix(_pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    }
     vis.length = 0;
     let near = 0;
     for (const h of this.list) {
       if (!h.visible) { h.near = false; continue; }
       const dx = h.x - cam.x, dz = h.z - cam.z, d2 = dx * dx + dz * dz;
       if (d2 > maxD2 || vis.length >= this.capacity) { h.near = false; continue; }
-      const r = this.nearRadius + (h.near ? 2.5 : 0);
-      h._d2 = d2; h.near = d2 < r * r; h._shadow = inShadowBox(shadowBox, h.x, h.y, h.z, 2.5);
+      const was = h.near, r = this.nearRadius + (was ? 2.5 : 0);
+      h._d2 = d2; h.near = d2 < r * r && (!camera || inView(h, was ? 2 : 1.2)); h._shadow = inShadowBox(shadowBox, h.x, h.y, h.z, 2.5);
       if (h.near) D[near++] = d2;
       vis.push(h);
     }

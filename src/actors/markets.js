@@ -5,6 +5,9 @@ import { makeOutfit } from './humans.js';
 import { rng, hash2 } from '../core/math.js';
 
 const NEAR = 140, FAR = 190;
+// How far in front of a stall's middle its shopper stands: the goods reach 0.75 m toward the
+// road, and the stall stands 0.95 m back from the road's edge (citygen.js).
+const BUYER = 0.95;
 
 export class Markets {
   constructor(game) {
@@ -32,7 +35,10 @@ export class Markets {
       seller.yaw = rot;
       out.push(seller);
       if (r.chance(0.35)) {
-        const u = r.range(-0.7, 0.7), buyer = g.humans.add(makeOutfit(r.pick(['woman', 'man', 'student', 'elder']), (r() * 1e9) | 0), x + s * 1.35 + c * u, z + c * 1.35 - s * u);
+        // A shopper at the front of the goods, at the road's edge (on the footpath with the
+        // stall, where the street has one), clear of the traffic in the kerb lane.
+        const u = r.range(-0.7, 0.7), buyer = g.humans.add(makeOutfit(r.pick(['woman', 'man', 'student', 'elder']), (r() * 1e9) | 0), x + s * BUYER + c * u, z + c * BUYER - s * u);
+        buyer.y = P.y[i];
         buyer.yaw = rot + Math.PI;
         if (r.chance(0.3)) buyer.pose = 'phone';
         out.push(buyer);
