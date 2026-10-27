@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { VEHICLE_TYPES, TYPE_KEYS } from './vehicle-types.js';
 import { vehicleModel } from './vehicle-models.js';
-import { createBody, stepBody, collideStatic, collidePair, closingSpeed, speedOf } from './vehicle-physics.js';
+import { createBody, stepBody, collideStatic, collidePair, closingSpeed, speedOf, forwardSpeed } from './vehicle-physics.js';
 import { makeOutfit, inShadowBox } from './humans.js';
 import { radialTexture } from '../world/citymat.js';
 import { clamp, rng } from '../core/math.js';
@@ -164,7 +164,10 @@ export class Vehicles {
         // Driven along its lane, a body forgets its last ride: woken again on a speed breaker, it
         // would otherwise take the whole hump as one substep's rise and fly.
         if (v.kinematic) { if (v.base !== undefined) v.base = undefined; continue; }
-        const ctl = controls.get(v) || IDLE;
+        // No controls this frame: lane traffic (its driver takes over next frame), the player's car and
+        // one they bailed out of roll on; anything parked or left waiting holds still.
+        const rolls = v.ai || v.role === 'player' || v.role === 'abandoned';
+        const ctl = controls.get(v) || (rolls ? IDLE : parked(v));
         stepBody(v, ctl, h, v.role === 'player' ? 1 : 1.3);
         // Up a flyover's ramp and along its deck, or on the street beneath it; over a speed
         // breaker the body rises with the hump, and taken fast it leaves the road for a moment.
@@ -413,6 +416,18 @@ export class Vehicles {
 }
 
 const IDLE = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+const PARKED = { throttle: 0, brake: 0, steer: 0, handbrake: true };
+
+/**
+ * A parked vehicle is left in gear with its handbrake on: every wheel drags, so a crash shoves it a few
+ * metres instead of sending it gliding down the street. The pedals brake whichever way it rolls (held
+ * at a stop, the brake pedal would reverse it).
+ */
+function parked(v) {
+  const f = forwardSpeed(v);
+  PARKED.throttle = f < -0.5 ? 1 : 0; PARKED.brake = f > 0.5 ? 1 : 0;
+  return PARKED;
+}
 
 /**
  * A vehicle's lamps are one instanced part, so its instance colour carries levels instead of a tint:

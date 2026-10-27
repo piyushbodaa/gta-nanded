@@ -320,7 +320,9 @@ export class Traffic {
   _disturbed(v, dt) {
     const a = v.ai;
     v.stunned = (v.stunned || 0) - dt;
-    this.game.controls.set(v, { throttle: 0, brake: 1, steer: 0, handbrake: false });
+    // Braking whichever way it was knocked (held at a stop, the brake pedal reversed it away for good).
+    const f = forwardSpeed(v);
+    this.game.controls.set(v, { throttle: f < -0.5 ? 1 : 0, brake: f > 0.5 ? 1 : 0, steer: 0, handbrake: true });
     if (v.stunned > 0 || speedOf(v) > 0.6 || v.wrecked) return;
     const n = this.net.nearest(v.x, v.z, 6, this._q);
     if (!n) { v.ai = null; v.role = 'abandoned'; return; }

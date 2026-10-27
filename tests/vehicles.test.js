@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import { world } from './helpers.js';
 import { Vehicles } from '../src/actors/vehicles.js';
 import { vehicleModel } from '../src/actors/vehicle-models.js';
-import { createBody, speedOf, stepBody } from '../src/actors/vehicle-physics.js';
+import { createBody, speedOf, forwardSpeed, stepBody } from '../src/actors/vehicle-physics.js';
 import { Player } from '../src/actors/player.js';
 import { Game } from '../src/game/game.js';
 import { Colliders } from '../src/world/colliders.js';
+import { Police } from '../src/game/police.js';
+import { installRules } from '../src/game/rules.js';
+import { Traffic } from '../src/actors/traffic.js';
 import { DECK_H } from '../src/world/roadnet.js';
 
 // A flat, empty city: vehicles meet only each other.
@@ -123,6 +126,47 @@ test('knocked back faster than it can reverse, a car skids down to that instead 
   assert.ok(v.vz < -15, `${v.vz.toFixed(1)} m/s after one step`);
   for (let i = 0; i < 240; i++) stepBody(v, { throttle: 0, brake: 0, steer: 0 }, 1 / 120);
   assert.ok(v.vz >= -9 * 1.2 - 1e-6, 'and within reverse speed after a while');
+});
+
+test('rear-ended, a parked vehicle is shoved a few metres and stays there; a car bailed out of rolls on', () => {
+  for (const [type, most] of [['hatch', 7], ['auto', 18], ['scooter', 18]]) {
+    const V = vehicles();
+    const mine = body(V, 'hatch', 0, 0, 0, { kinematic: false, role: 'player', speed: 15 });
+    const it = body(V, type, 0, 4.5, 0, { role: 'parked' });
+    it.ai = null;
+    let peak = 0;
+    for (let i = 0; i < 600; i++) {
+      // The player stops after the hit (held at a stop, the brake pedal would reverse).
+      const ctl = { throttle: 0, brake: !it.kinematic && forwardSpeed(mine) > 0.5 ? 1 : 0, steer: 0 };
+      frame(V, 1 / 60, new Map([[mine, ctl]]));
+      peak = Math.max(peak, speedOf(it));
+    }
+    assert.ok(peak > 5, `${type}: knocked on at ${peak.toFixed(1)} m/s`);
+    assert.ok(speedOf(it) < 0.05, `${type}: still moving at ${speedOf(it).toFixed(1)} m/s after 10 s`);
+    assert.ok(Math.hypot(it.x, it.z - 4.5) < most, `${type}: shoved ${Math.hypot(it.x, it.z - 4.5).toFixed(1)} m`);
+  }
+  const V = vehicles();
+  const left = body(V, 'hatch', 0, 0, 0, { kinematic: false, role: 'abandoned', speed: 10 });
+  for (let i = 0; i < 120; i++) frame(V, 1 / 60);
+  assert.ok(speedOf(left) > 8, `bailed out of, it rolls on at ${speedOf(left).toFixed(1)} m/s`);
+});
+
+test('a crashed lane car brakes to a stop whichever way it was knocked, instead of reversing away', () => {
+  for (const speed of [4, -4]) {
+    const V = vehicles();
+    const car = body(V, 'auto', 0, 0, 0, { speed });
+    V.wake(car);
+    const traffic = { game: { controls: new Map() }, net: FLAT.net, _q: {} };
+    let back = 0;
+    for (let i = 0; i < 420; i++) {
+      if (car.ai) Traffic.prototype._disturbed.call(traffic, car, 1 / 60);
+      V.step(1 / 60, traffic.game.controls);
+      traffic.game.controls.clear();
+      back = Math.max(back, -Math.sign(speed) * forwardSpeed(car));
+    }
+    assert.ok(back < 0.1, `knocked at ${speed} m/s, it went the other way at ${back.toFixed(1)} m/s`);
+    assert.ok(speedOf(car) < 0.05, `still moving at ${speedOf(car).toFixed(2)} m/s`);
+  }
 });
 
 test('ramming a car makes its wreck the player\'s crime', () => {
@@ -266,6 +310,23 @@ test('number plates front and back on two-wheelers, tempos and ambulances; the p
   assert.ok(vehicleModel('police').passengers.length >= 1);
 });
 
+test('a jacked police jeep\'s second officer stays on the job; an auto\'s passenger runs', () => {
+  const g = rulesGame();
+  const jeep = g.vehicles.spawn('police', 0, 0, 0, { role: 'police' });
+  const officer = g.vehicles.addPassenger(jeep, { kind: 'police' });
+  g.carjack(jeep, g.player);
+  assert.ok(g.police.level > 0, 'jacking the police is a crime');
+  const cop = g.peds.list.find(p => p.h === officer);
+  assert.equal(cop.state, 'fight');
+  assert.ok(cop.cop && cop.keep, 'a policeman, kept on the street');
+  assert.ok(g.police.foot.includes(cop), 'chasing with the officers on foot (and able to arrest)');
+  const auto = g.vehicles.spawn('auto', 10, 0, 0, { role: 'traffic' });
+  const rider = g.vehicles.addPassenger(auto, { kind: 'man' });
+  g.carjack(auto, g.player);
+  assert.equal(g.peds.list.find(p => p.h === rider).state, 'flee');
+  assert.equal(g.police.foot.length, 1);
+});
+
 test('lamps know what they are: tail lamps and light bars are lit apart from the head lamps', () => {
   const kinds = type => new Set(vehicleModel(type).geos.lights.attributes.lamp.array);
   assert.deepEqual([...kinds('hatch')].sort(), [0, 1]);
@@ -284,4 +345,23 @@ function fakeGame(city = FLAT, colliders = OPEN) {
     camera: { facing: 0, reset() {} },
     pushOutOfVehicles() {}, nearestEnterable: () => null, carjack(v) { V.ejectDriver(v); },
   };
+}
+/** The rules (rules.js) over a game of vehicles, police and a stand-in crowd. */
+function rulesGame() {
+  globalThis.addEventListener ??= () => {};
+  globalThis.document ??= {};
+  document.getElementById ??= () => ({ addEventListener() {} });
+  const V = vehicles();
+  const peds = {
+    list: [],
+    _make(h, x, z) { const p = { h, state: 'walk', t: 0 }; h.x = x; h.z = z; this.list.push(p); return p; },
+    adoptEjected(h) { this._make(h, h.x, h.z).state = 'down'; },
+  };
+  const g = {
+    city: { places: [] }, vehicles: V, humans: V.humans, peds, player: { pos: { x: 0, z: 0 } },
+    save: { stat() {}, data: {} }, audio: { sfx() {} }, hud: { help() {} },
+  };
+  g.police = new Police(g);
+  installRules(g);
+  return g;
 }

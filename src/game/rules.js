@@ -63,8 +63,12 @@ export function installRules(g) {
     g.audio.sfx('door');
     if (v.type === 'police') g.police.report('hitCop', v.x, v.z, { cop: true });
     else if (v.role === 'traffic' || v.role === 'mission') g.police.report('carjack', v.x, v.z);
-    // Passengers bail out too.
-    for (const ph of v.passengers.splice(0)) { ph.x = door.x + 1; ph.z = door.z + 1; const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6; }
+    // Passengers bail out too; a police jeep's second officer stays on the job, as when its crew
+    // gets out (police._dismount).
+    for (const ph of v.passengers.splice(0)) {
+      ph.x = door.x + 1; ph.z = door.z + 1; const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6;
+      if (v.type === 'police' && g.police.level > 0) { Object.assign(pp, { state: 'fight', t: 30, keep: true, cop: true, grudge: 2 }); g.police.foot.push(pp); }
+    }
   };
 
   g.onBeginEnter = v => { if (v.driver && v.ai) { v.ai.wait = 3; } };
