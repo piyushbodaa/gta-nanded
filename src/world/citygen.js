@@ -956,6 +956,25 @@ export class City {
     // A lamp post or pole set out from its own street can land in the lane of another beside
     // it (a river bridge, a flyover's ramp near its foot): keep it 0.4 m off every carriageway.
     const offLanes = (x, z) => net.roadClearance(x, z, 10) >= 0.4;
+    // A lamp on a bridge's or flyover's parapet, or down a median, stands on its own road on
+    // purpose, but must keep out of every other road at its height: the street a river bridge
+    // lands beside, the one a flyover's ramp (or its stretch back down at street level) runs
+    // along, the far arm of a junction. Measured to that road's carriageway edge on the lamp's
+    // side (a divided road's median is no lane); a road a deck above or below passes it by.
+    const seg = [0];
+    const offOtherLanes = (x, z, y, own, margin) => !net.grid.query(x - 1, z - 1, x + 1, z + 1, i => {
+      const o = net.ptRoad[i];
+      if (o === own) return false;
+      const ax = net.px[i], az = net.pz[i], dx = net.px[i + 1] - ax, dz = net.pz[i + 1] - az;
+      const d = Math.sqrt(pointSegDist2(x, z, ax, az, ax + dx, az + dz, seg));
+      const s = net.cum[i] + (net.cum[i + 1] - net.cum[i]) * seg[0];
+      if (Math.abs(net.deckAt(o, s) - y) >= 2) return false;
+      const side = (x - ax - dx * seg[0]) * dz - (z - az - dz * seg[0]) * dx >= 0 ? 1 : -1;
+      return d - net.edgeAt(o, s, side) < margin;
+    });
+    // A median lamp's post (0.3 m round in colliders.js) needs no more room than itself: the
+    // median it stands on keeps traffic off.
+    const MEDIAN_POST = 0.3;
     for (let road = 0; road < net.count; road++) {
       const len = net.length[road], w = net.width[road], type = net.type[road];
       const r = rng(hash2(road, 15485863));
@@ -968,7 +987,11 @@ export class City {
         for (let s = 6; s < len - 6; s += 24) {
           net.pointAt(road, s, p);
           // Turned like the lamps beside a street, so the arm and its pool reach over the deck.
-          for (const side of kerb ? [kerb] : [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road, net.deckAt(road, s));
+          const y = net.deckAt(road, s);
+          for (const side of kerb ? [kerb] : [1, -1]) {
+            const x = p.x + p.dz * side * (w / 2 - 0.2), z = p.z - p.dx * side * (w / 2 - 0.2);
+            if (offOtherLanes(x, z, y, road, 0.4)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road, y);
+          }
         }
         continue;
       }
@@ -976,7 +999,7 @@ export class City {
         // Twin-arm lamps down the median of the wide roads.
         for (let s = net.trimStart(road) + 8; s < len - net.trimEnd(road) - 8; s += 34) {
           net.pointAt(road, s, p);
-          if (clear(p.x, p.z)) add(p.x, p.z, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
+          if (clear(p.x, p.z) && offOtherLanes(p.x, p.z, 0, road, MEDIAN_POST)) add(p.x, p.z, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
         }
       } else if (w >= 12 && kerb) {
         // On a divided road they stand on the median between the carriageways; the one
@@ -988,7 +1011,7 @@ export class City {
           const inner = net.innerAt(road, s);
           if (inner > w / 2 - 0.05) continue;
           const m = inner + MEDIAN_W / 2;
-          if (clear(p.x - fz * m, p.z + fx * m)) add(p.x - fz * m, p.z + fx * m, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
+          if (clear(p.x - fz * m, p.z + fx * m) && offOtherLanes(p.x - fz * m, p.z + fx * m, 0, road, MEDIAN_POST)) add(p.x - fz * m, p.z + fx * m, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
         }
       } else if (w >= 8 || (dens > 0.5 && type <= 4)) {
         let side = 1;

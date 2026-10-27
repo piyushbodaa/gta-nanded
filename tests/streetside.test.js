@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { world } from './helpers.js';
 import { PROP, CHUNK, WALK_Y } from '../src/world/citygen.js';
 import { ChunkManager } from '../src/world/chunks.js';
-import { obbOverlap } from '../src/core/math.js';
+import { obbOverlap, pointSegDist2 } from '../src/core/math.js';
 
 // What stands along the streets faces them, and stays out of their lanes.
 
@@ -27,16 +27,48 @@ test('tea stalls, shrines and hoardings face the street; lamps on bridges reach 
 
 test('no street lamp or electric pole stands in the lane of a road beside its own', () => {
   const { city, net } = world();
-  const P = city.props;
-  let n = 0;
+  const P = city.props, t = [0];
+  // How far (x, z) is outside the carriageway of every road but `own` whose surface there is
+  // within 2 m of height y (a lamp collider stands from y; a deck above or below passes it by).
+  // Measured to the edge on its side: a divided road's carriageway stops at its median.
+  const offOthers = (x, z, y, own) => {
+    let best = Infinity, who = -1;
+    net.grid.query(x - 2, z - 2, x + 2, z + 2, k => {
+      const o = net.ptRoad[k];
+      if (o === own) return;
+      const ax = net.px[k], az = net.pz[k], dx = net.px[k + 1] - ax, dz = net.pz[k + 1] - az;
+      const d = Math.sqrt(pointSegDist2(x, z, ax, az, ax + dx, az + dz, t));
+      const s = net.cum[k] + (net.cum[k + 1] - net.cum[k]) * t[0];
+      if (Math.abs(net.deckAt(o, s) - y) >= 2) return;
+      const side = (x - ax - dx * t[0]) * dz - (z - az - dz * t[0]) * dx >= 0 ? 1 : -1;
+      const c = d - net.edgeAt(o, s, side);
+      if (c < best) { best = c; who = o; }
+    });
+    return [best, who];
+  };
+  const n = { side: 0, deck: 0, median: 0 };
   for (let i = 0; i < P.count; i++) {
-    // A bridge's lamps stand on its parapet; the rest stand beside the street, clear of every carriageway.
-    if ((P.kind[i] !== PROP.LAMP && P.kind[i] !== PROP.POLE) || net.bridge[P.road[i]] || net.raised[P.road[i]]) continue;
-    const clear = net.roadClearance(P.x[i], P.z[i], 10);
-    assert.ok(clear >= 0.4 - 1e-6, `prop ${i} (kind ${P.kind[i]}, road ${P.road[i]}) ${clear.toFixed(2)} m from a road edge`);
-    n++;
+    const k = P.kind[i], road = P.road[i], what = `prop ${i} (kind ${k}, road ${road})`;
+    if (k === PROP.MEDIAN_LAMP) {
+      // Down a median: its 0.3 m post reaches into no other road's lane.
+      const [c, o] = offOthers(P.x[i], P.z[i], P.y[i], road);
+      assert.ok(c >= 0.3 - 1e-6, `${what} ${c.toFixed(2)} m from road ${o}'s lane`);
+      n.median++;
+    } else if (k === PROP.LAMP && (net.bridge[road] || net.raised[road])) {
+      // A bridge's or flyover's lamps stand on its parapet, inside their own road's edge, but
+      // clear of every other road at their height (a street beside a bridge's end, or along a
+      // flyover's ramp or its stretch back down at street level).
+      const [c, o] = offOthers(P.x[i], P.z[i], P.y[i], road);
+      assert.ok(c >= 0.4 - 1e-6, `${what} at ${P.y[i].toFixed(1)} m stands ${c.toFixed(2)} m from road ${o}'s lane`);
+      n.deck++;
+    } else if (k === PROP.LAMP || k === PROP.POLE) {
+      // The rest stand beside the street, clear of every carriageway.
+      const clear = net.roadClearance(P.x[i], P.z[i], 10);
+      assert.ok(clear >= 0.4 - 1e-6, `${what} ${clear.toFixed(2)} m from a road edge`);
+      n.side++;
+    }
   }
-  assert.ok(n > 10000, `${n} lamps and poles`);
+  assert.ok(n.side > 10000 && n.deck > 300 && n.median > 400, JSON.stringify(n));
 });
 
 test('a compound wall runs into no other building, and no street tree stands in a wall or a shop platform', () => {
