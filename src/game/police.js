@@ -5,6 +5,7 @@ import { makeOutfit } from '../actors/humans.js';
 import { speedOf, forwardSpeed } from '../actors/vehicle-physics.js';
 
 const UNITS = [0, 2, 3, 4, 6, 8];
+const FOOT_MAX = 6; // officers on foot at once; later units stay in their jeeps
 const CRIME_HEAT = { carjack: 1, hitPed: 1, punch: 0.45, hitCop: 2, ramPolice: 1, wreck: 1, assault: 1, mission: 0 };
 
 export class Police {
@@ -56,7 +57,8 @@ export class Police {
   _copNear(x, z, r) {
     for (const u of this.units) if (dist(u.v.x, u.v.z, x, z) < r) return true;
     for (const c of this.foot) if (dist(c.h.x, c.h.z, x, z) < r) return true;
-    for (const v of this.game.vehicles.list) if (v.type === 'police' && v.role !== 'player' && dist(v.x, v.z, x, z) < r * 0.8) return true;
+    // Only a jeep with an officer in it sees anything: not an empty, abandoned or burnt-out one.
+    for (const v of this.game.vehicles.list) if (v.type === 'police' && v.driver && v.role !== 'player' && !v.wrecked && dist(v.x, v.z, x, z) < r * 0.8) return true;
     return false;
   }
 
@@ -66,7 +68,12 @@ export class Police {
       const c = this.pending[i];
       if ((c.t -= dt) <= 0) { this.pending.splice(i, 1); this.addHeat(c.heat, pos.x, pos.z); }
     }
-    if (this.level === 0) { this._cleanup(dt); return; }
+    if (this.level === 0) {
+      // Small crimes are forgotten after a while: a punch long ago doesn't count toward a star.
+      this.heat = Math.max(0, this.heat - dt * 0.03);
+      this._cleanup(dt);
+      return;
+    }
     // Line of sight from any unit.
     this.losT -= dt;
     if (this.losT <= 0) {
@@ -92,20 +99,33 @@ export class Police {
       }
     }
     this.searchRadius = 45 + this.level * 22;
-    // Keep the right number of units on the job.
+    // Keep the right number of units on the job. A jeep that is wrecked, gone or taken by the
+    // player is off it: let it go, or it wails and is never towed for the rest of the game.
     const want = UNITS[this.level];
-    this.units = this.units.filter(u => g.vehicles.list.includes(u.v) && !u.v.wrecked && u.v.role !== 'player');
+    this.units = this.units.filter(u => {
+      const on = g.vehicles.list.includes(u.v) && !u.v.wrecked && u.v.role !== 'player';
+      if (!on) this._release(u.v);
+      return on;
+    });
     if (this.units.length < want && (this.spawnT = (this.spawnT || 0) - dt) <= 0) {
       this._spawnUnit(pos);
       this.spawnT = 2.2 - this.level * 0.25;
     }
     for (const u of this.units) this._driveUnit(u, dt, pos);
     for (const c of this.foot) this._footCop(c, dt);
-    this.foot = this.foot.filter(c => g.peds.list.includes(c));
-    // Busted?
+    // Officers left far behind go back to their beat, which makes room for fresh ones closer in;
+    // the jeeps they left are towed away like any others (a long chase on foot would pile them up).
+    this.foot = this.foot.filter(c => {
+      if (!g.peds.list.includes(c)) return false;
+      if (dist(c.h.x, c.h.z, pos.x, pos.z) < 150) return true;
+      this._offDuty(c);
+      return false;
+    });
+    this._cleanup(dt);
+    // Busted? Not while a cutscene holds the player still: they couldn't get away if they tried.
     const near = this.foot.some(c => c.state !== 'down' && dist(c.h.x, c.h.z, P.x, P.z) < 1.5);
     const boxed = P.vehicle && speedOf(P.vehicle) < 1.5 && this.units.some(u => dist(u.v.x, u.v.z, P.vehicle.x, P.vehicle.z) < 6.5);
-    if ((P.state === 'foot' && near && P.speed < 2.5) || boxed) this.bustT += dt; else this.bustT = Math.max(0, this.bustT - dt * 2);
+    if (!g.cutscene && ((P.state === 'foot' && near && P.speed < 2.5) || boxed)) this.bustT += dt; else this.bustT = Math.max(0, this.bustT - dt * 2);
     if (this.bustT > (P.vehicle ? 3.2 : 1.6)) { this.bustT = 0; g.busted?.(); }
   }
 
@@ -158,7 +178,7 @@ export class Police {
     g.controls.set(v, ctl);
     // A stopped unit near a player on foot sends its officers out: at once when close, and
     // after a couple of seconds when it is held up further off (a blocked lane, a parked auto).
-    if (!g.player.vehicle && d < 35 && speedOf(v) < 2) {
+    if (!g.player.vehicle && d < 35 && speedOf(v) < 2 && this.foot.length < FOOT_MAX) {
       u.exitT += dt;
       if (u.exitT > (d < 14 ? 0.6 : 2.2) && v.driver) this._dismount(u);
     } else u.exitT = Math.max(0, u.exitT - dt);
@@ -170,7 +190,7 @@ export class Police {
    */
   _unstick(u) {
     const g = this.game, v = u.v, P = g.player, d = Math.hypot(v.x - P.x, v.z - P.z);
-    if (d < 45) { if (!g.player.vehicle && v.driver) { this._dismount(u); return true; } return false; }
+    if (d < 45) { if (!g.player.vehicle && v.driver && this.foot.length < FOOT_MAX) { this._dismount(u); return true; } return false; }
     const path = u.driver.path, net = g.net;
     if (!path) return false;
     const k = Math.min(path.length / 2 - 1, u.driver.i + 3);
@@ -194,10 +214,22 @@ export class Police {
       p.state = 'fight'; p.t = 30; p.keep = true; p.cop = true; p.grudge = 2;
       this.foot.push(p);
     }
-    v.role = 'police-parked';
+    // Left at the roadside, lights still flashing; free to be towed once the player takes it.
+    v.role = 'police-parked'; v.keep = false;
     this.units = this.units.filter(x => x !== u);
     g.controls.delete(v);
   }
+
+  /** A unit's jeep off the job (wrecked, gone, or the player's now). */
+  _release(v) {
+    v.keep = false;
+    if (v.role === 'player') return; // the player has its siren switch and its controls now
+    v.sirenOn = false;
+    this.game.controls.delete(v);
+    if (v.role === 'police') v.role = 'abandoned'; // a wreck: it burns, blows up and is towed like any other
+  }
+
+  _offDuty(c) { c.state = 'walk'; c.keep = false; c.road = null; }
 
   _footCop(c, dt) {
     // Cops chase on foot and keep at it longer than angry bystanders do.
@@ -208,13 +240,15 @@ export class Police {
     const g = this.game;
     for (const u of this.units) { u.v.sirenOn = false; u.v.role = 'police-idle'; u.v.keep = false; g.controls.delete(u.v); }
     this.units = [];
-    for (const c of this.foot) { c.state = 'walk'; c.keep = false; c.road = null; }
+    // The jeeps officers got out of go quiet too, or they wail on after 'Lost them'.
+    for (const v of g.vehicles.list) if (v.role === 'police-parked') v.sirenOn = false;
+    for (const c of this.foot) this._offDuty(c);
     this.foot = [];
     this.bustT = 0;
   }
 
   _cleanup(dt) {
-    // Idle police jeeps drive off and despawn when far away.
+    // Idle and parked police jeeps despawn when far away.
     const g = this.game, pos = g.player.pos;
     for (const v of g.vehicles.list.slice()) {
       if (!(v.role === 'police-idle' || v.role === 'police-parked')) continue;

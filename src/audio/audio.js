@@ -163,9 +163,9 @@ export class GameAudio {
         this._tone(1400 + Math.random() * 600, 0.6, { type: 'triangle', gain: 0.05 * k, glide: 900 });
         break;
       case 'explosion':
-        this._burst(1.6, { freq: 500, q: 0.4, gain: 0.9, type: 'lowpass', buf: this.brown });
-        this._burst(0.8, { freq: 2000, q: 0.5, gain: 0.5 });
-        this._tone(55, 1.2, { gain: 0.9, glide: 25 });
+        this._burst(1.6, { freq: 500, q: 0.4, gain: 0.9 * k, type: 'lowpass', buf: this.brown });
+        this._burst(0.8, { freq: 2000, q: 0.5, gain: 0.5 * k });
+        this._tone(55, 1.2, { gain: 0.9 * k, glide: 25 });
         break;
       case 'jump': this._tone(240, 0.08, { gain: 0.05, glide: 300 }); break;
       case 'thud': // suspension bottoming out on a speed breaker or in a pothole
