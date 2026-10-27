@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { world } from './helpers.js';
-import { Colliders, SOLID } from '../src/world/colliders.js';
-import { SOLID_BELOW } from '../src/world/roadnet.js';
+import { Colliders, SOLID, obbSat } from '../src/world/colliders.js';
+import { SOLID_BELOW, MEDIAN_W } from '../src/world/roadnet.js';
+import { VEHICLE_TYPES } from '../src/actors/vehicle-types.js';
+import { STORY_PLACES } from '../src/game/story.js';
 
 // Medians, railings and ramps are solid where they are drawn, and nowhere else.
 
@@ -60,4 +62,70 @@ test('a flyover ramp\'s solid end is closed to the street under the deck, and op
     }
   }
   assert.ok(ramps >= 30, `${ramps} ramps`);
+});
+
+// A truck (the c4 sand tipper): its half width and half length.
+const TRUCK = { hw: VEHICLE_TYPES.truck.W / 2, hd: VEHICLE_TYPES.truck.L / 2 };
+/** The kerbs down the medians: 0.35 m high and at most 0.7 m across. */
+const isMedian = (c, i) => c.type[i] === SOLID.OBB && c.y0[i] === 0 && Math.abs(c.h[i] - 0.35) < 1e-3 && c.hw[i] < 0.36;
+
+test("the c4 tipper follows its GPS line from Mama's ghat road onto the Govardhan bridge without touching a kerb", () => {
+  const { net } = world();
+  const col = colliders(), out = {}, P = STORY_PLACES;
+  const route = net.route(P.ghatRoad.x, P.ghatRoad.z, P.bridgeN.x, P.bridgeN.z);
+  // Along the drawn GPS line (the road's middle), and along the lane line drivers keep to.
+  for (const [line, pts] of [['GPS line', route.points], ['lane', net.lanePath(route.points)]]) {
+    let steps = 0;
+    for (let i = 0; i + 3 < pts.length; i += 2) {
+      const ax = pts[i], az = pts[i + 1], bx = pts[i + 2], bz = pts[i + 3], len = Math.hypot(bx - ax, bz - az), rot = Math.atan2(bx - ax, bz - az);
+      for (let s = 0; s <= len; s += 0.5, steps++) {
+        const x = ax + ((bx - ax) * s) / len, z = az + ((bz - az) * s) / len, hit = col.boxContact(x, z, TRUCK.hw, TRUCK.hd, rot, out, 0);
+        assert.ok(!hit || hit.depth < 0.02, `${line}: the tipper is ${hit?.depth.toFixed(2)} m into something at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+      }
+    }
+    assert.ok(steps > 500, `${line}: ${steps} places along ${route.length.toFixed(0)} m`);
+  }
+});
+
+test("at every junction a median keeps out of the other roads' lanes", () => {
+  const { net } = world();
+  const col = colliders(), q = {}, sat = {};
+  // One of road r's own medians: down its centre line, or along the median side of its carriageway.
+  const own = (r, i) => {
+    const n = net.nearest(col.x[i], col.z[i], 12, {}, o => o === r);
+    if (!n || Math.abs(n.dx * col.s[i] + n.dz * col.c[i]) < 0.995) return false;
+    const lateral = (col.x[i] - n.x) * n.dz - (col.z[i] - n.z) * n.dx, ms = net.oneway[r] ? -net.oneway[r] : 0;
+    return Math.abs(lateral - (ms ? ms * (net.innerAt(r, n.s) + MEDIAN_W / 4) : 0)) < 0.25;
+  };
+  // A truck in each lane over the last 15 m into every junction of three or more roads and the
+  // first 15 m out of it, wherever the road runs straight under the whole truck.
+  let ways = 0, into = 0, worst = 0, where = '';
+  for (let r = 0; r < net.count; r++) {
+    if (net.raised[r] || net.bridge[r]) continue;
+    const len = net.length[r], ow = net.oneway[r];
+    for (const dir of ow ? [ow] : [1, -1]) for (let lane = 0; lane < (ow ? net.lanes[r] : 1); lane++) {
+      const from = dir > 0 ? net.trimStart(r) : net.trimEnd(r), to = len - (dir > 0 ? net.trimEnd(r) : net.trimStart(r));
+      for (const [j, a, b] of [[dir > 0 ? net.ra[r] : net.rb[r], from, Math.min(to, from + 15)], [dir > 0 ? net.rb[r] : net.ra[r], Math.max(from, to - 15), to]]) {
+        if (net.jRoads[j].length < 3 || b - a < 0.5) continue;
+        ways++;
+        let deepest = 0;
+        for (let u = a; u <= b; u += 0.5) {
+          const s = dir > 0 ? u : len - u, seg = net.pointAt(r, s, q).seg;
+          if (net.cum[seg] > s - TRUCK.hd || net.cum[seg + 1] < s + TRUCK.hd) continue;
+          net.lanePoint(r, dir, u, net.laneOffset(r, lane, s), q);
+          const ca = Math.cos(q.heading), sa = Math.sin(q.heading), R = TRUCK.hd + TRUCK.hw;
+          col.near(q.x - R, q.z - R, q.x + R, q.z + R, i => {
+            if (!isMedian(col, i)) return;
+            const res = obbSat(q.x, q.z, TRUCK.hw, TRUCK.hd, ca, sa, col.x[i], col.z[i], col.hw[i], col.hd[i], col.c[i], col.s[i], sat);
+            if (!res || res.depth <= deepest || own(r, i)) return;
+            deepest = res.depth;
+            if (deepest > worst) { worst = deepest; where = `road ${r} lane ${lane} at (${q.x.toFixed(1)}, ${q.z.toFixed(1)}), junction ${j}`; }
+          });
+        }
+        if (deepest > 0.1) into++;
+      }
+    }
+  }
+  assert.ok(ways > 40000, `${ways} ways into and out of junctions`);
+  assert.equal(into, 0, `${into} of them run into another road's median, the worst ${worst.toFixed(2)} m on ${where}`);
 });
