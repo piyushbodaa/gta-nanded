@@ -51,12 +51,18 @@ export class Player {
     const n = g.net.nearest(this.x, this.z, 14, this._near || (this._near = {}), this._onGround);
     return n ? g.city.pavementAt(n.seg, n.dist) : 0;
   }
+  /** The ground, or a flyover deck if that is where we are, or the footpath. */
+  _groundAt(g) {
+    return Math.max(g.city.groundHeight(this.x, this.z), g.net.surfaceAt(this.x, this.z, this.groundY ?? 0), this._pavement(g));
+  }
 
   update(dt, input) {
     const g = this.game;
     this.invuln = Math.max(0, this.invuln - dt);
     this.punchCooldown = Math.max(0, this.punchCooldown - dt);
-    if (this.state === 'dead') return;
+    // The vehicle was taken away under us (a mission tidying up): step off where it stood.
+    if (this.vehicle?.removed) this.leaveVehicle(true);
+    if (this.state === 'dead') return this._dead();
     if (this.state === 'driving') return this._drive(dt, input);
     if (this.state === 'entering') return this._entering(dt);
     if (this.state === 'down') return this._down(dt);
@@ -86,10 +92,11 @@ export class Player {
     if (input.pressed('jump') && this.onGround) { this.vy = 4.6; this.onGround = false; g.audio?.sfx('jump'); }
     this.vy -= 15 * dt;
     this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
-    // The ground, or a flyover deck if that is where we are walking.
-    const gy = Math.max(g.city.groundHeight(this.x, this.z), g.net.surfaceAt(this.x, this.z, this.groundY ?? 0), this._pavement(g));
+    const gy = this._groundAt(g);
     this.groundY = gy;
     if (this.y <= gy) { if (!this.onGround && this.vy < -9) this.damage((-this.vy - 9) * 6, 'fall'); this.y = gy; this.vy = 0; this.onGround = true; }
+    else if (this.onGround && this.y - gy < 0.3) { this.y = gy; this.vy = 0; } // down a kerb or a slope: still on our feet
+    else this.onGround = false; // off a ledge: falling, and the landing can hurt
     // Collide: buildings and props, then vehicles, then keep out of deep water.
     const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
     p.x = this.x; p.z = this.z;
@@ -115,11 +122,11 @@ export class Player {
     }
     // Enter / carjack.
     if (input.pressed('enter')) {
-      const v = g.nearestEnterable(this.x, this.z, 4.2);
+      const v = g.nearestEnterable(this.x, this.z, 4.2, this.y);
       if (v) this._beginEnter(v);
     }
     // Animate.
-    h.x = this.x; h.y = this.y; h.z = this.z; h.yaw = this.heading;
+    h.x = this.x; h.y = this.y; h.z = this.z; h.yaw = this.heading; h.floor = gy;
     h.speed = this.speed;
     h.pose = this.speed > 0.3 ? (this.speed > 3.2 ? 'run' : 'walk') : 'idle';
     h.air = !this.onGround; h.vy = this.vy;
@@ -142,18 +149,26 @@ export class Player {
 
   _entering(dt) {
     const g = this.game, v = this.enterTarget, h = this.human;
+    const giveUp = () => { this.state = 'foot'; this.enterTarget = null; };
+    // It burnt out, or went away, while we ran to it.
+    if (v.wrecked || v.removed) return giveUp();
     this.stateT += dt;
     const door = g.vehicles.doorWorld(v);
     const d = dist(this.x, this.z, door.x, door.z);
     if (d > 0.35 && this.stateT < 1.6) {
-      // Walk (briskly) to the door.
+      // Walk (briskly) to the door, along walls rather than through them.
       const sp = 5;
       const ux = (door.x - this.x) / d, uz = (door.z - this.z) / d;
       this.x += ux * Math.min(d, sp * dt); this.z += uz * Math.min(d, sp * dt);
+      const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
+      p.x = this.x; p.z = this.z;
+      if (g.colliders.resolveCircle(p, 0.34, o, Infinity, this.groundY)) { this.x = p.x; this.z = p.z; }
       this.heading = Math.atan2(ux, uz);
       h.x = this.x; h.z = this.z; h.yaw = this.heading; h.speed = sp; h.pose = 'run'; h.air = false; h.lookYaw = 0;
       return;
     }
+    // Still well short of the door when time is up: it drove off, or something is in the way.
+    if (d > 1.5) return giveUp();
     // At the door: pull out whoever is driving, then get in.
     if (v.driver && v.driver !== h) g.carjack(v, this);
     this.enterVehicle(v);
@@ -177,17 +192,20 @@ export class Player {
 
   /** Get out; `instant` skips the walk (teleports, respawns). */
   leaveVehicle(instant = false) {
-    const g = this.game, v = this.vehicle;
+    const g = this.game, v = this.vehicle, h = this.human;
     if (!v) return;
     const spd = speedOf(v);
-    const door = g.vehicles.doorWorld(v);
+    // The door, or the nearest clear spot round the vehicle: never off a flyover's edge or into a wall.
+    const out = g.vehicles.exitWorld(v);
     v.driver = null;
     v.role = 'abandoned';
     this.vehicle = null;
-    this.x = door.x; this.z = door.z; this.y = Math.max(g.city.groundHeight(door.x, door.z), g.net.surfaceAt(door.x, door.z, v.y));
-    this.groundY = this.y;
+    this.x = out.x; this.z = out.z; this.y = this.groundY = out.y; this.vy = 0;
     this.heading = v.heading;
-    this.human.pose = 'idle'; this.human.pitch = 0; this.human.roll = 0;
+    h.x = this.x; h.y = this.y; h.z = this.z; h.floor = this.y; h.pitch = 0; h.roll = 0;
+    // Pulled out of the car while WASTED or BUSTED (it burnt, it sank, the respawn): still dead till then.
+    if (this.state === 'dead') { h.pose = 'lie'; g.onExitedVehicle?.(v, spd); return; }
+    h.pose = 'idle';
     this.state = 'foot';
     if (!instant && spd > 7) {
       // Bail out of a moving car: roll on the tarmac, the car rolls on without you.
@@ -201,17 +219,32 @@ export class Player {
   }
 
   _down(dt) {
-    const h = this.human;
+    const g = this.game, h = this.human;
     this.downT -= dt;
     this.x += this.vx * dt; this.z += this.vz * dt;
     this.vx = damp(this.vx, 0, 3, dt); this.vz = damp(this.vz, 0, 3, dt);
     const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
     p.x = this.x; p.z = this.z;
-    if (this.game.colliders.resolveCircle(p, 0.34, o)) { this.x = p.x; this.z = p.z; this.vx *= -0.2; this.vz *= -0.2; }
-    h.x = this.x; h.z = this.z; h.y = this.game.city.groundHeight(this.x, this.z);
+    // On the level we are on: a flyover's railings stop the slide, the street beneath does not.
+    if (g.colliders.resolveCircle(p, 0.34, o, Infinity, this.groundY)) { this.x = p.x; this.z = p.z; this.vx *= -0.2; this.vz *= -0.2; }
+    // Lying on the deck or the footpath we fell on, not on the ground beneath it.
+    this.vy -= 15 * dt; this.y += this.vy * dt;
+    const gy = this.groundY = this._groundAt(g);
+    if (this.y <= gy) { this.y = gy; this.vy = 0; }
+    h.x = this.x; h.z = this.z; h.y = this.y; h.floor = gy;
     // Down, then back up over the last moments (anim.js plays the fall and the get-up).
     h.pose = this.downT > GETUP_TIME * 0.85 ? 'lie' : 'getup'; h.speed = 0; h.air = false; h.punch = 0;
     if (this.downT <= 0) this.state = 'foot';
+  }
+
+  /** WASTED or BUSTED at the wheel: hands off, the car brought to a stop, the body left in its seat. */
+  _dead() {
+    const v = this.vehicle;
+    if (!v) return;
+    // Brake whichever way it rolls, and let go at a stop (held there, the brake pedal reverses).
+    const f = forwardSpeed(v);
+    this.controls = { throttle: f < -0.5 ? 1 : 0, brake: f > 0.5 ? 1 : 0, steer: 0, handbrake: false };
+    this.human.pose = v.model.seat.pose;
   }
 
   /** Knocked down by a car or a hard punch. */

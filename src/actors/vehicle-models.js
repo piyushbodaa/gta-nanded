@@ -1,24 +1,28 @@
 // Procedural vehicle models. Each type yields four geometries: `paint` (tinted
 // per vehicle), `glass` (dark, mirror-smooth windows), `fixed` (vertex-coloured
-// trim, tyres, canopy) and `lights` (lamps, brightened at night and when
-// braking), plus wheel and seat data. Car bodies are lofted through rounded
-// cross-sections and smooth-shaded, so paint and glass catch the sky.
+// trim, tyres, canopy) and `lights` (lamps, each tagged with its kind: in
+// front, tail or light bar), plus wheel and seat data. Car bodies are lofted
+// through rounded cross-sections and smooth-shaded, so paint and glass catch
+// the sky.
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const GLASS = 0x26343c, BLACK = 0x1a1a1a, GREY = 0x55595b, CHROME = 0xb8bec2, PLATE_W = 0xf4f4f0, PLATE_Y = 0xf2c230;
-const HEAD = 0xfff3c4, TAIL = 0xd81b1b, AMBER = 0xff9a1f;
+const HEAD = 0xfff3c4, TAIL = 0xd81b1b, AMBER = 0xff9a1f, BAR_RED = 0xff2020, BAR_BLUE = 0x2050ff;
+/** What a lamp is, by its colour (vehicles.js lights each kind its own way): 0 in front, 1 tail lamp, 2 light bar. */
+const lampKind = color => (color === TAIL ? 1 : color === BAR_RED || color === BAR_BLUE ? 2 : 0);
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 class VB {
-  constructor() { this.parts = { paint: { pos: [], col: [] }, glass: { pos: [], col: [] }, fixed: { pos: [], col: [] }, lights: { pos: [], col: [] } }; }
+  constructor() { this.parts = { paint: { pos: [], col: [] }, glass: { pos: [], col: [] }, fixed: { pos: [], col: [] }, lights: { pos: [], col: [], lamp: [] } }; }
   _tri(part, a, b, c, color) {
     if (part === 'fixed' && color === GLASS) part = 'glass';
     const P = this.parts[part];
     P.pos.push(...a, ...b, ...c);
     const r = ((color >> 16) & 255) / 255, g = ((color >> 8) & 255) / 255, bl = (color & 255) / 255;
     for (let i = 0; i < 3; i++) P.col.push(r, g, bl);
+    if (P.lamp) { const k = lampKind(color); P.lamp.push(k, k, k); }
   }
   quad(part, a, b, c, d, color) { this._tri(part, a, b, c, color); this._tri(part, a, c, d, color); }
   box(part, cx, cy, cz, w, h, d, color) {
@@ -112,6 +116,7 @@ class VB {
       let g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(P.pos, 3));
       g.setAttribute('color', new THREE.Float32BufferAttribute(P.col, 3));
+      if (P.lamp) g.setAttribute('lamp', new THREE.Float32BufferAttribute(P.lamp, 1));
       // Smooth across gentle bends (bonnet into windscreen), keep the hard edges hard.
       if (P.pos.length) g = toCreasedNormals(g, k === 'paint' || k === 'glass' ? 0.75 : 0.5);
       g.computeBoundingSphere();
@@ -270,10 +275,11 @@ const BUILDERS = {
     b.box('fixed', 0, 0.98, 2.1, 1.0, 0.22, 0.04, BLACK);
     // Light bar: red to the left, blue to the right.
     b.box('fixed', 0, 1.93, 0.1, 1.2, 0.08, 0.3, BLACK);
-    b.box('lights', 0.32, 2.03, 0.1, 0.5, 0.14, 0.26, 0xff2020);
-    b.box('lights', -0.32, 2.03, 0.1, 0.5, 0.14, 0.26, 0x2050ff);
+    b.box('lights', 0.32, 2.03, 0.1, 0.5, 0.14, 0.26, BAR_RED);
+    b.box('lights', -0.32, 2.03, 0.1, 0.5, 0.14, 0.26, BAR_BLUE);
     lampsAndPlates(b, { front: 2.11, rear: -2.09, y: 0.92, hw: 0.84 });
-    return { b, wheels, seat: { x: -0.4, y: 0.72, z: 0.0, pose: 'sit' }, siren: true };
+    // A second officer beside the driver from two stars up (police.js), and the back bench.
+    return { b, wheels, seat: { x: -0.4, y: 0.72, z: 0.0, pose: 'sit' }, passengers: [[0.4, 0.72, 0.0], [-0.4, 0.72, -1.1], [0.4, 0.72, -1.1]], siren: true };
   },
   auto() {
     const b = new VB();
@@ -311,6 +317,7 @@ const BUILDERS = {
     b.box('lights', 0, 0.86, 1.25, 0.2, 0.17, 0.08, HEAD);
     for (const sgn of [1, -1]) { b.box('lights', sgn * 0.28, 0.98, 1.06, 0.07, 0.05, 0.05, AMBER); b.box('lights', sgn * 0.55, 0.62, -1.3, 0.14, 0.12, 0.04, TAIL); }
     b.box('fixed', 0, 0.5, -1.31, 0.48, 0.13, 0.02, PLATE_Y);
+    b.box('fixed', 0, 0.6, 1.31, 0.3, 0.1, 0.02, PLATE_Y);
     return { b, wheels: [[0.6, -0.8, 0.23, false, 0.16], [-0.6, -0.8, 0.23, false, 0.16], [0, 1.15, 0.23, true, 0.14]], seat: { x: 0, y: 0.82, z: 0.18, pose: 'sit' }, passengers: [[0.3, 0.88, -0.75], [-0.3, 0.88, -0.75]] };
   },
   bike() {
@@ -331,6 +338,9 @@ const BUILDERS = {
     b.box('fixed', 0, 1.02, 0.44, 0.72, 0.04, 0.04, BLACK);
     b.box('lights', 0, 0.92, 0.6, 0.16, 0.14, 0.08, HEAD);
     b.box('lights', 0, 0.78, -0.88, 0.1, 0.06, 0.05, TAIL);
+    // Plates: up on the front mudguard, and under the tail lamp.
+    b.box('fixed', 0, 0.73, 0.72, 0.16, 0.09, 0.02, PLATE_W);
+    b.box('fixed', 0, 0.66, -0.9, 0.18, 0.1, 0.02, PLATE_W);
     return { b, wheels: [[0, 0.64, 0.31, true, 0.1], [0, -0.63, 0.31, false, 0.11]], seat: { x: 0, y: 0.8, z: -0.28, pose: 'ride' }, passengers: [[0, 0.86, -0.62]] };
   },
   scooter() {
@@ -342,6 +352,9 @@ const BUILDERS = {
     b.box('fixed', 0, 1.06, 0.5, 0.66, 0.05, 0.05, BLACK);
     b.box('lights', 0, 0.98, 0.6, 0.14, 0.1, 0.06, HEAD);
     b.box('lights', 0, 0.7, -0.92, 0.12, 0.06, 0.04, TAIL);
+    // Plates: on the front apron, and on the tail under its lamp.
+    b.box('fixed', 0, 0.55, 0.665, 0.16, 0.1, 0.02, PLATE_W);
+    b.box('fixed', 0, 0.55, -0.89, 0.16, 0.1, 0.02, PLATE_W);
     return { b, wheels: [[0, 0.62, 0.24, true, 0.1], [0, -0.62, 0.24, false, 0.11]], seat: { x: 0, y: 0.72, z: -0.26, pose: 'ride' }, passengers: [[0, 0.78, -0.62]] };
   },
   bus() {
@@ -363,6 +376,7 @@ const BUILDERS = {
       b.box('lights', s * 1.05, 1.05, -5.32, 0.2, 0.3, 0.04, TAIL);
     }
     b.box('fixed', 0, 0.85, -5.33, 0.5, 0.13, 0.02, PLATE_Y);
+    b.box('fixed', 0, 0.62, 5.36, 0.5, 0.13, 0.02, PLATE_Y);
     return { b, wheels: wheels4(3.4, -2.4, 1.08, 0.5, 0.32), seat: { x: -0.75, y: 1.0, z: 4.4, pose: 'sit' } };
   },
   truck() {
@@ -379,6 +393,7 @@ const BUILDERS = {
     b.box('fixed', 0, 0.7, 3.84, 2.3, 0.28, 0.08, GREY);
     for (const s of [1, -1]) { b.box('lights', s * 0.92, 0.95, 3.84, 0.28, 0.18, 0.04, HEAD); b.box('lights', s * 1.0, 1.0, -3.88, 0.2, 0.18, 0.04, TAIL); }
     b.box('fixed', 0, 0.75, -3.9, 0.5, 0.13, 0.02, PLATE_Y);
+    b.box('fixed', 0, 0.7, 3.89, 0.5, 0.13, 0.02, PLATE_Y);
     return { b, wheels: [...wheels4(2.95, -1.6, 1.0, 0.48, 0.28), [1.0, -2.65, 0.48, false, 0.28], [-1.0, -2.65, 0.48, false, 0.28]], seat: { x: -0.55, y: 1.25, z: 3.0, pose: 'sit' } };
   },
   tractor() {
@@ -404,6 +419,8 @@ const BUILDERS = {
     b.box('fixed', 0, 1.2, -0.7, 1.3, 0.5, 2.2, 0xc9a26b);
     b.box('fixed', 0, 0.55, 1.88, 1.5, 0.2, 0.06, GREY);
     for (const s of [1, -1]) { b.box('lights', s * 0.58, 0.95, 1.9, 0.24, 0.16, 0.04, HEAD); b.box('lights', s * 0.62, 0.85, -1.94, 0.14, 0.14, 0.04, TAIL); }
+    // Yellow plates (a goods carrier): on the bumper, and on the tailgate.
+    b.box('fixed', 0, 0.55, 1.92, 0.5, 0.12, 0.02, PLATE_Y); b.box('fixed', 0, 0.98, -1.95, 0.5, 0.12, 0.02, PLATE_Y);
     return { b, wheels: wheels4(1.25, -1.0, 0.66, 0.3), seat: { x: -0.32, y: 0.85, z: 1.25, pose: 'sit' } };
   },
   ambulance() {
@@ -416,10 +433,11 @@ const BUILDERS = {
       b.box('fixed', s * 0.917, 1.65, -0.9, 0.012, 0.5, 0.18, 0xc62828);
       b.box('fixed', s * 0.917, 1.65, -0.9, 0.012, 0.18, 0.5, 0xc62828);
     }
-    b.box('lights', 0.3, 2.32, 0.9, 0.45, 0.12, 0.24, 0xff2020);
-    b.box('lights', -0.3, 2.32, 0.9, 0.45, 0.12, 0.24, 0x2050ff);
+    b.box('lights', 0.3, 2.32, 0.9, 0.45, 0.12, 0.24, BAR_RED);
+    b.box('lights', -0.3, 2.32, 0.9, 0.45, 0.12, 0.24, BAR_BLUE);
     b.box('fixed', 0, 0.55, 2.33, 1.7, 0.25, 0.08, GREY);
     for (const s of [1, -1]) { b.box('lights', s * 0.7, 0.9, 2.34, 0.28, 0.14, 0.04, HEAD); b.box('lights', s * 0.8, 1.2, -2.37, 0.18, 0.3, 0.04, TAIL); }
+    b.box('fixed', 0, 0.55, 2.38, 0.5, 0.12, 0.02, PLATE_W); b.box('fixed', 0, 0.7, -2.36, 0.5, 0.12, 0.02, PLATE_W);
     return { b, wheels: wheels4(1.55, -1.35, 0.78, 0.33), seat: { x: -0.4, y: 0.75, z: 0.75, pose: 'sit' }, siren: true };
   },
 };

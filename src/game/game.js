@@ -203,10 +203,11 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- helpers for actors
-  nearestEnterable(x, z, radius) {
+  /** The vehicle to get into from (x, z), on the level `y` (the player's): not on a flyover above, nor the street below. */
+  nearestEnterable(x, z, radius, y = this.player.y) {
     let best = null, bd = radius;
     for (const v of this.vehicles.list) {
-      if (v === this.player.vehicle || v.wrecked) continue;
+      if (v === this.player.vehicle || v.wrecked || Math.abs(v.y - y) > 2) continue;
       const door = this.vehicles.doorWorld(v, this._door || (this._door = {}));
       const d = Math.min(dist(x, z, door.x, door.z), dist(x, z, v.x, v.z) - v.hd * 0.5);
       if (d < bd) { bd = d; best = v; }

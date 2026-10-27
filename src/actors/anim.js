@@ -600,7 +600,7 @@ function lie(a, h, P) {
   if (f >= 1) {
     P.set(end);
     P[C.TP] += 0.01 * Math.sin(a.t * 1.9); // still breathing
-    if (h.y > 0.05) flail(a, P, 0.5);
+    if (h.y - (h.floor || 0) > 0.05) flail(a, P, 0.5); // in the air above what they fell on (h.floor: a deck, a footpath; the road is 0)
     return;
   }
   const g = f * f, buckle = Math.sin(Math.PI * Math.min(1, f * 1.6));
@@ -615,7 +615,7 @@ function lie(a, h, P) {
   const legs = -HIP_Y + ANK + legLen(P[C.KN]);
   P[C.PY] = Math.max(lerp(STAND, end[C.PY], f * f * f), legs * Math.cos(P[C.BP]) - 0.05);
   P[C.RZ] = end[C.RZ] * Math.abs(Math.sin(P[C.BP]) / Math.sin(end[C.BP]));
-  if (h.y > 0.05) flail(a, P, 1);
+  if (h.y - (h.floor || 0) > 0.05) flail(a, P, 1);
 }
 /** Limbs thrown about in the air (hit by a car). */
 function flail(a, P, k) {
