@@ -18,10 +18,12 @@ const NAMES = {
 /** 'keyboard', 'gamepad' or 'touch': whatever the player last used. */
 export const device = game => game.input.mode;
 
+/** The name of the key or button for an action, as plain text. */
+export const keyName = (game, action) => NAMES[device(game)][action] ?? action;
+
 /** The key or button for an action, as a key cap. */
 export function key(game, action) {
-  const d = device(game);
-  return `<kbd${d === 'touch' ? ' class="tap"' : ''}>${NAMES[d][action] ?? action}</kbd>`;
+  return `<kbd${device(game) === 'touch' ? ' class="tap"' : ''}>${keyName(game, action)}</kbd>`;
 }
 
 /** 'press' on a keyboard or gamepad, 'tap' on a touch screen. */

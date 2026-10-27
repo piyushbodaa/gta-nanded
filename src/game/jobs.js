@@ -283,7 +283,7 @@ export class Jobs {
       g.controls.set(r, r.raceDriver.control(dt));
     }
     g.hud.objective(`${a.def.name}: position <b>${ahead + 1}/${a.rivals.length + 1}</b> · checkpoint ${a.idx + 1}/${pts.length}`);
-    g.hud.setTimer(a.t, 'TIME');
+    g.hud.setTimer(a.t, 'TIME', false); // a stopwatch: never 'running out'
     a.target = { x: p.x, z: p.z, r: 6, color: a.idx === pts.length - 1 ? 0xff5252 : 0xffc83d };
     this._markersAndRoute(a.target);
     if (dist(pos.x, pos.z, p.x, p.z) < 9) {

@@ -2,7 +2,7 @@
 import { CityMap } from './minimap.js';
 import { STORY, CHARACTERS } from '../game/story.js';
 import { dist } from '../core/math.js';
-import { key, verb, pick } from './controls.js';
+import { key, keyName, verb, pick } from './controls.js';
 import { installKind, promptInstall } from './install.js';
 
 const $ = id => document.getElementById(id);
@@ -17,6 +17,7 @@ export class PauseMenu {
     this.map = new CityMap(game, $('city-map'));
     this.map.onPick = (x, z) => this.setWaypoint(x, z);
     this._bind();
+    tapButtons(this.root);
   }
 
   _bind() {
@@ -91,6 +92,7 @@ export class PauseMenu {
 
   show(tab) {
     this.tab = tab;
+    $('pause-resume').querySelector('kbd').textContent = keyName(this.game, 'pause'); // Esc, or Start on a gamepad
     for (const b of this.root.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
     for (const p of this.root.querySelectorAll('[data-pane]')) p.classList.toggle('on', p.dataset.pane === tab);
     if (tab === 'map') { requestAnimationFrame(() => this._drawMap()); this._search(); }
@@ -143,7 +145,7 @@ export class PauseMenu {
     const cards = [
       ['RICKSHAW FARES', 'रिक्षा', `Get in any auto-rickshaw and ${job}. Pick up passengers and drive them to real places across Nanded. Fast, clean rides earn tips and streak bonuses.`, `${g.save.data.stats.fares} fares so far`],
       ['BHOOKH EXPRESS', 'डिलिव्हरी', `On any bike or scooty ${job}. Collect orders from restaurants and deliver them while they are still hot.`, `${g.save.data.stats.deliveries} deliveries`],
-      ...j.races.map(r => [r.name.toUpperCase(), 'STREET RACE', `Drive into the orange marker to start. ₹${r.reward} for first place.`, rec[r.id] ? `Best: ${rec[r.id].toFixed(1)}s` : 'Not raced yet', r]),
+      ...j.races.map(r => [r.name.toUpperCase(), 'STREET RACE', `Drive into the orange marker and ${pick(g, { keyboard: job, gamepad: job, touch: 'tap <kbd class="tap">START RACE</kbd>' })}. ₹${r.reward} for first place.`, rec[r.id] ? `Best: ${rec[r.id].toFixed(1)}s` : 'Not raced yet', r]),
       ['RANG GARAGE', 'रंग गॅरेज', g.save.data.garage ? "Drive into Anna's garage at Workshop Corner while wanted: new colour, repairs, stars cleared. ₹250." : 'Unlocks during the story.', ''],
       ['ROADSIDE SNACKS', 'चहा · वडा पाव', `Walk up to a tea stall or handcart and ${pick(g, { keyboard: `press ${key(g, 'action')}`, gamepad: `press ${key(g, 'action')}`, touch: 'tap the button that appears' })}: chai, vada pav, misal… They heal you and give you a burst of energy.`, ''],
     ];
@@ -189,4 +191,27 @@ export class PauseMenu {
     $('set-weather').textContent = { clear: 'Clear', haze: 'Summer haze', rain: 'Monsoon rain' }[g.sky.weather];
     $('set-time').textContent = `${g.sky.clockText()} · advance 3 hours`;
   }
+}
+
+/**
+ * A browser makes a click only from a lone finger, and the game's own buttons invite a thumb resting on the
+ * stick, so a menu tapped with the other thumb ignored every tap. Touch taps on the menu's buttons act on
+ * pointerup instead (a finger that moved was scrolling), and cancelling their touchend stops the browser's
+ * own click from acting a second time. Mouse, pen and keyboard keep the plain click.
+ */
+function tapButtons(root) {
+  const downs = new Map(); // touch pointerId -> where it went down, and on which button
+  let tapped = false;
+  root.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch') downs.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.target.closest('button') });
+  });
+  root.addEventListener('pointercancel', e => downs.delete(e.pointerId));
+  root.addEventListener('pointerup', e => {
+    const d = downs.get(e.pointerId);
+    downs.delete(e.pointerId);
+    if (!d?.button || d.button.disabled || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12) return;
+    tapped = true;
+    d.button.click();
+  });
+  root.addEventListener('touchend', e => { if (tapped) { tapped = false; e.preventDefault(); } }, { passive: false });
 }
