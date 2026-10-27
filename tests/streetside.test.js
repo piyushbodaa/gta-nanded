@@ -21,3 +21,17 @@ test('tea stalls, shrines and hoardings face the street; lamps on bridges reach 
   }
   for (const k of [PROP.STALL, PROP.SHRINE, PROP.HOARDING, PROP.LAMP]) assert.ok(seen[k] > 20, `${seen[k]} props of kind ${k}`);
 });
+
+test('no street lamp or electric pole stands in the lane of a road beside its own', () => {
+  const { city, net } = world();
+  const P = city.props;
+  let n = 0;
+  for (let i = 0; i < P.count; i++) {
+    // A bridge's lamps stand on its parapet; the rest stand beside the street, clear of every carriageway.
+    if ((P.kind[i] !== PROP.LAMP && P.kind[i] !== PROP.POLE) || net.bridge[P.road[i]] || net.raised[P.road[i]]) continue;
+    const clear = net.roadClearance(P.x[i], P.z[i], 10);
+    assert.ok(clear >= 0.4 - 1e-6, `prop ${i} (kind ${P.kind[i]}, road ${P.road[i]}) ${clear.toFixed(2)} m from a road edge`);
+    n++;
+  }
+  assert.ok(n > 10000, `${n} lamps and poles`);
+});

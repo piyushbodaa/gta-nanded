@@ -927,6 +927,9 @@ export class City {
     const nearPost = (x, z, r) => posts.query(x - r, z - r, x + r, z + r, i => (P.x[i] - x) ** 2 + (P.z[i] - z) ** 2 < r * r);
     // Nothing stands on the street under a flyover's deck.
     const clear = (x, z) => net.deckOver(x, z) < 0.3;
+    // A lamp post or pole set out from its own street can land in the lane of another beside
+    // it (a river bridge, a flyover's ramp near its foot): keep it 0.4 m off every carriageway.
+    const offLanes = (x, z) => net.roadClearance(x, z, 10) >= 0.4;
     for (let road = 0; road < net.count; road++) {
       const len = net.length[road], w = net.width[road], type = net.type[road];
       const r = rng(hash2(road, 15485863));
@@ -968,7 +971,7 @@ export class City {
           const off = w / 2 + 0.7;
           if (kerb) side = kerb;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
-          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road);
+          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z) && offLanes(x, z)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road);
           side = -side;
         }
       } else if (dens > 0.12) {
@@ -977,7 +980,7 @@ export class City {
           net.pointAt(road, s, p);
           const off = w / 2 + 0.55;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
-          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z)) add(x, z, Math.atan2(p.dx, p.dz), PROP.POLE, road);
+          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z) && offLanes(x, z)) add(x, z, Math.atan2(p.dx, p.dz), PROP.POLE, road);
         }
       }
       // Life at the corners: tea stalls, vada-pav carts, shrines, hoardings.
