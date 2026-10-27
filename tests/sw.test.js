@@ -20,7 +20,7 @@ const site = release => ({
 
 function phone(files, { oldCaches = {} } = {}) {
   const href = r => new URL(typeof r === 'string' ? r : r.url, ORIGIN).href;
-  const net = { files, online: true, puts: [] };
+  const net = { files, online: true, puts: [], sent: [] }; // sent: what the server answered, file by file
   const stores = new Map(Object.entries(oldCaches).map(([name, urls]) => [name, new Map(urls.map(u => [href(u), new Response('old')]))]));
   const cache = name => {
     if (!stores.has(name)) stores.set(name, new Map());
@@ -41,17 +41,20 @@ function phone(files, { oldCaches = {} } = {}) {
     delete: async name => stores.delete(name),
     match: async r => { for (const m of stores.values()) if (m.has(href(r))) return m.get(href(r)).clone(); },
   };
-  // Like Vercel: the query does not change the file served.
+  // Like Vercel: the query does not change the file served, and a request naming the file's ETag gets a 304.
+  // There is no HTTP cache here, as on a phone that has dropped it: a plain request downloads the file.
   async function fetch(r) {
     if (!net.online) throw new TypeError('Failed to fetch');
-    const file = net.files[new URL(href(r)).pathname];
-    if (!file) return new Response('Not found', { status: 404 });
-    return new Response(file.body, { headers: file.etag ? { etag: file.etag } : {} });
+    const path = new URL(href(r)).pathname, file = net.files[path];
+    const status = !file ? 404 : file.etag && r.headers?.get('if-none-match') === file.etag ? 304 : 200;
+    net.sent.push(`${status} ${path}`);
+    if (status === 404) return new Response('Not found', { status });
+    return new Response(status === 304 ? null : file.body, { status, headers: file.etag ? { etag: file.etag } : {} });
   }
   const on = {};
   const self = { addEventListener: (name, fn) => { on[name] = fn; }, location: new URL('/sw.js', ORIGIN),
     skipWaiting: async () => {}, clients: { claim: async () => {}, matchAll: async () => [] } };
-  vm.runInNewContext(source, { self, caches, fetch, Response, URL });
+  vm.runInNewContext(source, { self, caches, fetch, Request, Response, URL });
   const settle = async waits => { for (let i = 0; i < waits.length; i++) await waits[i]; }; // waits can grow while settling
   return {
     net, caches,
@@ -107,13 +110,14 @@ test('a new release drops the old release\'s build files and keeps one copy of t
   assert.equal(p.paths().length, 8);
 });
 
-test('replaced media reach the next visit, and unchanged media are not rewritten', async () => {
+test('replaced media reach the next visit, and unchanged media cost a 304, not a download', async () => {
   const p = phone(site('B'));
   await p.install();
-  assert.equal(await (await p.get('/media/chase.webp')).text(), 'art 1');
   const puts = p.net.puts.length;
+  p.net.sent.length = 0;
   assert.equal(await (await p.get('/media/chase.webp')).text(), 'art 1');
-  assert.equal(p.net.puts.length, puts, 'a 304-style revalidation rewrote the cached copy');
+  assert.deepEqual(p.net.sent, ['304 /media/chase.webp'], 'the background check downloaded an unchanged file');
+  assert.equal(p.net.puts.length, puts, 'a 304 rewrote the cached copy');
   p.net.files['/media/chase.webp'] = { body: 'art 2', etag: '"2"' }; // same name, new art
   assert.equal(await (await p.get('/media/chase.webp')).text(), 'art 1'); // shown at once from the cache
   assert.equal(await (await p.get('/media/chase.webp')).text(), 'art 2'); // and new on the next visit

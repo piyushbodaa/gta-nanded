@@ -3,8 +3,9 @@
    event (src/core/analytics.js); of those, only allowlisted names and modes are sent, never the
    URL, referrer, player or game state. Advertising features and Google signals are off.
    gtag.js also sends GA4's own session events (first_visit, session_start, user_engagement) and
-   whatever Enhanced measurement the web stream has switched on in GA4 Admin. Keep all of that off
-   there: form interactions, for one, would report the settings cheat form with the real address. */
+   whatever Enhanced measurement the web stream has switched on in GA4 Admin; keep that off there,
+   as the game needs none of it. The page keeps no <form> (src/ui/menus.js turns the cheat box into
+   a plain row), so form interactions have nothing to report even while that setting is on. */
 (() => {
   const host = 'gta.nanded.fun';
   const id = 'G-0GVL1WWPS8';

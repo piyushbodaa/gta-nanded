@@ -40,13 +40,23 @@ export class PauseMenu {
     $('set-music').addEventListener('input', e => { g.save.data.settings.music = Number(e.target.value); g.audio.setVolumes({ music: Number(e.target.value) }); g.save.dirty(); });
     $('set-sfx').addEventListener('input', e => { g.save.data.settings.sfx = Number(e.target.value); g.audio.setVolumes({ sfx: Number(e.target.value) }); g.save.dirty(); });
     $('set-sens').addEventListener('input', e => { g.save.data.settings.sensitivity = Number(e.target.value); g.input.setSensitivity(Number(e.target.value)); g.save.dirty(); });
-    $('set-cheat-form').addEventListener('submit', e => {
-      e.preventDefault();
-      const field = $('set-cheat'), msg = g.cheat?.(field.value);
+    // The cheat box must not stay a <form>: GA4's form tracking would report each code entered, with the
+    // page's real address (public/analytics.js). It becomes a plain row, and Enter (Go on a phone
+    // keyboard) or its button runs the code.
+    const form = $('set-cheat-form'), row = document.createElement('div'), field = $('set-cheat'), go = form.querySelector('button');
+    row.className = form.className;
+    row.append(...form.childNodes);
+    form.replaceWith(row);
+    field.autocomplete = 'off';
+    go.type = 'button';
+    const cheat = () => {
+      const msg = g.cheat?.(field.value);
       field.value = '';
       field.placeholder = msg === null ? 'Nothing happened' : msg ? 'Cheat activated' : 'Not a cheat code';
       if (msg) { this.close(); g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5); }
-    });
+    };
+    field.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); cheat(); } });
+    go.addEventListener('click', cheat);
     $('set-time').addEventListener('click', () => { g.sky.hours = (g.sky.hours + 3) % 24; g.renderer.shadowMap.needsUpdate = true; this._settings(); });
     $('set-weather').addEventListener('click', () => { g.sky.cycleWeather(); this._settings(); });
     $('set-reset').addEventListener('click', () => {

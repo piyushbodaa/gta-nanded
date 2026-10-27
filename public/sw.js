@@ -79,14 +79,14 @@ self.addEventListener('fetch', event => {
   }
   if (url.pathname.startsWith('/media/')) {
     event.respondWith(caches.match(request).then(hit => {
-      // A revalidation, so usually a 304; the copy is rewritten only when the file changed.
-      const fresh = fetch(request).then(res => {
-        const same = hit && res.headers.get('etag') && res.headers.get('etag') === hit.headers.get('etag');
-        if (!same) event.waitUntil(store(request, res));
-        return res;
-      });
-      if (!hit) return fresh;
-      event.waitUntil(fresh.catch(() => null));
+      if (!hit) return fetch(request).then(res => { event.waitUntil(store(request, res)); return res; });
+      // The check names the cached copy's own ETag, so an unchanged file costs a 304 even after the
+      // browser's HTTP cache has dropped it (a plain fetch would then download it again in full).
+      // A request with its own condition skips the HTTP cache, so the 304 arrives here as it is.
+      const etag = hit.headers.get('etag');
+      const check = etag ? fetch(new Request(request.url, { headers: { 'If-None-Match': etag }, cache: 'no-store' })) : fetch(request);
+      event.waitUntil(check.then(res => res.status === 304 || (etag && res.headers.get('etag') === etag) || store(request, res))
+        .catch(() => null));
       return hit;
     }));
     return;
