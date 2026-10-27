@@ -243,16 +243,28 @@ test('a witness calls a crime in where it happened: the search starts there, wit
   run(g, 0.05);
   assert.equal(p.level, 1);
   assert.deepEqual([p.lastSeen.x, p.lastSeen.z, p.seen], [10, 0, false], 'searching the crime scene, not the player');
-  // On the player's trail already, a later call adds heat but doesn't send the search back.
-  p.lastSeen.x = 120;
-  p.pending.push({ t: 0.01, heat: 1, x: 10, z: 0 });
+  // Searching for the player, out of sight, nearly lost them: a carjack called in 300 m away is the
+  // freshest word the police have. The search moves there and starts again, with the second star.
+  p.lastSeen.x = 120; p.unseenT = 6;
+  p.pending.push({ t: 0.01, heat: 1, x: 450, z: 0 });
   run(g, 0.05);
   assert.equal(p.level, 2);
-  assert.deepEqual([p.lastSeen.x, p.seen], [120, false]);
+  assert.deepEqual([p.lastSeen.x, p.seen], [450, false]);
+  assert.ok(p.unseenT < 0.1, 'the search starts again');
+  run(g, 3);
+  assert.equal(p.level, 2, 'not lost again a moment later');
+  // With the player in sight, a call adds heat but doesn't send the hunt back to the crime.
+  p.seen = true; p.lastSeen.x = 150; p.unseenT = 0;
+  p.addHeat(1, 10, 0, true);
+  assert.deepEqual([p.level, p.lastSeen.x, p.seen], [3, 150, true]);
   // An officer who sees a crime knows where the player is.
   p.clear();
   p.report('hitCop', 150, 0, { cop: true });
   assert.deepEqual([p.lastSeen.x, p.seen], [150, true]);
+  // Lost them: the next call starts a new hunt at its crime, whatever the last hunt last saw.
+  p.setLevel(0);
+  p.addHeat(1, 10, 0, true);
+  assert.deepEqual([p.level, p.lastSeen.x, p.seen], [1, 10, false]);
 });
 
 test('a witness still calling a crime in is too late once the player steps into a mission marker', () => {

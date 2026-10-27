@@ -38,14 +38,16 @@ export class Police {
 
   /**
    * Heat for a crime at (x, z). Seen by an officer, the police know where the player is. `heard`
-   * from a witness, they know only where the crime was: a new hunt searches from there, unseen, and
-   * one already on the player's trail keeps it.
+   * from a witness, they know only where the crime was: they search from there, unseen, and start
+   * the search afresh, unless a hunt has the player in sight right now (its sight check keeps it on
+   * the player). `seen` is only kept up during a hunt, so a call that starts one never trusts it.
    */
   addHeat(h, x, z, heard = false) {
     const before = this.level;
     this.heat = clamp(Math.max(this.heat, this.level) + h, 0, 5.99);
     this.level = Math.max(this.level, Math.min(5, Math.floor(this.heat + 0.001)));
-    if (this.level > 0 && !(heard && before > 0)) { this.lastSeen.x = x; this.lastSeen.z = z; this.unseenT = 0; this.seen = !heard; }
+    const inSight = heard && before > 0 && this.seen;
+    if (this.level > 0 && !inSight) { this.lastSeen.x = x; this.lastSeen.z = z; this.unseenT = 0; this.seen = !heard; }
     if (this.level > before) this.game.onWantedChange?.(this.level, before);
   }
 
