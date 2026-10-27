@@ -113,9 +113,9 @@ export class Colliders {
     // The map is at half scale and the road widths are not, so roads overlap: the arms of a
     // junction that meet at a narrow angle run into each other for metres before it, a divided
     // road's two carriageways converge into the one street they came from, a service road runs
-    // half under its flyover's ramp. A median laid there stands in the other road's lane,
-    // where nothing following it can pass (traffic, which drives its lanes, goes through).
-    // So medians are laid only where they are clear of every other road's
+    // half under its flyover's ramp. A median laid there, or a ramp's closing box, stands in the
+    // other road's lane, where nothing following it can pass (traffic, which drives its lanes,
+    // goes through). So those are laid only where they are clear of every other road's
     // carriageway at street level, as citygen keeps the median lamps; a deck above passes over,
     // and the same street going on round a plain bend (a junction of just the two) is no other.
     // The segments of other roads that could reach within R of the piece being laid, centred on
@@ -197,11 +197,24 @@ export class Colliders {
               // where the slope comes down below a car's roof, across the carriageway: else a car
               // or someone on foot under the deck goes on into the ramp. It stays below the deck,
               // so the deck's own traffic passes over it. Out to the embankment's sides: 0.35 m
-              // past the kerb edge, and on the edge on a divided road's median side.
+              // past the kerb edge, and on the edge on a divided road's median side. But not across
+              // a street that runs on under the ramp here (a service road the map lays half under
+              // it): its traffic drives on through, and so must everyone else. Tested every 0.25 m
+              // across, at the box's front, middle and back.
               net.pointAt(r, dA > dB ? (sm + e) / 2 : (s + sm) / 2, q);
               const out = side => (side === ms && divided ? 0 : 0.35);
-              const eL = net.edgeAt(r, sm, 1) + out(1), eR = net.edgeAt(r, sm, -1) + out(-1), off = (eL - eR) / 2;
-              this.addBox(q.x + p.dz * off, q.z - p.dx * off, (eL + eR) / 2, half / 2, rot, Math.max(0.5, lo - 1.1));
+              const eL = net.edgeAt(r, sm, 1) + out(1), eR = net.edgeAt(r, sm, -1) + out(-1);
+              const m = Math.ceil((eL + eR) / 0.25), across = j => -eR + ((eL + eR) * j) / m;
+              gather(r, q.x, q.z, Math.hypot(Math.max(eL, eR), half / 2));
+              clear.length = 0;
+              for (let j = 0; j <= m; j++) {
+                const lx = across(j);
+                clear.push(!others.length || [-half / 2, 0, half / 2].every(lz => !onOther(q.x + p.dz * lx + p.dx * lz, q.z - p.dx * lx + p.dz * lz, 0)));
+              }
+              runs((j, k) => {
+                const off = (across(j) + across(k)) / 2;
+                this.addBox(q.x + p.dz * off, q.z - p.dx * off, (across(k) - across(j)) / 2, half / 2, rot, Math.max(0.5, lo - 1.1));
+              });
             }
           } else if (divided || median) {
             // This carriageway's half of the median, from its edge out to the middle, or a wide
