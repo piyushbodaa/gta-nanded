@@ -65,9 +65,12 @@ export class Effects {
     this.rainY = 0;
     // --- mission markers.
     this.markers = new Markers(scene);
+    // Explosion flashes: a glow on the street, not a light. A PointLight, even switched off,
+    // would put a second light into the shader of every lit pixel, every frame.
     this.flashes = [];
-    this.light = new THREE.PointLight(0xffa040, 0, 30, 2);
-    scene.add(this.light);
+    this.glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex, color: 0xffa040, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+    this.glow.scale.setScalar(18); this.glow.visible = false; this.glow.renderOrder = 2;
+    scene.add(this.glow);
   }
 
   spawn(x, y, z, vx, vy, vz, life, size, r, g, b, a, { grow = 1, drag = 1, buoy = 0, fade = 1 } = {}) {
@@ -79,10 +82,11 @@ export class Effects {
   smoke(x, y, z, dark = 0.3, n = 1) {
     for (let k = 0; k < n; k++) this.spawn(x + (Math.random() - 0.5) * 0.4, y, z + (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.6, 1.4 + Math.random(), (Math.random() - 0.5) * 0.6, 2.2, 1.0, dark, dark, dark * 1.05, 0.55, { grow: 2.2, drag: 0.8, buoy: 0.3 });
   }
-  dust(x, z, n = 1, color = [0.72, 0.62, 0.48]) {
-    for (let k = 0; k < n; k++) this.spawn(x, 0.2, z, (Math.random() - 0.5) * 1.5, 0.4 + Math.random() * 0.4, (Math.random() - 0.5) * 1.5, 1.1, 0.9, color[0], color[1], color[2], 0.35, { grow: 2.5, drag: 1.5 });
+  // y is the road under it (up on a flyover's deck, or the street).
+  dust(x, z, n = 1, color = [0.72, 0.62, 0.48], y = 0) {
+    for (let k = 0; k < n; k++) this.spawn(x, y + 0.2, z, (Math.random() - 0.5) * 1.5, 0.4 + Math.random() * 0.4, (Math.random() - 0.5) * 1.5, 1.1, 0.9, color[0], color[1], color[2], 0.35, { grow: 2.5, drag: 1.5 });
   }
-  tyreSmoke(x, z) { this.spawn(x, 0.3, z, (Math.random() - 0.5) * 0.8, 0.5, (Math.random() - 0.5) * 0.8, 1.4, 0.8, 0.85, 0.85, 0.85, 0.32, { grow: 3, drag: 1.2 }); }
+  tyreSmoke(x, z, y = 0) { this.spawn(x, y + 0.3, z, (Math.random() - 0.5) * 0.8, 0.5, (Math.random() - 0.5) * 0.8, 1.4, 0.8, 0.85, 0.85, 0.85, 0.32, { grow: 3, drag: 1.2 }); }
   sparks(x, y, z, n = 8) {
     for (let k = 0; k < n; k++) this.spawn(x, y, z, (Math.random() - 0.5) * 7, 2 + Math.random() * 3, (Math.random() - 0.5) * 7, 0.35 + Math.random() * 0.3, 0.12, 1, 0.75, 0.3, 1, { grow: 0.3, drag: 0.5, buoy: -9 });
   }
@@ -96,7 +100,7 @@ export class Effects {
     }
     for (let k = 0; k < 24; k++) this.smoke(x + (Math.random() - 0.5) * 3, y + 1, z + (Math.random() - 0.5) * 3, 0.15, 1);
     this.sparks(x, y + 1, z, 30);
-    this.flashes.push({ x, y: y + 2, z, t: 0.5 });
+    this.flashes.push({ x, y: y - 0.4, z, t: 0.5 }); // the glow lies on the road under the blast
   }
   splash(x, z) {
     for (let k = 0; k < 20; k++) this.spawn(x, -2.6, z, (Math.random() - 0.5) * 4, 3 + Math.random() * 3, (Math.random() - 0.5) * 4, 0.9, 0.5, 0.8, 0.9, 1, 0.7, { grow: 1.5, buoy: -9 });
@@ -106,7 +110,8 @@ export class Effects {
     const key = vehicle.id * 10 + Math.round(x * 0) ;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
-    m.compose(new THREE.Vector3(x, 0.085, z), q, new THREE.Vector3(width, 1, 0.55));
+    // On the road under the wheels: a flyover's deck, or the street (less any hop off a hump).
+    m.compose(new THREE.Vector3(x, (vehicle.y || 0) - (vehicle.hop || 0) + 0.085, z), q, new THREE.Vector3(width, 1, 0.55));
     this.skids.setMatrixAt(this.skidI, m);
     this.skidI = (this.skidI + 1) % this.skidN;
     this.skids.count = Math.min(this.skidN, this.skids.count + 1);
@@ -141,14 +146,15 @@ export class Effects {
     g.setDrawRange(0, hi);
     this.points.visible = hi > 0;
     this.mat.uniforms.scale.value = innerHeight * 0.9;
-    // Explosion flashes light the street.
+    // Explosion flashes light the street (the brightest one, fading over half a second).
     let li = 0;
     for (let k = this.flashes.length - 1; k >= 0; k--) {
       const f = this.flashes[k]; f.t -= dt;
       if (f.t <= 0) { this.flashes.splice(k, 1); continue; }
-      this.light.position.set(f.x, f.y, f.z); li = Math.max(li, f.t * 60);
+      if (f.t * 2 > li) { li = f.t * 2; this.glow.position.set(f.x, f.y, f.z); }
     }
-    this.light.intensity = li;
+    this.glow.visible = li > 0;
+    this.glow.material.opacity = Math.min(1, li) * 0.9;
     // Rain follows the camera.
     const rainOn = weather.rain > 0.3;
     this.rain.visible = rainOn;
