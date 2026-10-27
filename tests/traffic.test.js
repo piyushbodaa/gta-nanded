@@ -169,6 +169,14 @@ function beside(a, b) {
   const along = dx * fx + dz * fz, right = -dx * fz + dz * fx;
   return { along, right, overlap: Math.abs(along) < a.hd + b.hd && Math.abs(right) < a.hw + b.hw };
 }
+// Whether two bodies touch, whatever angle they stand at to each other.
+function touching(a, b) {
+  for (const h of [a.heading, b.heading]) for (const [ax, az] of [[Math.sin(h), Math.cos(h)], [Math.cos(h), -Math.sin(h)]]) {
+    const ext = v => Math.abs(Math.sin(v.heading) * ax + Math.cos(v.heading) * az) * v.hd + Math.abs(Math.cos(v.heading) * ax - Math.sin(v.heading) * az) * v.hw;
+    if (Math.abs((b.x - a.x) * ax + (b.z - a.z) * az) >= ext(a) + ext(b)) return false;
+  }
+  return true;
+}
 // A long, level two-way street with one lane each way and no speed breakers.
 function street(net, city, minW, maxW, minLen) {
   for (let r = 0; r < net.count; r++) {
@@ -226,6 +234,56 @@ test('a car stalled across the middle of the lane is passed on the road, on its 
   assert.ok(car.ai.road !== road || car.ai.s > mid + 6, 'and got past');
 });
 
+test('a scooter nosed onto the footpath is passed by cars and buses in the kerb lane, clear of its tail', () => {
+  const { net, city } = world();
+  // A wide two-way road: its kerb lane runs close by the two-wheelers parked along it.
+  const road = street(net, city, 11.5, 13, 160), mid = net.length[road] / 2, w = net.width[road];
+  for (const type of ['sedan', 'bus']) {
+    const p = net.pointAt(road, mid, {});
+    const { g, traffic } = streets(p.x, p.z);
+    g.quality.settings.traffic = 0;
+    // As Parked leaves one: just off the left kerb, nosed in at an angle, its tail out over the road.
+    const off = w / 2 + 0.55;
+    const scooter = g.vehicles.spawn('scooter', p.x + p.dz * off, p.z - p.dx * off, Math.atan2(p.dx, p.dz) + 1.2, { role: 'parked' });
+    const car = driving(g, traffic, type, road, 1, mid - 40);
+    let hit = false, slowest = Infinity;
+    run(g, traffic, 10, () => {
+      hit ||= touching(car, scooter);
+      slowest = Math.min(slowest, car.ai.speed);
+      return car.ai.road === road && car.ai.s < mid + 8;
+    });
+    assert.ok(car.ai.road !== road || car.ai.s >= mid + 8, `the ${type} got past (s ${car.ai.s.toFixed(1)})`);
+    assert.ok(!hit, `the ${type} never touched it`);
+    assert.ok(slowest > 5, `the ${type} kept going (${slowest.toFixed(1)} m/s)`);
+  }
+});
+
+test('a car left in the middle of a narrow street is squeezed past from both ends, a wheel on the verge if need be', () => {
+  const { net, city } = world();
+  const road = street(net, city, 4.5, 5.2, 160), len = net.length[road], mid = len / 2, hw = net.width[road] / 2;
+  const past = c => c.ai.road !== road || c.ai.s > (c.ai.dir > 0 ? mid : len - mid) + 6;
+  for (const across of [0, 0.4, -0.4]) {
+    const p = net.pointAt(road, mid, {});
+    const { g, traffic } = streets(p.x, p.z);
+    g.quality.settings.traffic = 0;
+    // On the centre line or a little to one side: no room for a car on either side of it.
+    const left = g.vehicles.spawn('hatch', p.x + p.dz * across, p.z - p.dx * across, Math.atan2(p.dx, p.dz), { role: 'abandoned' });
+    const cars = [driving(g, traffic, 'sedan', road, 1, mid - 35), driving(g, traffic, 'suv', road, -1, len - mid - 35)];
+    let hit = false, over = 0;
+    run(g, traffic, 25, () => {
+      hit ||= cars.some(c => touching(c, left)) || touching(cars[0], cars[1]);
+      for (const c of cars) {
+        const q = net.nearest(c.x, c.z, 8, {});
+        if (q.road === road) over = Math.max(over, q.dist + c.hw - hw);
+      }
+      return !cars.every(past);
+    });
+    assert.ok(cars.every(past), `${across} m off the middle: both got past it`);
+    assert.ok(!hit, `${across} m off the middle: nobody touched it or each other`);
+    assert.ok(over < 0.5, `no more than a wheel off the road (${over.toFixed(2)} m over its edge)`);
+  }
+});
+
 test('traffic follows a slow police jeep in its lane instead of driving through it', () => {
   const { net, city } = world();
   const road = street(net, city, 6, 9, 160), mid = net.length[road] / 2;
@@ -276,6 +334,24 @@ test('traffic judges its path by its own width: a bus stops for a car at its sid
   let slowest = Infinity;
   run(g, traffic, 6, () => { slowest = Math.min(slowest, bike.ai.speed); return bike.ai.road === lane && bike.ai.s < m2 + 5; });
   assert.ok(slowest > 6, `the bike kept going (${slowest.toFixed(1)} m/s)`);
+});
+
+test('a bike waits for a cow sitting across a narrow street, and rides by one standing along its far side', () => {
+  const { net, city } = world();
+  const road = street(net, city, 4.5, 5.2, 160), mid = net.length[road] / 2;
+  const p = net.pointAt(road, mid, {}), along = Math.atan2(p.dx, p.dz);
+  // Sat across the middle, its head and rump reaching into both lanes; or standing in the other lane.
+  for (const [off, heading, stops] of [[0, along + Math.PI / 2, true], [-1.2, along, false]]) {
+    const { g, traffic } = streets(p.x, p.z);
+    g.quality.settings.traffic = 0;
+    const cow = { cow: true, x: p.x + p.dz * off, z: p.z - p.dx * off, heading };
+    g.animals = { forEachNear: (x, z, r, fn) => { if (Math.hypot(cow.x - x, cow.z - z) < r) fn(cow); } };
+    const bike = driving(g, traffic, 'bike', road, 1, mid - 30, { cruise: 9, speed: 9 });
+    let slowest = Infinity;
+    run(g, traffic, 8, () => { slowest = Math.min(slowest, bike.ai.speed); return bike.ai.road === road && bike.ai.s < mid + 5; });
+    if (stops) assert.ok(bike.ai.speed < 0.3 && bike.ai.s < mid - 2, `stopped short of the cow (${(bike.ai.s - mid).toFixed(1)} m)`);
+    else assert.ok(slowest > 6, `rode by the cow (${slowest.toFixed(1)} m/s)`);
+  }
 });
 
 test('traffic stops at the stop line on red, whichever way it drives the road', () => {
