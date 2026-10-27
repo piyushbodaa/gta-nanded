@@ -73,8 +73,8 @@ export class Hud {
     this._fitColumn();
   }
   clearSubtitle() { this.el.subtitle.hidden = true; this.timers.subtitle = 0; this._helpBack(); }
-  /** Something came up in the middle column, or grew: on a touch screen, make room in it and under it. */
-  _fitColumn() { this._checkRadio(); this._helpFits(); this._placeBig(); this._clearUnderColumn(); }
+  /** Something came up in the middle column, or grew, or went: on a touch screen, make room in it and under it. */
+  _fitColumn() { this._checkRadio(); this._helpFits(); this._cutSubtitle(); this._placeBig(); this._clearUnderColumn(); }
   /**
    * On a touch screen the help box stacks with the subtitle, a toast and the radio card in the middle column.
    * On the shortest phones they can run off the bottom of the screen, cutting off the help or the card under
@@ -82,8 +82,30 @@ export class Hud {
    */
   _helpFits() {
     const { help, subtitle, toast, radio } = this.el;
+    this._cut(0); // measured with the whole line of dialogue
     if (!this.game.input.touch?.active || help.hidden || (subtitle.hidden && toast.hidden && radio.hidden)) return;
     if (help.parentElement.getBoundingClientRect().bottom > innerHeight - 4) this._helpAside();
+  }
+  /**
+   * ...and when a long objective and a long line of dialogue still leave no room for a toast or the station card
+   * under them (c7's NDPS call on the shortest phones), the line is cut short, with an ellipsis, while they
+   * are up: they are the newest and go in a few seconds, and the line comes back whole when they do.
+   */
+  _cutSubtitle() {
+    const { subtitle, toast, radio } = this.el;
+    if (!this.game.input.touch?.active || subtitle.hidden || (toast.hidden && radio.hidden)) return;
+    const over = subtitle.parentElement.getBoundingClientRect().bottom - (innerHeight - 4);
+    if (over <= 0) return;
+    const line = parseFloat(getComputedStyle(subtitle).lineHeight);
+    const lines = Math.round(subtitle.offsetHeight / line);
+    this._cut(Math.max(1, lines - Math.ceil(over / line)));
+  }
+  /** Show only this many lines of the subtitle (0: all of it). */
+  _cut(lines) {
+    const el = this.el.subtitle;
+    if (!lines && !el.classList.contains('cut')) return;
+    el.classList.toggle('cut', lines > 0);
+    el.style.webkitLineClamp = lines ? String(lines) : '';
   }
   /** The help box steps aside, to come back with the time it had left. */
   _helpAside() {
@@ -240,14 +262,17 @@ export class Hud {
         if (k === 'cash') this.el.cashDelta.hidden = true;
         else if (this.el[k]) this.el[k].hidden = true;
         if (k === 'big' || k === 'subtitle' || k === 'toast') this._helpBack();
+        if (k === 'toast') this._fitColumn(); // the line of dialogue whole again
       }
     }
     this._checkRadio();
-    // The station card in the middle column, like a toast: room for it, and the help back once it has gone.
+    // The station card in the middle column, like a toast: room for it, and the help back and the line of
+    // dialogue whole once it has gone.
     const radio = this.el.radio;
     if (this.radioUp !== !radio.hidden) {
       this.radioUp = !radio.hidden;
-      if (this.radioUp) this._fitColumn(); else this._helpBack();
+      if (!this.radioUp) this._helpBack();
+      this._fitColumn();
     }
     // Cash counts up like a slot machine.
     const cash = g.save?.cash ?? 0;

@@ -72,6 +72,7 @@ body.playing #welcome { display: none; }
 .objective b { color: #ffd23f; font-weight: 700; } .objective i { color: #cfd8dc; font-style: normal; font-size: .85em; }
 .subtitle { position: absolute; left: 50%; bottom: calc(66px + var(--safe-b)); transform: translateX(-50%); max-width: min(900px, 86vw); text-align: center; font: 500 21px/1.4 var(--body); color: #fff; text-shadow: var(--outline), 0 2px 12px #000; }
 .subtitle b { font-weight: 700; }
+.subtitle.cut { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; } /* hud.js sets how many lines, while a toast needs the room */
 .hud-stack { display: contents; }
 .bark { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font: 700 20px/1.2 var(--cond); color: #fffbe6; text-shadow: var(--outline); white-space: nowrap; }
 .bark.pop { animation: barkpop 2.6s ease forwards; }

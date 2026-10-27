@@ -162,6 +162,49 @@ test('on the shortest phones the help box steps aside while a subtitle, toast or
   assert.equal(els['hud-help'].hidden, false);
 });
 
+test('on the shortest phones a long line of dialogue is cut short while a toast or station card needs its room, then comes back whole', () => {
+  const g = fakeGame('touch'), hud = hudFor(g), sub = els['hud-subtitle'], help = els['hud-help'], radio = els['hud-radio'];
+  globalThis.getComputedStyle = () => ({ lineHeight: '21px' });
+  // 568 x 320, c7: a 5-line objective and Kadam's NDPS call (7 lines of 21 px) fill the column to 316 px down.
+  const lines = () => Number(sub.style.webkitLineClamp) || 7;
+  const tall = { objective: () => 101, subtitle: () => lines() * 21, help: () => 110, toast: () => 50, radio: () => 19 };
+  column.bottom = () => Object.entries(tall).reduce((y, [k, h]) => (els[`hud-${k}`].hidden ? y : y + h() + 6), 56);
+  Object.defineProperty(sub, 'offsetHeight', { get: tall.subtitle });
+  const fits = what => assert.ok(column.bottom() <= 316, `${what}: the column ends ${column.bottom()} px down`);
+  hud.objective("Head west for Taroda Naka, through the <b>old city</b>. Keep Tiger's SUV off the tempo.");
+  hud.subtitle('Inspector Kadam (phone)', 'Two hundred kilos is an NDPS case: ten years for the driver. Bring it to Vazirabad Police Station and walk away, and I forget your face.', 8);
+  assert.equal(lines(), 7, 'whole while it fits');
+  // 📻 tapped: the station card ran off the bottom. Now the line gives it room.
+  radio.innerHTML = '<strong>📻 Lavani Express 98.3</strong>'; radio.hidden = false;
+  hud.update(0.1);
+  fits('station card');
+  assert.equal(lines(), 5);
+  assert.ok(sub.classList.contains('cut'));
+  // A new neighbourhood's toast as well, and the first drive's help: the help waits, the line gives more room.
+  hud.toast('New neighbourhood: Doctor Lane · 1/53 · +₹50');
+  hud.help('Hold GAS to drive and steer with your left thumb.', 9);
+  fits('toast and station card');
+  assert.equal(help.hidden, true);
+  assert.equal(lines(), 3);
+  // The toast goes: the line takes back what it can. The station card goes: the line is whole again.
+  hud.update(3.1);
+  fits('station card again');
+  assert.equal(lines(), 5);
+  radio.hidden = true;
+  hud.update(0.1);
+  assert.equal(lines(), 7);
+  assert.equal(sub.classList.contains('cut'), false);
+  assert.equal(help.hidden, true, 'the help still waits for the line to end');
+  hud.clearSubtitle();
+  assert.equal(help.hidden, false);
+  // A keyboard player's subtitle is never cut (no middle column).
+  const k = hudFor(fakeGame('keyboard'));
+  columnAt568();
+  k.subtitle('KADAM_PH', 'Until then, stay alive.', 4); k.toast('New neighbourhood: Doctor Lane');
+  assert.equal(els['hud-subtitle'].classList.contains('cut'), false);
+  delete globalThis.getComputedStyle;
+});
+
 test("on a phone the station card that only repeats the vehicle card's station goes; another station's replaces the vehicle card", () => {
   const g = fakeGame('touch'), hud = hudFor(g), radio = els['hud-radio'], vehicle = els['hud-vehicle'];
   vehicle.box = { top: 249, bottom: 302 };
