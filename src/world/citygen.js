@@ -145,16 +145,42 @@ export class City {
 
   /** Depth of the raised platform (ota) along a shop front; 0 when there is none. */
   shopPlatform(i) {
-    if (!(this.lots.flags[i] & 1) || this.lots.style[i] === STYLE.SHED || this.lots.style[i] === STYLE.HUT) return 0;
+    const L = this.lots;
+    if (!(L.flags[i] & 1) || L.style[i] === STYLE.SHED || L.style[i] === STYLE.HUT) return 0;
     // Leave the kerb-side walking line (0.45 m from the road edge) clear.
     const d = Math.min(0.9, this.frontRoom(i) - 0.65);
-    return d > 0.25 ? d : 0;
+    if (d <= 0.25) return 0;
+    // A street tree whose trunk would stand in the platform: the shop does without one. Asked once
+    // the city is built, like compoundWall; its end against a neighbour's side wall is hidden.
+    const cache = this._ota || (this._ota = new Int8Array(L.cap).fill(-1));
+    if (cache[i] < 0) {
+      const T = this.trees, c = Math.cos(L.rot[i]), s = Math.sin(L.rot[i]), lz = -L.hd[i] - d / 2;
+      const x = L.x[i] + lz * s, z = L.z[i] + lz * c, ext = L.hw[i] + 1;
+      cache[i] = this.lotGrid.query(x - ext, z - ext, x + ext, z + ext, id => {
+        if (id > -100000 || id <= -200000) return false;
+        const k = -100000 - id - 1, r = T.kind[k] === 2 ? 0.75 : T.kind[k] === 5 ? 0.6 : 0.32; // its trunk, as colliders.js stands it
+        const dx = T.x[k] - x, dz = T.z[k] - z;
+        return Math.abs(dx * c - dz * s) < L.hw[i] + r && Math.abs(dx * s + dz * c) < d / 2 + r;
+      }) ? 0 : 1;
+    }
+    return cache[i] === 1 ? d : 0;
   }
 
-  /** A compound wall stands 1.6 m in front of the house, only where it leaves the kerb free. */
+  /**
+   * A compound wall stands 1.6 m in front of the house, only where it leaves the kerb free and
+   * its line is clear: a back-row or infill house's wall would otherwise run into the house in
+   * front of it, and a street tree or stall would stand in it. Asked once the city is built
+   * (by the renderer and the colliders alike), when every lot, tree and stall is in lotGrid.
+   */
   compoundWall(i) {
     const L = this.lots;
-    return Boolean(L.flags[i] & 32) && L.style[i] !== STYLE.SHED && L.style[i] !== STYLE.HUT && this.frontRoom(i) >= 2.4;
+    if (!(L.flags[i] & 32) || L.style[i] === STYLE.SHED || L.style[i] === STYLE.HUT || this.frontRoom(i) < 2.4) return false;
+    const cache = this._wall || (this._wall = new Int8Array(L.cap).fill(-1));
+    if (cache[i] < 0) {
+      const lz = -L.hd[i] - 1.5, s = Math.sin(L.rot[i]), c = Math.cos(L.rot[i]);
+      cache[i] = this._overlapsLots(L.x[i] + lz * s, L.z[i] + lz * c, L.hw[i], 0.15, L.rot[i], 0) ? 0 : 1;
+    }
+    return cache[i] === 1;
   }
 
   /** True when (x, z) lies inside (or within `pad` of) a building lot or reserved landmark. */
