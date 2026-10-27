@@ -89,7 +89,8 @@ async function boot() {
   if (game.quality.mode === 'auto' && (!game.quality.learned || game.quality.learned.promote)) {
     status('Tuning the graphics for this device');
     await new Promise(r => setTimeout(r, 30)); // let the status paint before the GPU is busy
-    game.calibrate();
+    // Timed on the station forecourt, where a new story opens: the busiest place play begins.
+    game.calibrate({ x: 5.3 - 4, z: 10.9 + 2, heading: Math.PI * 0.75 });
   }
   status('The city is yours', 1);
   const has = game.save.hasProgress;

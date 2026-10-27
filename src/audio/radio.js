@@ -40,10 +40,17 @@ export class Radio {
 
   /** Cycle to the next station (or off). Returns { name, tag } for the HUD. */
   cycle() {
-    this.index = this.index >= STATIONS.length - 1 ? -1 : this.index + 1;
-    this.song = null;
-    this._crackle(this.station?.id === 'katta');
+    this.setIndex(this.index >= STATIONS.length - 1 ? -1 : this.index + 1);
     return this.station ? { name: this.station.name, tag: this.station.tag } : { name: 'Radio off', tag: '' };
+  }
+
+  /** Tune to a station by its index (-1: off). The new station starts with a song of its own. */
+  setIndex(i) {
+    this.index = Math.max(-1, Math.min(STATIONS.length - 1, Math.round(i) || 0));
+    // Not playing: the next update starts the new station's song. Left playing, it would go on
+    // scheduling the song just thrown away.
+    this.song = null; this.playing = false;
+    this._crackle(this.station?.id === 'katta');
   }
 
   update(dt, inVehicle, game) {

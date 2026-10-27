@@ -95,6 +95,18 @@ test('saves survive a round trip and reset cleanly', () => {
   assert.equal(new Save().cash, 200);
 });
 
+test('a browser that refuses the save gets the game to say so, once', () => {
+  globalThis.localStorage = { getItem: () => null, setItem: () => { throw new Error('storage is blocked'); } };
+  const s = new Save();
+  let told = 0;
+  s.onFail = () => told++;
+  s.cash = 500;
+  assert.equal(s.flush(), false);
+  s.cash = 600; s.flush();
+  assert.equal(s.available, false);
+  assert.equal(told, 1);
+});
+
 test('every place the story sends you is on a road you can drive', async () => {
   const { world } = await import('./helpers.js');
   const { STORY_PLACES } = await import('../src/game/story.js');

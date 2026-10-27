@@ -43,7 +43,8 @@ export class GameAudio {
     this.master.connect(comp).connect(ctx.destination);
     this.sfxBus = ctx.createGain(); this.sfxBus.gain.value = this.volume.sfx; this.sfxBus.connect(this.master);
     this.musicBus = ctx.createGain(); this.musicBus.gain.value = this.volume.music; this.musicBus.connect(this.master);
-    this.ambBus = ctx.createGain(); this.ambBus.gain.value = 0.7; this.ambBus.connect(this.master);
+    // The street follows Effects volume (0.875 of the default 0.8: as loud as it always was).
+    this.ambBus = ctx.createGain(); this.ambBus.gain.value = 0.875; this.ambBus.connect(this.sfxBus);
     // Shared noise buffers.
     this.white = this._noise('white'); this.brown = this._noise('brown');
     this._engine();
@@ -51,6 +52,15 @@ export class GameAudio {
     this._siren();
     this.radio = new Radio(ctx, this.musicBus, this.white);
     this.enabled = true;
+    // A hidden page gets no frames, so update() can't fade the engine, siren and street out:
+    // silence them at once and stop the audio clock (the radio's too) until the page is back.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { this._hush(); ctx.suspend(); } else if (this.enabled) ctx.resume();
+    });
+    // A phone may hand the audio back interrupted after a call or an app switch, and only a
+    // touch or a key may start it again: the next one does.
+    const wake = () => { if (this.enabled && ctx.state !== 'running' && !document.hidden) ctx.resume(); };
+    for (const type of ['touchend', 'click', 'keydown']) addEventListener(type, wake, true);
     return ctx.resume();
   }
 
@@ -58,7 +68,25 @@ export class GameAudio {
     if (!this.ctx) return;
     this.enabled = on;
     this.master.gain.setTargetAtTime(on ? this.volume.master : 0, this.ctx.currentTime, 0.05);
+    // Sound off stops the audio clock too once the fade is done, rather than render silence.
     if (on) this.ctx.resume();
+    else setTimeout(() => { if (!this.enabled) this.ctx.suspend(); }, 300);
+  }
+
+  /** The game stopped on an error: silence everything now, and for good. */
+  halt() {
+    if (!this.ctx) return;
+    this.enabled = false; // neither the page coming back nor a touch starts it again
+    if (this.radio) this._hush(); // made last: everything is there to hush
+    this.ctx.suspend();
+  }
+
+  /** Every continuous sound to silence now, without waiting for update() to fade it. */
+  _hush() {
+    const now = this.ctx.currentTime, e = this.eng;
+    for (const p of [e.gain.gain, e.screech.gain, e.wind.gain, this.sir.g.gain, this.amb.bed.gain, this.amb.rain.gain, this.radio.out.gain]) {
+      p.cancelScheduledValues(now); p.setValueAtTime(0, now);
+    }
   }
   setVolumes({ sfx, music }) {
     if (sfx !== undefined) { this.volume.sfx = sfx; this.sfxBus && (this.sfxBus.gain.value = sfx); }
@@ -209,6 +237,8 @@ export class GameAudio {
     const g = clamp(1 / (1 + d / 18), 0, 1) * 0.14 * vol;
     if (g < 0.004) return;
     this.hornCool.set(v.id, now + h.len * h.pulses + 0.15);
+    // Forget the cooldowns that are over: traffic keeps spawning cars with new ids.
+    if (this.hornCool.size > 64) for (const [id, until] of this.hornCool) if (until <= now) this.hornCool.delete(id);
     for (let p = 0; p < h.pulses; p++) for (const f of h.f) {
       const o = this.ctx.createOscillator(), gn = this.ctx.createGain(), flt = this.ctx.createBiquadFilter();
       const t = now + p * (h.len + 0.06);
@@ -262,8 +292,8 @@ export class GameAudio {
     a.rain.gain.setTargetAtTime(g.paused ? 0 : sky.w.grey > 0.5 ? 0.06 : 0, now, 0.8);
     if (!g.paused && now > a.next && dens > 0.25) {
       a.next = now + 1.5 + Math.random() * (6 - dens * 3);
-      // A horn somewhere down the street.
-      const fake = { id: -Math.floor(Math.random() * 1e6), type: ['auto', 'bike', 'default', 'bus', 'scooter'][Math.floor(Math.random() * 5)], x: pos.x + (Math.random() - 0.5) * 120, z: pos.z + (Math.random() - 0.5) * 120 };
+      // A horn somewhere down the street (one id for them all: they come further apart than any horn lasts).
+      const fake = { id: -1, type: ['auto', 'bike', 'default', 'bus', 'scooter'][Math.floor(Math.random() * 5)], x: pos.x + (Math.random() - 0.5) * 120, z: pos.z + (Math.random() - 0.5) * 120 };
       this.horn(fake, 0.6);
     }
     const hour = sky.hours;
@@ -277,7 +307,13 @@ export class GameAudio {
       this._burst(0.05, { freq: 4500, q: 8, gain: 0.02, bus: this.ambBus }); this._burst(0.05, { freq: 4500, q: 8, gain: 0.02, at: 0.07, bus: this.ambBus });
     }
     if (!g.paused && now > a.bellNext && g.nearShrine?.()) { a.bellNext = now + 5 + Math.random() * 8; this._bell(0.05); }
+    // The station is a setting: the one picked last time plays again, Radio off included.
+    const st = g.save?.data.settings, radio = this.radio;
+    if (st && radio) {
+      if (!this._tuned) { this._tuned = true; radio.setIndex(st.radio ?? 0); }
+      else if (st.radio !== radio.index) { st.radio = radio.index; g.save.dirty(); }
+    }
     // Radio only plays in vehicles.
-    this.radio?.update(dt, Boolean(v) && !g.paused && !g.cutscene, g);
+    radio?.update(dt, Boolean(v) && !g.paused && !g.cutscene, g);
   }
 }
