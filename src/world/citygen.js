@@ -5,6 +5,7 @@ import { SpatialGrid, rng, clamp, pointSegDist2, obbOverlap, hash2, smoothstep }
 import { MEDIAN_W } from './roadnet.js';
 import { airfieldPieces } from './airfield.js';
 import { RoadBumps } from './roadbumps.js';
+import { GHAT_WIDTH, layGhat, ghatTop } from './ghats.js';
 
 // Building styles. The renderer maps each to facade rows in the texture atlas.
 export const STYLE = {
@@ -60,6 +61,9 @@ export class City {
     this.raisedAreas = [];
     this._buildDensity();
     this._buildWaterIndex();
+    // Ghat steps down the riverbanks, laid on the bank as it is drawn (ghats.js, landmarks.js).
+    this.ghats = [];
+    for (const p of this.places) if (GHAT_WIDTH[p.id] && (p.ghat = layGhat(this, p, GHAT_WIDTH[p.id]))) this.ghats.push(p.ghat);
     // Off the streets and decks, bodies stand on the ground as it is drawn: the river valleys.
     net.ground = (x, z) => this.groundHeight(x, z);
   }
@@ -250,7 +254,8 @@ export class City {
 
   /**
    * Ground height: flat city, with the river valleys cut into it exactly as the ground mesh
-   * draws them, so what people walk and drive on is what they see.
+   * draws them, the station's platforms and the ghats' steps on it, so what people walk and
+   * drive on is what they see.
    */
   groundHeight(x, z) {
     // Raised ground: the station's platforms.
@@ -260,6 +265,18 @@ export class City {
       const u = dx * a.ux + dz * a.uz, v = dx * a.vx + dz * a.vz;
       if (Math.abs(u) <= a.hu && Math.abs(v) <= a.hv) return a.h;
     }
+    const y = this.bareGround(x, z);
+    // A ghat's stone treads, laid over the bank (where the bank rises above one, the bank).
+    for (const gh of this.ghats) {
+      if ((x - gh.cx) ** 2 + (z - gh.cz) ** 2 > gh.r2) continue;
+      const top = ghatTop(gh, x, z);
+      if (top > y) return top;
+    }
+    return y;
+  }
+
+  /** The ground mesh itself (chunks.js), before anything is built on it: flat, cut by the river valleys. */
+  bareGround(x, z) {
     // Every corner of this ground cell is out of the valley: flat.
     if (this.riverDistance(x, z, this._rd || (this._rd = {})).d > 14 + GROUND_CELL * Math.SQRT2) return 0;
     // The valley at the cell's corners, between them the triangle the mesh draws (split from

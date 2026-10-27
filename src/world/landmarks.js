@@ -20,16 +20,16 @@ function frame(p, rot = placeRot(p)) {
 
 const SPECIAL = {
   'hazur-sahib': hazurSahib,
-  'nagina-ghat': (ctx, p) => { gurudwara(ctx, p, 0.75); ghat(ctx, p, 26); },
+  'nagina-ghat': (ctx, p) => { gurudwara(ctx, p, 0.75); ghat(ctx, p); },
   'langar-sahib': (ctx, p) => { gurudwara(ctx, p, 0.8); langarHall(ctx, p); },
   'sangat-sahib': (ctx, p) => gurudwara(ctx, p, 0.7),
   'mata-sahib': (ctx, p) => gurudwara(ctx, p, 0.75),
-  'hira-ghat': (ctx, p) => { gurudwara(ctx, p, 0.6); ghat(ctx, p, 22); },
-  'shikar-ghat': (ctx, p) => { gurudwara(ctx, p, 0.6); ghat(ctx, p, 20); },
-  'banda-ghat': (ctx, p) => { gurudwara(ctx, p, 0.65); ghat(ctx, p, 22); },
-  'ram-ghat': (ctx, p) => { ghat(ctx, p, 34); smallTemple(ctx, p, 6, -4); },
-  'govardhan-ghat': (ctx, p) => { ghat(ctx, p, 36); smallTemple(ctx, p, -8, -6); },
-  'urvashi-ghat': (ctx, p) => { ghat(ctx, p, 28); smallTemple(ctx, p, 0, -6); },
+  'hira-ghat': (ctx, p) => { gurudwara(ctx, p, 0.6); ghat(ctx, p); },
+  'shikar-ghat': (ctx, p) => { gurudwara(ctx, p, 0.6); ghat(ctx, p); },
+  'banda-ghat': (ctx, p) => { gurudwara(ctx, p, 0.65); ghat(ctx, p); },
+  'ram-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, 6, -4); },
+  'govardhan-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, -8, -6); },
+  'urvashi-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, 0, -6); },
   'nanded-station': station,
   'nanded-bus-stand': busStand,
   'sggs-stadium': stadium,
@@ -307,41 +307,31 @@ function langarHall(ctx, p) {
   g.color(0x8d9ea4, 0); g.cbox(X(0, 8), 3.4, Z(0, 8), 10.5, 0.15, 1.8, rot);
 }
 
-/** Ghat steps from street level down to the river, laid toward the water. */
-function ghat(ctx, p, width) {
+/**
+ * Ghat steps from street level down to the river, as the city laid them (p.ghat, ghats.js):
+ * the treads drawn are the treads walked on.
+ */
+function ghat(ctx, p) {
   const { g, city, pg } = ctx;
-  // Find the direction to the river.
-  let best = null, bd = Infinity;
-  for (const s of city.waterSegs) {
-    const dx = s[2] - s[0], dz = s[3] - s[1], l2 = dx * dx + dz * dz;
-    let t = l2 ? ((p.x - s[0]) * dx + (p.z - s[1]) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t));
-    const qx = s[0] + dx * t, qz = s[1] + dz * t, d = Math.hypot(qx - p.x, qz - p.z) - s[4] / 2;
-    if (d < bd) { bd = d; best = { qx, qz, w: s[4], dx, dz }; }
-  }
-  if (!best || bd > 140) return;
-  const len = Math.hypot(best.qx - p.x, best.qz - p.z) || 1;
-  const ux = (best.qx - p.x) / len, uz = (best.qz - p.z) / len; // toward water
-  const rot = Math.atan2(ux, uz); // local +z toward water
-  const c = Math.cos(rot), s = Math.sin(rot);
-  const edge = len - best.w / 2; // distance to the water's edge from the place
-  const startD = Math.max(0, edge - 22), endD = edge + 2;
+  const G = p.ghat;
+  if (!G) return;
+  const { rot, hw, start: startD, end: endD } = G;
+  const c = Math.cos(rot), s = Math.sin(rot); // local +z toward the water
   const X = (lx, lz) => p.x + lx * c + lz * s, Z = (lx, lz) => p.z - lx * s + lz * c;
-  const hw = width / 2;
-  const steps = 12;
-  for (let k = 0; k < steps; k++) {
-    const d0 = startD + ((endD - startD) * k) / steps, d1 = startD + ((endD - startD) * (k + 1)) / steps;
-    const y = city.groundHeight(X(0, d0), Z(0, d0)) + 0.05;
-    // Sandstone steps, a shade darker every other tread.
+  G.treads.forEach((t, k) => {
+    // Sandstone steps, a shade darker every other tread, down into the bank under them.
     g.color(k % 2 ? 0xcdb894 : 0xd9c7a3, 0);
-    g.cbox(X(0, (d0 + d1) / 2), y - 0.6, Z(0, (d0 + d1) / 2), hw, 0.6, (d1 - d0) / 2 + 0.02, rot);
-  }
+    const bottom = Math.min(t.top - 0.6, t.low - 0.1);
+    g.cbox(X(0, (t.d0 + t.d1) / 2), bottom, Z(0, (t.d0 + t.d1) / 2), hw, t.top - bottom, (t.d1 - t.d0) / 2 + 0.02, rot);
+  });
   // Side walls with a lamp at each end, and a couple of umbrellas for the pandas.
+  const walls = 6, run = (endD - startD) / walls;
   for (const sx of [-hw - 0.5, hw + 0.5]) {
     g.color(0xb8ad98, 0);
-    for (let k = 0; k < steps; k += 2) {
-      const d = startD + ((endD - startD) * k) / steps;
+    for (let k = 0; k < walls; k++) {
+      const d = startD + run * k;
       const y = city.groundHeight(X(sx, d), Z(sx, d));
-      g.cbox(X(sx, d + 1), y - 0.4, Z(sx, d + 1), 0.5, 1.6, (endD - startD) / steps, rot);
+      g.cbox(X(sx, d + 1), y - 0.4, Z(sx, d + 1), 0.5, 1.6, run / 2, rot);
     }
     g.color(0x6f7779, 0); g.cyl(X(sx, startD), 0, Z(sx, startD), 0.08, 4.2, 5);
     pool(pg, X(sx, startD), Z(sx, startD), 5, 4.2);

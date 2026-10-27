@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { world } from './helpers.js';
 import { ChunkManager } from '../src/world/chunks.js';
+import { buildPlace } from '../src/world/landmarks.js';
 import { Colliders } from '../src/world/colliders.js';
 import { CHUNK, GROUND_CELL } from '../src/world/citygen.js';
 import { WATER_Y } from '../src/world/water.js';
@@ -205,6 +206,67 @@ test('on foot: across a bridge, down the ghat to the water, and out of the river
     const d = city.riverDistance(w.P.x, w.P.z).d;
     assert.ok(d > -1.05, `${toBank ? 'walking' : 'standing'}: ${(-d).toFixed(2)} m in after 4 s`);
   }
+});
+
+/** The sandstone treads landmarks.js draws for place i (a ghat): the boxes given Geo.cbox. */
+function treadsDrawn(city, i) {
+  const boxes = [];
+  let color = 0;
+  const g = new Proxy({}, {
+    get: (_, k) => k === 'color' ? (c => { color = c; return g; })
+      : k === 'cbox' ? ((x, y0, z, hw, h, hd, rot = 0) => { if (color === 0xcdb894 || color === 0xd9c7a3) boxes.push({ x, y0, z, hw, h, hd, rot }); return g; })
+        : () => g,
+  });
+  buildPlace({ g, sg: g, pg: g, fg: g, wires: g, city, net: city.net, signSlots: new Map(), cx: 0, cz: 0, far: false }, city.places[i], i);
+  return boxes;
+}
+
+test('down every ghat the feet are on its steps as drawn, a step at a time', () => {
+  const { city, net } = world();
+  let ghats = 0, frames = 0;
+  city.places.forEach((p, i) => {
+    if (!p.ghat) return;
+    ghats++;
+    const G = p.ghat, boxes = treadsDrawn(city, i);
+    assert.equal(boxes.length, G.treads.length, `${p.id}: every tread drawn`);
+    // A riser is a step down (the player stays on its feet down 0.3 m), not a jump.
+    for (let k = 1; k < G.treads.length; k++) assert.ok(G.treads[k - 1].top - G.treads[k].top < 0.25, `${p.id}: riser ${k}`);
+    // The top of the stone drawn under (x, z), well inside a tread (not on the seam where one meets the next).
+    const stone = (x, z) => {
+      let top = -Infinity;
+      for (const b of boxes) {
+        const c = Math.cos(b.rot), s = Math.sin(b.rot), dx = x - b.x, dz = z - b.z;
+        if (Math.abs(dx * c - dz * s) < b.hw && Math.abs(dx * s + dz * c) < b.hd - 0.05) top = Math.max(top, b.y0 + b.h);
+      }
+      return top;
+    };
+    // Walked down its middle and near either side, from the landing at the top to the water.
+    for (const lat of [0, -0.7, 0.7]) {
+      const lx = lat * G.hw, at = d => ({ x: G.x + lx * G.uz + d * G.ux, z: G.z - lx * G.ux + d * G.uz });
+      const from = at(G.start + 1), to = at(G.end + 3);
+      const w = walker(from.x, from.z, city.groundHeight(from.x, from.z));
+      let sunk = 0, aloft = 0, falls = 0, onSteps = 0;
+      w.walk(14, P => {
+        const top = stone(P.x, P.z);
+        if (top > -Infinity) {
+          onSteps++;
+          sunk = Math.max(sunk, top - P.y);
+          aloft = Math.max(aloft, P.y - Math.max(top, city.bareGround(P.x, P.z)));
+          // People and vehicles stand on what the player does.
+          assert.equal(net.surfaceAt(P.x, P.z, P.y), P.y);
+          if (!P.onGround) falls++;
+        }
+        return to;
+      });
+      frames += onSteps;
+      assert.ok(onSteps > 60, `${p.id} at ${lat}: ${onSteps} frames on the steps`);
+      assert.ok(sunk < 0.01, `${p.id} at ${lat}: feet ${sunk.toFixed(2)} m down in a tread`);
+      assert.ok(aloft < 0.01, `${p.id} at ${lat}: ${aloft.toFixed(2)} m above the steps`);
+      assert.equal(falls, 0, `${p.id} at ${lat}: ${falls} frames off their feet on the steps`);
+    }
+  });
+  assert.ok(ghats >= 6, `${ghats} ghats with steps`);
+  assert.ok(frames > 2000, `${frames} frames on the steps`);
 });
 
 test('down on the riverbank, trees, buildings on their plinths and bridge piers stand in the way', () => {
