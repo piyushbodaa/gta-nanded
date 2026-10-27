@@ -284,6 +284,36 @@ export class City {
     });
   }
 
+  /**
+   * The ground under lot i's lowest corner, or 0 on level ground: a building on the river
+   * valley's slope stands on a plinth carried down to it. chunks.js draws the plinth and
+   * colliders.js stands the building from there, so the bank can't walk through either.
+   */
+  footing(i) {
+    const L = this.lots, x = L.x[i], z = L.z[i], hw = L.hw[i], hd = L.hd[i];
+    // Most lots stand well back from any river.
+    if (this.riverDistance(x, z, this._rf || (this._rf = {})).d > Math.hypot(hw, hd) + 14 + GROUND_CELL * 1.5) return 0;
+    const c = Math.cos(L.rot[i]), s = Math.sin(L.rot[i]);
+    let low = 0;
+    for (const [lx, lz] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]]) low = Math.min(low, this.groundHeight(x + lx * c + lz * s, z - lx * s + lz * c));
+    return low > -0.05 ? 0 : low;
+  }
+
+  /**
+   * The piers under a river bridge's span from (ax, az) to (bx, bz), hw its deck's half-width:
+   * about every 18 m where the riverbed is below, a block from under the bed up to the deck's
+   * underside. fn(x, z, y0, y1, hx, hz, rot) gets each one as Geo.cbox and Colliders.addBox
+   * take a box, so the piers drawn and the piers in the way are the same.
+   */
+  riverPiers(ax, az, bx, bz, hw, fn) {
+    const steps = Math.floor(Math.hypot(bx - ax, bz - az) / 18), rot = Math.atan2(bx - ax, bz - az) + Math.PI / 2;
+    for (let k = 0; k <= steps; k++) {
+      const t = steps ? k / steps : 0.5;
+      const x = ax + (bx - ax) * t, z = az + (bz - az) * t, gh = this.groundHeight(x, z);
+      if (gh <= -0.8) fn(x, z, gh - 1.5, -1.1, hw * 0.75, 0.9, rot);
+    }
+  }
+
   // ---------------------------------------------------------------- generation
   generate(onProgress) {
     const t0 = performance.now();
