@@ -14,6 +14,7 @@ export class PauseMenu {
     this.root = $('pause');
     this.open = false;
     this.tab = 'map';
+    this.tabs = this.root.querySelector('.tabs');
     this.map = new CityMap(game, $('city-map'));
     this.map.onPick = (x, z) => this.setWaypoint(x, z);
     this._bind();
@@ -55,7 +56,8 @@ export class PauseMenu {
       this._confirmReset = true; $('set-reset').textContent = `${verb(g) === 'tap' ? 'Tap' : 'Click'} again to erase everything`;
       setTimeout(() => { this._confirmReset = false; $('set-reset').textContent = 'Start over (erase progress)'; }, 4000);
     });
-    addEventListener('resize', () => { if (this.open && this.tab === 'map') this._drawMap(); });
+    this.tabs.addEventListener('scroll', () => tabEdges(this.tabs), { passive: true });
+    addEventListener('resize', () => { tabEdges(this.tabs); if (this.open && this.tab === 'map') this._drawMap(); });
   }
 
   setWaypoint(x, z, label) {
@@ -93,7 +95,12 @@ export class PauseMenu {
   show(tab) {
     this.tab = tab;
     $('pause-resume').querySelector('kbd').textContent = keyName(this.game, 'pause'); // Esc, or Start on a gamepad
-    for (const b of this.root.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    for (const b of this.root.querySelectorAll('[data-tab]')) {
+      const on = b.dataset.tab === tab;
+      b.setAttribute('aria-selected', String(on));
+      if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // when the tab row scrolls sideways
+    }
+    tabEdges(this.tabs);
     for (const p of this.root.querySelectorAll('[data-pane]')) p.classList.toggle('on', p.dataset.pane === tab);
     if (tab === 'map') { requestAnimationFrame(() => this._drawMap()); this._search(); }
     if (tab === 'story') this._story();
@@ -193,17 +200,27 @@ export class PauseMenu {
   }
 }
 
+/** Fade the ends of the tab row that have tabs past them, so a row that has to scroll sideways says so. */
+function tabEdges(nav) {
+  nav.classList.toggle('more-l', nav.scrollLeft > 1);
+  nav.classList.toggle('more-r', nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
+}
+
 /**
  * A browser makes a click only from a lone finger, and the game's own buttons invite a thumb resting on the
- * stick, so a menu tapped with the other thumb ignored every tap. Touch taps on the menu's buttons act on
- * pointerup instead (a finger that moved was scrolling), and cancelling their touchend stops the browser's
- * own click from acting a second time. Mouse, pen and keyboard keep the plain click.
+ * stick, so a menu tapped with the other thumb ignored every tap. A tap by a second finger acts on pointerup
+ * instead (a finger that moved was scrolling), and cancelling its touchend stops the browser from clicking too.
+ * A lone finger keeps the browser's own click, which knows that a tap on a gliding list only stops it, and which
+ * moves focus (so the keyboard closes after a search). Mouse, pen and keyboard keep the plain click.
  */
-function tapButtons(root) {
-  const downs = new Map(); // touch pointerId -> where it went down, and on which button
-  let tapped = false;
+export function tapButtons(root) {
+  const downs = new Map(); // second-finger pointerId -> where it went down, and on which button
+  let tapped = false, scrolled = -Infinity;
+  root.addEventListener('scroll', e => { scrolled = e.timeStamp; }, { capture: true, passive: true });
   root.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'touch') downs.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.target.closest('button') });
+    // A finger that lands while a list still glides is stopping it, not tapping.
+    if (e.pointerType !== 'touch' || e.isPrimary || e.timeStamp - scrolled < 100) return;
+    downs.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.target.closest('button') });
   });
   root.addEventListener('pointercancel', e => downs.delete(e.pointerId));
   root.addEventListener('pointerup', e => {
@@ -211,7 +228,9 @@ function tapButtons(root) {
     downs.delete(e.pointerId);
     if (!d?.button || d.button.disabled || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12) return;
     tapped = true;
+    // The browser's tap would take focus off the search box; without it the phone's keyboard stays open.
+    if (document.activeElement?.matches('input, textarea')) document.activeElement.blur();
     d.button.click();
   });
-  root.addEventListener('touchend', e => { if (tapped) { tapped = false; e.preventDefault(); } }, { passive: false });
+  root.addEventListener('touchend', e => { if (tapped && e.cancelable) e.preventDefault(); tapped = false; }, { passive: false });
 }

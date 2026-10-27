@@ -133,10 +133,12 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
 @media (orientation: portrait) and (max-width: 760px) {
   .rotate { display: block; position: absolute; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 32px); top: 40%; padding: 10px 14px; background: #000c; border-radius: 6px; font: 700 15px/1.3 var(--body); text-align: center; animation: areafade 6s forwards; }
   /* Not the way to play, but nothing should sit on anything: MAP and pause move under the cash, clear of the
-     radar; the area name rises above the buttons; the middle column starts below the radar. */
+     radar, and a mission timer goes under them; the area name rises above the buttons; the middle column
+     starts below the radar and the timer. */
   body.touch-ui .touch-top { left: auto; right: calc(12px + var(--safe-r)); transform: none; top: calc(84px + var(--safe-t)); }
+  body.touch-ui .timer { top: calc(130px + var(--safe-t)); }
   body.touch-ui .area-name { bottom: calc(40% + var(--safe-b)); }
-  body.touch-ui .hud-stack { width: calc(100vw - 32px); margin-top: calc(150px + var(--safe-t)); }
+  body.touch-ui .hud-stack { width: calc(100vw - 32px); margin-top: calc(178px + var(--safe-t)); }
 }
 
 /* Small screens: shrink the HUD */
@@ -211,13 +213,22 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
   .pause-head { gap: 8px; } .pause-head h2 { font-size: 24px; } .tabs button { padding: 7px 9px; font-size: 14px; }
 }
 /* Landscape phones: search, places, zoom and Clear waypoint sit beside the map, all on screen, and the tabs
-   scroll sideways in one row instead of wrapping into a second one. */
+   keep to one row instead of wrapping into a second one. Tighter tabs fit all seven from 568 px across (the
+   title gives way below 720 px); if they still can't fit, the row scrolls sideways and fades where more wait. */
 @media (max-height: 500px) and (orientation: landscape) {
   .tab[data-pane="map"].on { grid-template-columns: 1fr minmax(180px, 34%); grid-template-rows: minmax(0, 1fr); }
   .map-side { max-height: none; overflow: auto; }
   .map-results { min-height: 0; }
   .pause-head { flex-wrap: nowrap; } .pause-head h2, .resume { flex: none; }
-  .tabs { flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .tabs { flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 2px; scroll-padding-inline: 28px; } /* the chosen tab stops clear of a fade */
+  .tabs button { padding: 7px 6px; letter-spacing: .5px; }
+  .resume { padding: 8px 12px; }
+  .tabs.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), #0000); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), #0000); }
+  .tabs.more-l { -webkit-mask-image: linear-gradient(90deg, #0000, #000 28px); mask-image: linear-gradient(90deg, #0000, #000 28px); }
+  .tabs.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, #0000, #000 28px, #000 calc(100% - 28px), #0000); mask-image: linear-gradient(90deg, #0000, #000 28px, #000 calc(100% - 28px), #0000); }
+}
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 720px) {
+  .pause-head h2 { display: none; } /* still names the dialog for screen readers (aria-labelledby) */
 }
 
 /* ---------------------------------------------------------------- photo + fatal */
@@ -228,10 +239,14 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
 .photo-bar button { border: 0; background: #222; color: #fff; padding: 8px 12px; font-weight: 700; touch-action: manipulation; }
 .photo-bar button.share { background: #1f8f4e; }
 /* Touch screens: the right-hand corner is the buttons, so the card goes top-left (over the radar). Its picture
-   has the screen's shape, so 36% of the width keeps the whole card, Share, Save and ✕, on screen. */
-body.touch-ui .photo { right: auto; left: calc(10px + var(--safe-l)); top: calc(10px + var(--safe-t)); width: min(300px, 36vw); transform: rotate(-1.5deg); }
-body.touch-ui .photo-bar { flex-wrap: wrap; gap: 6px; padding: 6px 0; } /* the place name gets its own line */
-body.touch-ui .photo-bar strong { flex-basis: 100%; font-size: 13px; }
+   has the screen's shape, so 36% of the width keeps the whole card on screen. The card still reaches down over
+   the stick, so only Share, Save and ✕ take touches, and they sit along its top, far from the stick's ring;
+   a thumb on the picture or the caption walks as if the card weren't there. The caption goes under the picture. */
+body.touch-ui .photo { right: auto; left: calc(10px + var(--safe-l)); top: calc(10px + var(--safe-t)); width: min(300px, 36vw); transform: rotate(-1.5deg); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; pointer-events: none; }
+body.touch-ui .photo button { pointer-events: auto; }
+body.touch-ui .photo img { order: 1; }
+body.touch-ui .photo-bar { display: contents; }
+body.touch-ui .photo-bar strong { order: 2; flex-basis: 100%; font-size: 13px; }
 body.touch-ui #photo-close { margin-left: auto; }
 .fatal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: #0b0d0e; padding: 24px; text-align: center; }
 .fatal h2 { font: 400 40px/1.1 var(--display); } .fatal button { margin-top: 12px; border: 0; background: var(--orange); color: #111; padding: 10px 16px; font: 800 16px var(--cond); }
