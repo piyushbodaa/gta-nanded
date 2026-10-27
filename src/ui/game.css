@@ -160,6 +160,17 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
   .timer { top: calc(90px + var(--safe-t)); font-size: 28px; }
   .toast { font-size: 13px; }
 }
+/* Landscape phones: the button grid grows up the right-hand side, and a column that wraps a long line grows
+   down into it (the help box and radio card under 📻 and DRIFT). So the column ends where the grid starts
+   (--clear-r: its width, 200 px up to 420 px tall, 248 px above, plus its margin), and stays centred while
+   it can be 360 px wide; on narrower phones it moves left, up to the radar, rather than under the buttons. */
+@media (max-height: 500px) and (orientation: landscape) {
+  body.touch-ui .hud-stack { --clear-r: calc(218px + var(--safe-r)); width: min(calc(100vw - 164px - var(--safe-l) - var(--clear-r)), max(360px, calc(100vw - 2 * var(--clear-r)))); margin-left: auto; margin-right: var(--clear-r); }
+  body.touch-ui .hud-stack > .help-box { max-width: min(520px, 100%); } /* the column keeps it clear */
+}
+@media (min-height: 421px) and (max-height: 500px) and (orientation: landscape) {
+  body.touch-ui .hud-stack { --clear-r: calc(266px + var(--safe-r)); }
+}
 
 /* ---------------------------------------------------------------- pause menu */
 .pause { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: linear-gradient(180deg, #050607f2, #0b0d0ee8); font-family: var(--body); animation: fadein .2s; touch-action: auto; -webkit-user-select: text; user-select: text; }
@@ -263,9 +274,13 @@ body.touch-ui #photo-close { margin-left: auto; }
   body.touch-ui .speedo { bottom: calc(30% + 62px); }
 }
 /* The shortest phones: a shorter radar leaves room for the speedometer under it, and shorter pedals keep
-   EXIT and START JOB under the wanted stars. */
+   EXIT and START JOB under the wanted stars. The middle column is narrowest here, so the help box and the
+   radio card are more compact: the first drive's help and its radio card both fit above the bottom edge. */
 @media (max-height: 340px) {
   .radar { height: 84px; }
   .tb.pedal { height: 76px; }
   .touch-right { gap: 4px; }
+  .help-box { padding: 8px 10px; }
+  .radio-card strong { font-size: 20px; }
+  .radio-card span { font-size: 12px; line-height: 1.25; }
 }
