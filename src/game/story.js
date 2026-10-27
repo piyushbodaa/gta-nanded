@@ -53,6 +53,10 @@ const P = {
   latur: { x: -248, z: 1368 }, // Latur Phata
   degloor: { x: 1038, z: 389 }, // Degloor Naka, on the road in from Telangana
   gandhiPutla: { x: 112.2, z: 417.8 }, dam: { x: -1350.3, z: 1990.4 },
+  // Just round the corner where the race leaves Vazirabad Road for the river: it goes by the main
+  // roads, not the shortcut behind the Putla, a right-angle turn into a 4.8 m lane that every car
+  // overshot at race pace.
+  vazirabadTurn: { x: -20, z: 318 },
   ghatBridge: { x: -88.8, z: 803.8 }, // mid-bridge on the southbound carriageway, the way the race crosses
 };
 /** Every place the story sends you (checked against the road network in the tests). */
@@ -413,7 +417,7 @@ export const STORY = [
     id: 'c6', giver: 'TIGER', title: 'नदीकाठची शर्यत', subtitle: 'RIVER RIGHTS', reward: 3500, requires: ['c5'],
     start: P.gandhiPutla,
     steps: g => {
-      const cps = routeCheckpoints(g, [P.gandhiPutla, P.ghatBridge, P.dam], 320);
+      const cps = routeCheckpoints(g, [P.gandhiPutla, P.vazirabadTurn, P.ghatBridge, P.dam], 320);
       return [
         S.call(c => {
           kerbSpawn(c, 'racer', 'hatch', P.gandhiPutla, { dx: 4, label: 'your car', color: 0xd62f2f });

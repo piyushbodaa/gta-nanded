@@ -444,6 +444,13 @@ test('the river race crosses the Govardhan bridge once, straight on to the dam',
   for (const p of pts) { len += net.route(from.x, from.z, p.x, p.z).length; from = p; }
   const direct = net.route(P.gandhiPutla.x, P.gandhiPutla.z, P.dam.x, P.dam.z).length;
   assert.ok(len < direct * 1.08, `${len.toFixed(0)} m of racing for a ${direct.toFixed(0)} m drive`);
+  // Off the start by the main roads, as the rivals plan it (two checkpoints ahead): not the sharp
+  // turn into the 4.8 m lanes behind the Putla, which every car overshot at race pace.
+  const p = [P.gandhiPutla, pts[0], pts[1]].flatMap((a, i, all) => i ? net.route(all[i - 1].x, all[i - 1].z, a.x, a.z).points.slice(0, -2) : []);
+  for (let i = 0; i < p.length; i += 2) {
+    const n = net.nearest(p[i], p[i + 1], 10, {});
+    assert.ok(!n || net.width[n.road] >= 7, `a ${net.width[n.road].toFixed(1)} m lane at ${p[i].toFixed(0)}, ${p[i + 1].toFixed(0)}`);
+  }
 });
 
 /**
