@@ -82,15 +82,20 @@ export function dressWorld(g) {
   return mesh;
 }
 
-/** Spawn a vehicle at the kerb near a point, facing along the street. */
+/**
+ * Spawn a vehicle at the kerb near a point, facing along the street. With `toward`, a place the
+ * player will drive it to, the kerb facing the way the route there leaves.
+ */
 function kerbSpawn(c, name, type, at, opts = {}) {
   const x = at.x + (opts.dx || 0), z = at.z + (opts.dz || 0), half = VEHICLE_TYPES[type].L / 2;
   let side = opts.side ?? 1, first = c.roadPoint(x, z, side);
   // Never nosed into a dead end: a tipper can't turn in a 4.8 m lane, and a hunter or a getaway
-  // would only wedge at its end. The other kerb, facing out.
-  if (deadAhead(c.g.net, first)) {
+  // would only wedge at its end. Nor, given where it goes, facing away from the way out: a truck
+  // can't turn round in a lane either. The other kerb, facing out.
+  const facesOut = p => (opts.toward ? leavesAhead(c.g.net, p, opts.toward) : !deadAhead(c.g.net, p));
+  if (!facesOut(first)) {
     const out = c.roadPoint(x, z, -side);
-    if (!deadAhead(c.g.net, out)) { first = out; side = -side; }
+    if (facesOut(out)) { first = out; side = -side; }
   }
   // Something already on that spot (a scene vehicle, traffic, the player): a car length further
   // along the kerb, then back, rather than on top of it.
@@ -113,6 +118,14 @@ function deadAhead(net, { road, dir }) {
     j = net.otherEnd(r, j);
   }
   return false;
+}
+/** Does the route from a kerb spot to `to` set off the way the spot faces (judged 8 m along it)? */
+function leavesAhead(net, at, to) {
+  const r = net.route(at.x, at.z, to.x, to.z), p = r?.points;
+  if (!p || p.length < 4) return true;
+  let k = 2;
+  while (k < p.length - 2 && dist(p[k], p[k + 1], p[0], p[1]) < 8) k += 2;
+  return Math.sin(at.heading) * (p[k] - p[0]) + Math.cos(at.heading) * (p[k + 1] - p[1]) > 0;
 }
 function kerbTaken(g, at, half) {
   const P = g.player;
@@ -374,7 +387,8 @@ export const STORY = [
         ['SHERA', 'The watchman naps after his chai. Mostly.'],
       ], { block: true }),
       S.goTo(P.yard, 'Go to the <b>impound yard</b> behind the Central Bus Stand.', { radius: 16, stop: false }),
-      S.call(c => { kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227 }); yardScene(c); }),
+      // Facing the way out of the yard's lane, toward the main road home, not up to its bend.
+      S.call(c => { kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227, toward: P.ghatRoad }); yardScene(c); }),
       S.enter('seized', "Take back <b>Mama's tipper</b>."),
       // Mama and Shera go up to the main road to see it home, where you park it (on the kerb
       // you pull in at off the bridge), not down the ghat lanes out of sight. You're across town.

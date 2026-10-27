@@ -561,6 +561,23 @@ test("Mama's tippers load on the main road: no hairpin a truck can't turn betwee
   assert.ok(sharpest(P.ghatBridge, home) < 60, `c5: a ${sharpest(P.ghatBridge, home).toFixed(0)}° turn bringing the tipper home`);
 });
 
+test("Mama's seized tipper faces the way out of the impound yard's lane, with nothing parked in front of it", async () => {
+  const { world } = await import('./helpers.js');
+  const { net } = world();
+  const { spawns } = await storyDryRun();
+  const s = spawns.c5.seized, fx = Math.sin(s.heading), fz = Math.cos(s.heading), home = STORY_PLACES.ghatRoad;
+  // A truck can't turn round in a 4.8 m lane: the route home sets off the way it faces.
+  const p = net.route(s.x, s.z, home.x, home.z).points;
+  let k = 2;
+  while (Math.hypot(p[k] - p[0], p[k + 1] - p[1]) < 8) k += 2;
+  assert.ok(fx * (p[k] - p[0]) + fz * (p[k + 1] - p[1]) > 0, 'it faces back up the lane, away from the way out');
+  for (const name of ['yardTractor', 'yardBike', 'yardAuto']) {
+    const v = spawns.c5[name], ox = v.x - s.x, oz = v.z - s.z;
+    const ahead = ox * fx + oz * fz, across = Math.abs(ox * fz - oz * fx);
+    assert.ok(!(ahead > 0 && ahead < s.hd + v.hd + 6 && across < s.hw + v.hw + 0.5), `the ${name} stands ${(ahead - s.hd - v.hd).toFixed(1)} m in front of it`);
+  }
+});
+
 test('Continue and Free Roam never put you inside a contact marker', async () => {
   const { world } = await import('./helpers.js');
   const { net } = world();
