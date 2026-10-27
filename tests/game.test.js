@@ -263,6 +263,22 @@ test('a hunter that rams straight at the player and gets nowhere (a median betwe
   assert.ok(rams > 0, 'and at the player again');
 });
 
+test('a hunter ramming the player, backing off and ramming again keeps at it, never off round the roads', () => {
+  const g = fakeGame();
+  let routed = 0, rams = 0, frames = 0;
+  g.net.route = () => { routed++; return { points: [0, 10, 0, 0] }; };
+  const v = { id: 1, x: 0, z: 10, hunt: { setPath() {}, control: (dt, target) => { if (target) rams++; return {}; } } };
+  g.missions = { active: { ent: { savkarCar: v } } };
+  // In to 3.5 m (against the player's car), back out to 12 m, in again: every 3 s for a minute.
+  for (let t = 0; t < 60; t += 0.1, frames++) {
+    const k = (t % 3) / 3;
+    v.z = 3.5 + 8.5 * (k < 0.5 ? 1 - 2 * k : 2 * k - 1);
+    driveHunters(g, 0.1);
+  }
+  assert.equal(routed, 0);
+  assert.equal(rams, frames);
+});
+
 test('a step that fails leaves no GPS line to its target', () => {
   const g = fakeGame();
   let routed = 0;

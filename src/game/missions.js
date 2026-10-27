@@ -629,8 +629,10 @@ export function driveHunters(game, dt) {
     v.huntRoads = Math.max(0, (v.huntRoads || 0) - dt);
     if (d < 45 && !v.huntRoads) {
       // Straight at the player. Not closing in for seconds (rocking against the median between
-      // two carriageways, or a wall): round by the roads for a while, as from further off.
-      if (d < (v.huntBest ?? Infinity) - 2) { v.huntBest = d; v.huntStall = 0; }
+      // two carriageways, or a wall): round by the roads for a while, as from further off. At the
+      // player is not stuck: ramming, backing off and ramming again never gets closer than the
+      // last time, and on the roads it would only park beside them.
+      if (d < 10 || d < (v.huntBest ?? Infinity) - 2) { v.huntBest = d; v.huntStall = 0; }
       else if ((v.huntStall = (v.huntStall || 0) + dt) > 5) { v.huntRoads = 8; v.huntT = 0; }
       game.controls.set(v, v.hunt.control(dt, { x: pos.x, z: pos.z }));
     } else {
