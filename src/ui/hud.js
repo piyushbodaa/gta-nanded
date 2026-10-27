@@ -7,6 +7,16 @@ import { key } from './controls.js';
 const $ = id => document.getElementById(id);
 
 /**
+ * Whether two shown HUD elements share any rows of the screen. On a touch screen the middle column and the
+ * cards under it (area and vehicle names, big cards) are all centred across the screen, so that is overlapping.
+ */
+function shareRows(a, b) {
+  if (a.hidden || b.hidden) return false;
+  const r = a.getBoundingClientRect(), s = b.getBoundingClientRect();
+  return r.top < s.bottom && s.top < r.bottom;
+}
+
+/**
  * The cash counter's next value. It counts towards the real amount like a slot machine: a share of the gap
  * each frame, but at least ₹1, because at 60 fps a rounded share of a small gap is 0 and it would stop short.
  */
@@ -25,7 +35,7 @@ export class Hud {
       clock: $('hud-clock'), cash: $('hud-cash'), stars: $('hud-stars'), health: $('hud-health'), stamina: $('hud-stamina'),
       help: $('hud-help'), area: $('hud-area'), vehicle: $('hud-vehicle'), speed: $('hud-speed'), speedNum: $('hud-speed-num'), gear: $('hud-gear'),
       objective: $('hud-objective'), subtitle: $('hud-subtitle'), bark: $('hud-bark'), timer: $('hud-timer'), big: $('hud-big'), toast: $('hud-toast'),
-      cashDelta: $('hud-cash-delta'), prompt: $('hud-prompt'), perf: $('hud-perf'), hint: $('hud-hint'),
+      cashDelta: $('hud-cash-delta'), prompt: $('hud-prompt'), perf: $('hud-perf'), hint: $('hud-hint'), radio: $('hud-radio'),
     };
     this.perfOn = false;
     this.perfT = 0;
@@ -42,7 +52,9 @@ export class Hud {
     this.objText = '';
     this.timerHtml = '';
     this.speedShown = { kmh: -1, gear: '', hp: -1 };
-    this.helpLater = null; // [html, seconds] waiting for a big card to go
+    this.helpLater = null; // [html, seconds] waiting for a big card, or for room in the middle column
+    this.radioUp = false; // the radio's station card (main.js shows it)
+    this.radioSeen = ''; // the station card last checked against the vehicle's name card
     addEventListener('resize', () => this.radar.resize());
     requestAnimationFrame(() => this.radar.resize());
   }
@@ -53,21 +65,45 @@ export class Hud {
     // On touch screens the help box sits mid-screen, where a big card (MISSION PASSED, WANTED) goes: it waits for the card.
     if (this.timers.big > 0 && this.game.input.touch?.active) { this.helpLater = [html, seconds]; return; }
     this.el.help.innerHTML = html; this.el.help.hidden = false; this.timers.help = seconds;
+    this._helpFits();
   }
   subtitle(speaker, text, seconds = 4.5, color = '#ffd27a') {
     this.el.subtitle.innerHTML = speaker ? `<b style="color:${color}">${speaker}:</b> ${text}` : text;
     this.el.subtitle.hidden = false; this.timers.subtitle = seconds;
+    this._helpFits(); this._placeBig();
   }
-  clearSubtitle() { this.el.subtitle.hidden = true; this.timers.subtitle = 0; }
+  clearSubtitle() { this.el.subtitle.hidden = true; this.timers.subtitle = 0; this._helpBack(); }
+  /**
+   * On a touch screen the help box stacks with the subtitle, a toast and the radio card in the middle column.
+   * On the shortest phones they can run off the bottom of the screen, cutting off the help or the card under
+   * it: then the help steps aside while they are up (they are short), and comes back after.
+   */
+  _helpFits() {
+    const { help, subtitle, toast, radio } = this.el;
+    if (!this.game.input.touch?.active || help.hidden || (subtitle.hidden && toast.hidden && radio.hidden)) return;
+    if (help.parentElement.getBoundingClientRect().bottom > innerHeight - 4) this._helpAside();
+  }
+  /** The help box steps aside, to come back with the time it had left. */
+  _helpAside() {
+    this.helpLater = [this.el.help.innerHTML, this.timers.help];
+    this.el.help.hidden = true; this.timers.help = 0;
+  }
+  _helpBack() {
+    if (!this.helpLater) return;
+    const [html, seconds] = this.helpLater;
+    this.helpLater = null;
+    this.help(html, seconds); // which waits again if a big card is up, or the column still runs off the screen
+  }
   objective(text) {
     // Missions and jobs set it every frame: write only when it changes.
     text = text || '';
     if (text === this.objText) return;
     this.objText = text;
     this.el.objective.innerHTML = text; this.el.objective.hidden = !text;
+    this._placeBig();
   }
   bark(text) { this.el.bark.textContent = text; this.el.bark.hidden = false; this.timers.bark = 2.6; this.el.bark.classList.remove('pop'); void this.el.bark.offsetWidth; this.el.bark.classList.add('pop'); }
-  toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; }
+  toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; this._helpFits(); this._placeBig(); }
   big(title, sub = '', kind = 'passed', seconds = 4.5) {
     const el = this.el.big;
     // The line under the title is a sentence, even when it starts with a name ('Sand tipper was wrecked.').
@@ -75,14 +111,41 @@ export class Hud {
     el.className = `big-message ${kind}`;
     el.innerHTML = `<strong>${title}</strong>${sub ? `<span>${sub}</span>` : ''}`;
     el.hidden = false; this.timers.big = seconds;
+    el.style.top = '';
+    if (!this.game.input.touch?.active) return;
     // A help box already up on a touch screen steps aside, and comes back after the card with the time it had left.
-    if (this.game.input.touch?.active && !this.el.help.hidden && this.timers.help > 0) {
-      this.helpLater = [this.el.help.innerHTML, this.timers.help];
-      this.el.help.hidden = true; this.timers.help = 0;
-    }
+    if (!this.el.help.hidden && this.timers.help > 0) this._helpAside();
+    this._placeBig();
   }
-  area(name) { this.el.area.innerHTML = name; this.el.area.hidden = false; this.timers.area = 4; this.el.area.classList.remove('fade'); void this.el.area.offsetWidth; this.el.area.classList.add('fade'); }
-  vehicleName(name, extra = '') { this.el.vehicle.innerHTML = `<strong>${name}</strong>${extra ? `<span>${extra}</span>` : ''}`; this.el.vehicle.hidden = false; this.timers.vehicle = 3.5; }
+  /**
+   * On a touch screen a big card goes under the middle column, not across it: lower than its usual place when
+   * the column reaches that far down (a long objective and a subtitle, on the shortest phones), as low as the
+   * card's height allows. When the column grows under it (the next line of dialogue), it moves down again.
+   */
+  _placeBig() {
+    const el = this.el.big;
+    if (el.hidden || !this.game.input.touch?.active) return;
+    const below = this.el.help.parentElement.getBoundingClientRect().bottom + 6;
+    if (el.offsetTop < below) el.style.top = `${Math.max(el.offsetTop, Math.min(below, innerHeight - el.offsetHeight - 8))}px`;
+    this._makeRoom(el);
+  }
+  area(name) { this.el.area.innerHTML = name; this.el.area.hidden = false; this.timers.area = 4; this.el.area.classList.remove('fade'); void this.el.area.offsetWidth; this.el.area.classList.add('fade'); this._makeRoom(this.el.area); }
+  vehicleName(name, extra = '') { this.el.vehicle.innerHTML = `<strong>${name}</strong>${extra ? `<span>${extra}</span>` : ''}`; this.el.vehicle.hidden = false; this.timers.vehicle = 3.5; this._makeRoom(this.el.vehicle); }
+  /**
+   * Touch screens: the area name, the vehicle name and a big card can meet under the middle column (on the
+   * shortest phones the two names share the bottom, and a card moved down under a long column reaches them).
+   * Where a name would print over another card the newer name stays, and a big card beats both.
+   */
+  _makeRoom(shown) {
+    if (!this.game.input.touch?.active) return;
+    const { big, area, vehicle } = this.el;
+    if (shown !== big && shareRows(shown, big)) { this._drop(shown); return; }
+    for (const el of [area, vehicle]) if (el !== shown && shareRows(el, shown)) this._drop(el);
+  }
+  _drop(el) {
+    el.hidden = true;
+    for (const k in this.timers) if (this.el[k] === el) this.timers[k] = 0;
+  }
   /** A countdown (red in its last 10 s), or a stopwatch with urgent false: counting up never runs out. */
   setTimer(seconds, label = '', urgent = seconds < 10) {
     const el = this.el.timer;
@@ -129,8 +192,26 @@ export class Hud {
       if (this.timers[k] <= 0) {
         if (k === 'cash') this.el.cashDelta.hidden = true;
         else if (this.el[k]) this.el[k].hidden = true;
-        if (k === 'big' && this.helpLater) { const [html, seconds] = this.helpLater; this.helpLater = null; this.help(html, seconds); }
+        if (k === 'big' || k === 'subtitle' || k === 'toast') this._helpBack();
       }
+    }
+    // The radio puts up its station card as a song starts, the first one as you get in, where on a phone it can
+    // meet the vehicle's name card. That card names the station already, so the station card goes; one for
+    // another station (📻 tapped) means the name card is out of date, and that goes instead.
+    const { radio, vehicle } = this.el;
+    if (radio.hidden || vehicle.hidden) this.radioSeen = '';
+    else if (radio.textContent !== this.radioSeen) {
+      this.radioSeen = radio.textContent;
+      if (g.input.touch?.active && shareRows(radio, vehicle)) {
+        const station = radio.querySelector('strong')?.textContent;
+        if (station && vehicle.textContent.includes(station)) radio.hidden = true;
+        else this._drop(vehicle);
+      }
+    }
+    // The station card in the middle column, like a toast: room for it, and the help back once it has gone.
+    if (this.radioUp !== !radio.hidden) {
+      this.radioUp = !radio.hidden;
+      if (this.radioUp) { this._helpFits(); this._placeBig(); } else this._helpBack();
     }
     // Cash counts up like a slot machine.
     const cash = g.save?.cash ?? 0;

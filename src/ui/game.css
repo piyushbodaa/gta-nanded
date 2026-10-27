@@ -156,7 +156,7 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
   .speedo b { font-size: 40px; }
   .help-box { font-size: 13px; max-width: 58vw; left: 0; right: 0; margin: 0 auto; width: fit-content; top: auto; bottom: calc(10px + var(--safe-b)); }
   .area-name { font-size: 24px; } .big-message strong { font-size: 44px; }
-  body.touch-ui .big-message { top: 46%; } /* under the middle column, not across it */
+  body.touch-ui .big-message { top: 46%; } /* under the middle column, not across it (hud.js moves it lower if the column is longer) */
   .timer { top: calc(90px + var(--safe-t)); font-size: 28px; }
   .toast { font-size: 13px; }
 }
@@ -284,8 +284,11 @@ body.touch-ui #photo-close { margin-left: auto; }
   body.touch-ui .speedo { bottom: calc(30% + 62px); }
 }
 /* The shortest phones: a shorter radar leaves room for the speedometer under it, and shorter pedals keep
-   EXIT and START JOB under the wanted stars. The middle column is narrowest here, so the help box and the
-   radio card are more compact: the first drive's help and its radio card both fit above the bottom edge. */
+   EXIT and START JOB under the wanted stars. The middle column is narrowest here (186 px at 568 x 320) and a
+   long objective and the first drive's help fill it nearly to the bottom, so: the help box is more compact
+   (and steps aside while a subtitle or toast would push the column off the screen, hud.js); the radio card is
+   one line, the station, without the DJ's line that took three more; and the vehicle's name, smaller, goes
+   down to the area name's place at the bottom, clear of the column (when both are up, hud.js keeps the newer). */
 @media (max-height: 340px) {
   .radar { height: 84px; }
   .tb.pedal { height: 76px; }
@@ -293,4 +296,9 @@ body.touch-ui #photo-close { margin-left: auto; }
   .help-box { padding: 8px 10px; }
   .radio-card strong { font-size: 20px; }
   .radio-card span { font-size: 12px; line-height: 1.25; }
+  body.touch-ui .radio-card strong { white-space: nowrap; }
+  body.touch-ui .radio-card span { display: none; }
+  body.touch-ui .vehicle-name { bottom: calc(10px + var(--safe-b)); }
+  body.touch-ui .vehicle-name strong { font-size: 22px; }
+  body.touch-ui .vehicle-name span { font-size: 13px; margin-top: 2px; }
 }
