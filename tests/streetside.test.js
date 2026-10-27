@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { world } from './helpers.js';
-import { PROP } from '../src/world/citygen.js';
+import { PROP, CHUNK, WALK_Y } from '../src/world/citygen.js';
+import { ChunkManager } from '../src/world/chunks.js';
 import { obbOverlap } from '../src/core/math.js';
 
 // What stands along the streets faces them, and stays out of their lanes.
@@ -61,4 +63,19 @@ test('a compound wall runs into no other building, and no street tree stands in 
     if (wall) walls++; if (ota) otas++;
   }
   assert.ok(walls > 1000 && otas > 5000, `${walls} walls, ${otas} platforms`);
+});
+
+test('night light pools lie over the footpaths, shop platforms and medians, so the light reaches past the kerb', () => {
+  const { city } = world();
+  const mats = { city: new THREE.MeshBasicMaterial(), signs: new THREE.MeshBasicMaterial(), pools: new THREE.MeshBasicMaterial(), wires: new THREE.LineBasicMaterial(), foliage: new THREE.MeshBasicMaterial() };
+  const cm = new ChunkManager(new THREE.Scene(), city, mats, new Map());
+  // The busy shops by (561, 286): footpaths, shop platforms, lamps and shop light.
+  const cx = Math.floor(561 / CHUNK), cz = Math.floor(286 / CHUNK), key = `${cx},${cz}`;
+  cm._build(key, cx, cz);
+  const pools = cm.chunks.get(key).levels.find(l => l?.pools).pools.geometry.attributes.position.array;
+  let low = Infinity;
+  for (let i = 1; i < pools.length; i += 3) low = Math.min(low, pools[i]);
+  // The highest of them, a median's planted top, is 0.32 m.
+  assert.ok(low > Math.max(WALK_Y, 0.3, 0.32) + 0.05, `a pool lies ${low.toFixed(2)} m up`);
+  assert.ok(pools.length > 3 * 4 * 20, `${pools.length / 12} pool quads`);
 });

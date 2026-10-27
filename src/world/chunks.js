@@ -1320,10 +1320,15 @@ function wire(out, x0, z0, x1, z1, c, s) {
   }
 }
 
+// The ground pool lies over the footpaths (WALK_Y), shop platforms (0.3 m) and medians (0.32 m):
+// any lower and they hide it, cutting the light off in a straight line at the kerb. It is
+// additive and soft-edged, so 0.4 m up it reads as light on the street and what stands in it.
+const POOL_Y = 0.4;
+
 function lightPool(pg, x, z, radius, headY, base = 0) {
   // Ground pool, and a small bright quad under the lamp head (base: the deck it stands on).
   pg.setTint(0xffffff, 0).setTile(0, 0, 1, 0);
-  const y = base + 0.12;
+  const y = base + POOL_Y;
   if (headY) headY += base;
   const a = pg.v(x - radius, y, z - radius, 0, 0), b = pg.v(x - radius, y, z + radius, 0, 1);
   const c = pg.v(x + radius, y, z + radius, 1, 1), d = pg.v(x + radius, y, z - radius, 1, 0);
