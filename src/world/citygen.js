@@ -1025,8 +1025,18 @@ export class City {
           // Turned like the lamps beside a street, so the arm and its pool reach over the deck.
           const y = net.deckAt(road, s);
           for (const side of kerb ? [kerb] : [1, -1]) {
+            const rot = Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
             const x = p.x + p.dz * side * (w / 2 - 0.2), z = p.z - p.dx * side * (w / 2 - 0.2);
-            if (offOtherLanes(x, z, y, road, 0.4)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road, y);
+            if (offOtherLanes(x, z, y, road, 0.4)) { add(x, z, rot, PROP.LAMP, road, y); continue; }
+            // Where a flyover is back down at street level it often runs along another street,
+            // and its lamp would stand in that street's lane. It has no parapet there: stand the
+            // lamp beside the street instead, at the first spot out from the kerb that is clear
+            // (like the side lamps), so the stretch keeps its light.
+            if (!net.raised[road] || y >= 0.05) continue;
+            for (let off = w / 2 + 0.7; off <= w / 2 + 8; off += 0.5) {
+              const x2 = p.x + p.dz * side * off, z2 = p.z - p.dx * side * off;
+              if (offLanes(x2, z2) && clear(x2, z2) && !this._overlapsLots(x2, z2, 0.3, 0.3, 0, 0)) { add(x2, z2, rot, PROP.LAMP, road, 0); break; }
+            }
           }
         }
         continue;
