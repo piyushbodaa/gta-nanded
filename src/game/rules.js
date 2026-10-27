@@ -52,7 +52,9 @@ export function installRules(g) {
   g.onPedHitByVehicle = (p, v, spd) => {
     if (v.role !== 'player') return;
     g.audio.sfx('crash', 0.3);
-    g.police.report(p.cop ? 'hitCop' : 'hitPed', v.x, v.z, { cop: p.cop });
+    // As with a punch: the story's own people (the goons waiting where you pull up) are not a
+    // crime to run into, or the fight that follows runs with the police in it.
+    if (!p.mission) g.police.report(p.cop ? 'hitCop' : 'hitPed', v.x, v.z, { cop: p.cop });
     g.camera.addShake(0.1);
   };
 

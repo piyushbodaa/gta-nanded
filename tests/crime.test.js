@@ -134,6 +134,18 @@ test('one punch on an officer is one crime, and fighting the story\'s own enemie
   assert.equal(g.police.pending.length, 0);
 });
 
+test('running into the story\'s own goons is no crime; running down a passer-by is', () => {
+  const g = rulesGame();
+  const mine = jeep({ type: 'hatch', role: 'player', driver: null, vz: 9 });
+  g.police.foot.push({ h: { x: 0, z: 10 } }); // an officer watching, so every crime counts at once
+  // c8 and c10 stand their goons where you pull up, and the step ends with the car still rolling.
+  for (let i = 0; i < 4; i++) g.onPedHitByVehicle({ mission: true, h: { x: 0, z: 2 } }, mine, 9);
+  assert.equal(g.police.heat, 0);
+  assert.equal(g.police.pending.length, 0);
+  g.onPedHitByVehicle({ h: { x: 0, z: 2 } }, mine, 9);
+  assert.equal(g.police.level, 1, 'a passer-by run down is a crime');
+});
+
 test('being rammed by a police jeep is no crime; ramming one is', () => {
   const g = rulesGame();
   const mine = jeep({ type: 'hatch', role: 'player', driver: null });

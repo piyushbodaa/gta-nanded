@@ -5,6 +5,7 @@ import { Missions, Steps, driveHunters } from '../src/game/missions.js';
 import { STORY, CHARACTERS, HOME, STORY_PLACES } from '../src/game/story.js';
 import { Save } from '../src/game/save.js';
 import { Peds } from '../src/actors/peds.js';
+import { DynamicDriver } from '../src/actors/traffic.js';
 
 function fakeGame() {
   const hud = { big() {}, objective() {}, setTimer() {}, subtitle() {}, clearSubtitle() {}, help() {}, route: null };
@@ -279,6 +280,28 @@ test('a hunter ramming the player, backing off and ramming again keeps at it, ne
   assert.equal(rams, frames);
 });
 
+test('a hunter pressed against a player who stopped backs off and comes again, and plans afresh on the roads after', () => {
+  const g = fakeGame();
+  let routed = 0;
+  g.net.route = () => { routed++; return { points: [0, 80, 0, 40] }; };
+  g.net.lanePath = p => p;
+  // c7: Tiger came round by the roads (the path ends at the onion tempo) and rammed it; it stopped.
+  const v = { id: 1, x: 0, z: 4.2, y: 0, heading: Math.PI, vx: 0, vz: 0, hw: 1, hd: 2.3, spec: { top: 40 } };
+  v.hunt = new DynamicDriver(g, v, { aggression: 0.9, maxSpeed: 40 });
+  v.hunt.setPath([0, 60, 0, 30, 0, 4, 0, 0], false);
+  v.hunt.i = 3;
+  g.missions = { active: { ent: { tigerCar: v } } };
+  let back = 0;
+  for (let t = 0; t < 4; t += 0.1) { driveHunters(g, 0.1); const c = g.controls.get(v); if (c.brake && !c.throttle) back++; }
+  assert.ok(back > 0, 'it backs off to ram again');
+  assert.equal(routed, 0);
+  // The player drives off: round by the roads, planned at once rather than idling with no path.
+  g.player.pos = { x: 0, z: -60 };
+  driveHunters(g, 0.1);
+  assert.equal(routed, 1);
+  assert.ok(v.hunt.path?.length >= 4);
+});
+
 test('a step that fails leaves no GPS line to its target', () => {
   const g = fakeGame();
   let routed = 0;
@@ -398,6 +421,11 @@ test('a race rival heads for the checkpoint it owes, and one wedged out of sight
   const d = tiger.raceDriver;
   assert.deepEqual(d.goal, cps[0], 'its re-plans head for the first checkpoint, not the finish');
   assert.equal(d.path.at(-1), 200, 'and its line runs on through the next');
+  // Its driver re-plans by itself (wedged), to the checkpoint alone: on through the next again, or
+  // it brakes to a stop there, and wedged on that last stretch it counts as arriving, never stuck.
+  d.setPath([0, -20, 0, 100]);
+  step.update(m.ctx, 0.1);
+  assert.deepEqual([d.path.at(-1), d.goal], [200, cps[0]]);
   Object.assign(tiger, { x: 0, z: 95 });
   step.update(m.ctx, 0.1);
   assert.equal(tiger.raceIdx, 1);
@@ -408,6 +436,65 @@ test('a race rival heads for the checkpoint it owes, and one wedged out of sight
   assert.deepEqual([tiger.x, tiger.vx, Math.round(tiger.heading * 100)], [0, 0, 0]);
   Object.assign(tiger, { x: 20, z: 10 });
   assert.equal(d.onStuck(), false);
+});
+
+test('a wedged rival is put back a short way on: through a checkpoint, never into the finish, past you, or where you can see it', async () => {
+  const THREE = await import('three');
+  const g = fakeGame();
+  g.net = { route: (x0, z0, x1, z1) => ({ points: [x0, z0, x1, z1] }), nearest: (x, z) => ({ x, z, road: 0 }), raised: [], deckOver: () => 0 };
+  const m = stepContext(g);
+  const tiger = { id: 1, x: 0, z: 0, y: 0, spec: { top: 40 }, heading: 0 };
+  m.ent.tiger = tiger;
+  g.vehicles.list = [tiger];
+  m.ctx.driver = () => ({ i: 0, setPath(p) { this.path = p; this.goal = { x: p.at(-2), z: p.at(-1) }; }, control: () => ({}) });
+  const cps = [{ x: 0, z: 1000 }, { x: 0, z: 2000 }];
+  const step = Steps.race(cps, ['tiger'], 'Win.');
+  step.enter(m.ctx);
+  const d = tiger.raceDriver, line = [0, -400, 0, 264, 0, 500, 0, 736, 0, 1000, 0, 2000];
+  const at = (x, z, i, owe = 0) => { Object.assign(tiger, { x, z, heading: 2, raceIdx: owe }); d.path = line; d.i = i; };
+  // A long straight, its points 236 m apart: 30 m on along it, not on to the next point.
+  g.player.pos = { x: 0, z: -400 };
+  at(1.5, 270, 2);
+  assert.equal(d.onStuck(), true);
+  assert.deepEqual([tiger.x, tiger.z, tiger.heading, d.i, tiger.raceIdx], [0, 300, 0, 2, 0]);
+  // Wedged on a corner just short of the checkpoint it owes, too near it to be put down short of
+  // it and too far to count (c6's first, round the hairpin off Vazirabad Road): carried through,
+  // credited, and its line planned on to the next.
+  for (const z of [976, 984]) {
+    at(1, z, 4);
+    assert.equal(d.onStuck(), true, `wedged ${1000 - z} m short of the checkpoint`);
+    assert.equal(tiger.raceIdx, 1);
+    assert.ok(tiger.z > 1000 - 14 && tiger.z <= z + 30, `put back at ${tiger.z}`);
+    assert.deepEqual([d.goal, d.path.at(-1)], [cps[1], 2000]);
+  }
+  // Short of the finish, never into it: it must drive there to win.
+  at(1, 1970, 5, 1);
+  assert.equal(d.onStuck(), true);
+  assert.ok(tiger.z <= 1980 && tiger.raceIdx === 1, `put back at ${tiger.z}, inside the finish`);
+  at(1, 1990, 5, 1);
+  assert.equal(d.onStuck(), false);
+  // Behind you and out of the camera's view, 30 m back: on toward you, but still behind.
+  const cam = new THREE.PerspectiveCamera(62, 915 / 412, 0.3, 900);
+  cam.position.set(0, 3, -6); cam.lookAt(0, 1, 30); cam.updateMatrixWorld();
+  g.camera3 = cam;
+  g.player.pos = { x: 0, z: 0 };
+  at(2, -30, 1);
+  assert.equal(d.onStuck(), true);
+  assert.ok(tiger.z > -30 && tiger.z < -10, `put back at ${tiger.z}`);
+  // Behind you as you pass a checkpoint it still owes: through it, but no further than 10 m short of you.
+  g.player.vehicle = {}; g.player.pos = { x: 0, z: 1000 };
+  step.update(m.ctx, 0.1); // (your checkpoint 1)
+  cam.position.set(0, 3, 1004); cam.lookAt(0, 1, 1040); cam.updateMatrixWorld();
+  g.player.pos = { x: 0, z: 1010 };
+  at(1, 976, 4);
+  assert.equal(d.onStuck(), true);
+  assert.ok(tiger.raceIdx === 1 && tiger.z > 986 && tiger.z <= 1000, `put back at ${tiger.z}, checkpoint ${tiger.raceIdx}`);
+  // Ahead of you, in view: it unsticks itself.
+  g.player.pos = { x: 0, z: 0 };
+  cam.position.set(0, 3, -6); cam.lookAt(0, 1, 30); cam.updateMatrixWorld();
+  at(2, 60, 2);
+  assert.equal(d.onStuck(), false);
+  assert.deepEqual([tiger.x, tiger.z], [2, 60]);
 });
 
 test('the river race crosses the Govardhan bridge once, straight on to the dam', async () => {
@@ -421,6 +508,42 @@ test('the river race crosses the Govardhan bridge once, straight on to the dam',
   for (const p of pts) { len += net.route(from.x, from.z, p.x, p.z).length; from = p; }
   const direct = net.route(P.gandhiPutla.x, P.gandhiPutla.z, P.dam.x, P.dam.z).length;
   assert.ok(len < direct * 1.08, `${len.toFixed(0)} m of racing for a ${direct.toFixed(0)} m drive`);
+  // Off the start by the main roads, as the rivals plan it (two checkpoints ahead): not the sharp
+  // turn into the 4.8 m lanes behind the Putla, which every car overshot at race pace.
+  const p = [P.gandhiPutla, pts[0], pts[1]].flatMap((a, i, all) => i ? net.route(all[i - 1].x, all[i - 1].z, a.x, a.z).points.slice(0, -2) : []);
+  for (let i = 0; i < p.length; i += 2) {
+    const n = net.nearest(p[i], p[i + 1], 10, {});
+    assert.ok(!n || net.width[n.road] >= 7, `a ${net.width[n.road].toFixed(1)} m lane at ${p[i].toFixed(0)}, ${p[i + 1].toFixed(0)}`);
+  }
+});
+
+test('a river race rival wedged on the hairpin off Vazirabad Road is put back round it, past the first checkpoint', async () => {
+  const { world } = await import('./helpers.js');
+  const { net } = world();
+  const g = { ...fakeGame(), net, input: { mode: 'keyboard' }, settings: {} };
+  const race = STORY.find(m => m.id === 'c6').steps(g).find(s => s.kind === 'race');
+  const m = stepContext(g);
+  g.player.pos = { x: 300, z: 300 }; // far off, out of sight
+  // On the median nose at the apex (14-20 m short of the checkpoint), and on the way into it.
+  for (const [x, z] of [[-14, 300], [-16, 302], [-17, 299], [-18, 304], [0, 309]]) {
+    const v = { id: 1, x: STORY_PLACES.gandhiPutla.x, z: STORY_PLACES.gandhiPutla.z, y: 0, spec: { top: 40 }, heading: 0, hw: 1, hd: 2 };
+    m.ent.tiger = v; g.vehicles.list = [v];
+    race.enter(m.ctx);
+    const d = v.raceDriver, P = d.path;
+    // Heading for the end of the stretch of its line it is wedged beside.
+    let best = Infinity;
+    for (let i = 1; i < P.length / 2; i++) {
+      const ax = P[i * 2 - 2], az = P[i * 2 - 1], sx = P[i * 2] - ax, sz = P[i * 2 + 1] - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * sx + (z - az) * sz) / Math.max(sx * sx + sz * sz, 1e-6)));
+      const off = Math.hypot(ax + sx * t - x, az + sz * t - z);
+      if (off < best) { best = off; d.i = i; }
+    }
+    Object.assign(v, { x, z });
+    assert.equal(d.onStuck(), true, `wedged at ${x}, ${z}`);
+    assert.equal(v.raceIdx, 1, `put back at ${v.x.toFixed(0)}, ${v.z.toFixed(0)} from ${x}, ${z}`);
+    assert.ok(Math.hypot(v.x - x, v.z - z) > 10, `moved ${Math.hypot(v.x - x, v.z - z).toFixed(1)} m`);
+    assert.deepEqual(d.goal, race.points[1], 'its line planned on to the next checkpoint');
+  }
 });
 
 /**
@@ -536,6 +659,23 @@ test("Mama's tippers load on the main road: no hairpin a truck can't turn betwee
   const home = STORY.find(m => m.id === 'c5').steps({ input: { mode: 'keyboard' }, settings: {} }).filter(s => s.kind === 'goTo').at(-1).target;
   // Coming back over the bridge (its southbound carriageway) with the seized one.
   assert.ok(sharpest(P.ghatBridge, home) < 60, `c5: a ${sharpest(P.ghatBridge, home).toFixed(0)}° turn bringing the tipper home`);
+});
+
+test("Mama's seized tipper faces the way out of the impound yard's lane, with nothing parked in front of it", async () => {
+  const { world } = await import('./helpers.js');
+  const { net } = world();
+  const { spawns } = await storyDryRun();
+  const s = spawns.c5.seized, fx = Math.sin(s.heading), fz = Math.cos(s.heading), home = STORY_PLACES.ghatRoad;
+  // A truck can't turn round in a 4.8 m lane: the route home sets off the way it faces.
+  const p = net.route(s.x, s.z, home.x, home.z).points;
+  let k = 2;
+  while (Math.hypot(p[k] - p[0], p[k + 1] - p[1]) < 8) k += 2;
+  assert.ok(fx * (p[k] - p[0]) + fz * (p[k + 1] - p[1]) > 0, 'it faces back up the lane, away from the way out');
+  for (const name of ['yardTractor', 'yardBike', 'yardAuto']) {
+    const v = spawns.c5[name], ox = v.x - s.x, oz = v.z - s.z;
+    const ahead = ox * fx + oz * fz, across = Math.abs(ox * fz - oz * fx);
+    assert.ok(!(ahead > 0 && ahead < s.hd + v.hd + 6 && across < s.hw + v.hw + 0.5), `the ${name} stands ${(ahead - s.hd - v.hd).toFixed(1)} m in front of it`);
+  }
 });
 
 test('Continue and Free Roam never put you inside a contact marker', async () => {
