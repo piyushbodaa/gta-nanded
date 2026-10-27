@@ -7,6 +7,7 @@ import { HOSPITAL, POLICE_STATION } from './story.js';
 import { DynamicDriver } from '../actors/traffic.js';
 import { driveHunters } from './missions.js';
 import { drivingHelp, vehicleKeys } from '../ui/controls.js';
+import { tapButtons } from '../ui/tap.js';
 
 const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
 
@@ -373,6 +374,7 @@ export function installRules(g) {
   // slow phone plays at a lower resolution, with a caption strip naming the place and the game.
   // Share hands it to the phone's share sheet (WhatsApp, Instagram...); Save downloads it.
   const photo = document.getElementById('photo');
+  tapButtons(photo); // Share, Save and ✕ answer the other thumb while one walks or steers on the stick
   const hidePhotoLater = ms => { clearTimeout(g._photoT); g._photoT = setTimeout(() => (photo.hidden = true), ms); };
   g.takePhoto = title => {
     const r = g.renderer, ratio = r.getPixelRatio(), want = Math.min(2, Math.max(ratio, 1280 / innerWidth));
