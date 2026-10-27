@@ -4,6 +4,7 @@ import { clamp, damp, dampAngle, wrapAngle, dist } from '../core/math.js';
 import { makeOutfit } from './humans.js';
 import { GETUP_TIME } from './anim.js';
 import { speedOf, forwardSpeed } from './vehicle-physics.js';
+import { WATER_Y } from '../world/water.js';
 
 const WALK = 1.9, JOG = 4.4, SPRINT = 7.4;
 
@@ -45,11 +46,24 @@ export class Player {
 
   heal(amount) { this.health = Math.min(this.maxHealth, this.health + amount); }
 
-  /** The top of the footpath we are on, if we are on one (0 on the road). */
+  /** The top of the footpath we are on, if we are on one (-Infinity off it: the street or the ground decides). */
   _pavement(g) {
     this._onGround ||= r => !g.net.raised[r];
     const n = g.net.nearest(this.x, this.z, 14, this._near || (this._near = {}), this._onGround);
-    return n ? g.city.pavementAt(n.seg, n.dist) : 0;
+    return (n && g.city.pavementAt(n.seg, n.dist)) || -Infinity;
+  }
+
+  /**
+   * Wade no deeper than the ghat steps: a metre into the river the bank pushes back along its
+   * normal and only the step into the water is lost, so someone who ends up deeper (out of a
+   * sinking car, a roll down the bank) walks out. A bridge deck stands clear of the water.
+   */
+  _keepOutOfRiver(dt) {
+    const rd = this.game.city.riverDistance(this.x, this.z, this._rd || (this._rd = {}));
+    if (rd.d >= -1 || this.groundY >= WATER_Y) return;
+    const vn = this.vx * rd.nx + this.vz * rd.nz, out = Math.min(-1 - rd.d, (Math.max(0, -vn) + 2) * dt);
+    this.x += rd.nx * out; this.z += rd.nz * out;
+    if (vn < 0) { this.vx -= vn * rd.nx; this.vz -= vn * rd.nz; }
   }
 
   update(dt, input) {
@@ -100,12 +114,7 @@ export class Player {
       this.x = p.x; this.z = p.z;
     }
     g.pushOutOfVehicles(this, 0.34);
-    const rd = g.city.riverDistance(this.x, this.z, this._rd || (this._rd = {}));
-    if (rd.d < -1) { // wade no further than the ghat steps
-      const back = 0.8 * dt * 10;
-      this.x -= this.vx * dt * 1.05; this.z -= this.vz * dt * 1.05; this.vx *= 0.3; this.vz *= 0.3;
-      void back;
-    }
+    this._keepOutOfRiver(dt);
     this.speed = Math.hypot(this.vx, this.vz);
     // Punch.
     if (this.punchT > 0) this.punchT -= dt;
@@ -208,7 +217,10 @@ export class Player {
     const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
     p.x = this.x; p.z = this.z;
     if (this.game.colliders.resolveCircle(p, 0.34, o)) { this.x = p.x; this.z = p.z; this.vx *= -0.2; this.vz *= -0.2; }
-    h.x = this.x; h.z = this.z; h.y = this.game.city.groundHeight(this.x, this.z);
+    // Down on whatever is underneath (a bridge deck, a flyover, the bank), and out of the river.
+    this.y = this.groundY = this.game.net.surfaceAt(this.x, this.z, this.groundY ?? 0);
+    this._keepOutOfRiver(dt);
+    h.x = this.x; h.z = this.z; h.y = this.y;
     // Down, then back up over the last moments (anim.js plays the fall and the get-up).
     h.pose = this.downT > GETUP_TIME * 0.85 ? 'lie' : 'getup'; h.speed = 0; h.air = false; h.punch = 0;
     if (this.downT <= 0) this.state = 'foot';

@@ -40,6 +40,10 @@ const PALETTES = {
 
 export const CHUNK = 192;
 export const chunkKey = (cx, cz) => `${cx},${cz}`;
+// The ground mesh is a grid of this many metres, two triangles a cell (chunks.js).
+export const GROUND_CELL = 6;
+/** The river valley's ground `d` metres from the bank (negative in the water): 14 m of slope down to -3.2. */
+export const valleyDepth = d => (d > 14 ? 0 : d > 0 ? -3.2 * (1 - smoothstep(0, 14, d)) : -3.2 - Math.min(1.5, -d * 0.08));
 // Paved footpath along the busy roads; buildings keep behind it.
 export const FOOTPATH_W = 1.9;
 export const WALK_Y = 0.2; // the top of a footpath: its kerb's height
@@ -56,6 +60,8 @@ export class City {
     this.raisedAreas = [];
     this._buildDensity();
     this._buildWaterIndex();
+    // Off the streets and decks, bodies stand on the ground as it is drawn: the river valleys.
+    net.ground = (x, z) => this.groundHeight(x, z);
   }
 
   // ---------------------------------------------------------------- zoning
@@ -209,15 +215,26 @@ export class City {
     }
   }
 
-  /** Signed distance to the nearest river bank: negative in the water. Returns {d, w}. */
+  /**
+   * Signed distance to the nearest river bank: negative in the water. Returns {d, w, nx, nz}:
+   * (nx, nz) points away from the river, toward the nearer bank.
+   */
   riverDistance(x, z, out = {}) {
-    let best = Infinity, bw = 0;
+    let best = Infinity, bw = 0, bs = -1, bt = 0;
+    const t = this._rt || (this._rt = [0]);
     this.waterGrid.query(x, z, x, z, id => {
       const s = this.waterSegs[id];
-      const d = Math.sqrt(pointSegDist2(x, z, s[0], s[1], s[2], s[3])) - s[4] / 2;
-      if (d < best) { best = d; bw = s[4]; }
+      const d = Math.sqrt(pointSegDist2(x, z, s[0], s[1], s[2], s[3], t)) - s[4] / 2;
+      if (d < best) { best = d; bw = s[4]; bs = id; bt = t[0]; }
     });
-    out.d = best; out.w = bw;
+    out.d = best; out.w = bw; out.nx = 0; out.nz = 0;
+    if (bs >= 0) {
+      const s = this.waterSegs[bs], dx = s[2] - s[0], dz = s[3] - s[1];
+      let nx = x - (s[0] + dx * bt), nz = z - (s[1] + dz * bt), l = Math.hypot(nx, nz);
+      // On the centre line itself either bank will do.
+      if (l < 1e-6) { nx = dz; nz = -dx; l = Math.hypot(nx, nz) || 1; }
+      out.nx = nx / l; out.nz = nz / l;
+    }
     return out;
   }
 
@@ -231,7 +248,10 @@ export class City {
     return best;
   }
 
-  /** Ground height: flat city, with the river valleys cut into it. */
+  /**
+   * Ground height: flat city, with the river valleys cut into it exactly as the ground mesh
+   * draws them, so what people walk and drive on is what they see.
+   */
   groundHeight(x, z) {
     // Raised ground: the station's platforms.
     for (const a of this.raisedAreas) {
@@ -240,10 +260,28 @@ export class City {
       const u = dx * a.ux + dz * a.uz, v = dx * a.vx + dz * a.vz;
       if (Math.abs(u) <= a.hu && Math.abs(v) <= a.hv) return a.h;
     }
-    const r = this.riverDistance(x, z, this._rd || (this._rd = {}));
-    if (r.d > 14) return 0;
-    if (r.d > 0) return -3.2 * (1 - smoothstep(0, 14, r.d));
-    return -3.2 - Math.min(1.5, -r.d * 0.08);
+    // Every corner of this ground cell is out of the valley: flat.
+    if (this.riverDistance(x, z, this._rd || (this._rd = {})).d > 14 + GROUND_CELL * Math.SQRT2) return 0;
+    // The valley at the cell's corners, between them the triangle the mesh draws (split from
+    // the cell's low corner to its high one).
+    const C = GROUND_CELL, ix = Math.floor(x / C), iz = Math.floor(z / C), fx = x / C - ix, fz = z / C - iz;
+    const x0 = ix * C, z0 = iz * C, h00 = this.valleyAt(x0, z0), h11 = this.valleyAt(x0 + C, z0 + C);
+    if (fx >= fz) { const h10 = this.valleyAt(x0 + C, z0); return h00 + (h10 - h00) * fx + (h11 - h10) * fz; }
+    const h01 = this.valleyAt(x0, z0 + C);
+    return h00 + (h01 - h00) * fz + (h11 - h01) * fx;
+  }
+
+  /** The river valley at (x, z): what the ground mesh puts at its grid points. */
+  valleyAt(x, z) { return valleyDepth(this.riverDistance(x, z, this._rv || (this._rv = {})).d); }
+
+  /** True when a river valley cuts into the rectangle (anywhere else valleyAt is 0). */
+  valleyIn(minX, minZ, maxX, maxZ) {
+    const x = (minX + maxX) / 2, z = (minZ + maxZ) / 2, hw = (maxX - minX) / 2, hd = (maxZ - minZ) / 2;
+    // Water segments are indexed 30 m beyond their banks, more than the valley's 14.
+    return this.waterGrid.query(minX, minZ, maxX, maxZ, id => {
+      const s = this.waterSegs[id];
+      return segBoxDist(s[0], s[1], s[2], s[3], x, z, hw, hd, 1, 0) <= s[4] / 2 + 14;
+    });
   }
 
   // ---------------------------------------------------------------- generation

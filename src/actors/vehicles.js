@@ -5,6 +5,7 @@ import { vehicleModel } from './vehicle-models.js';
 import { createBody, stepBody, collideStatic, collidePair, speedOf } from './vehicle-physics.js';
 import { makeOutfit, inShadowBox } from './humans.js';
 import { radialTexture } from '../world/citymat.js';
+import { WATER_Y } from '../world/water.js';
 import { clamp, rng } from '../core/math.js';
 import { sendFirst } from '../core/buffers.js';
 
@@ -138,16 +139,16 @@ export class Vehicles {
         if (v.kinematic) continue;
         const ctl = controls.get(v) || IDLE;
         stepBody(v, ctl, h, v.role === 'player' ? 1 : 1.3);
-        // Up a flyover's ramp and along its deck, or on the street beneath it; over a speed
+        // Up a flyover's ramp and along its deck, on the street beneath it or down a riverbank; over a speed
         // breaker the body rises with the hump, and taken fast it leaves the road for a moment.
         v.y = this.city.net.surfaceAt(v.x, v.z, v.y - (v.hop || 0));
         this._ride(v, h);
         v.y += v.hop;
         const hit = collideStatic(v, this.colliders, this._contact);
         if (hit > 4) this._impact(v, hit, null);
-        // Water: the riverbank is a hard edge for anything with wheels.
+        // Water: down the bank and into the channel, a body sinks. A bridge deck stands clear of it.
         const rd = this.city.riverDistance(v.x, v.z, this._rd || (this._rd = {}));
-        if (rd.d < -1.5) v.sinking = (v.sinking || 0) + h; else v.sinking = 0;
+        if (rd.d < -1.5 && v.y < WATER_Y) v.sinking = (v.sinking || 0) + h; else v.sinking = 0;
       }
     }
     // Vehicle-vehicle (only pairs involving a dynamic body).

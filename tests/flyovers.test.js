@@ -47,6 +47,61 @@ test('the street under a flyover stays on the ground, the deck carries its own t
   }
 });
 
+test('a car driven up a ramp from the street climbs onto the deck', () => {
+  const { net } = world();
+  const p = {};
+  let ramps = 0, climbed = 0;
+  // From every foot on the ground, along the centre and the kerb lane, a substep (0.4 m) at a time.
+  for (let r = 0; r < net.count; r++) {
+    if (!net.raised[r]) continue;
+    let top = 0;
+    for (let s = 0; s <= net.length[r]; s += 1) top = Math.max(top, net.deckAt(r, s));
+    for (const back of [false, true]) {
+      if (net.jDeck[back ? net.rb[r] : net.ra[r]] > 0.05) continue;
+      for (const off of [0, net.width[r] / 4]) {
+        let y = 0, high = 0;
+        for (let k = 0; k * 0.4 <= net.length[r]; k++) {
+          net.pointAt(r, back ? net.length[r] - k * 0.4 : k * 0.4, p);
+          y = net.surfaceAt(p.x + p.dz * off, p.z - p.dx * off, y);
+          high = Math.max(high, y);
+        }
+        ramps++;
+        if (high > top - 0.5) climbed++;
+      }
+    }
+  }
+  assert.ok(ramps > 60 && climbed >= ramps * 0.95, `${climbed} of ${ramps} ramps climbed`);
+  // The Hingoli Gate flyover, driven its own way in the kerb lane from the street, road after road.
+  const hingoli = r => net.name(r) === 'Hingoli Gate Flyover' && net.raised[r];
+  let climbs = 0;
+  for (let r0 = 0; r0 < net.count; r0++) {
+    const from = net.oneway[r0] > 0 ? net.ra[r0] : net.rb[r0];
+    if (!hingoli(r0) || !net.oneway[r0] || net.jDeck[from] > 0.05) continue;
+    let y = 0, high = 0;
+    for (let r = r0, j = from; r >= 0; ) {
+      const dir = net.ra[r] === j ? 1 : -1, len = net.length[r];
+      for (let s = 0; s <= len; s += 0.4) {
+        net.lanePoint(r, dir, s, net.laneOffset(r, 0, dir > 0 ? s : len - s), p);
+        y = net.surfaceAt(p.x, p.z, y);
+        high = Math.max(high, y);
+      }
+      j = net.otherEnd(r, j);
+      r = net.jDeck[j] > 0.05 ? net.jRoads[j].find(o => o !== r && hingoli(o) && net.oneway[o] === (net.ra[o] === j ? 1 : -1)) ?? -1 : -1;
+    }
+    assert.ok(high > DECK_H - 0.01, `up the Hingoli Gate flyover from road ${r0}: ${high.toFixed(2)} m`);
+    climbs++;
+  }
+  assert.ok(climbs >= 2, 'both carriageways climbed');
+  // Crossing a ramp's foot, inside the junction, the street stays on the ground.
+  for (let j = 0; j < net.junctionCount; j++) {
+    if (net.jDeck[j] > 0.05 || !net.jRoads[j].some(r => net.raised[r])) continue;
+    for (let a = 0; a < 16; a++) {
+      const k = (net.jRadius[j] - 1) * Math.sqrt((a % 4 + 0.5) / 4), t = (a * Math.PI) / 8;
+      assert.ok(net.surfaceAt(net.jx[j] + Math.cos(t) * k, net.jz[j] + Math.sin(t) * k, 0) < 0.25, `junction ${j}`);
+    }
+  }
+});
+
 test('railings on a deck stop deck traffic and let the street below through', () => {
   const { net, city } = world();
   const colliders = new Colliders(city);

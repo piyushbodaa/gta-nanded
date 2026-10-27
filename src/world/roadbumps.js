@@ -24,11 +24,13 @@ export class RoadBumps {
    * Lay them out. Speed breakers stand before the chowks on smaller streets, now and then along
    * long stretches, and either side of school, college, coaching and hospital gates. Potholes
    * pit the minor streets, most of all where the town is old or rural (`wear(x, z)`, 0..1).
-   * `railDistance` keeps both off level crossings.
+   * `railDistance` keeps both off level crossings. Neither lies under a flyover: heightAt and
+   * holeAt go by plan position alone, so traffic on the deck above would ride over them too.
    */
   place(places, wear, railDistance) {
     const net = this.net, p = {};
     const clear = road => !net.raised[road] && !net.bridge[road];
+    const open = (x, z) => net.deckOver(x, z) === 0;
     const add = (road, s) => {
       const len = net.length[road], t0 = net.trimStart(road) + 6, t1 = len - net.trimEnd(road) - 6;
       if (s < t0 || s > t1) return;
@@ -37,6 +39,7 @@ export class RoadBumps {
       net.pointAt(road, s, p);
       if (railDistance(p.x, p.z) < 9) return;
       const b = { road, s, x: p.x, z: p.z, dx: p.dx, dz: p.dz, left: net.edgeAt(road, s, 1), right: net.edgeAt(road, s, -1) };
+      if (![0, b.left, -b.right].every(v => open(b.x + b.dz * v, b.z - b.dx * v))) return;
       const i = this.bumps.push(b) - 1, m = Math.max(b.left, b.right) + BUMP_LEN;
       this.bumpGrid.insertRect(i, b.x - m, b.z - m, b.x + m, b.z + m);
       list.push(s); list.sort((a2, b2) => a2 - b2);
@@ -72,7 +75,7 @@ export class RoadBumps {
         if (left + right < 0.5) continue;
         net.pointAt(road, s, p);
         const x = p.x + p.dz * side, z = p.z - p.dx * side;
-        if (railDistance(x, z) < 6 || this.heightAt(x, z, 3) > 0) continue;
+        if (railDistance(x, z) < 6 || this.heightAt(x, z, 3) > 0 || !open(x, z)) continue;
         // Apart from each other (overlapping ones would flicker).
         if (this.holeGrid.query(x - 2, z - 2, x + 2, z + 2, j => Math.hypot(this.holes[j].x - x, this.holes[j].z - z) < this.holes[j].r + rad + 0.3)) continue;
         this.holeGrid.insertPoint(this.holes.push({ road, x, z, r: rad, rot, seed }) - 1, x, z);
