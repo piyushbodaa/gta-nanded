@@ -219,9 +219,13 @@ export class Peds {
     // Down a river valley the streets say what is underfoot: a street stays level across the
     // slope, off it is the bank itself (standing at street level there floated them 3 m up).
     // Only someone already up off the street (out of a vehicle on a flyover) can be on a deck:
-    // on level ground, walkers passing a ramp's foot would climb it into the air.
+    // on level ground, walkers passing a ramp's foot would climb it into the air. One walking a
+    // flyover keeps to its deck wherever they are over it: down its ramps, and up the next where
+    // it comes down to the street between two (else on into that ramp's embankment).
+    const net = this.net, fly = p.state === 'walk' && p.road != null && net.raised[p.road];
+    const y = fly ? net.deckAt(p.road, p.dir > 0 ? p.s : net.length[p.road] - p.s) : h.y;
     const ground = g.city.groundHeight(h.x, h.z);
-    const top = h.y > 0.3 || ground < 0 ? this.net.surfaceAt(h.x, h.z, h.y) : ground;
+    const top = y > 0.3 || ground < 0 ? net.surfaceAt(h.x, h.z, y) : ground;
     return Math.max(top, pave);
   }
 

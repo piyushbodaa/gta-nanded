@@ -4,7 +4,7 @@
 // its deck) up h metres. Queries say at what level they are asked, so a car on a
 // flyover and a car on the street beneath it never meet each other's walls.
 import { SpatialGrid, clamp } from '../core/math.js';
-import { PROP, PUMP_HW, PUMP_HD } from './citygen.js';
+import { PROP, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
 import { placeColliders } from './landmarks.js';
 
@@ -94,14 +94,22 @@ export class Colliders {
       const k = P.kind[i], x = P.x[i], z = P.z[i], rot = P.rot[i];
       if (k === PROP.LAMP || k === PROP.POLE) this.addCircle(x, z, 0.18, 8, P.y[i]);
       else if (k === PROP.MEDIAN_LAMP) this.addCircle(x, z, 0.3, 8, P.y[i]);
-      else if (k === PROP.STALL) this.addBox(x, z, 1.05, 0.85, rot, 2.2);
+      else if (k === PROP.STALL) {
+        this.addBox(x, z, 1.05, 0.85, rot, 2.2);
+        // Its bench, where chunks.js draws it (if it has one).
+        const side = city.stallBench(i), c = Math.cos(rot), s = Math.sin(rot), lx = side * BENCH.x;
+        if (side) this.addBox(x + lx * c + BENCH.z * s, z - lx * s + BENCH.z * c, BENCH.hw, BENCH.hd, rot, BENCH.h);
+      }
       else if (k === PROP.CART) this.addBox(x, z, 0.95, 0.6, rot, 1.2);
       else if (k === PROP.SHRINE) this.addBox(x, z, 0.75, 0.75, rot, 2.5);
       else if (k === PROP.VENDOR) this.addBox(x, z, 1.0, 0.75, rot, 1.2);
       else if (k === PROP.HOARDING) { const c = Math.cos(rot), s = Math.sin(rot); this.addCircle(x + c * 2.2, z - s * 2.2, 0.15, 8); this.addCircle(x - c * 2.2, z + s * 2.2, 0.15, 8); }
     }
-    // Bridge railings and wide-road medians, segment by segment.
-    const net = city.net, p = {};
+    // Bridge railings and wide-road medians. They go piece by piece along each straight stretch
+    // of the polyline, which chunks.js draws them along (a flyover in the same 4 m pieces): one
+    // piece laid across a bend would leave the drawn median, an invisible kerb in the lane on
+    // one side of it and a gap through the median on the other.
+    const net = city.net, p = {}, q = {};
     for (let r = 0; r < net.count; r++) {
       const w = net.width[r], lift = net.raised[r];
       // A carriageway of a divided road has its half of the median on its right (ms: +1 left of a->b, -1 right).
@@ -109,24 +117,41 @@ export class Colliders {
       const bridge = net.bridge[r], median = w >= 11.5 && !bridge && !ms;
       if (!bridge && !lift && !median && !ms) continue;
       const s0 = net.trimStart(r), s1 = net.length[r] - net.trimEnd(r), step = lift ? 4 : 8;
-      for (let s = s0; s < s1 - 0.5; s += step) {
-        const e = Math.min(s + step, s1), sm = (s + e) / 2;
-        net.pointAt(r, sm, p);
-        const rot = Math.atan2(p.dx, p.dz);
-        const half = (e - s) / 2;
-        const inner = ms ? net.innerAt(r, sm) : w / 2, divided = inner < w / 2 - 0.05;
-        const dA = lift ? net.deckAt(r, s) : 0, dB = lift ? net.deckAt(r, e) : 0, lo = Math.min(dA, dB), hi = Math.max(dA, dB);
-        if (bridge || hi > 0.05) {
-          // Railings ride on a deck you can pass under; a low ramp is walled down to the ground.
-          const y0 = lo >= SOLID_BELOW ? lo - 0.3 : 0, top = hi + 1.0;
-          for (const side of [1, -1]) {
-            const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2;
-            this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, top - y0, y0);
-          }
-        } else if (divided) {
-          const off = inner + MEDIAN_W / 4;
-          this.addBox(p.x + p.dz * off * ms, p.z - p.dx * off * ms, MEDIAN_W / 4, half, rot, 0.35);
-        } else if (median) this.addBox(p.x, p.z, 0.35, half, rot, 0.35);
+      for (let i = net.ptStart[r]; i < net.ptStart[r + 1] - 1; i++) {
+        const sa = Math.max(net.cum[i], s0), sb = Math.min(net.cum[i + 1], s1);
+        if (sb - sa < 0.05) continue;
+        const n = Math.ceil((sb - sa) / step);
+        for (let k = 0; k < n; k++) {
+          const s = sa + ((sb - sa) * k) / n, e = sa + ((sb - sa) * (k + 1)) / n, sm = (s + e) / 2;
+          net.pointAt(r, sm, p);
+          const rot = Math.atan2(p.dx, p.dz);
+          const half = (e - s) / 2;
+          const inner = ms ? net.innerAt(r, sm) : w / 2, divided = inner < w / 2 - 0.05;
+          const dA = lift ? net.deckAt(r, s) : 0, dB = lift ? net.deckAt(r, e) : 0, lo = Math.min(dA, dB), hi = Math.max(dA, dB);
+          if (bridge || hi > 0.05) {
+            // Railings ride on a deck you can pass under; a low ramp is walled down to the ground.
+            const y0 = lo >= SOLID_BELOW ? lo - 0.3 : 0, top = hi + 1.0;
+            for (const side of [1, -1]) {
+              const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2;
+              this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, top - y0, y0);
+            }
+            if (lo < SOLID_BELOW && hi >= SOLID_BELOW) {
+              // Here the deck comes down onto its solid embankment, and chunks.js slopes the
+              // underside from the deck to the ground across this piece. Close its lower half,
+              // where the slope comes down below a car's roof, across the carriageway: else a car
+              // or someone on foot under the deck goes on into the ramp. It stays below the deck,
+              // so the deck's own traffic passes over it. Out to the embankment's sides: 0.35 m
+              // past the kerb edge, and on the edge on a divided road's median side.
+              net.pointAt(r, dA > dB ? (sm + e) / 2 : (s + sm) / 2, q);
+              const out = side => (side === ms && divided ? 0 : 0.35);
+              const eL = net.edgeAt(r, sm, 1) + out(1), eR = net.edgeAt(r, sm, -1) + out(-1), off = (eL - eR) / 2;
+              this.addBox(q.x + p.dz * off, q.z - p.dx * off, (eL + eR) / 2, half / 2, rot, Math.max(0.5, lo - 1.1));
+            }
+          } else if (divided) {
+            const off = inner + MEDIAN_W / 4;
+            this.addBox(p.x + p.dz * off * ms, p.z - p.dx * off * ms, MEDIAN_W / 4, half, rot, 0.35);
+          } else if (median) this.addBox(p.x, p.z, 0.35, half, rot, 0.35);
+        }
       }
       if (lift) for (const pier of net.deckPiers(r)) this.addCircle(pier.x, pier.z, 0.6, pier.d - 1.1);
       // A river bridge's piers, span by span as chunks.js draws them: in the way down on the bank.

@@ -4,8 +4,8 @@
 // Each tile is drawn three times through a small "painter": once in colour,
 // once as a paint mask (white where the wall takes the building's paint), and
 // once as an emissive map (where light shows through at night). The colour and
-// mask are combined into one RGBA DataTexture (mask in alpha) so the browser
-// never premultiplies the colours away.
+// mask are combined into one RGBA array texture (mask in alpha, a layer per
+// tile) so the browser never premultiplies the colours away.
 import { rng } from '../core/math.js';
 
 export const TILE_PX = 256;
@@ -722,7 +722,26 @@ function paintTile(g, col, row) {
 }
 
 /**
- * Paint the colour+mask atlas (RGBA bytes) and the emissive atlas (canvas).
+ * Copy each tile of the painted atlas into a layer of its own (layer = row * ATLAS_COLS + col),
+ * with the paint mask in alpha. read(canvas, x, y, w, h) returns that block's RGBA bytes.
+ * A tile alone in its layer wraps round within itself and has mipmaps of its own, so a
+ * repeating road or wall never takes in the tiles painted beside it.
+ */
+export function packLayers(read, t) {
+  const size = t * t * 4, out = new Uint8Array(ATLAS_COLS * ATLAS_ROWS * size);
+  for (let row = 0; row < ATLAS_ROWS; row++) {
+    for (let col = 0; col < ATLAS_COLS; col++) {
+      const o = (row * ATLAS_COLS + col) * size;
+      out.set(read('color', col * t, row * t, t, t), o);
+      const m = read('mask', col * t, row * t, t, t);
+      for (let i = 3; i < size; i += 4) out[o + i] = m[i - 3];
+    }
+  }
+  return out;
+}
+
+/**
+ * Paint the colour+mask atlas (RGBA bytes, a layer per tile) and the emissive atlas (canvas).
  * scale < 1 paints a smaller atlas (phones keep ~5 MB of texture instead of ~21).
  */
 export function paintAtlas(scale = 1) {
@@ -744,11 +763,10 @@ export function paintAtlas(scale = 1) {
       paintTile(ge, col, row);
     }
   }
-  const rgba = cc.getImageData(0, 0, W, H);
-  const m = mc.getImageData(0, 0, W, H).data;
-  const d = rgba.data;
-  for (let i = 3; i < d.length; i += 4) d[i] = m[i - 3];
-  return { data: d, width: W, height: H, emissive };
+  // Read back a tile at a time: no whole-atlas copies of the colour and the mask.
+  const t = T * scale;
+  const data = packLayers((which, x, y, w, h) => (which === 'mask' ? mc : cc).getImageData(x, y, w, h).data, t);
+  return { data, tile: t, layers: ATLAS_COLS * ATLAS_ROWS, emissive };
 }
 
 /**

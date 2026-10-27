@@ -6,7 +6,7 @@
 // that are a pixel or two at that distance.
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
-import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD } from './citygen.js';
+import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
@@ -1228,25 +1228,31 @@ function buildProp(ctx, i) {
       break;
     }
     case PROP.STALL: {
-      // Tea stall: tin box, overhanging roof, a bench and a kettle on the counter.
+      // Tea stall: tin box, overhanging roof, a bench and a kettle on the counter (local -z faces the road).
       const col = r.pick([0x2f6fb5, 0x2e8b57, 0xc0392b, 0xd4a017, 0x1f9aa8]);
       g.color(col, 0); g.cbox(x, 0, z, 1.0, 2.1, 0.8, rot);
       g.color(0x8d9ea4, 0); g.cbox(x - s * 0.5, 2.1, z - c * 0.5, 1.4, 0.08, 1.4, rot);
       g.color(0x7a5a3c, 0); g.cbox(x - s * 1.0, 0.9, z - c * 1.0, 1.0, 0.1, 0.22, rot);
       g.color(0xc0c4c6, 0); g.cyl(x - s * 0.95, 1.0, z - c * 0.95, 0.18, 0.3, 6);
-      g.color(0x6d4c33, 0); g.cbox(x - s * 2.2 + c * 0.3, 0, z - c * 2.2 - s * 0.3, 0.9, 0.45, 0.2, rot);
+      // The bench stands beside the stall's back half, past the footpath (in front it would stand
+      // in the road, and along the stall's side across the walkers' line).
+      const bench = city.stallBench(i);
+      if (bench) {
+        const lx = bench * BENCH.x, lz = BENCH.z;
+        g.color(0x6d4c33, 0); g.cbox(x + lx * c + lz * s, 0, z - lx * s + lz * c, BENCH.hw, BENCH.h, BENCH.hd, rot);
+      }
       lightPool(pg, x - s * 1.2, z - c * 1.2, 4, 2.0);
       break;
     }
     case PROP.CART: {
-      // Vada-pav / fruit handcart with a big umbrella.
-      g.color(0x8a6a3a, 0); g.cbox(x, 0.7, z, 0.9, 0.25, 0.55, rot);
+      // Vada-pav / fruit handcart with a big umbrella (y0: up on the footpath, where it stands on one).
+      g.color(0x8a6a3a, 0); g.cbox(x, y0 + 0.7, z, 0.9, 0.25, 0.55, rot);
       g.color(0x2b2b2b, 0);
-      for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) g.wheel(x + lx * c + lz * s, 0.32, z - lx * s + lz * c, 0.32, 0.07, s, c);
+      for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) g.wheel(x + lx * c + lz * s, y0 + 0.32, z - lx * s + lz * c, 0.32, 0.07, s, c);
       const goods = r.pick([0xe67e22, 0xf1c40f, 0xc0392b, 0x27ae60]);
-      g.color(goods, 0); g.blob(x, 1.05, z, 0.7, 0.18, 0.4, i);
-      g.color(0x555555, 0); g.cyl(x, 0.95, z, 0.03, 1.6, 4);
-      g.color(r.pick([0xc0392b, 0xf1c40f, 0x2f6fb5, 0x8e44ad]), 0); g.cone(x, 2.4, z, 1.35, 0.55, 8);
+      g.color(goods, 0); g.blob(x, y0 + 1.05, z, 0.7, 0.18, 0.4, i);
+      g.color(0x555555, 0); g.cyl(x, y0 + 0.95, z, 0.03, 1.6, 4);
+      g.color(r.pick([0xc0392b, 0xf1c40f, 0x2f6fb5, 0x8e44ad]), 0); g.cone(x, y0 + 2.4, z, 1.35, 0.55, 8);
       break;
     }
     case PROP.SHRINE: {
@@ -1319,10 +1325,15 @@ function wire(out, x0, z0, x1, z1, c, s) {
   }
 }
 
+// The ground pool lies over the footpaths (WALK_Y), shop platforms (0.3 m) and medians (0.32 m):
+// any lower and they hide it, cutting the light off in a straight line at the kerb. It is
+// additive and soft-edged, so 0.4 m up it reads as light on the street and what stands in it.
+const POOL_Y = 0.4;
+
 function lightPool(pg, x, z, radius, headY, base = 0) {
   // Ground pool, and a small bright quad under the lamp head (base: the deck it stands on).
   pg.setTint(0xffffff, 0).setTile(0, 0, 1, 0);
-  const y = base + 0.12;
+  const y = base + POOL_Y;
   if (headY) headY += base;
   const a = pg.v(x - radius, y, z - radius, 0, 0), b = pg.v(x - radius, y, z + radius, 0, 1);
   const c = pg.v(x + radius, y, z + radius, 1, 1), d = pg.v(x + radius, y, z - radius, 1, 0);

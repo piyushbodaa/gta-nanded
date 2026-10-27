@@ -424,6 +424,8 @@ test('walkers up on a flyover follow it down to the street', () => {
         n++;
         for (let t = 0; t < 900; t += 1 / 20) {
           g.time += 1 / 20; peds._update(p, 1 / 20);
+          // Down on a street: some flyovers come down to the ground between two ramps, and walkers
+          // follow them on up the next ramp rather than pacing that stretch.
           if (p.road != null && !net.raised[p.road] && p.h.y < 0.5) { down++; break; }
         }
         peds.remove(p);
