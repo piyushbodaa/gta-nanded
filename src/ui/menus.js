@@ -4,6 +4,7 @@ import { STORY, CHARACTERS } from '../game/story.js';
 import { dist } from '../core/math.js';
 import { key, keyName, verb, pick } from './controls.js';
 import { installKind, promptInstall } from './install.js';
+import { tapButtons } from './tap.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -221,33 +222,4 @@ export class PauseMenu {
 export function tabEdges(nav) {
   nav.classList.toggle('more-l', nav.scrollLeft > 1);
   nav.classList.toggle('more-r', nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
-}
-
-/**
- * A browser makes a click only from a lone finger, and the game's own buttons invite a thumb resting on the
- * stick, so a menu tapped with the other thumb ignored every tap. A tap by a second finger acts on pointerup
- * instead (a finger that moved was scrolling), and cancelling its touchend stops the browser from clicking too.
- * A lone finger keeps the browser's own click, which knows that a tap on a gliding list only stops it, and which
- * moves focus (so the keyboard closes after a search). Mouse, pen and keyboard keep the plain click.
- */
-export function tapButtons(root) {
-  const downs = new Map(); // second-finger pointerId -> where it went down, and on which button
-  let tapped = false, scrolled = -Infinity;
-  root.addEventListener('scroll', e => { scrolled = e.timeStamp; }, { capture: true, passive: true });
-  root.addEventListener('pointerdown', e => {
-    // A finger that lands while a list still glides is stopping it, not tapping.
-    if (e.pointerType !== 'touch' || e.isPrimary || e.timeStamp - scrolled < 100) return;
-    downs.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.target.closest('button') });
-  });
-  root.addEventListener('pointercancel', e => downs.delete(e.pointerId));
-  root.addEventListener('pointerup', e => {
-    const d = downs.get(e.pointerId);
-    downs.delete(e.pointerId);
-    if (!d?.button || d.button.disabled || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12) return;
-    tapped = true;
-    // The browser's tap would take focus off the search box; without it the phone's keyboard stays open.
-    if (document.activeElement?.matches('input, textarea')) document.activeElement.blur();
-    d.button.click();
-  });
-  root.addEventListener('touchend', e => { if (tapped && e.cancelable) e.preventDefault(); tapped = false; }, { passive: false });
 }

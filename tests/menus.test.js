@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.addEventListener ??= () => {};
-const { tapButtons, tabEdges } = await import('../src/ui/menus.js');
+const { tabEdges } = await import('../src/ui/menus.js');
+const { tapButtons } = await import('../src/ui/tap.js');
 
 // A pause-menu root that records its listeners, and a button that counts its clicks.
 function fakeMenu() {
@@ -87,4 +88,25 @@ test('a second-finger tap lets go of the search box, so the phone keyboard close
   m.tap();
   assert.equal(m.button.clicks, 1);
   assert.equal(blurred, 1);
+});
+
+test('the photo card closes on a second-finger tap of its ✕, with the other thumb on the stick', async () => {
+  // A stand-in page: the card records its listeners, and its buttons run their click listeners when clicked.
+  const on = {};
+  const photo = { hidden: false, addEventListener: (type, fn) => (on[type] ??= []).push(fn) };
+  const button = () => ({ disabled: false, fns: [], addEventListener(type, fn) { if (type === 'click') this.fns.push(fn); }, click() { for (const fn of this.fns) fn(); } });
+  const els = { photo, 'photo-close': button(), 'photo-save': button(), 'photo-share': button() };
+  globalThis.document = { activeElement: null, getElementById: id => els[id] ?? { addEventListener() {} } };
+  const { installRules } = await import('../src/game/rules.js');
+  const g = { city: { places: [] }, vehicles: {} };
+  installRules(g);
+  const fire = (type, e) => { const ev = { prevented: false, preventDefault() { this.prevented = true; }, ...e }; for (const fn of on[type] || []) fn(ev); return ev; };
+  const close = els['photo-close'];
+  const target = { closest: () => close };
+  fire('pointerdown', { pointerId: 3, pointerType: 'touch', isPrimary: false, clientX: 200, clientY: 30, target, timeStamp: 500 });
+  fire('pointerup', { pointerId: 3, pointerType: 'touch', isPrimary: false, clientX: 201, clientY: 30, target, timeStamp: 580 });
+  const end = fire('touchend', { cancelable: true, timeStamp: 581 });
+  assert.equal(photo.hidden, true, 'the card goes away');
+  assert.equal(end.prevented, true, 'and the browser makes no second click');
+  clearTimeout(g._photoT);
 });
