@@ -5,6 +5,7 @@ import { Missions, Steps, driveHunters } from '../src/game/missions.js';
 import { STORY, CHARACTERS, HOME, STORY_PLACES } from '../src/game/story.js';
 import { Save } from '../src/game/save.js';
 import { Peds } from '../src/actors/peds.js';
+import { DynamicDriver } from '../src/actors/traffic.js';
 
 function fakeGame() {
   const hud = { big() {}, objective() {}, setTimer() {}, subtitle() {}, clearSubtitle() {}, help() {}, route: null };
@@ -277,6 +278,28 @@ test('a hunter ramming the player, backing off and ramming again keeps at it, ne
   }
   assert.equal(routed, 0);
   assert.equal(rams, frames);
+});
+
+test('a hunter pressed against a player who stopped backs off and comes again, and plans afresh on the roads after', () => {
+  const g = fakeGame();
+  let routed = 0;
+  g.net.route = () => { routed++; return { points: [0, 80, 0, 40] }; };
+  g.net.lanePath = p => p;
+  // c7: Tiger came round by the roads (the path ends at the onion tempo) and rammed it; it stopped.
+  const v = { id: 1, x: 0, z: 4.2, y: 0, heading: Math.PI, vx: 0, vz: 0, hw: 1, hd: 2.3, spec: { top: 40 } };
+  v.hunt = new DynamicDriver(g, v, { aggression: 0.9, maxSpeed: 40 });
+  v.hunt.setPath([0, 60, 0, 30, 0, 4, 0, 0], false);
+  v.hunt.i = 3;
+  g.missions = { active: { ent: { tigerCar: v } } };
+  let back = 0;
+  for (let t = 0; t < 4; t += 0.1) { driveHunters(g, 0.1); const c = g.controls.get(v); if (c.brake && !c.throttle) back++; }
+  assert.ok(back > 0, 'it backs off to ram again');
+  assert.equal(routed, 0);
+  // The player drives off: round by the roads, planned at once rather than idling with no path.
+  g.player.pos = { x: 0, z: -60 };
+  driveHunters(g, 0.1);
+  assert.equal(routed, 1);
+  assert.ok(v.hunt.path?.length >= 4);
 });
 
 test('a step that fails leaves no GPS line to its target', () => {

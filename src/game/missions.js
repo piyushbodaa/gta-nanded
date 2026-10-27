@@ -634,6 +634,11 @@ export function driveHunters(game, dt) {
       // last time, and on the roads it would only park beside them.
       if (d < 10 || d < (v.huntBest ?? Infinity) - 2) { v.huntBest = d; v.huntStall = 0; }
       else if ((v.huntStall = (v.huntStall || 0) + dt) > 5) { v.huntRoads = 8; v.huntT = 0; }
+      // No road path while ramming: the one from the roads ends where the player is, and a driver
+      // at the end of its path is arriving, not stuck, so it would sit pressed against a player
+      // who stopped, throttle on, instead of backing off to ram again. Back on the roads it plans
+      // afresh at once.
+      v.hunt.path = null; v.huntT = 0;
       game.controls.set(v, v.hunt.control(dt, { x: pos.x, z: pos.z }));
     } else {
       v.huntBest = Infinity; v.huntStall = 0;
