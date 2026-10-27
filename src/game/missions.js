@@ -17,6 +17,8 @@ export class Missions {
     this.dialogT = 0;
     this.routeT = 0;
     this.cooldown = 0;
+    this._leftovers = []; // the last mission's cast and props, cleared when the next one starts
+    this._driven = new WeakSet(); // mission vehicles the player has driven: theirs to keep
   }
 
   get byId() { return this._byId || (this._byId = new Map(this.defs.map(d => [d.id, d]))); }
@@ -166,12 +168,23 @@ export class Missions {
     m.steps[m.i]?.exit?.(m.ctx);
     this.dialog.length = 0;
     g.hud.clearSubtitle();
+    this._leftovers = [];
     for (const e of Object.values(m.ent)) {
       if (!e) continue;
-      if (e.h) { e.keep = false; e.mission = false; if (e.state === 'fight') { e.state = 'flee'; e.t = 5; } }
-      else if (e.id) {
+      if (e.h) {
+        e.keep = false; e.mission = false;
+        // The scene is over: nobody stands frozen in it (a posed actor would until you were
+        // 150 m off), nobody fights on, and the beaten get up from cowering before long.
+        if (e.state === 'fight') { e.state = 'flee'; e.t = 5; }
+        else if (e.state === 'scripted') { e.state = 'walk'; g.peds._resnap?.(e); }
+        else if (e.state === 'cower' && e.t > 30) e.t = 4;
+        if (e.after === 'fight') e.after = 'flee';
+        e.role = null; // and never back to the spot they had in it
+        this._leftovers.push(e);
+      } else if (e.id) {
         e.vital = false; e.arrow = false; e.blip = null; e.keep = false;
         if (e.role === 'mission' || e.role === 'rival') { e.role = 'abandoned'; g.controls.delete(e); }
+        if (!this._driven.has(e)) this._leftovers.push(e);
       }
     }
     if (m.def.policeLock) { g.police.lock = false; }
