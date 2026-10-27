@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Compare the public release to the build, including media and derived map data."""
+"""Compare the public release to the build: every built file, and the cache rules that let a
+release reach returning players."""
 from pathlib import Path
 import hashlib
 import json
@@ -7,8 +8,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://gta.nanded.fun'
-paths = [Path('index.html')]
-paths += sorted(p.relative_to(ROOT / 'dist') for folder in ['assets', 'media', 'data'] for p in (ROOT / 'dist' / folder).rglob('*') if p.is_file())
+# Files that keep their name across releases must be revalidated, or browsers keep the old copy.
+FRESH = {'sw.js': 'no-cache', 'data/world.json': 'max-age=0'}
+paths = sorted(p.relative_to(ROOT / 'dist') for p in (ROOT / 'dist').rglob('*') if p.is_file())
 verified = []
 for path in paths:
     local = (ROOT / 'dist' / path).read_bytes()
@@ -16,6 +18,8 @@ for path in paths:
     with urllib.request.urlopen(request, timeout=45) as response:
         remote = response.read()
         assert response.status == 200, path
+        rule = FRESH.get(path.as_posix())
+        assert not rule or rule in (response.headers.get('Cache-Control') or ''), f'Cache rule missing: {path}'
     assert hashlib.sha256(remote).digest() == hashlib.sha256(local).digest(), f'Build mismatch: {path}'
     verified.append({'path': path.as_posix(), 'bytes': len(remote), 'sha256': hashlib.sha256(remote).hexdigest()})
 range_results = []
