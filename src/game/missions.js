@@ -467,8 +467,8 @@ export const Steps = {
           v.raceIdx = 0;
           planLegs(c.g, v, points);
           // Wedged (a turn into a lane missed at speed, a wall): out of sight, back on the road
-          // a little further on, as police.js does for its jeeps, short of its next checkpoint.
-          v.raceDriver.onStuck = () => putBack(c.g, v, v.raceDriver, points[Math.min(v.raceIdx, points.length - 1)], progress(c.g.player.pos));
+          // a little further on, as police.js does for its jeeps, short of the finish.
+          v.raceDriver.onStuck = () => putBack(c.g, v, v.raceDriver, points, progress(c.g.player.pos));
         }
       },
       update(c, dt) {
@@ -620,26 +620,34 @@ function inSight(g, x, y, z) {
 /**
  * A rival wedged where the player can't see it is put back on the road a little further along its
  * route, facing along it (police.js does the same for its jeeps). Up to 30 m on from where it was
- * driving, measured along the path, whose points can be 200 m apart on a long straight. Never
- * near the checkpoint it owes (`cp`: it must still drive through it), never from behind the player
- * (`mine`, their progress as race() counts it) to level with or ahead of them, never where the
- * player could see it appear, on or under a flyover, or onto another car. Returns true when handled.
+ * driving, measured along the path, whose points can be 200 m apart on a long straight. Through a
+ * checkpoint on the way it is credited with it, as driving through would; never near the finish
+ * (it must still drive there to win), never from behind the player (`mine`, their progress as
+ * race() counts it) to level with or ahead of them, never where the player could see it appear,
+ * on or under a flyover, or onto another car. Returns true when handled.
  */
-function putBack(g, v, driver, cp, mine) {
-  const path = driver.path, net = g.net, n = path ? path.length / 2 : 0;
+function putBack(g, v, driver, points, mine) {
+  const path = driver.path, net = g.net, n = path ? path.length / 2 : 0, last = points.length - 1;
   if (n < 2 || inSight(g, v.x, v.y || 0, v.z)) return false;
-  const progress = (x, z) => v.raceIdx * 1e5 - dist(x, z, cp.x, cp.z);
-  const behind = progress(v.x, v.z) < mine;
+  // How far on a spot is, as race() counts it, owing checkpoint `owe` there.
+  const progress = (x, z, owe) => owe * 1e5 - dist(x, z, points[owe].x, points[owe].z);
+  let owe = Math.min(v.raceIdx, last);
+  const behind = progress(v.x, v.z, owe) < mine;
+  const fin = points[last];
   // Where it is along the stretch it was driving (from the point before the one it heads for),
-  // then on along the path in 2 m steps, each spot one it may be put on.
+  // then on along the path in 2 m steps, each spot one it may be put on. Its line runs on through
+  // the checkpoint after the one it owes, so the walk can carry it through one: a car wedged on a
+  // corner just short of a checkpoint (c6's first, 20 m round the hairpin off Vazirabad Road) is
+  // otherwise one this could never move, too near the checkpoint to put on and too far to count.
   let k = clamp(driver.i, 1, n - 1);
   const ax = path[k * 2 - 2], az = path[k * 2 - 1], sx = path[k * 2] - ax, sz = path[k * 2 + 1] - az;
   const t = clamp(((v.x - ax) * sx + (v.z - az) * sz) / Math.max(sx * sx + sz * sz, 1e-6), 0, 1);
   let x = ax + sx * t, z = az + sz * t;
   const spots = [];
   for (let walked = 0; walked <= 30; walked += 2) {
-    if (dist(x, z, cp.x, cp.z) < 20 || (behind && progress(x, z) > mine - 10)) break;
-    spots.push({ x, z, k });
+    if (owe < last && dist(x, z, points[owe].x, points[owe].z) < 14) owe++; // through it, as race() credits one
+    if ((owe === last && dist(x, z, fin.x, fin.z) < 20) || (behind && progress(x, z, owe) > mine - 10)) break;
+    spots.push({ x, z, k, owe });
     // 2 m further on, round the path's corners.
     let left = 2;
     while (left > 0 && k < n) {
@@ -649,16 +657,18 @@ function putBack(g, v, driver, cp, mine) {
     }
     if (left > 0) break; // the end of the path
   }
-  // The furthest on that is clear: on the road there, not too near the checkpoint, unseen.
+  // The furthest on that is clear: on the road there, not too near the finish, unseen.
   for (const s of spots.reverse()) {
     const r = net.nearest(s.x, s.z, 20, {}, rd => !net.raised[rd]);
-    if (!r || net.deckOver(r.x, r.z) > 0.3 || dist(r.x, r.z, cp.x, cp.z) < 16 || inSight(g, r.x, 0, r.z)) continue;
+    if (!r || net.deckOver(r.x, r.z) > 0.3 || (s.owe === last && dist(r.x, r.z, fin.x, fin.z) < 16) || inSight(g, r.x, 0, r.z)) continue;
     if (g.vehicles.list.some(o => o !== v && dist(o.x, o.z, r.x, r.z) < 6)) continue;
     // Facing the next path point at least a couple of metres on.
     const a = s.k < n - 1 && dist(r.x, r.z, path[s.k * 2], path[s.k * 2 + 1]) < 2 ? s.k + 1 : s.k;
     v.x = r.x; v.z = r.z; v.y = 0; v.vx = v.vz = 0; v.w = 0;
     v.heading = Math.atan2(path[a * 2] - r.x, path[a * 2 + 1] - r.z);
     driver.i = a; driver.reverseT = 0; driver.stuck = 0;
+    // Carried through a checkpoint: credited, and its line planned on from here, as race() does.
+    if (s.owe > v.raceIdx) { v.raceIdx = s.owe; planLegs(g, v, points); }
     return true;
   }
   return false;

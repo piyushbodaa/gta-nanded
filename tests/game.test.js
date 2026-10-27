@@ -438,7 +438,7 @@ test('a race rival heads for the checkpoint it owes, and one wedged out of sight
   assert.equal(d.onStuck(), false);
 });
 
-test('a wedged rival is put back a short way on: never into the checkpoint it owes, past you, or where you can see it', async () => {
+test('a wedged rival is put back a short way on: through a checkpoint, never into the finish, past you, or where you can see it', async () => {
   const THREE = await import('three');
   const g = fakeGame();
   g.net = { route: (x0, z0, x1, z1) => ({ points: [x0, z0, x1, z1] }), nearest: (x, z) => ({ x, z, road: 0 }), raised: [], deckOver: () => 0 };
@@ -446,21 +446,32 @@ test('a wedged rival is put back a short way on: never into the checkpoint it ow
   const tiger = { id: 1, x: 0, z: 0, y: 0, spec: { top: 40 }, heading: 0 };
   m.ent.tiger = tiger;
   g.vehicles.list = [tiger];
-  m.ctx.driver = () => ({ i: 0, setPath(p) { this.path = p; }, control: () => ({}) });
-  const step = Steps.race([{ x: 0, z: 1000 }, { x: 0, z: 2000 }], ['tiger'], 'Win.');
+  m.ctx.driver = () => ({ i: 0, setPath(p) { this.path = p; this.goal = { x: p.at(-2), z: p.at(-1) }; }, control: () => ({}) });
+  const cps = [{ x: 0, z: 1000 }, { x: 0, z: 2000 }];
+  const step = Steps.race(cps, ['tiger'], 'Win.');
   step.enter(m.ctx);
-  const d = tiger.raceDriver, at = (x, z, i) => { Object.assign(tiger, { x, z, heading: 2 }); d.i = i; };
+  const d = tiger.raceDriver, line = [0, -400, 0, 264, 0, 500, 0, 736, 0, 1000, 0, 2000];
+  const at = (x, z, i, owe = 0) => { Object.assign(tiger, { x, z, heading: 2, raceIdx: owe }); d.path = line; d.i = i; };
   // A long straight, its points 236 m apart: 30 m on along it, not on to the next point.
   g.player.pos = { x: 0, z: -400 };
-  d.path = [0, -400, 0, 264, 0, 500, 0, 736, 0, 1000, 0, 2000];
   at(1.5, 270, 2);
   assert.equal(d.onStuck(), true);
-  assert.deepEqual([tiger.x, tiger.z, tiger.heading, d.i], [0, 300, 0, 2]);
-  // Wedged by the checkpoint it owes: it drives through that itself.
-  at(1, 970, 4);
+  assert.deepEqual([tiger.x, tiger.z, tiger.heading, d.i, tiger.raceIdx], [0, 300, 0, 2, 0]);
+  // Wedged on a corner just short of the checkpoint it owes, too near it to be put down short of
+  // it and too far to count (c6's first, round the hairpin off Vazirabad Road): carried through,
+  // credited, and its line planned on to the next.
+  for (const z of [976, 984]) {
+    at(1, z, 4);
+    assert.equal(d.onStuck(), true, `wedged ${1000 - z} m short of the checkpoint`);
+    assert.equal(tiger.raceIdx, 1);
+    assert.ok(tiger.z > 1000 - 14 && tiger.z <= z + 30, `put back at ${tiger.z}`);
+    assert.deepEqual([d.goal, d.path.at(-1)], [cps[1], 2000]);
+  }
+  // Short of the finish, never into it: it must drive there to win.
+  at(1, 1970, 5, 1);
   assert.equal(d.onStuck(), true);
-  assert.ok(tiger.z <= 980, `put back at ${tiger.z}, inside the checkpoint`);
-  at(1, 990, 4);
+  assert.ok(tiger.z <= 1980 && tiger.raceIdx === 1, `put back at ${tiger.z}, inside the finish`);
+  at(1, 1990, 5, 1);
   assert.equal(d.onStuck(), false);
   // Behind you and out of the camera's view, 30 m back: on toward you, but still behind.
   const cam = new THREE.PerspectiveCamera(62, 915 / 412, 0.3, 900);
@@ -470,7 +481,17 @@ test('a wedged rival is put back a short way on: never into the checkpoint it ow
   at(2, -30, 1);
   assert.equal(d.onStuck(), true);
   assert.ok(tiger.z > -30 && tiger.z < -10, `put back at ${tiger.z}`);
+  // Behind you as you pass a checkpoint it still owes: through it, but no further than 10 m short of you.
+  g.player.vehicle = {}; g.player.pos = { x: 0, z: 1000 };
+  step.update(m.ctx, 0.1); // (your checkpoint 1)
+  cam.position.set(0, 3, 1004); cam.lookAt(0, 1, 1040); cam.updateMatrixWorld();
+  g.player.pos = { x: 0, z: 1010 };
+  at(1, 976, 4);
+  assert.equal(d.onStuck(), true);
+  assert.ok(tiger.raceIdx === 1 && tiger.z > 986 && tiger.z <= 1000, `put back at ${tiger.z}, checkpoint ${tiger.raceIdx}`);
   // Ahead of you, in view: it unsticks itself.
+  g.player.pos = { x: 0, z: 0 };
+  cam.position.set(0, 3, -6); cam.lookAt(0, 1, 30); cam.updateMatrixWorld();
   at(2, 60, 2);
   assert.equal(d.onStuck(), false);
   assert.deepEqual([tiger.x, tiger.z], [2, 60]);
@@ -493,6 +514,35 @@ test('the river race crosses the Govardhan bridge once, straight on to the dam',
   for (let i = 0; i < p.length; i += 2) {
     const n = net.nearest(p[i], p[i + 1], 10, {});
     assert.ok(!n || net.width[n.road] >= 7, `a ${net.width[n.road].toFixed(1)} m lane at ${p[i].toFixed(0)}, ${p[i + 1].toFixed(0)}`);
+  }
+});
+
+test('a river race rival wedged on the hairpin off Vazirabad Road is put back round it, past the first checkpoint', async () => {
+  const { world } = await import('./helpers.js');
+  const { net } = world();
+  const g = { ...fakeGame(), net, input: { mode: 'keyboard' }, settings: {} };
+  const race = STORY.find(m => m.id === 'c6').steps(g).find(s => s.kind === 'race');
+  const m = stepContext(g);
+  g.player.pos = { x: 300, z: 300 }; // far off, out of sight
+  // On the median nose at the apex (14-20 m short of the checkpoint), and on the way into it.
+  for (const [x, z] of [[-14, 300], [-16, 302], [-17, 299], [-18, 304], [0, 309]]) {
+    const v = { id: 1, x: STORY_PLACES.gandhiPutla.x, z: STORY_PLACES.gandhiPutla.z, y: 0, spec: { top: 40 }, heading: 0, hw: 1, hd: 2 };
+    m.ent.tiger = v; g.vehicles.list = [v];
+    race.enter(m.ctx);
+    const d = v.raceDriver, P = d.path;
+    // Heading for the end of the stretch of its line it is wedged beside.
+    let best = Infinity;
+    for (let i = 1; i < P.length / 2; i++) {
+      const ax = P[i * 2 - 2], az = P[i * 2 - 1], sx = P[i * 2] - ax, sz = P[i * 2 + 1] - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * sx + (z - az) * sz) / Math.max(sx * sx + sz * sz, 1e-6)));
+      const off = Math.hypot(ax + sx * t - x, az + sz * t - z);
+      if (off < best) { best = off; d.i = i; }
+    }
+    Object.assign(v, { x, z });
+    assert.equal(d.onStuck(), true, `wedged at ${x}, ${z}`);
+    assert.equal(v.raceIdx, 1, `put back at ${v.x.toFixed(0)}, ${v.z.toFixed(0)} from ${x}, ${z}`);
+    assert.ok(Math.hypot(v.x - x, v.z - z) > 10, `moved ${Math.hypot(v.x - x, v.z - z).toFixed(1)} m`);
+    assert.deepEqual(d.goal, race.points[1], 'its line planned on to the next checkpoint');
   }
 });
 
