@@ -10,6 +10,8 @@ const MAJOR_ONLY = new Set(['bus', 'truck']);
 const CRUISE = [17, 15, 14, 12.5, 10.5, 8.5]; // by road class, m/s
 const TYPE_CAP = { auto: 13, tractor: 8.5, bus: 13, truck: 14, tempo: 13, bike: 16, scooter: 13 };
 const SIGNAL_CYCLE = 22;
+// At a light, the nose stops this far out from the crossing: behind the zebra (0.8 to 3.8 m out).
+const STOP_LINE = 4;
 // Junctions joined by a road this short are one crossing (a street over both carriageways of a divided road).
 const CROSSING_LINK = 16;
 // A lane's ends, in the direction of travel (dir -1 starts at junction b): how far in from the
@@ -89,6 +91,30 @@ export class Traffic {
     return c < half - 2 ? 'green' : c < half ? 'amber' : 'red';
   }
   isRed(j, road, t) { return this.signalState(j, road, t) !== 'green'; }
+
+  /**
+   * The speed a car can keep for the light at junction j, its middle toEnd metres short of where the
+   * lane of `road` meets the crossing. On red or amber the nose stops short of the zebra, braking
+   * gently from far enough out to manage it from any speed (aiming the middle 2 m short, from 16 m
+   * out, left noses on the zebra and buses 3 m into the crossing); on a road too short for that, the
+   * tail stops just clear of the junction behind. A car that full braking would not stop short of the
+   * line when the light turns amber goes on through, as drivers do, instead of stopping in the
+   * crossing; one held up (crawling) before it reaches the line waits for the next green, but one
+   * held up already over it goes on when it can, rather than stand on the zebra through the red.
+   */
+  _forLight(v, j, road, toEnd, time) {
+    const net = this.net, a = v.ai;
+    const lane = net.length[road] - net.trimStart(road) - net.trimEnd(road);
+    const toLine = toEnd - Math.min(v.hd + STOP_LINE, Math.max(2, lane - v.hd));
+    if (toLine > 45) return Infinity;
+    const light = this.signalState(j, road, time);
+    if (light === 'amber' && a.speed * a.speed > 2 * 7 * toLine) a.goOn = j;
+    else if (light === 'green' || (a.speed < 1 && toLine > 0)) a.goOn = -1;
+    if (light === 'green' || a.goOn === j) return Infinity;
+    // About 3.5 m/s² down to walking pace, then easing in over the last few metres.
+    const d = Math.max(0, toLine);
+    return Math.min(0.9 * d, Math.sqrt(7 * d));
+  }
 
   update(dt) {
     const g = this.game, focus = g.player.pos;
@@ -226,7 +252,15 @@ export class Traffic {
       const j = a.dir > 0 ? net.rb[a.road] : net.ra[a.road];
       const toEnd = net.length[a.road] - endTrim(net, a.road, a.dir) - a.s;
       if (net.jRoads[j].length >= 3 && toEnd < 22) want = Math.min(want, 5 + toEnd * 0.45);
-      if (this.signals.has(j) && toEnd < 16 && this.isRed(j, a.road, time)) want = Math.min(want, Math.max(0, (toEnd - 2) * 0.9));
+      if (this.signals.has(j)) want = Math.min(want, this._forLight(v, j, a.road, toEnd, time));
+    } else {
+      // Turning onto a short road with a light at its far end (a link between two chowks): slow for
+      // it in the turn already, or there is no room left to stop short of the zebra. Not for a stub
+      // under 2 m long, where the only place to wait would be in the junction behind.
+      const T = a.turn, j = T.dir > 0 ? net.rb[T.road] : net.ra[T.road];
+      if (this.signals.has(j) && net.length[T.road] - net.trimStart(T.road) - net.trimEnd(T.road) >= 2) {
+        want = Math.min(want, this._forLight(v, j, T.road, (1 - T.u) * T.len + net.length[T.road] - endTrim(net, T.road, T.dir) - T.s0, time));
+      }
     }
     if (a.wait > 0) { a.wait -= dt; want = 0; }
     // Accelerate gently, brake firmly.
@@ -350,6 +384,7 @@ export class Traffic {
     const y2 = net.deckAt(best.road, best.dir > 0 ? s0 : net.length[best.road] - s0);
     a.turn = { x0, z0, x1, z1, x2, z2, y0, y2, len, u: 0, road: best.road, dir: best.dir, s0, j };
     a.lane = lane;
+    a.goOn = -1; // through this light now: the next one is decided afresh
     return true;
   }
 
@@ -438,7 +473,7 @@ export class Traffic {
     }
     // Rejoin: snap to the nearest lane, facing the way the car points (or the only way a one-way road allows).
     const dir = net.oneway[n.road] || (Math.cos(v.heading - Math.atan2(n.dx, n.dz)) >= 0 ? 1 : -1);
-    a.road = n.road; a.dir = dir; a.s = dir > 0 ? n.s : net.length[n.road] - n.s; a.turn = null; a.speed = 0; a.lane = 0; a.pushPast = a.squeezing = null;
+    a.road = n.road; a.dir = dir; a.s = dir > 0 ? n.s : net.length[n.road] - n.s; a.turn = null; a.speed = 0; a.lane = 0; a.pushPast = a.squeezing = null; a.goOn = -1;
     v.kinematic = true; v.vx = v.vz = 0; v.w = 0;
   }
 }
