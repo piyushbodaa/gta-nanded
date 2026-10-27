@@ -918,7 +918,7 @@ export class City {
     const P = (this.props = { x: [], z: [], rot: [], kind: [], road: [], y: [] });
     const net = this.net, p = {};
     // Lamp posts and electric poles aren't in lotGrid (they'd crowd out half the street), but a
-    // handcart's or vendor's umbrella, 1.35-1.45 m round, must not stand round one.
+    // handcart's or vendor's umbrella, 1.35-1.45 m round, must not have one standing through it.
     const posts = new SpatialGrid(8);
     const add = (x, z, rot, kind, road, y = 0) => {
       P.x.push(x); P.z.push(z); P.rot.push(rot); P.kind.push(kind); P.road.push(road); P.y.push(y);
