@@ -14,7 +14,7 @@ function fakeGame() {
     vehicles: { list: [] }, peds: { list: [] }, police: { level: 0, setLevel() {}, lock: false },
     save: { done: id => false, complete() {}, flush() {}, data: { stamps: [] } }, addCash() {},
     camera: { cinematic: null, playShot() {}, endShot() {} }, effects: { markers: { set() {} } },
-    net: { route: () => null }, onWantedChange() {},
+    net: { route: () => null, nearest: () => null, raised: [] }, onWantedChange() {},
   };
 }
 

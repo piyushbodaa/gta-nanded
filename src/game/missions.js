@@ -87,7 +87,7 @@ export class Missions {
     if (this.active !== m) return;
     // Markers and GPS for the current target.
     const markers = [];
-    if (m.target && m.target.marker !== false) markers.push({ x: m.target.x, z: m.target.z, r: m.target.r ?? 3, h: m.target.h ?? 4, color: m.target.markerColor ?? 0xffc83d });
+    if (m.target && m.target.marker !== false) markers.push({ x: m.target.x, z: m.target.z, y: m.target.y, r: m.target.r ?? 3, h: m.target.h ?? 4, color: m.target.markerColor ?? 0xffc83d });
     for (const e of Object.values(m.ent)) if (e && e.arrow) markers.push({ kind: 'arrow', x: e.x ?? e.h.x, z: e.z ?? e.h.z, y: (e.spec?.H ?? 1.8) + 1.4, color: 0x64b5f6 });
     g.effects?.markers.set(markers);
     this.routeT -= dt;
@@ -282,6 +282,15 @@ export class Missions {
   }
 }
 
+/**
+ * How high a marker on the road at (x, z) stands: on the flyover deck when the road there, the one
+ * the GPS leads to, is raised (from the street below the deck hides it). Work it out once per point.
+ */
+export function markerY(net, x, z) {
+  const n = net.nearest(x, z, 20, {});
+  return n && net.raised[n.road] ? net.deckAt(n.road, n.s) : 0;
+}
+
 /** A vehicle's label in a sentence: "the onion tempo", but "Pakya's auto" and "your car" as they are. */
 const the = label => !label ? 'the vehicle' : /'s\b|^(your|my)\b/i.test(label) ? label : `the ${label}`;
 const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -441,11 +450,12 @@ export const Steps = {
    * points: [{x, z}] ; finish = last point.
    */
   race(points, rivals, text = 'Win the race.') {
-    let idx = 0, shown = '';
+    let idx = 0, shown = '', ys = [];
     return {
       kind: 'race', points,
       enter(c) {
         idx = 0; shown = '';
+        ys = points.map(p => markerY(c.g.net, p.x, p.z));
         c.objective(text);
         for (const n of rivals) {
           const v = c.ent[n];
@@ -462,7 +472,7 @@ export const Steps = {
       update(c, dt) {
         const g = c.g, pos = g.player.pos;
         const p = points[idx];
-        c.m.target = { x: p.x, z: p.z, r: 6, h: 7, markerColor: idx === points.length - 1 ? 0xff5252 : 0xffc83d };
+        c.m.target = { x: p.x, z: p.z, y: ys[idx], r: 6, h: 7, markerColor: idx === points.length - 1 ? 0xff5252 : 0xffc83d };
         // Rivals drive the route with a little rubber band.
         let ahead = 0;
         for (const n of rivals) {
