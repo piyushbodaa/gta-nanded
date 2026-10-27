@@ -1,7 +1,11 @@
 /* Counts visits, game starts and passed missions with Google Analytics 4, on gta.nanded.fun only:
    local builds and previews send nothing. The game announces moments with a 'nanded:analytics'
-   event (src/core/analytics.js); only allowlisted names and modes leave the page, never the URL,
-   referrer, player or game state. Advertising features and Google signals are off. */
+   event (src/core/analytics.js); of those, only allowlisted names and modes are sent, never the
+   URL, referrer, player or game state. Advertising features and Google signals are off.
+   gtag.js also sends GA4's own session events (first_visit, session_start, user_engagement) and
+   whatever Enhanced measurement the web stream has switched on in GA4 Admin; keep that off there,
+   as the game needs none of it. The page keeps no <form> (src/ui/menus.js turns the cheat box into
+   a plain row), so form interactions have nothing to report even while that setting is on. */
 (() => {
   const host = 'gta.nanded.fun';
   const id = 'G-0GVL1WWPS8';
