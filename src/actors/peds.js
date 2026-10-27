@@ -215,8 +215,12 @@ export class Peds {
       }
       pave = p.under;
     }
-    // Only someone already up off the street (out of a vehicle on a flyover) can be on a deck.
-    const deck = h.y > 0.3 ? this.net.surfaceAt(h.x, h.z, h.y) : 0;
+    // Only someone already up off the street (out of a vehicle on a flyover) can be on a deck. One
+    // walking a flyover keeps to its deck wherever they are over it: down its ramps, and up the next
+    // where it comes down to the street between two (else on into that ramp's embankment).
+    const net = this.net, fly = p.state === 'walk' && p.road != null && net.raised[p.road];
+    const y = fly ? net.deckAt(p.road, p.dir > 0 ? p.s : net.length[p.road] - p.s) : h.y;
+    const deck = y > 0.3 ? net.surfaceAt(h.x, h.z, y) : 0;
     return Math.max(g.city.groundHeight(h.x, h.z), deck, pave);
   }
 
