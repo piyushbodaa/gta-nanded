@@ -10,6 +10,7 @@ import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y,
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
+import { medianRuns } from './colliders.js';
 import { buildAirfieldPiece } from './airfield.js';
 import { buildPlace } from './landmarks.js';
 import { FoliageGeo, LEAF } from './foliage.js';
@@ -326,6 +327,9 @@ function buildRoads(ctx, data) {
   if (data.junctions) for (const j of data.junctions) buildJunction(ctx, j);
 }
 
+// Where a median's run starts and ends inside a road piece.
+const medianP = {}, medianQ = {};
+
 /** The stretch of road segment i from sa to sb (s0..s1 is the whole drawn segment). */
 function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   const { g, city, net } = ctx;
@@ -351,8 +355,19 @@ function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   if (net.bridge[road] || d0 > 0.05 || d1 > 0.05) buildBridgeSpan(ctx, p, q, off0, off1, e0, e1, divided ? ms : 0, d0, d1);
   else {
     if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1]);
-    if (divided) buildMedianHalf(ctx, p, q, off0, off1, ms, e0[mk], e1[mk]);
-    else if (w >= 11.5 && !ms) buildMedian(ctx, p, q, off0, off1);
+    // The median, along the runs colliders.js makes solid (none where it would stand in another
+    // road's lane), with an end where one stops short along the road.
+    const runs = medianRuns(net)[road], from = net.trimStart(road) + 0.01, to = len - net.trimEnd(road) - 0.01;
+    for (let k = 0; runs && k < runs.length; k += 2) {
+      const ra = Math.max(runs[k], sa), rb = Math.min(runs[k + 1], sb);
+      if (rb - ra < 0.01) continue;
+      // A run inside this piece starts or ends on a plain stretch of the segment, not at its mitred ends.
+      const P = ra > sa ? medianP : p, Q = rb < sb ? medianQ : q;
+      const o0 = ra > sa ? offsetAt(net, road, i, true, start, end, ra, P) : off0, o1 = rb < sb ? offsetAt(net, road, i + 1, true, start, end, rb, Q) : off1;
+      const ends = (runs[k] > from && ra === runs[k] ? 1 : 0) | (runs[k + 1] < to && rb === runs[k + 1] ? 2 : 0);
+      if (ms) buildMedianHalf(ctx, P, Q, o0, o1, ms, net.edgeAt(road, ra, ms), net.edgeAt(road, rb, ms), ends);
+      else buildMedian(ctx, P, Q, o0, o1, ends);
+    }
   }
   // Zebra crossing just before a big junction (on the ground).
   if (w >= 8 && sb === s1 && d1 < 0.3 && s1 >= len - net.trimEnd(road) - 0.01 && net.jRoads[net.rb[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, q, off1, e1, -1, s1);
@@ -565,7 +580,8 @@ function buildFootpaths(ctx, p, q, o0, o1, hw, sides) {
   }
 }
 
-function buildMedian(ctx, p, q, o0, o1) {
+/** A wide two-way road's median down its centre line, from p to q; `ends` 1 and 2 close it off at p and at q. */
+function buildMedian(ctx, p, q, o0, o1, ends = 0) {
   const { g } = ctx;
   const hw = 0.35, h = 0.32;
   const ax = p.x + o0.nx * hw, az = p.z + o0.nz * hw, bx = q.x + o1.nx * hw, bz = q.z + o1.nz * hw;
@@ -574,6 +590,9 @@ function buildMedian(ctx, p, q, o0, o1) {
   g.setTint(0xffffff, 0).setTile(TILE.KERB[0], TILE.KERB[1], 1, 1);
   g.wall(bx, bz, ax, az, 0.03, h, 0, len / 2.4, 0, 0.3);
   g.wall(dx, dz, cx, cz, 0.03, h, 0, len / 2.4, 0, 0.3);
+  // Its ends, facing back along the road at p and on along it at q.
+  if (ends & 1) g.wall(ax, az, dx, dz, 0.03, h, 0, (2 * hw) / 2.4, 0, 0.3);
+  if (ends & 2) g.wall(cx, cz, bx, bz, 0.03, h, 0, (2 * hw) / 2.4, 0, 0.3);
   g.color(0x8c9a5a, 0);
   const a = g.v(ax, h, az), b = g.v(bx, h, bz), c = g.v(cx, h, cz), d = g.v(dx, h, dz);
   g.quad(a, d, c, b);
@@ -582,9 +601,9 @@ function buildMedian(ctx, p, q, o0, o1) {
 /**
  * This carriageway's half of a divided road's median, on `side` (+1 left of a->b, -1 right)
  * from its edge (e0, e1 at each end) to the middle: a kerb facing the traffic and a planted
- * top. The other carriageway builds the other half.
+ * top. The other carriageway builds the other half. `ends` 1 and 2 close it off at p and at q.
  */
-function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1) {
+function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1, ends = 0) {
   const { g } = ctx;
   const h = 0.32, f0 = (e0 + MEDIAN_W / 2 + 0.05) * side, f1 = (e1 + MEDIAN_W / 2 + 0.05) * side;
   const ax = p.x + o0.nx * e0 * side, az = p.z + o0.nz * e0 * side, bx = q.x + o1.nx * e1 * side, bz = q.z + o1.nz * e1 * side;
@@ -592,6 +611,10 @@ function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1) {
   const len = Math.hypot(bx - ax, bz - az);
   g.setTint(0xffffff, 0).setTile(TILE.KERB[0], TILE.KERB[1], 1, 1);
   if (side > 0) g.wall(ax, az, bx, bz, 0.03, h, 0, len / 2.4, 0, 0.3); else g.wall(bx, bz, ax, az, 0.03, h, 0, len / 2.4, 0, 0.3);
+  // Its ends, facing back along the road at p and on along it at q (each drawn left to right as seen from outside).
+  const u = (MEDIAN_W / 2 + 0.05) / 2.4;
+  if (ends & 1) { if (side > 0) g.wall(dx, dz, ax, az, 0.03, h, 0, u, 0, 0.3); else g.wall(ax, az, dx, dz, 0.03, h, 0, u, 0, 0.3); }
+  if (ends & 2) { if (side > 0) g.wall(bx, bz, cx, cz, 0.03, h, 0, u, 0, 0.3); else g.wall(cx, cz, bx, bz, 0.03, h, 0, u, 0, 0.3); }
   g.color(0x8c9a5a, 0);
   const a = g.v(ax, h, az), b = g.v(bx, h, bz), c = g.v(cx, h, cz), d = g.v(dx, h, dz);
   if (side > 0) g.quad(a, b, c, d); else g.quad(a, d, c, b);

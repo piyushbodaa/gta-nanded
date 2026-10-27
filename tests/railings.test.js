@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { world } from './helpers.js';
-import { Colliders, SOLID, obbSat } from '../src/world/colliders.js';
+import { Colliders, SOLID, obbSat, medianRuns } from '../src/world/colliders.js';
 import { SOLID_BELOW, MEDIAN_W } from '../src/world/roadnet.js';
+import { ChunkManager } from '../src/world/chunks.js';
+import { CHUNK } from '../src/world/citygen.js';
 import { pointSegDist2 } from '../src/core/math.js';
 import { VEHICLE_TYPES } from '../src/actors/vehicle-types.js';
 import { STORY_PLACES } from '../src/game/story.js';
@@ -180,4 +183,80 @@ test("at every junction a median keeps out of the other roads' lanes", () => {
   }
   assert.ok(ways > 40000, `${ways} ways into and out of junctions`);
   assert.equal(into, 0, `${into} of them run into another road's median, the worst ${worst.toFixed(2)} m on ${where}`);
+});
+
+test('a median is drawn just where it is solid: no kerb is drawn through a lane that drives through it', () => {
+  const { net, city } = world();
+  const col = colliders(), all = medianRuns(net), p = {};
+  // Solid along its runs, and nowhere else: the kerb boxes add up to the runs.
+  let runs = 0, boxes = 0;
+  for (const lay of all) for (let k = 0; lay && k < lay.length; k += 2) runs += lay[k + 1] - lay[k];
+  for (let i = 0; i < col.n; i++) if (isMedian(col, i)) boxes += 2 * col.hd[i];
+  assert.ok(runs > 60000 && Math.abs(runs - boxes) < 1, `${boxes.toFixed(0)} m of median kerb is solid, along ${runs.toFixed(0)} m of runs`);
+  /** Is (x, z) on a median's kerb box, or within `pad` of one? */
+  const solid = (x, z, pad) => col.near(x - 1, z - 1, x + 1, z + 1, i => {
+    if (!isMedian(col, i)) return false;
+    const ex = x - col.x[i], ez = z - col.z[i];
+    return Math.abs(ex * col.c[i] - ez * col.s[i]) <= col.hw[i] + pad && Math.abs(ex * col.s[i] + ez * col.c[i]) <= col.hd[i] + pad;
+  });
+  // Drawn along them too, and nowhere else, in the close-up chunks round the c4 tipper's first
+  // junction (where road 2096's median half stood a metre into 12125's lane), where road 5657 runs
+  // half over another, and where two divided roads' carriageways are mapped over each other.
+  const mats = { city: new THREE.MeshBasicMaterial(), signs: new THREE.MeshBasicMaterial(), pools: new THREE.MeshBasicMaterial(), wires: new THREE.LineBasicMaterial(), foliage: new THREE.MeshBasicMaterial() };
+  const cm = new ChunkManager(new THREE.Scene(), city, mats, new Map());
+  let drawn = 0, along = 0;
+  for (const [x, z] of [[-156.8, 951.5], [1796, -2394], [-3236, 4930], [1583, -1685]]) {
+    const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK), key = `${cx},${cz}`;
+    cm._build(key, cx, cz);
+    // The planted tops of the medians drawn there (0.32 m up, in their green).
+    const tops = [];
+    for (const mesh of cm.chunks.get(key).meshes) {
+      const tint = mesh.geometry.attributes.tint?.array, pos = mesh.geometry.attributes.position.array, idx = mesh.geometry.index?.array;
+      if (!tint || !idx) continue;
+      const top = v => tint[v * 4] === 0x8c && tint[v * 4 + 1] === 0x9a && tint[v * 4 + 2] === 0x5a && Math.abs(pos[v * 3 + 1] - 0.32) < 1e-3;
+      for (let k = 0; k < idx.length; k += 3) {
+        const [a, b, c] = [idx[k], idx[k + 1], idx[k + 2]];
+        if (top(a) && top(b) && top(c)) tops.push([pos[a * 3], pos[a * 3 + 2], pos[b * 3], pos[b * 3 + 2], pos[c * 3], pos[c * 3 + 2]]);
+      }
+    }
+    // All over each drawn top, every half metre or so, is a kerb: its top runs 5 cm past the kerb,
+    // and where the median narrows its straight boxes follow the slanting edge within 10 cm. (Not
+    // within 1.5 m of a bend, where the mitred top fills the wedge between two straight boxes.)
+    const near = {}, divided = o => !!all[o];
+    const atBend = (x, z) => {
+      const n = net.nearest(x, z, 8, near, divided);
+      if (!n) return false;
+      const i = net.pointAt(n.road, n.s, p).seg, a = net.ptStart[n.road], b = net.ptStart[n.road + 1] - 1;
+      return (i > a && n.s - net.cum[i] < 1.5) || (i + 1 < b && net.cum[i + 1] - n.s < 1.5);
+    };
+    for (const [ax, az, bx, bz, qx, qz] of tops) {
+      const m = Math.ceil(Math.max(Math.hypot(bx - ax, bz - az), Math.hypot(qx - ax, qz - az)) / 0.5), gx = (ax + bx + qx) / 3, gz = (az + bz + qz) / 3;
+      for (let u = 0; u <= m; u++) for (let v = 0; u + v <= m; v++) {
+        // (pulled in a little towards its middle, off its edges)
+        const x = gx + (ax + ((bx - ax) * u) / m + ((qx - ax) * v) / m - gx) * 0.95, z = gz + (az + ((bz - az) * u) / m + ((qz - az) * v) / m - gz) * 0.95;
+        if (atBend(x, z)) continue;
+        drawn++;
+        assert.ok(solid(x, z, 0.15), `a median is drawn at (${x.toFixed(2)}, ${z.toFixed(2)}) with no kerb there`);
+      }
+    }
+    // Down the middle of every run of the road segments built there, it is drawn (not too near
+    // either end of a segment, where on the inside of a bend the next segment's mitre takes over).
+    const inTop = (x, z) => tops.some(([ax, az, bx, bz, qx, qz]) => {
+      const d1 = (bx - ax) * (z - az) - (bz - az) * (x - ax), d2 = (qx - bx) * (z - bz) - (qz - bz) * (x - bx), d3 = (ax - qx) * (z - qz) - (az - qz) * (x - qx);
+      return (d1 >= -1e-6 && d2 >= -1e-6 && d3 >= -1e-6) || (d1 <= 1e-6 && d2 <= 1e-6 && d3 <= 1e-6);
+    });
+    for (const i of city.chunk(cx, cz).segs) {
+      const r = net.ptRoad[i], lay = all[r], ms = net.oneway[r] ? -net.oneway[r] : 0;
+      const s0 = Math.max(net.cum[i], net.trimStart(r)), s1 = Math.min(net.cum[i + 1], net.length[r] - net.trimEnd(r));
+      for (let k = 0; lay && k < lay.length; k += 2) {
+        for (let s = Math.max(lay[k] + 0.1, net.cum[i] + 2, s0 + 0.1); s < Math.min(lay[k + 1] - 0.1, net.cum[i + 1] - 2, s1 - 0.1); s += 0.5) {
+          net.pointAt(r, s, p);
+          const off = ms ? ms * (net.innerAt(r, s) + MEDIAN_W / 4) : 0, x = p.x + p.dz * off, z = p.z - p.dx * off;
+          along++;
+          assert.ok(inTop(x, z) && solid(x, z, 0), `road ${r}'s median is solid at (${x.toFixed(2)}, ${z.toFixed(2)}) but not drawn there`);
+        }
+      }
+    }
+  }
+  assert.ok(drawn > 1000 && along > 300, `${drawn} spots drawn, ${along} along the runs`);
 });
