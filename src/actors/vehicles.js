@@ -15,9 +15,12 @@ const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color()
 const WRECK = 0x2a2624;
 
 let nextId = 1;
-// In the river: how hard the water holds a body back (per second, once it is 0.6 m deep), and
-// how long under before its engine has drowned and it is a write-off.
-const WATER_DRAG = 3, DROWNED = 1.5;
+// In the river: how hard the water holds a body back (per second, once most of it is under); how
+// much of its height is "most"; how long that far under before its engine has drowned and it is a
+// write-off (rules.js reads the same clock to drown a player still at the wheel); and where the
+// clock is held while it is merely stuck in the shallows: past rules.js's splash (0.4 s), short of
+// drowning.
+const WATER_DRAG = 3, UNDER = 0.6, DROWNED = 1.5, STUCK = 1;
 
 export class Vehicles {
   constructor(scene, humans, colliders, city) {
@@ -181,17 +184,25 @@ export class Vehicles {
         const hit = collideStatic(v, this.colliders, this._contact);
         if (hit > 4) this._impact(v, hit, null);
         // Water: down the bank and into the channel, a body sinks. A bridge deck stands clear of it.
+        // It drowns only once the water is over most of it (drawn on the riverbed, it is then mostly
+        // under): a truck, or an SUV a few metres out in waist-deep water, is merely stuck, and can
+        // crawl back out or be left there. Nothing burns in the river (rules.js draws no fire there).
         const rd = this.city.riverDistance(v.x, v.z, this._rd || (this._rd = {}));
-        if (rd.d < -1.5 && v.y < WATER_Y) v.sinking = (v.sinking || 0) + h; else v.sinking = 0;
-        // The water holds it back, the deeper the harder: rolled in, it stops a few metres out
-        // instead of crossing the riverbed and climbing the far bank.
-        const depth = WATER_Y - v.y;
+        const depth = WATER_Y - v.y, under = depth / (UNDER * v.spec.H);
+        if (rd.d < -1.5 && depth > 0) {
+          v.sinking = (v.sinking || 0) + h;
+          if (under < 1) v.sinking = Math.min(v.sinking, STUCK);
+          v.onFire = 0;
+        } else v.sinking = 0;
+        // The water holds it back, the more of it under the harder: rolled in, it stops a few metres
+        // out instead of crossing the riverbed and climbing the far bank, a tall truck further out
+        // than a hatch.
         if (depth > 0) {
-          const k = Math.exp(-WATER_DRAG * Math.min(1, depth / 0.6) * h);
+          const k = Math.exp(-WATER_DRAG * Math.min(1, under) * h);
           v.vx *= k; v.vz *= k; v.w *= k;
         }
-        // Under for good, its engine drowned: a write-off where it lies, and nothing burns under the river.
-        if (v.sinking > DROWNED) { v.wrecked = true; v.onFire = 0; v.explodeAt = 0; }
+        // Under for good, its engine drowned: a write-off where it lies, and no blast goes off under the river.
+        if (v.sinking > DROWNED) { v.wrecked = true; v.explodeAt = 0; }
       }
       // Lane traffic was placed where it will be at the end of the frame: meet it where it is now.
       this._collidePairs(dt - (k + 1) * h);

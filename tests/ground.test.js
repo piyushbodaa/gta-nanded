@@ -119,32 +119,84 @@ test('cars cross the Godavari bridges without sinking, and sink in the river bes
   assert.ok(v.y < WATER_Y && v.sinking > 0.9, `in the river: y ${v.y.toFixed(2)}, sinking ${v.sinking.toFixed(2)}`);
 });
 
-test('a car rolled or driven into the river stops a few metres out and drowns there, nowhere near the far bank', () => {
+/** Points 12 m up the Godavari's bank, clear of roads, facing the water: where cars go in. */
+function riverSites(n) {
   const { net, city } = world();
-  const H = host(), dt = 1 / 60;
-  let runs = 0;
-  // Down the bank from 12 m up at 12 m/s, toward the water: left to roll (bailed out of), or
-  // driven in flat out.
-  for (let i = 0; i < city.waterSegs.length && runs < 12; i += 17) {
+  const sites = [];
+  for (let i = 0; i < city.waterSegs.length && sites.length < n; i += 17) {
     const [ax, az, bx, bz, w] = city.waterSegs[i], l = Math.hypot(bx - ax, bz - az);
     const x = (ax + bx) / 2 + ((bz - az) / l) * (w / 2 + 12), z = (az + bz) / 2 - ((bx - ax) / l) * (w / 2 + 12);
     const rd = city.riverDistance(x, z);
     if (w < 40 || Math.abs(rd.d - 12) > 1.5 || net.nearest(x, z, 25, {})) continue;
-    for (const role of ['abandoned', 'player']) {
-      const v = createBody('hatch', x, z, Math.atan2(-rd.nx, -rd.nz));
-      v.y = city.groundHeight(x, z); v.role = role; v.vx = -rd.nx * 12; v.vz = -rd.nz * 12;
-      H.list = [v];
-      const ctl = new Map(role === 'player' ? [[v, { throttle: 1, brake: 0, steer: 0, handbrake: false }]] : []);
-      let farthest = Infinity;
-      for (let t = 0; t < 8; t += dt) { H.step(dt, ctl); farthest = Math.min(farthest, city.riverDistance(v.x, v.z).d); }
-      if (v.y > WATER_Y) continue; // a tree on the bank stopped it short of the water
-      runs++;
-      assert.ok(farthest > -10, `${role} car at ${i}: ${(-farthest).toFixed(1)} m out into the ${w} m channel`);
-      assert.ok(speedOf(v) < 0.05, `${role} car at ${i}: still going at ${speedOf(v).toFixed(2)} m/s`);
-      assert.ok(v.wrecked && v.sinking > 1.5 && !v.onFire, `${role} car at ${i}: drowned where it lies`);
-    }
+    sites.push({ i, x, z, w, heading: Math.atan2(-rd.nx, -rd.nz), nx: rd.nx, nz: rd.nz });
+  }
+  return sites;
+}
+
+/** A body sent down the bank at `speed`, left to roll (bailed out of) or driven on flat out, for `secs`. */
+function intoRiver(H, s, type, role, speed, secs = 8) {
+  const { city } = world(), dt = 1 / 60;
+  const v = createBody(type, s.x, s.z, s.heading);
+  v.y = city.groundHeight(s.x, s.z); v.role = role; v.vx = -s.nx * speed; v.vz = -s.nz * speed;
+  H.list = [v];
+  const ctl = new Map(role === 'player' ? [[v, { throttle: 1, brake: 0, steer: 0, handbrake: false }]] : []);
+  let farthest = Infinity;
+  for (let t = 0; t < secs; t += dt) { H.step(dt, ctl); farthest = Math.min(farthest, city.riverDistance(v.x, v.z).d); }
+  return { v, farthest, depth: WATER_Y - v.y };
+}
+
+test('a car rolled or driven into the river stops a few metres out, nowhere near the far bank', () => {
+  const H = host();
+  let runs = 0;
+  for (const s of riverSites(8)) for (const role of ['abandoned', 'player']) {
+    const { v, farthest } = intoRiver(H, s, 'hatch', role, 12);
+    if (v.y > WATER_Y) continue; // a tree on the bank stopped it short of the water
+    runs++;
+    assert.ok(farthest > -10, `${role} car at ${s.i}: ${(-farthest).toFixed(1)} m out into the ${s.w} m channel`);
+    assert.ok(speedOf(v) < 0.05, `${role} car at ${s.i}: still going at ${speedOf(v).toFixed(2)} m/s`);
+    // Driven in, it ploughs on until the water is over most of it, and drowns there.
+    if (role === 'player') assert.ok(v.wrecked && v.sinking > 1.5 && !v.onFire, `${role} car at ${s.i}: drowned where it lies`);
   }
   assert.ok(runs >= 10, `${runs} cars into the river`);
+});
+
+test('a body drowns in the river only once the water is over most of it; in the shallows it is merely stuck', () => {
+  const H = host();
+  let drowned = 0, stuck = 0;
+  for (const s of riverSites(6)) for (const type of ['bike', 'hatch', 'suv', 'truck', 'bus']) for (const speed of [12, 25]) for (const role of ['abandoned', 'player']) {
+    const { v, depth } = intoRiver(H, s, type, role, speed);
+    if (v.y > WATER_Y) continue;
+    const at = `${role} ${type} at ${speed} m/s, site ${s.i}: ${depth.toFixed(2)} m of water on a ${v.spec.H} m body`;
+    if (v.sinking > 1.5) {
+      drowned++;
+      // What the player sees on the WASTED screen: a body mostly under the river, not one in the shallows.
+      assert.ok(depth >= 0.6 * v.spec.H, `${at}: drowned`);
+      assert.ok(v.wrecked && !v.onFire && !v.explodeAt, `${at}: a write-off`);
+    } else if (depth < 0.6 * v.spec.H) {
+      stuck++;
+      assert.ok(!v.wrecked && v.sinking <= 1, `${at}: merely stuck (wrecked ${v.wrecked}, clock ${v.sinking.toFixed(2)})`);
+    }
+  }
+  assert.ok(drowned > 20 && stuck > 20, `${drowned} drowned, ${stuck} stuck`);
+});
+
+test('a truck or an SUV stuck in the river\'s shallows reverses back out', () => {
+  const { city } = world();
+  const H = host(), dt = 1 / 60;
+  let runs = 0;
+  for (const s of riverSites(4)) for (const type of ['truck', 'suv']) {
+    const { v } = intoRiver(H, s, type, 'abandoned', 12);
+    if (v.y > WATER_Y) continue;
+    runs++;
+    // Back at the wheel, reversing.
+    v.role = 'player';
+    const back = new Map([[v, { throttle: 0, brake: 1, steer: 0, handbrake: false }]]);
+    let t = 0;
+    for (; t < 40 && v.y < WATER_Y; t += dt) H.step(dt, back);
+    assert.ok(v.y >= WATER_Y && !v.wrecked, `${type} at ${s.i}: still in the river after ${t.toFixed(0)} s (y ${v.y.toFixed(2)}, wrecked ${v.wrecked})`);
+    assert.ok(city.riverDistance(v.x, v.z).d > -1.5, `${type} at ${s.i}: out on the bank`);
+  }
+  assert.ok(runs >= 6, `${runs} stuck in the river`);
 });
 
 /** The real Player in a minimal game, walked by a stick held toward `aim(player)`. */
