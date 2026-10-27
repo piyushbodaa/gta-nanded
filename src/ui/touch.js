@@ -82,7 +82,7 @@ export class TouchControls {
       for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
     }
     // Everything here acts on pointerdown, so the click a tap makes afterwards is a ghost: MAP and ❚❚ open the
-    // pause menu under the finger, and the click would land on whatever tab is there (📷: on Share). Cancelling
+    // pause menu under the finger, and the click would land on whatever tab is there. Cancelling
     // the touchend stops that click; touch events stay with the button the finger went down on. (A touchend
     // after a drag on the stick can't be cancelled, and makes no click; asking anyway only warns in the console.)
     this.root.addEventListener('touchend', e => { if (e.cancelable) e.preventDefault(); }, { passive: false });

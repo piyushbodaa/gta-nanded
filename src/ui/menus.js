@@ -218,7 +218,7 @@ export class PauseMenu {
 }
 
 /** Fade the ends of the tab row that have tabs past them, so a row that has to scroll sideways says so. */
-function tabEdges(nav) {
+export function tabEdges(nav) {
   nav.classList.toggle('more-l', nav.scrollLeft > 1);
   nav.classList.toggle('more-r', nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
 }

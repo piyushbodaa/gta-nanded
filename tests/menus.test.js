@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.addEventListener ??= () => {};
-const { tapButtons } = await import('../src/ui/menus.js');
+const { tapButtons, tabEdges } = await import('../src/ui/menus.js');
 
 // A pause-menu root that records its listeners, and a button that counts its clicks.
 function fakeMenu() {
@@ -48,6 +48,36 @@ test('a second finger that moved, or that stops a gliding list, does not press',
   assert.equal(m.button.clicks, 0, 'a finger landing 40 ms after a scroll is stopping it');
   m.tap({ at: 1400 });
   assert.equal(m.button.clicks, 1, 'once the list has settled, taps press again');
+});
+
+test('a second finger on a greyed-out button, or off any button, presses nothing', () => {
+  globalThis.document = { activeElement: null };
+  const m = fakeMenu();
+  m.button.disabled = true;
+  assert.equal(m.tap().prevented, false);
+  assert.equal(m.button.clicks, 0);
+  // Off any button (the map, a card's text): nothing is pressed, and the touch goes on as usual.
+  const off = { closest: () => null };
+  m.fire('pointerdown', { pointerId: 4, pointerType: 'touch', isPrimary: false, clientX: 10, clientY: 10, target: off, timeStamp: 2000 });
+  m.fire('pointerup', { pointerId: 4, pointerType: 'touch', isPrimary: false, clientX: 10, clientY: 10, target: off, timeStamp: 2080 });
+  assert.equal(m.fire('touchend', { cancelable: true }).prevented, false);
+});
+
+test('the tab row fades only at the ends that have tabs past them', () => {
+  const nav = (scrollLeft, clientWidth, scrollWidth) => {
+    const on = new Set();
+    return { scrollLeft, clientWidth, scrollWidth, on, classList: { toggle: (c, f) => (f ? on.add(c) : on.delete(c)) } };
+  };
+  const all = nav(0, 600, 600); tabEdges(all);
+  assert.deepEqual([...all.on], [], 'every tab fits: no fade');
+  const start = nav(0, 400, 600); tabEdges(start);
+  assert.deepEqual([...start.on], ['more-r'], 'scrolled to the start: Settings and Controls wait on the right');
+  const middle = nav(100, 400, 600); tabEdges(middle);
+  assert.deepEqual([...middle.on].sort(), ['more-l', 'more-r']);
+  const end = nav(200, 400, 600); tabEdges(end);
+  assert.deepEqual([...end.on], ['more-l'], 'scrolled to the end: only the left fades');
+  const hidden = nav(0, 0, 0); tabEdges(hidden);
+  assert.deepEqual([...hidden.on], [], 'a closed menu measures nothing and fades nothing');
 });
 
 test('a second-finger tap lets go of the search box, so the phone keyboard closes', () => {
