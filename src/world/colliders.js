@@ -4,7 +4,7 @@
 // its deck) up h metres. Queries say at what level they are asked, so a car on a
 // flyover and a car on the street beneath it never meet each other's walls.
 import { SpatialGrid, clamp } from '../core/math.js';
-import { PROP, PUMP_HW, PUMP_HD } from './citygen.js';
+import { PROP, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
 import { placeColliders } from './landmarks.js';
 
@@ -94,7 +94,12 @@ export class Colliders {
       const k = P.kind[i], x = P.x[i], z = P.z[i], rot = P.rot[i];
       if (k === PROP.LAMP || k === PROP.POLE) this.addCircle(x, z, 0.18, 8, P.y[i]);
       else if (k === PROP.MEDIAN_LAMP) this.addCircle(x, z, 0.3, 8, P.y[i]);
-      else if (k === PROP.STALL) this.addBox(x, z, 1.05, 0.85, rot, 2.2);
+      else if (k === PROP.STALL) {
+        this.addBox(x, z, 1.05, 0.85, rot, 2.2);
+        // Its bench, where chunks.js draws it (if it has one).
+        const side = city.stallBench(i), c = Math.cos(rot), s = Math.sin(rot), lx = side * BENCH.x;
+        if (side) this.addBox(x + lx * c + BENCH.z * s, z - lx * s + BENCH.z * c, BENCH.hw, BENCH.hd, rot, BENCH.h);
+      }
       else if (k === PROP.CART) this.addBox(x, z, 0.95, 0.6, rot, 1.2);
       else if (k === PROP.SHRINE) this.addBox(x, z, 0.75, 0.75, rot, 2.5);
       else if (k === PROP.VENDOR) this.addBox(x, z, 1.0, 0.75, rot, 1.2);

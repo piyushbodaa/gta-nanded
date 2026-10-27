@@ -6,7 +6,7 @@
 // that are a pixel or two at that distance.
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
-import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD } from './citygen.js';
+import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
@@ -1234,8 +1234,13 @@ function buildProp(ctx, i) {
       g.color(0x8d9ea4, 0); g.cbox(x - s * 0.5, 2.1, z - c * 0.5, 1.4, 0.08, 1.4, rot);
       g.color(0x7a5a3c, 0); g.cbox(x - s * 1.0, 0.9, z - c * 1.0, 1.0, 0.1, 0.22, rot);
       g.color(0xc0c4c6, 0); g.cyl(x - s * 0.95, 1.0, z - c * 0.95, 0.18, 0.3, 6);
-      // The bench stands along the stall's side: the stall is 1.8 m back from the road, so in front it would stand on it.
-      g.color(0x6d4c33, 0); g.cbox(x + c * 1.35 - s * 0.6, 0, z - s * 1.35 - c * 0.6, 0.2, 0.45, 0.75, rot);
+      // The bench stands beside the stall's back half, past the footpath (in front it would stand
+      // in the road, and along the stall's side across the walkers' line).
+      const bench = city.stallBench(i);
+      if (bench) {
+        const lx = bench * BENCH.x, lz = BENCH.z;
+        g.color(0x6d4c33, 0); g.cbox(x + lx * c + lz * s, 0, z - lx * s + lz * c, BENCH.hw, BENCH.h, BENCH.hd, rot);
+      }
       lightPool(pg, x - s * 1.2, z - c * 1.2, 4, 2.0);
       break;
     }

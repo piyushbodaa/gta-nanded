@@ -47,6 +47,10 @@ export const valleyDepth = d => (d > 14 ? 0 : d > 0 ? -3.2 * (1 - smoothstep(0, 
 // Paved footpath along the busy roads; buildings keep behind it.
 export const FOOTPATH_W = 1.9;
 export const WALK_Y = 0.2; // the top of a footpath: its kerb's height
+// A tea stall's bench, in the stall's frame (local -z toward the road; the stall's box is 1 x 0.8
+// m half-size and stands 1.8 m out from the kerb): beside the stall's back half, from 1.95 m out,
+// past a footpath and the walkers' line along it. `x` is how far to the side its middle stands.
+export const BENCH = { x: 1.35, z: 0.5, hw: 0.2, hd: 0.35, h: 0.45 };
 
 export class City {
   constructor(world, net) {
@@ -181,6 +185,38 @@ export class City {
       cache[i] = this._overlapsLots(L.x[i] + lz * s, L.z[i] + lz * c, L.hw[i], 0.15, L.rot[i], 0) ? 0 : 1;
     }
     return cache[i] === 1;
+  }
+
+  /**
+   * Which side of tea stall i its bench stands on: +1 (local +x), -1, or 0 for no bench. It goes
+   * where its whole seat is past the footpath of every street (by a junction or on a bend one
+   * side may reach another road, or its own), clear of the buildings and of any tree's trunk.
+   * Asked once the city is built, by the renderer and the colliders alike, so what you see is
+   * what you hit.
+   */
+  stallBench(i) {
+    const P = this.props, T = this.trees;
+    const cache = this._bench || (this._bench = new Int8Array(P.count).fill(2));
+    if (cache[i] !== 2) return cache[i];
+    const c = Math.cos(P.rot[i]), s = Math.sin(P.rot[i]);
+    const at = (lx, lz) => [P.x[i] + lx * c + lz * s, P.z[i] - lx * s + lz * c];
+    cache[i] = 0;
+    for (const side of [1, -1]) {
+      const seat = [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([a, b]) => {
+        const [x, z] = at(side * BENCH.x + a * BENCH.hw, BENCH.z + b * BENCH.hd);
+        return this.net.roadClearance(x, z, 10) >= FOOTPATH_W - 0.05;
+      });
+      const [x, z] = at(side * BENCH.x, BENCH.z);
+      if (!seat || this.builtAt(x, z, BENCH.hd)) continue;
+      const tree = this.lotGrid.query(x - 2, z - 2, x + 2, z + 2, id => {
+        if (id > -100000 || id <= -200000) return false;
+        const k = -100000 - id - 1, r = T.kind[k] === 2 ? 0.75 : T.kind[k] === 5 ? 0.6 : 0.32; // its trunk, as colliders.js stands it
+        const dx = T.x[k] - x, dz = T.z[k] - z;
+        return Math.abs(dx * c - dz * s) < BENCH.hw + r && Math.abs(dx * s + dz * c) < BENCH.hd + r;
+      });
+      if (!tree) { cache[i] = side; break; }
+    }
+    return cache[i];
   }
 
   /** True when (x, z) lies inside (or within `pad` of) a building lot or reserved landmark. */

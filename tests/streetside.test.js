@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { world } from './helpers.js';
-import { PROP, CHUNK, WALK_Y } from '../src/world/citygen.js';
+import { PROP, CHUNK, WALK_Y, FOOTPATH_W, BENCH } from '../src/world/citygen.js';
+import { Colliders } from '../src/world/colliders.js';
 import { ChunkManager } from '../src/world/chunks.js';
 import { obbOverlap, pointSegDist2 } from '../src/core/math.js';
 
@@ -69,6 +70,29 @@ test('no street lamp or electric pole stands in the lane of a road beside its ow
     }
   }
   assert.ok(n.side > 10000 && n.deck > 300 && n.median > 400, JSON.stringify(n));
+});
+
+test('a tea stall\'s bench stands past the footpath and its walkers, and is as solid as it looks', () => {
+  const { city, net } = world();
+  const P = city.props, C = new Colliders(city);
+  let stalls = 0, benches = 0;
+  for (let i = 0; i < P.count; i++) {
+    if (P.kind[i] !== PROP.STALL) continue;
+    stalls++;
+    const side = city.stallBench(i);
+    if (!side) continue;
+    benches++;
+    const c = Math.cos(P.rot[i]), s = Math.sin(P.rot[i]), at = (lx, lz) => [P.x[i] + lx * c + lz * s, P.z[i] - lx * s + lz * c];
+    // Every corner of the seat is past a footpath (1.9 m) of every street, so beyond the walkers' line
+    // (0.95 m out, or a sidestep round the stall toward the road) and out of every carriageway.
+    for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const [x, z] = at(side * BENCH.x + a * BENCH.hw, BENCH.z + b * BENCH.hd), clear = net.roadClearance(x, z, 10);
+      assert.ok(clear >= FOOTPATH_W - 0.05 - 1e-6, `stall ${i}'s bench ${clear.toFixed(2)} m from a road edge`);
+    }
+    // Drawn on the ground there (no footpath under it), and solid to someone on foot.
+    assert.ok(C.blocked(...at(side * BENCH.x, BENCH.z), 0.05), `stall ${i}'s bench has no collider`);
+  }
+  assert.ok(stalls > 200 && benches > stalls * 0.9, `${benches} benches at ${stalls} stalls`);
 });
 
 test('a compound wall runs into no other building, and no street tree stands in a wall or a shop platform', () => {
