@@ -230,8 +230,16 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
    title gives way below 720 px); if they still can't fit, the row scrolls sideways and fades where more wait. */
 @media (max-height: 500px) and (orientation: landscape) {
   .tab[data-pane="map"].on { grid-template-columns: 1fr minmax(180px, 34%); grid-template-rows: minmax(0, 1fr); }
-  .map-side { max-height: none; overflow: auto; }
+  /* The zoom, Me and Clear buttons sit in a row over the map's bottom-left corner, as in a phone's map app (in the
+     narrow side panel they took two rows), and the search box and results are tighter: the results list has
+     room for two places at least, from 568 x 320. */
+  .tab[data-pane="map"].on { position: relative; }
+  .map-actions { position: absolute; left: 8px; bottom: 8px; max-width: calc(66% - 30px); }
+  .map-actions button { padding: 7px 9px; font-size: 14px; }
+  .map-side { max-height: none; overflow: auto; gap: 6px; }
+  .map-side input { padding: 8px 12px; }
   .map-results { min-height: 0; }
+  .map-results button { padding: 6px 9px; }
   .pause-head { flex-wrap: nowrap; } .pause-head h2, .resume { flex: none; }
   .tabs { flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 2px; scroll-padding-inline: 28px; } /* the chosen tab stops clear of a fade */
   .tabs button { padding: 7px 6px; letter-spacing: .5px; }
