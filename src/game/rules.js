@@ -84,7 +84,7 @@ export function installRules(g) {
     g.hud.vehicleName(spec.name, `${spec.mr}${st ? ` · 📻 ${st.name}` : ''}`);
     g.audio.sfx('door');
     if (!g.save.data.seenDriveHelp && !g.missions.active) {
-      g.save.data.seenDriveHelp = true;
+      g.save.set('seenDriveHelp', true);
       g.hud.help(`${drivingHelp(g)}<br>${vehicleKeys(g)}`, 8);
     }
   };
@@ -186,8 +186,10 @@ export function installRules(g) {
   let skidT = 0, smokeT = 0, saveT = 0;
   g.hooks = [dt => {
     const P = g.player;
-    g.save.data.stats.playTime += dt;
-    if (P.vehicle) g.save.data.stats.distance += speedOf(P.vehicle) * dt;
+    // Through stat(), which marks the save dirty: the autosave below then writes them even on a
+    // long quiet drive where nothing else changes.
+    g.save.stat('playTime', dt);
+    if (P.vehicle) g.save.stat('distance', speedOf(P.vehicle) * dt);
     driveHunters(g, dt);
     g.jobs.update(dt);
     // Damage effects and wrecks.
@@ -322,14 +324,14 @@ export function installRules(g) {
 
   g.onPlayerDamage = () => {};
   g.onWantedChange = (level, before) => {
-    if (level > before) { g.audio.sfx('wanted'); if (before === 0 && !g.save.data.seenWantedHelp) { g.save.data.seenWantedHelp = true; g.hud.help(`You are <b>wanted</b>. Break line of sight and get out of the flashing search area on the radar to lose the police.${g.save.data.garage ? ' A respray at Anna\'s garage works too.' : ''}`, 8); } }
+    if (level > before) { g.audio.sfx('wanted'); if (before === 0 && !g.save.data.seenWantedHelp) { g.save.set('seenWantedHelp', true); g.hud.help(`You are <b>wanted</b>. Break line of sight and get out of the flashing search area on the radar to lose the police.${g.save.data.garage ? ' A respray at Anna\'s garage works too.' : ''}`, 8); } }
   };
   g.onEvaded = () => g.hud.toast('Lost them. <b>Wanted level cleared.</b>');
 
   g.onDistrict = name => {
     const d = g.save.data.districts;
     if (!g.started || d.includes(name)) return;
-    if (g.time < 3) { d.push(name); return; } // where you start doesn't count as a discovery
+    if (g.time < 3) { d.push(name); g.save.dirty(); return; } // where you start doesn't count as a discovery
     {
       d.push(name);
       g.addCash(50);

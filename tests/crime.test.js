@@ -107,7 +107,7 @@ function rulesGame() {
     city: { places: [], densityAt: () => 0.5 },
     audio: { sfx(name, k = 1) { if (name === 'explosion') g.boom = k; } },
     camera: { addShake() {} },
-    save: { cash: 1000, stat() {}, flush() {}, data: { stats: { playTime: 0, distance: 0 } } },
+    save: { cash: 1000, stat() {}, flush() {}, set(k, v) { this.data[k] = v; }, data: { stats: { playTime: 0, distance: 0 } } },
     effects: { sparks() {}, explosion() {}, fire() {}, smoke() {}, dust() {}, skid() {}, tyreSmoke() {}, splash() {} },
     missions: { active: null, fail(reason) { g.hud.big('MISSION FAILED', reason); g.missions.active = null; } },
     jobs: { update() {}, stop() {} },
@@ -233,4 +233,20 @@ test('a frozen player is not beaten up during a cutscene', () => {
   g.cutscene = false;
   g.pedAttacks({ h: { x: 0.5, z: 0, yaw: 0 }, cop: true }, 7);
   assert.ok(g.hurt);
+});
+
+test('the autosave keeps play time, distance and one-time tips, even on a quiet drive where nothing else changes', async () => {
+  const { Save } = await import('../src/game/save.js');
+  const store = new Map();
+  globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  const g = rulesGame();
+  g.save = new Save();
+  g.onWantedChange(1, 0); // the "you are wanted" tip, shown once ever
+  g.player.vehicle = jeep({ type: 'hatch', role: 'player', driver: null, vz: 10 });
+  for (let t = 0; t < 10.5; t += 1 / 60) g.hooks[0](1 / 60);
+  const saved = JSON.parse(store.get('gta-nanded-save-v2') ?? 'null');
+  assert.ok(saved, 'the 10 s autosave wrote, though no cash or crime changed');
+  assert.ok(saved.stats.playTime > 9.9 && saved.stats.distance > 99, `played ${saved.stats.playTime} s, drove ${saved.stats.distance} m`);
+  assert.equal(saved.seenWantedHelp, true);
+  assert.equal(saved.cash, 200);
 });
