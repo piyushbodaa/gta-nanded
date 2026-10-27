@@ -72,6 +72,7 @@ body.playing #welcome { display: none; }
 .objective b { color: #ffd23f; font-weight: 700; } .objective i { color: #cfd8dc; font-style: normal; font-size: .85em; }
 .subtitle { position: absolute; left: 50%; bottom: calc(66px + var(--safe-b)); transform: translateX(-50%); max-width: min(900px, 86vw); text-align: center; font: 500 21px/1.4 var(--body); color: #fff; text-shadow: var(--outline), 0 2px 12px #000; }
 .subtitle b { font-weight: 700; }
+.subtitle.cut { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; } /* hud.js sets how many lines, while a toast needs the room */
 .hud-stack { display: contents; }
 .bark { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font: 700 20px/1.2 var(--cond); color: #fffbe6; text-shadow: var(--outline); white-space: nowrap; }
 .bark.pop { animation: barkpop 2.6s ease forwards; }
@@ -156,7 +157,7 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
   .speedo b { font-size: 40px; }
   .help-box { font-size: 13px; max-width: 58vw; left: 0; right: 0; margin: 0 auto; width: fit-content; top: auto; bottom: calc(10px + var(--safe-b)); }
   .area-name { font-size: 24px; } .big-message strong { font-size: 44px; }
-  body.touch-ui .big-message { top: 46%; } /* under the middle column, not across it */
+  body.touch-ui .big-message { top: 46%; } /* under the middle column, not across it (hud.js moves it lower if the column is longer) */
   .timer { top: calc(90px + var(--safe-t)); font-size: 28px; }
   .toast { font-size: 13px; }
 }
@@ -230,8 +231,16 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
    title gives way below 720 px); if they still can't fit, the row scrolls sideways and fades where more wait. */
 @media (max-height: 500px) and (orientation: landscape) {
   .tab[data-pane="map"].on { grid-template-columns: 1fr minmax(180px, 34%); grid-template-rows: minmax(0, 1fr); }
-  .map-side { max-height: none; overflow: auto; }
+  /* The zoom, Me and Clear buttons sit in a row over the map's bottom-left corner, as in a phone's map app (in the
+     narrow side panel they took two rows), and the search box and results are tighter: the results list has
+     room for two places at least, from 568 x 320. */
+  .tab[data-pane="map"].on { position: relative; }
+  .map-actions { position: absolute; left: 8px; bottom: 8px; max-width: calc(66% - 30px); }
+  .map-actions button { padding: 7px 9px; font-size: 14px; }
+  .map-side { max-height: none; overflow: auto; gap: 6px; }
+  .map-side input { padding: 8px 12px; }
   .map-results { min-height: 0; }
+  .map-results button { padding: 6px 9px; }
   .pause-head { flex-wrap: nowrap; } .pause-head h2, .resume { flex: none; }
   .tabs { flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 2px; scroll-padding-inline: 28px; } /* the chosen tab stops clear of a fade */
   .tabs button { padding: 7px 6px; letter-spacing: .5px; }
@@ -276,8 +285,12 @@ body.touch-ui #photo-close { margin-left: auto; }
   body.touch-ui .speedo { bottom: calc(30% + 62px); }
 }
 /* The shortest phones: a shorter radar leaves room for the speedometer under it, and shorter pedals keep
-   EXIT and START JOB under the wanted stars. The middle column is narrowest here, so the help box and the
-   radio card are more compact: the first drive's help and its radio card both fit above the bottom edge. */
+   EXIT and START JOB under the wanted stars. The middle column is narrowest here (186 px at 568 x 320) and a
+   long objective and the first drive's help fill it nearly to the bottom, so: the help box is more compact
+   (and steps aside while a subtitle or toast would push the column off the screen, hud.js); the radio card is
+   one line, the station, without the DJ's line that took three more; and the vehicle's name, smaller, goes
+   down to the area name's place at the bottom, clear of the column. (hud.js keeps one of the two names when
+   both are up, and drops a name a long column reaches.) */
 @media (max-height: 340px) {
   .radar { height: 84px; }
   .tb.pedal { height: 76px; }
@@ -285,4 +298,16 @@ body.touch-ui #photo-close { margin-left: auto; }
   .help-box { padding: 8px 10px; }
   .radio-card strong { font-size: 20px; }
   .radio-card span { font-size: 12px; line-height: 1.25; }
+  body.touch-ui .radio-card strong { font-size: 19px; } /* one line in the 186 px column: the longest station is 187 px at 20 px */
+  body.touch-ui .radio-card span { display: none; }
+  body.touch-ui .vehicle-name { bottom: calc(10px + var(--safe-b)); }
+  body.touch-ui .vehicle-name strong { font-size: 22px; }
+  body.touch-ui .vehicle-name span { font-size: 13px; margin-top: 2px; }
+  /* A big card goes under the speedometer and a long column, down among the round buttons: centred on the
+     screen left of them (over the resting stick's faint ring), its line stays readable, not under DRIFT. */
+  body.touch-ui .big-message { top: 60%; right: calc(218px + var(--safe-r)); }
+  /* It is 350 px wide at 568 x 320, so its title stays on one line (hud.js makes a long one smaller to fit) and
+     a title card's line drops its wide letter-spacing: a card that wraps is too tall for its place here. */
+  body.touch-ui .big-message strong { white-space: nowrap; }
+  body.touch-ui .big-message.title span { font-size: 22px; letter-spacing: 2px; }
 }

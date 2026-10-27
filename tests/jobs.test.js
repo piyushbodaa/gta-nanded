@@ -96,3 +96,14 @@ test("a race checkpoint up on a flyover stands on its deck, where the GPS leads:
   jobs.update(4); // past the countdown
   assert.equal(shown[0].y, ys[0]);
 });
+
+test('a race starts with the siren off: on a phone its button waits for STOP JOB to go, so it could not be stopped', () => {
+  const g = fakeGame();
+  Object.assign(g.player.vehicle, { type: 'police', heading: 0, sirenOn: true });
+  const jobs = new Jobs(g);
+  const race = jobs.races[0];
+  Object.assign(g.player.vehicle, { x: race.start.x, z: race.start.z });
+  jobs._startRace(race);
+  assert.equal(jobs.active.kind, 'race');
+  assert.equal(g.player.vehicle.sirenOn, false);
+});

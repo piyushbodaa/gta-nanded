@@ -3,26 +3,31 @@ import assert from 'node:assert/strict';
 import { Hud, countCash } from '../src/ui/hud.js';
 import { keyName } from '../src/ui/controls.js';
 
-// Just enough DOM for the HUD: elements that count their writes.
+// Just enough DOM for the HUD: elements that count their writes. Layout is whatever a test says: an element's
+// `box` (top and bottom on the screen), and the middle column's bottom (`column.bottom()`, its children's parent).
+const column = { bottom: () => 0 };
 class FakeEl {
   constructor() {
-    this.hidden = true; this.writes = 0; this.html = ''; this.offsetWidth = 0;
-    this.style = { animation: '', setProperty() {} };
+    this.hidden = true; this.writes = 0; this.html = ''; this.offsetWidth = 0; this.offsetTop = 0; this.offsetHeight = 0;
+    this.box = { top: 0, bottom: 0 };
+    this.style = { animation: '', top: '', setProperty() {} };
     const classes = new Set();
     this.classList = { toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)), add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c) };
-    this.parentElement = { classList: this.classList };
+    this.parentElement = { classList: this.classList, getBoundingClientRect: () => ({ bottom: column.bottom() }) };
   }
   get innerHTML() { return this.html; }
   set innerHTML(v) { this.html = String(v); this.writes++; }
   get textContent() { return this.html; }
   set textContent(v) { this.html = String(v); this.writes++; }
   getContext() { return {}; }
-  getBoundingClientRect() { return { width: 100, height: 100 }; }
+  getBoundingClientRect() { return { width: 100, height: 100, ...this.box }; }
+  querySelector(tag) { const m = this.html.match(new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`)); return m && { textContent: m[1] }; }
 }
 const els = {};
 globalThis.document = { getElementById: id => (els[id] ??= new FakeEl()) };
 globalThis.addEventListener ??= () => {};
 globalThis.requestAnimationFrame ??= () => 0;
+globalThis.innerHeight = 320;
 
 function fakeGame(mode = 'keyboard') {
   return {
@@ -40,6 +45,7 @@ function fakeGame(mode = 'keyboard') {
 }
 function hudFor(g) {
   for (const k in els) delete els[k];
+  column.bottom = () => 0;
   const hud = new Hud(g);
   hud.radar = { draw() {}, resize() {} };
   return hud;
@@ -105,6 +111,227 @@ test('on a touch screen the help box waits for a big card, then shows for its fu
   k.big('MISSION PASSED', '₹500', 'passed', 5);
   k.help('Corner help', 6);
   assert.equal(els['hud-help'].hidden, false);
+});
+
+// The middle column at 568 x 320 as measured in the game: it starts 56 px down, and what each part of it takes
+// (a 3-line objective, a 5-line subtitle, the first drive's 6-line help, a 2-line toast, the 1-line station card).
+function columnAt568() {
+  const tall = { objective: 61, subtitle: 105, help: 132, toast: 50, radio: 20 };
+  column.bottom = () => Object.entries(tall).reduce((y, [k, h]) => (els[`hud-${k}`].hidden ? y : y + h + 6), 56);
+}
+
+test('on the shortest phones the help box steps aside while a subtitle, toast or station card would push the column off the screen', () => {
+  const g = fakeGame('touch'), hud = hudFor(g), help = els['hud-help'];
+  columnAt568();
+  hud.objective("Drive to <b>Kaka Savkar's office</b> in the Old Mondha lanes.");
+  hud.help('Hold GAS to drive and steer with your left thumb.', 9);
+  assert.equal(help.hidden, false, 'the objective and the help fit');
+  hud.update(2);
+  hud.subtitle('PAKYA', 'Savkar lends to half the district. Farmers, students, auto-wale. Nobody ever finishes paying.', 4.5);
+  assert.equal(help.hidden, true, 'under the subtitle it ran off the bottom');
+  for (let t = 0; t < 4.6; t += 0.1) hud.update(0.1);
+  assert.equal(help.hidden, false, 'back when the subtitle goes');
+  assert.ok(Math.abs(hud.timers.help - 7) < 0.25, `with the time it had left: ${hud.timers.help}`);
+  // The next line of dialogue: aside again; the dialogue ends: back.
+  hud.subtitle('PAKYA', 'No licence, no receipts.', 4.5);
+  assert.equal(help.hidden, true);
+  hud.clearSubtitle();
+  assert.equal(help.hidden, false);
+  // A toast with the station card under it: aside while the toast is up; the station card alone fits.
+  hud.toast('New neighbourhood: Doctor Lane · 1/53 · +₹50');
+  els['hud-radio'].hidden = false;
+  hud.update(0.1);
+  assert.equal(help.hidden, true);
+  for (let t = 0; t < 3.1; t += 0.1) hud.update(0.1);
+  assert.equal(els['hud-toast'].hidden, true);
+  assert.equal(help.hidden, false, 'the objective, help and station card fit');
+  // A big card still comes first: help that would come back under it waits for it.
+  hud.subtitle('PAKYA', 'Careful, bhau.', 2);
+  hud.big('WANTED', '', 'wanted', 3);
+  for (let t = 0; t < 2.1; t += 0.1) hud.update(0.1);
+  assert.equal(help.hidden, true, 'the subtitle went, the card is still up');
+  for (let t = 0; t < 1.1; t += 0.1) hud.update(0.1);
+  assert.equal(help.hidden, false);
+  // Where the column has room (or with a keyboard, the help in its corner) nothing steps aside.
+  column.bottom = () => 231; // 800 x 360: objective, subtitle and help
+  hud.subtitle('PAKYA', 'Careful, bhau.', 4);
+  assert.equal(help.hidden, false);
+  const k = hudFor(fakeGame('keyboard'));
+  columnAt568();
+  k.help('Corner help', 6); k.subtitle('PAKYA', 'Careful, bhau.', 4);
+  assert.equal(els['hud-help'].hidden, false);
+});
+
+test('on the shortest phones a long line of dialogue is cut short while a toast or station card needs its room, then comes back whole', () => {
+  const g = fakeGame('touch'), hud = hudFor(g), sub = els['hud-subtitle'], help = els['hud-help'], radio = els['hud-radio'];
+  globalThis.getComputedStyle = () => ({ lineHeight: '21px' });
+  // 568 x 320, c7: a 5-line objective and Kadam's NDPS call (7 lines of 21 px) fill the column to 316 px down.
+  const lines = () => Number(sub.style.webkitLineClamp) || 7;
+  const tall = { objective: () => 101, subtitle: () => lines() * 21, help: () => 110, toast: () => 50, radio: () => 19 };
+  column.bottom = () => Object.entries(tall).reduce((y, [k, h]) => (els[`hud-${k}`].hidden ? y : y + h() + 6), 56);
+  Object.defineProperty(sub, 'offsetHeight', { get: tall.subtitle });
+  const fits = what => assert.ok(column.bottom() <= 316, `${what}: the column ends ${column.bottom()} px down`);
+  hud.objective("Head west for Taroda Naka, through the <b>old city</b>. Keep Tiger's SUV off the tempo.");
+  hud.subtitle('Inspector Kadam (phone)', 'Two hundred kilos is an NDPS case: ten years for the driver. Bring it to Vazirabad Police Station and walk away, and I forget your face.', 8);
+  assert.equal(lines(), 7, 'whole while it fits');
+  // 📻 tapped: the station card ran off the bottom. Now the line gives it room.
+  radio.innerHTML = '<strong>📻 Lavani Express 98.3</strong>'; radio.hidden = false;
+  hud.update(0.1);
+  fits('station card');
+  assert.equal(lines(), 5);
+  assert.ok(sub.classList.contains('cut'));
+  // A new neighbourhood's toast as well, and the first drive's help: the help waits, the line gives more room.
+  hud.toast('New neighbourhood: Doctor Lane · 1/53 · +₹50');
+  hud.help('Hold GAS to drive and steer with your left thumb.', 9);
+  fits('toast and station card');
+  assert.equal(help.hidden, true);
+  assert.equal(lines(), 3);
+  // The toast goes: the line takes back what it can. The station card goes: the line is whole again.
+  hud.update(3.1);
+  fits('station card again');
+  assert.equal(lines(), 5);
+  radio.hidden = true;
+  hud.update(0.1);
+  assert.equal(lines(), 7);
+  assert.equal(sub.classList.contains('cut'), false);
+  assert.equal(help.hidden, true, 'the help still waits for the line to end');
+  hud.clearSubtitle();
+  assert.equal(help.hidden, false);
+  // A keyboard player's subtitle is never cut (no middle column).
+  const k = hudFor(fakeGame('keyboard'));
+  columnAt568();
+  k.subtitle('KADAM_PH', 'Until then, stay alive.', 4); k.toast('New neighbourhood: Doctor Lane');
+  assert.equal(els['hud-subtitle'].classList.contains('cut'), false);
+  delete globalThis.getComputedStyle;
+});
+
+test("on a phone the station card that only repeats the vehicle card's station goes; another station's replaces the vehicle card", () => {
+  const g = fakeGame('touch'), hud = hudFor(g), radio = els['hud-radio'], vehicle = els['hud-vehicle'];
+  vehicle.box = { top: 249, bottom: 302 };
+  hud.vehicleName('Nanded Auto', 'रिक्षा · 📻 Radio Godavari 92.7');
+  const station = (name, line) => { const r = els['hud-radio']; r.innerHTML = `<strong style="color:#ffcf3f">📻 ${name}</strong><span>${line}</span>`; r.hidden = false; };
+  // The radio's DJ card as the first song starts (at 800 x 360 the column's end met the vehicle's name).
+  station('Radio Godavari 92.7', 'Next up on Radio Godavari 92.7: a brand-new track, made in Nanded.');
+  hud.update(0.1);
+  assert.equal(radio.hidden, true, 'the vehicle card names the station already');
+  assert.equal(vehicle.hidden, false);
+  // 📻 tapped: another station. Now the vehicle card is out of date.
+  station('Lavani Express 98.3', 'ढोलकी, हार्मोनियम आणि ठसका');
+  hud.update(0.1);
+  assert.equal(radio.hidden, false);
+  assert.equal(vehicle.hidden, true);
+  assert.equal(hud.timers.vehicle, 0);
+  // With the vehicle card gone, a station card stays; with a keyboard, both do (they are far apart).
+  station('Lavani Express 98.3', 'You are tuned to Lavani Express 98.3.');
+  hud.update(0.1);
+  assert.equal(radio.hidden, false);
+  // 568 x 320, getting in for the first drive: the station card comes up, and in the same frame the first drive's
+  // help, before the HUD's own update. The station card goes first, so the column (objective and help) stays
+  // clear of the vehicle's name at the bottom instead of reaching it and dropping it.
+  const p = hudFor(fakeGame('touch'));
+  columnAt568();
+  els['hud-vehicle'].box = { top: 270, bottom: 310 };
+  p.objective("Drive to <b>Kaka Savkar's office</b> in the Old Mondha lanes.");
+  p.vehicleName('Nanded Auto', 'रिक्षा · 📻 Radio Godavari 92.7');
+  station('Radio Godavari 92.7', 'Radio Godavari 92.7 — chai cutting, volume full.');
+  p.help('Hold GAS to drive and steer with your left thumb.', 9);
+  assert.equal(els['hud-radio'].hidden, true);
+  assert.equal(els['hud-vehicle'].hidden, false);
+  assert.equal(els['hud-help'].hidden, false);
+  const k = hudFor(fakeGame('keyboard'));
+  els['hud-vehicle'].box = { top: 249, bottom: 302 };
+  k.vehicleName('Nanded Auto', 'रिक्षा · 📻 Radio Godavari 92.7');
+  station('Radio Godavari 92.7', 'Radio Godavari 92.7 — chai cutting, volume full.');
+  k.update(0.1);
+  assert.equal(els['hud-radio'].hidden, false);
+  assert.equal(els['hud-vehicle'].hidden, false);
+});
+
+test('on a phone a big card goes under the middle column, and further down when the column grows under it', () => {
+  const g = fakeGame('touch'), hud = hudFor(g), big = els['hud-big'];
+  // 568 x 320: the card's place is 46% down (147 px), and a WANTED card is 101 px tall.
+  big.offsetTop = 147; big.offsetHeight = 101;
+  column.bottom = () => 186; // a 3-line objective and a 3-line subtitle
+  hud.big('WANTED', 'A student saw you take it', 'wanted', 2.5);
+  assert.equal(big.style.top, '192px');
+  // The next line of dialogue is longer: the card moves down, no further than keeps it on the screen.
+  big.offsetTop = 192; column.bottom = () => 228;
+  hud.subtitle('BUNTY', 'Their fathers will buy new ones. Yours can\'t buy back his land. Ride, before the watchman wakes up.', 5);
+  assert.equal(big.style.top, '211px');
+  // A short column leaves it in its place; so does a keyboard (no middle column).
+  big.offsetTop = 166; column.bottom = () => 145;
+  hud.big('MISSION PASSED', '₹500', 'passed', 4.5);
+  assert.equal(big.style.top, '');
+  const k = hudFor(fakeGame('keyboard'));
+  els['hud-big'].offsetTop = 147; column.bottom = () => 186;
+  k.big('WANTED', '', 'wanted', 2.5);
+  assert.equal(els['hud-big'].style.top, '');
+});
+
+test('on the shortest phones a big card never runs off the bottom, and a long title shrinks to stay on one line', () => {
+  const g = fakeGame('touch'), hud = hudFor(g), big = els['hud-big'];
+  // 568 x 320: the card's place is 60% down (192 px). A card whose line wraps (the c7 pass card, a mission
+  // failed) is 120 px tall there, and ran 312 px down; a 2-line title made the respray card 135 px, past 320.
+  big.offsetTop = 192; big.offsetHeight = 135;
+  column.bottom = () => 76; // a 1-line objective
+  hud.big('MISSION FAILED', 'The tempo is wrecked and the load is all over the road.', 'failed', 5);
+  assert.equal(big.style.top, '177px', 'moved up as far as it has to');
+  // Under a long column it moves down only as far as the screen allows, as before.
+  big.offsetTop = 192; big.offsetHeight = 101; column.bottom = () => 228;
+  hud.big('WANTED', 'A student saw you take it', 'wanted', 2.5);
+  assert.equal(big.style.top, '211px');
+  // The title is kept to one line in the 350 px card (game.css): 'NEW COLOUR, NEW LIFE' is 410 px at 44 px.
+  const title = { style: {}, clientWidth: 350, get scrollWidth() { return Math.round(410 * this.size() / 44); }, size() { return parseFloat(this.style.fontSize || '44px'); } };
+  globalThis.getComputedStyle = el => ({ fontSize: `${el.size()}px` });
+  big.querySelector = () => title;
+  hud.big('NEW COLOUR, NEW LIFE', "Anna's Rang Garage · −₹500", 'passed', 3);
+  assert.ok(title.scrollWidth <= title.clientWidth, `${title.style.fontSize} is ${title.scrollWidth} px wide`);
+  assert.ok(title.size() >= 34, `no smaller than it has to be: ${title.style.fontSize}`);
+  assert.equal(title.style.whiteSpace, undefined);
+  // One that can't fit even small wraps after all.
+  const long = { ...title, style: {}, get scrollWidth() { return Math.round(900 * this.size() / 44); } };
+  big.querySelector = () => long;
+  hud.big('A TITLE FAR TOO LONG FOR ANY PHONE', '', 'title', 3);
+  assert.equal(long.style.whiteSpace, 'normal');
+  delete big.querySelector; delete globalThis.getComputedStyle;
+});
+
+test('on a phone the area and vehicle names keep the newer where they meet; a big card and the middle column beat both', () => {
+  const g = fakeGame('touch'), hud = hudFor(g), area = els['hud-area'], vehicle = els['hud-vehicle'], big = els['hud-big'];
+  // 568 x 320: both names at the bottom of the screen.
+  area.box = { top: 284, bottom: 308 }; vehicle.box = { top: 270, bottom: 310 };
+  hud.vehicleName('Nanded Auto', 'रिक्षा');
+  hud.area('Shivaji Nagar');
+  assert.equal(vehicle.hidden, true);
+  assert.equal(area.hidden, false);
+  hud.vehicleName('Bike', 'बाईक');
+  assert.equal(area.hidden, true);
+  assert.equal(hud.timers.area, 0);
+  assert.equal(vehicle.hidden, false);
+  // A big card reaching down there: the name under it goes, and one that comes while the card is up doesn't show.
+  big.box = { top: 192, bottom: 293 }; big.offsetTop = 192;
+  hud.big('WANTED', '', 'wanted', 2.5);
+  assert.equal(vehicle.hidden, true);
+  hud.area('Vazirabad');
+  assert.equal(area.hidden, true);
+  // Bigger phones: the names are apart, and both stay.
+  hud.update(3);
+  vehicle.box = { top: 249, bottom: 302 }; area.box = { top: 324, bottom: 348 };
+  hud.vehicleName('Bike', 'बाईक'); hud.area('Taroda Khurd');
+  assert.equal(vehicle.hidden, false);
+  assert.equal(area.hidden, false);
+  // The middle column reaching down to a name (a new district's toast under the first drive's help, at
+  // 568 x 320): the name goes, the column stays whole.
+  hud.update(5);
+  area.box = { top: 284, bottom: 308 };
+  hud.area('Doctor Lane');
+  column.bottom = () => 311;
+  hud.toast('New neighbourhood: Doctor Lane · 1/53 · +₹50');
+  assert.equal(area.hidden, true);
+  assert.equal(els['hud-toast'].hidden, false);
+  // A name that comes while the column is that long doesn't show.
+  hud.vehicleName('Bike', 'बाईक');
+  assert.equal(vehicle.hidden, true);
 });
 
 test('a big card reads as a sentence and a second cash change restarts its animation', () => {

@@ -253,6 +253,9 @@ export class Jobs {
   }
   _startRace(def) {
     const g = this.game, v = g.player.vehicle;
+    // A race is run with the siren off: on a phone the SIREN button gives way to STOP JOB until it ends, so a
+    // siren left on would wail all race with no button to stop it.
+    v.sirenOn = false;
     const rivals = [];
     const types = ['hatch', 'bike', 'sedan'];
     for (let i = 0; i < 3; i++) {
