@@ -245,7 +245,7 @@ export const STORY = [
         ['ANNA', 'Hm. Leave it with me. And listen: police on your tail, drive straight into my garage. New colour, new plates, no questions.'],
       ]),
       S.call(c => {
-        c.g.save.data.garage = true; c.g.save.flush();
+        c.g.save.set('garage', true); c.g.save.flush();
         c.g.police.clear();
         // Anna keeps the bike, even if you hopped back on while he talked.
         if (c.g.player.vehicle === c.ent.bike1) c.g.player.leaveVehicle(true);

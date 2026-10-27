@@ -236,25 +236,30 @@ test('a car stalled across the middle of the lane is passed on the road, on its 
 
 test('a scooter nosed onto the footpath is passed by cars and buses in the kerb lane, clear of its tail', () => {
   const { net, city } = world();
-  // A wide two-way road: its kerb lane runs close by the two-wheelers parked along it.
-  const road = street(net, city, 11.5, 13, 160), mid = net.length[road] / 2, w = net.width[road];
-  for (const type of ['sedan', 'bus']) {
-    const p = net.pointAt(road, mid, {});
-    const { g, traffic } = streets(p.x, p.z);
-    g.quality.settings.traffic = 0;
-    // As Parked leaves one: just off the left kerb, nosed in at an angle, its tail out over the road.
-    const off = w / 2 + 0.55;
-    const scooter = g.vehicles.spawn('scooter', p.x + p.dz * off, p.z - p.dx * off, Math.atan2(p.dx, p.dz) + 1.2, { role: 'parked' });
-    const car = driving(g, traffic, type, road, 1, mid - 40);
-    let hit = false, slowest = Infinity;
-    run(g, traffic, 10, () => {
-      hit ||= touching(car, scooter);
-      slowest = Math.min(slowest, car.ai.speed);
-      return car.ai.road === road && car.ai.s < mid + 8;
-    });
-    assert.ok(car.ai.road !== road || car.ai.s >= mid + 8, `the ${type} got past (s ${car.ai.s.toFixed(1)})`);
-    assert.ok(!hit, `the ${type} never touched it`);
-    assert.ok(slowest > 5, `the ${type} kept going (${slowest.toFixed(1)} m/s)`);
+  // Two-way roads, wide and 6 m narrow, and a 10 m one-way carriageway: their kerb lanes run close
+  // by the two-wheelers parked along them.
+  const oneway = net.oneway.findIndex((ow, r) => ow && !net.bridge[r] && !net.raised[r] && net.width[r] >= 10 && net.width[r] < 10.5 && net.length[r] >= 160 && !city.bumps.bumps.some(b => b.road === r));
+  for (const road of [street(net, city, 11.5, 13, 160), street(net, city, 6, 6.5, 160), oneway]) {
+    assert.ok(road >= 0);
+    const mid = net.length[road] / 2, w = net.width[road], side = net.kerbSide(road) || 1;
+    for (const type of ['sedan', 'bus']) {
+      const p = net.pointAt(road, mid, {});
+      const { g, traffic } = streets(p.x, p.z);
+      g.quality.settings.traffic = 0;
+      // As Parked leaves one: just off the kerb on the traffic's left, nosed in at an angle, its tail out over the road.
+      const off = (w / 2 + 0.55) * side, heading = Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI) + side * 1.2;
+      const scooter = g.vehicles.spawn('scooter', p.x + p.dz * off, p.z - p.dx * off, heading, { role: 'parked' });
+      const car = driving(g, traffic, type, road, side, mid - 40);
+      let hit = false, slowest = Infinity;
+      run(g, traffic, 10, () => {
+        hit ||= touching(car, scooter);
+        slowest = Math.min(slowest, car.ai.speed);
+        return car.ai.road === road && car.ai.s < mid + 8;
+      });
+      assert.ok(car.ai.road !== road || car.ai.s >= mid + 8, `road ${road}, ${w} m: the ${type} got past (s ${car.ai.s.toFixed(1)})`);
+      assert.ok(!hit, `road ${road}, ${w} m: the ${type} never touched it`);
+      assert.ok(slowest > 5, `road ${road}, ${w} m: the ${type} kept going (${slowest.toFixed(1)} m/s)`);
+    }
   }
 });
 
@@ -354,7 +359,10 @@ test('a bike waits for a cow sitting across a narrow street, and rides by one st
   }
 });
 
-test('traffic stops at the stop line on red, whichever way it drives the road', () => {
+// The zebra at a crossing runs from 0.8 to 3.8 m out from the junction's edge (chunks.js).
+const ZEBRA_OUT = 3.8;
+
+test('traffic stops at the stop line on red, whichever way it drives the road, its nose short of the zebra', () => {
   const { net, city } = world();
   const { g, traffic } = streets(0, 0);
   g.quality.settings.traffic = 0;
@@ -365,21 +373,158 @@ test('traffic stops at the stop line on red, whichever way it drives the road', 
       const len = net.length[road], line = net.trimStart(road);
       if (net.ra[road] !== j || net.rb[road] === j || !net.canTravel(road, -1) || traffic._link(sig.junctions, road)) continue;
       if (line - net.trimEnd(road) < 2.5 || len < 70 || city.bumps.bumps.some(b => b.road === road && b.s < line + 50)) continue;
-      // Just as the light turns red.
+      // Just as the light turns red: a bike, a car at a main road's speed, and a bus, 40 m out.
       let t = 0;
       while (!(traffic.signalState(j, road, t) === 'red' && traffic.signalState(j, road, t - 0.1) === 'amber')) t += 0.1;
-      g.time = t;
-      g.vehicles.list.length = 0; traffic.cars.length = 0;
-      const car = driving(g, traffic, 'sedan', road, -1, len - line - 40);
-      g.player.pos = { x: car.x, z: car.z };
-      run(g, traffic, 10.5);
-      // Measured from the crossing: short of its stop line, as the pole stands.
-      const fromJ = len - car.ai.s;
-      assert.ok(car.ai.speed < 0.3 && fromJ > line + 0.5 && fromJ < line + 4, `road ${road} into junction ${j}: stopped ${fromJ.toFixed(1)} m out, stop line ${line.toFixed(1)} m`);
+      for (const [type, speed] of [['bike', 12], ['sedan', 17], ['bus', 12]]) {
+        g.time = t;
+        g.vehicles.list.length = 0; traffic.cars.length = 0;
+        const car = driving(g, traffic, type, road, -1, len - line - 40, { speed, cruise: speed });
+        g.player.pos = { x: car.x, z: car.z };
+        run(g, traffic, 10.5);
+        // Measured from the crossing: its nose short of the zebra, not far back from it.
+        const nose = len - car.ai.s - car.hd - line;
+        assert.ok(car.ai.speed < 0.3 && nose > ZEBRA_OUT && nose < ZEBRA_OUT + 1.5, `road ${road} into junction ${j}: ${type} stopped with its nose ${nose.toFixed(1)} m out`);
+      }
       checked++;
     }
   }
   assert.ok(checked >= 4, `checked ${checked} approaches`);
+});
+
+test('on amber a car stops short of the zebra if it can, and goes on through if it cannot; it never stops in the crossing', () => {
+  const { net, city } = world();
+  const { g, traffic } = streets(0, 0);
+  g.quality.settings.traffic = 0;
+  let checked = 0, stopped = 0, went = 0;
+  for (const [j, sig] of traffic.signals) {
+    for (const road of net.jRoads[j]) {
+      const dir = net.rb[road] === j ? 1 : -1, len = net.length[road];
+      if (net.ra[road] === net.rb[road] || !net.canTravel(road, dir) || traffic._link(sig.junctions, road)) continue;
+      const end = len - (dir > 0 ? net.trimEnd(road) : net.trimStart(road));
+      if (end - (dir > 0 ? net.trimStart(road) : net.trimEnd(road)) < 60 || city.bumps.bumps.some(b => b.road === road && Math.abs((dir > 0 ? b.s : len - b.s) - end) < 50)) continue;
+      // Just as the light turns amber, at the speed traffic comes up to a crossing, from close in to well back.
+      let t = 0;
+      while (!(traffic.signalState(j, road, t) === 'amber' && traffic.signalState(j, road, t - 0.1) === 'green')) t += 0.1;
+      for (const type of ['hatch', 'bus']) for (let out = 1; out <= 25; out += 3) {
+        g.time = t;
+        g.vehicles.list.length = 0; traffic.cars.length = 0;
+        const toEnd = out + createBody(type, 0, 0, 0).hd, speed = 5 + toEnd * 0.45;
+        const car = driving(g, traffic, type, road, dir, end - toEnd, { speed, cruise: 14 });
+        g.player.pos = { x: car.x, z: car.z };
+        run(g, traffic, 6, () => !(car.ai.turn || car.ai.road !== road));
+        if (car.ai.turn || car.ai.road !== road) { went++; continue; }
+        const nose = end - car.ai.s - car.hd;
+        assert.ok(car.ai.speed < 0.3 && nose > ZEBRA_OUT, `road ${road} into junction ${j}: a ${type} ${out} m out on amber stopped with its nose ${nose.toFixed(1)} m out`);
+        stopped++;
+      }
+      if (++checked >= 12) break;
+    }
+    if (checked >= 12) break;
+  }
+  assert.ok(checked >= 6 && stopped > 10 && went > 10, `${checked} approaches: ${stopped} stopped, ${went} went through`);
+});
+
+test('a car that went on through amber and was held up over the line goes on, instead of standing on the zebra through the red', () => {
+  const { net } = world();
+  const { g, traffic } = streets(0, 0);
+  g.quality.settings.traffic = 0;
+  let checked = 0;
+  for (const [j, sig] of traffic.signals) {
+    for (const road of net.jRoads[j]) {
+      const dir = net.rb[road] === j ? 1 : -1, len = net.length[road];
+      if (net.ra[road] === net.rb[road] || !net.canTravel(road, dir) || traffic._link(sig.junctions, road)) continue;
+      const end = len - (dir > 0 ? net.trimEnd(road) : net.trimStart(road));
+      if (end - (dir > 0 ? net.trimStart(road) : net.trimEnd(road)) < 30) continue;
+      // As the light turns red: crawling over the zebra, its nose a metre short of the crossing,
+      // after whoever was ahead held it up there.
+      let t = 0;
+      while (!(traffic.signalState(j, road, t) === 'red' && traffic.signalState(j, road, t - 0.1) === 'amber')) t += 0.1;
+      g.time = t;
+      g.vehicles.list.length = 0; traffic.cars.length = 0;
+      const car = driving(g, traffic, 'hatch', road, dir, end - createBody('hatch', 0, 0, 0).hd - 1, { speed: 0.5, goOn: j });
+      g.player.pos = { x: car.x, z: car.z };
+      run(g, traffic, 4, () => !(car.ai.turn || car.ai.road !== road));
+      assert.ok(car.ai.turn || car.ai.road !== road, `road ${road} into junction ${j}: it stood on the zebra through the red`);
+      if (++checked >= 8) break;
+    }
+    if (checked >= 8) break;
+  }
+  assert.ok(checked >= 8, `checked ${checked} approaches`);
+});
+
+test('traffic never appears where it could not stop for a red or amber light: none stands on the zebra or drives into the crossing', () => {
+  const { net } = world();
+  const { g, traffic } = streets(0, 0);
+  g.quality.settings.traffic = 0;
+  let watched = 0;
+  for (const sig of new Set(traffic.signals.values())) {
+    const j0 = sig.junctions[0];
+    g.player.pos = { x: net.jx[j0], z: net.jz[j0] };
+    // Through the whole cycle, a crowd of cars appearing around the crossing, watched for 4 s.
+    for (let t = 0; t < 22; t += 2.75) {
+      g.time = t;
+      g.vehicles.list.length = 0; traffic.cars.length = 0;
+      for (let k = 0; k < 60; k++) traffic._spawnOne(g.player.pos, 0, 45);
+      // Those that appeared on a road into the crossing with the light against them, until it changes.
+      const seen = [];
+      for (const car of traffic.cars) {
+        const { road, dir } = car.ai, j = dir > 0 ? net.rb[road] : net.ra[road];
+        if (!sig.junctions.includes(j) || traffic.signalState(j, road, t) === 'green') continue;
+        const len = net.length[road], end = len - (dir > 0 ? net.trimEnd(road) : net.trimStart(road));
+        // On a road too short to hold it short of the zebra, it waits with its tail clear of the junction behind.
+        if (net.length[road] - net.trimStart(road) - net.trimEnd(road) < 2 * car.hd + ZEBRA_OUT + 0.5) continue;
+        seen.push({ car, road, j, end, light: traffic.signalState(j, road, t) });
+      }
+      let ran = null;
+      run(g, traffic, 4, () => {
+        for (const w of seen) if (!ran && traffic.signalState(w.j, w.road, g.time) !== 'green' && (w.car.ai.turn || w.car.ai.road !== w.road)) ran = w;
+      });
+      for (const w of seen) {
+        if (traffic.signalState(w.j, w.road, g.time) === 'green') continue;
+        watched++;
+        assert.ok(!ran, `road ${ran?.road} into junction ${ran?.j}: a ${ran?.car.type} that appeared on ${ran?.light} drove into the crossing`);
+        const nose = w.end - w.car.ai.s - w.car.hd;
+        assert.ok(!(w.car.ai.speed < 0.3 && nose < ZEBRA_OUT), `road ${w.road} into junction ${w.j}: a ${w.car.type} that appeared on ${w.light} stands with its nose ${nose.toFixed(1)} m out`);
+      }
+    }
+  }
+  assert.ok(watched > 200, `watched ${watched} cars`);
+});
+
+test('turning onto a short road with a red light at its far end, a car slows in the turn and stops short of the zebra', () => {
+  const { net, city } = world();
+  const { g, traffic } = streets(0, 0);
+  g.quality.settings.traffic = 0;
+  let checked = 0;
+  for (const [j, sig] of traffic.signals) {
+    for (const road of net.jRoads[j]) {
+      // A link of 8-11 m of lane between two junctions, the far one signalled.
+      const dir = net.rb[road] === j ? 1 : -1, len = net.length[road], lane = len - net.trimStart(road) - net.trimEnd(road);
+      if (net.ra[road] === net.rb[road] || !net.canTravel(road, dir) || traffic._link(sig.junctions, road)) continue;
+      if (lane < 8 || lane > 11 || city.bumps.bumps.some(b => b.road === road)) continue;
+      const k = dir > 0 ? net.ra[road] : net.rb[road];
+      const from = net.jRoads[k].find(r => r !== road && net.ra[r] !== net.rb[r] && !net.bridge[r] && net.canTravel(r, net.rb[r] === k ? 1 : -1));
+      if (from === undefined) continue;
+      // A hatch at the end of a road into the near junction, taking the turn onto the link.
+      const fdir = net.rb[from] === k ? 1 : -1, fend = net.length[from] - (fdir > 0 ? net.trimEnd(from) : net.trimStart(from));
+      g.vehicles.list.length = 0; traffic.cars.length = 0;
+      const car = driving(g, traffic, 'hatch', from, fdir, fend, { speed: 6, cruise: 14 });
+      let onto = false;
+      for (let t = 0; t < 40 && !onto; t += 1 / 3) { g.time = t; car.ai.turn = null; onto = traffic._chooseTurn(car, k) && car.ai.turn.road === road; }
+      if (!onto) continue;
+      // The light ahead has just turned red.
+      let t = 0;
+      while (!(traffic.signalState(j, road, t) === 'red' && traffic.signalState(j, road, t - 0.1) === 'amber')) t += 0.1;
+      g.time = t; g.player.pos = { x: car.x, z: car.z };
+      run(g, traffic, 8);
+      const nose = len - (dir > 0 ? net.trimEnd(road) : net.trimStart(road)) - car.ai.s - car.hd;
+      assert.ok(car.ai.road === road && car.ai.speed < 0.3 && nose > ZEBRA_OUT, `road ${road} into junction ${j}: stopped with its nose ${nose.toFixed(1)} m out`);
+      if (++checked >= 6) break;
+    }
+    if (checked >= 6) break;
+  }
+  assert.ok(checked >= 6, `checked ${checked} links`);
 });
 
 test('cars through busy chowks keep moving: each turn starts at its own road\'s end, with no jumps, and nobody waits for ever', () => {

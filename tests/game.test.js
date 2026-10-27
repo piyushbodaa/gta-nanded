@@ -12,7 +12,7 @@ function fakeGame() {
     time: 0, hud, controls: new Map(), cutscene: false,
     player: { pos: { x: 0, z: 0 }, x: 0, z: 0, vehicle: null, state: 'foot', speed: 0 },
     vehicles: { list: [] }, peds: { list: [] }, police: { level: 0, setLevel() {}, lock: false },
-    save: { done: id => false, complete() {}, flush() {}, data: { stamps: [] } }, addCash() {},
+    save: { done: id => false, complete() {}, flush() {}, set(k, v) { this.data[k] = v; }, data: { stamps: [] } }, addCash() {},
     camera: { cinematic: null, playShot() {}, endShot() {} }, effects: { markers: { set() {} } },
     net: { route: () => null }, onWantedChange() {},
   };
