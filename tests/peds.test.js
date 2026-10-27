@@ -275,6 +275,50 @@ test('a car throws people off to its side, along the car\'s side', () => {
     run(peds, p, 1 / 30);
     assert.equal(p.state, 'down');
     assert.ok(p.vz < -0.5 && Math.abs(p.vx - 9) < 0.3, `thrown (${p.vx.toFixed(2)}, ${p.vz.toFixed(2)})`);
+    // Someone just behind it as it pulls away is left behind, on their feet.
+    const q = person(g, peds, n.x - 2.3, n.z, 'idle');
+    q.t = 10;
+    run(peds, q, 1 / 30);
+    assert.equal(q.state, 'idle');
+  } finally { restore(); }
+});
+
+test('foot cops wait a step from the player\'s car, and are not run over when it pulls away', () => {
+  const { net } = world();
+  const n = net.nearest(517.7, 600.5, 60, {});
+  const { g, peds, restore } = crowd(n.x, n.z, 6);
+  try {
+    const heading = Math.atan2(n.dx, n.dz);
+    const v = { x: n.x, z: n.z, y: 0, heading, vx: 0, vz: 0, hw: 0.86, hd: 2.1, role: 'player' };
+    g.vehicles.list.push(v);
+    g.player.state = 'driving'; g.player.vehicle = v;
+    let runOver = 0;
+    g.onPedHitByVehicle = () => runOver++;
+    // Two cops chasing on foot 4 and 6 m behind it, and one off to its side.
+    const cops = [[-4, 0.4], [-6, -0.4], [0.5, 3]].map(([back, side]) => {
+      const p = person(g, peds, n.x + n.dx * back + n.dz * side, n.z + n.dz * back - n.dx * side, 'fight');
+      p.cop = true; p.keep = true; p.t = 30; p.grudge = 2;
+      return p;
+    });
+    const step = () => { g.time += 1 / 30; for (const p of cops) peds._update(p, 1 / 30); };
+    // Within `m` of the car's body.
+    const by = (p, m) => {
+      const dx = p.h.x - v.x, dz = p.h.z - v.z, c = Math.cos(v.heading), s = Math.sin(v.heading);
+      return Math.abs(dx * c - dz * s) < v.hw + m && Math.abs(dx * s + dz * c) < v.hd + m;
+    };
+    let touching = 0;
+    for (let t = 0; t < 3; t += 1 / 30) { step(); for (const p of cops) if (by(p, 0.3)) touching++; }
+    assert.equal(touching, 0, 'nobody runs into the car');
+    assert.ok(cops.every(p => p.state === 'fight' && by(p, 1.2)), 'they wait a step off it');
+    // It pulls away hard.
+    for (let t = 0, sp = 0; t < 4; t += 1 / 30) {
+      sp = Math.min(14, sp + 6 / 30);
+      v.vx = Math.sin(heading) * sp; v.vz = Math.cos(heading) * sp; v.x += v.vx / 30; v.z += v.vz / 30;
+      g.player.x = v.x; g.player.z = v.z;
+      step();
+    }
+    assert.equal(runOver, 0, 'no cop run over by a car pulling away from them');
+    assert.ok(cops.every(p => p.state === 'fight'), 'still after it');
   } finally { restore(); }
 });
 
@@ -301,6 +345,93 @@ test('a fare waving at the kerb holds their ground, and goes back to waving at t
     assert.equal(p.state, 'hail');
     assert.ok(Math.hypot(p.h.x - x, p.h.z - z) < 0.6, `back at the spot (${Math.hypot(p.h.x - x, p.h.z - z).toFixed(2)} m)`);
   } finally { restore(); }
+});
+
+test('a story\'s actor stays as the story posed them, and after a scare goes back to their spot and stands', () => {
+  const { net } = world();
+  const n = net.nearest(517.7, 600.5, 60, {});
+  const { g, peds, restore } = crowd(n.x, n.z, 3);
+  try {
+    const off = net.width[n.road] / 2 + 0.6, x = n.x + n.dz * off, z = n.z - n.dx * off;
+    g.player.x = x - n.dz * 5; g.player.z = z + n.dx * 5;
+    const posed = person(g, peds, x + n.dx * 3, z + n.dz * 3, 'scripted');
+    posed.keep = true; posed.h.pose = 'phone';
+    run(peds, posed, 2);
+    assert.ok(posed.h.pose === 'phone' && posed.h.x === x + n.dx * 3, 'left as posed');
+    for (const after of ['cower', 'flee']) {
+      const p = person(g, peds, x, z, 'scripted');
+      p.keep = true; p.mission = true; p.t = 999;
+      peds.knock(p, 4, 0, 2, 'punch');
+      p.after = after;
+      let left = 0;
+      run(peds, p, 60, 1 / 30, q => { left = Math.max(left, Math.hypot(q.h.x - x, q.h.z - z)); });
+      assert.ok(left > 3, `${after}: moved off (${left.toFixed(1)} m)`);
+      assert.ok(p.state === 'scripted' && p.h.pose === 'idle' && p.h.speed === 0, `${after}: ${p.state}, ${p.h.pose} at ${p.h.speed} m/s`);
+      assert.ok(Math.hypot(p.h.x - x, p.h.z - z) < 0.6, `${after}: back at the spot (${Math.hypot(p.h.x - x, p.h.z - z).toFixed(2)} m)`);
+      peds.remove(p);
+    }
+  } finally { restore(); }
+});
+
+test('someone who calms down on a river bridge walks it inside its railings, and off it', () => {
+  const { net } = world();
+  const { g, peds, restore } = crowd(0, 0, 12);
+  const onDeck = (q, r) => net.nearest(q.h.x, q.h.z, 20, {}, o => o === r).dist;
+  let bridges = 0, given = 0, pressed = 0, off = 0, bank = 0;
+  try {
+    for (let r = 0; r < net.count; r++) {
+      if (!net.bridge[r] || net.raised[r] || net.length[r] < 60) continue;
+      bridges++;
+      const pt = net.pointAt(r, net.length[r] / 2, {}), w = net.width[r];
+      g.player.x = pt.x + 200; g.player.z = pt.z;
+      const p = person(g, peds, pt.x + pt.dz * (w / 2 - 1), pt.z - pt.dx * (w / 2 - 1), 'flee');
+      p.t = -1;
+      run(peds, p, 1 / 30);
+      if (p.state === 'walk' && net.bridge[p.road]) given++;
+      run(peds, p, 240, 1 / 20, q => {
+        const s = q.dir > 0 ? q.s : net.length[q.road] - q.s;
+        if (net.bridge[q.road] && s > 5 && s < net.length[q.road] - 5 && onDeck(q, q.road) > net.width[q.road] / 2 - 0.2) pressed++;
+      });
+      if (!net.bridge[p.road]) off++;
+      peds.remove(p);
+      // On the bank beside it they get a street, not the bridge (unless that puts them on another).
+      const b = person(g, peds, pt.x + pt.dz * (w / 2 + 4), pt.z - pt.dx * (w / 2 + 4));
+      peds._resnap(b);
+      if (b.road != null && net.bridge[b.road] && onDeck(b, b.road) > net.width[b.road] / 2 + 0.4) bank++;
+      peds.remove(b);
+    }
+  } finally { restore(); }
+  assert.ok(bridges >= 10, `${bridges} bridges`);
+  assert.equal(given, bridges, 'given the bridge they are on');
+  assert.equal(pressed, 0, 'never pressed against its railing');
+  assert.ok(off >= bridges * 0.8, `${off} of ${bridges} walked off the bridge in 4 min`);
+  assert.equal(bank, 0, 'nobody on the bank sent along a bridge');
+});
+
+test('walkers up on a flyover follow it down to the street', () => {
+  const { net } = world();
+  const { g, peds, restore } = crowd(0, 0, 13);
+  let n = 0, down = 0;
+  try {
+    for (let r = 0; r < net.count; r++) {
+      if (!net.raised[r] || net.deckAt(r, net.length[r] / 2) < 4) continue;
+      for (const side of [1, -1]) {
+        // Out of a car's door on its deck, far from the player.
+        const s = net.length[r] / 2, pt = net.pointAt(r, s, {});
+        const p = person(g, peds, pt.x + pt.dz * 2 * side, pt.z - pt.dx * 2 * side);
+        p.h.y = net.deckAt(r, s); p.speed = 1.3;
+        g.player.x = pt.x + 300; g.player.z = pt.z;
+        n++;
+        for (let t = 0; t < 900; t += 1 / 20) {
+          g.time += 1 / 20; peds._update(p, 1 / 20);
+          if (p.road != null && !net.raised[p.road] && p.h.y < 0.5) { down++; break; }
+        }
+        peds.remove(p);
+      }
+    }
+  } finally { restore(); }
+  assert.ok(n >= 20, `${n} walkers`);
+  assert.equal(down, n, `${down} of ${n} came down to a street within 15 min`);
 });
 
 test('people thrown at a compound wall on a phone\'s long frames stop at it', () => {
