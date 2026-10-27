@@ -51,3 +51,22 @@ test('only the instances in use are sent to the graphics chip', () => {
   assert.deepEqual(attr.updateRanges, []);
   assert.equal(attr.version, v0 + 1, 'nothing to send');
 });
+
+test('the few detailed bodies go to the people the camera can see', () => {
+  const scene = new THREE.Scene(), humans = new Humans(scene, 16);
+  humans.nearRadius = 10; humans.nearMax = 1;
+  // A phone in landscape, behind the player's shoulder, looking up the street.
+  const camera = new THREE.PerspectiveCamera(62, 915 / 412, 0.3, 900);
+  camera.position.set(0, 2.2, 0); camera.lookAt(0, 1, 10);
+  const ahead = humans.add(makeOutfit('man', 1), 0.5, 6);
+  const behind = humans.add(makeOutfit('woman', 2), 0, -2); // nearer the camera, but out of sight
+  humans.update(0.016, camera.position, null, camera);
+  assert.ok(ahead.near && !behind.near, 'the one in front in detail');
+  // Swung round to face the other way, the detail follows.
+  camera.lookAt(0, 1, -10);
+  humans.update(0.016, camera.position, null, camera);
+  assert.ok(behind.near && !ahead.near, 'the one now in front in detail');
+  // With no camera (the people viewer), the nearest, as before.
+  humans.update(0.016, camera.position, null);
+  assert.ok(behind.near && !ahead.near);
+});
