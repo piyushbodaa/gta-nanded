@@ -104,7 +104,7 @@ export class Colliders {
     // of the polyline, which chunks.js draws them along (a flyover in the same 4 m pieces): one
     // piece laid across a bend would leave the drawn median, an invisible kerb in the lane on
     // one side of it and a gap through the median on the other.
-    const net = city.net, p = {};
+    const net = city.net, p = {}, q = {};
     for (let r = 0; r < net.count; r++) {
       const w = net.width[r], lift = net.raised[r];
       // A carriageway of a divided road has its half of the median on its right (ms: +1 left of a->b, -1 right).
@@ -129,6 +129,18 @@ export class Colliders {
             for (const side of [1, -1]) {
               const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2;
               this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, top - y0, y0);
+            }
+            if (lo < SOLID_BELOW && hi >= SOLID_BELOW) {
+              // Here the deck comes down onto its solid embankment, and chunks.js slopes the
+              // underside from the deck to the ground across this piece. Close its lower half,
+              // where the slope comes down below a car's roof, across the carriageway: else a car
+              // or someone on foot under the deck goes on into the ramp. It stays below the deck,
+              // so the deck's own traffic passes over it. Out to the embankment's sides: 0.35 m
+              // past the kerb edge, and on the edge on a divided road's median side.
+              net.pointAt(r, dA > dB ? (sm + e) / 2 : (s + sm) / 2, q);
+              const out = side => (side === ms && divided ? 0 : 0.35);
+              const eL = net.edgeAt(r, sm, 1) + out(1), eR = net.edgeAt(r, sm, -1) + out(-1), off = (eL - eR) / 2;
+              this.addBox(q.x + p.dz * off, q.z - p.dx * off, (eL + eR) / 2, half / 2, rot, Math.max(0.5, lo - 1.1));
             }
           } else if (divided) {
             const off = inner + MEDIAN_W / 4;
