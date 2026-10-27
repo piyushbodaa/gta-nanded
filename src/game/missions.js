@@ -50,13 +50,15 @@ export class Missions {
     this._dialog(dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
     if (!this.active) {
-      // Walk or drive (slowly) into a start marker.
+      // Walk or drive (slowly) into a start marker. Not while lying WASTED or BUSTED, nor with the
+      // police after you or a witness still calling a crime in (it would land mid-cutscene).
       const markers = [];
+      const ready = this.cooldown <= 0 && !g.respawning && !g.jobs?.active && (g.police?.level || 0) === 0 && !g.police?.pending?.length;
       for (const d of this.available()) {
         const p = this.startPoint(d);
         markers.push({ x: p.x, z: p.z, r: 2.2, h: 3, color: CHARACTERS[d.giver]?.markerColor ?? 0xffc83d });
         const pos = g.player.pos;
-        if (this.cooldown <= 0 && !g.jobs?.active && dist(pos.x, pos.z, p.x, p.z) < 2.6 && (!g.player.vehicle || speedOf(g.player.vehicle) < 3) && (g.police?.level || 0) === 0) this.start(d.id);
+        if (ready && dist(pos.x, pos.z, p.x, p.z) < 2.6 && (!g.player.vehicle || speedOf(g.player.vehicle) < 3)) this.start(d.id);
       }
       g.effects?.markers.set([...markers, ...(g.jobs?.markers?.() || [])]);
       return;
@@ -78,6 +80,8 @@ export class Missions {
     try { r = step.update ? step.update(m.ctx, dt) : 'done'; } catch (err) { this._crash(err); return; }
     if (r === 'done') this._next();
     else if (typeof r === 'string' && r.startsWith('fail:')) this.fail(r.slice(5));
+    // Failed or passed just now: no markers or GPS line to the old target.
+    if (this.active !== m) return;
     // Markers and GPS for the current target.
     const markers = [];
     if (m.target && m.target.marker !== false) markers.push({ x: m.target.x, z: m.target.z, r: m.target.r ?? 3, h: m.target.h ?? 4, color: m.target.markerColor ?? 0xffc83d });
@@ -213,15 +217,18 @@ export class Missions {
       spawnVehicle(name, type, x, z, heading, opts = {}) {
         const v = g.vehicles.spawn(type, x, z, heading, { role: 'mission', driver: opts.driver ?? false, color: opts.color, seed: opts.seed });
         v.kinematic = !opts.dynamic && false; v.keep = true; v.label = opts.label;
+        v.pilot = v.driver; // who the script put at the wheel (a carjack swaps v.driver)
         if (opts.dynamic === false) v.kinematic = true;
         Object.assign(v, opts.props || {});
         m.ent[name] = v;
         return v;
       },
       spawnPed(name, kind, x, z, opts = {}) {
+        const P = g.player.pos;
+        if (g.colliders?.blocked(x, z, 0.3)) ({ x, z } = clearOf(g.colliders, x, z, P));
         const h = g.humans.add(makeOutfit(kind, opts.seed ?? (Math.random() * 1e9) | 0), x, z);
         if (opts.outfit) Object.assign(h.outfit, opts.outfit);
-        h.yaw = opts.heading ?? 0;
+        h.yaw = opts.heading ?? headingTo(x, z, P.x, P.z); // facing whoever they're talking to
         const p = g.peds._make(h, x, z, null);
         p.state = opts.state || 'scripted'; p.keep = true; p.mission = true; p.t = 999;
         h.pose = opts.pose || 'idle';
@@ -240,6 +247,28 @@ export class Missions {
       driver: (v, opts) => new DynamicDriver(g, v, opts),
     };
   }
+}
+
+/**
+ * Scripted people never step out of a wall by themselves, so one asked to stand inside a wall
+ * moves toward the player (who stands somewhere clear) until free, appearing on the player's side.
+ * If the wall reaches right up to the player, they stand beside the player instead.
+ */
+function clearOf(colliders, x, z, P) {
+  for (let k = 0; k < 40; k++) {
+    const d = dist(x, z, P.x, P.z);
+    if (d < 1) break;
+    x += (P.x - x) / d * 0.4; z += (P.z - z) / d * 0.4;
+    if (!colliders.blocked(x, z, 0.3)) return { x, z };
+  }
+  const a0 = Math.atan2(x - P.x, z - P.z);
+  for (const r of [1.3, 2.2]) {
+    for (let k = 0; k < 12; k++) {
+      const a = a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.52, cx = P.x + Math.sin(a) * r, cz = P.z + Math.cos(a) * r;
+      if (!colliders.blocked(cx, cz, 0.3)) return { x: cx, z: cz };
+    }
+  }
+  return { x, z };
 }
 
 // ------------------------------------------------------------------ step library
@@ -335,7 +364,14 @@ export const Steps = {
         for (const n of names) {
           const p = c.ent[n];
           if (!p) continue;
-          if (p.hits >= (p.needHits || 2)) { if (p.state !== 'down' && p.state !== 'getup') { p.state = 'cower'; p.t = 999; } p.blip = null; continue; }
+          if (p.hits >= (p.needHits || 2)) {
+            // Beaten for good: no grudge left, and one still on the ground cowers once up (the
+            // knockdown had queued a fight, which went on through the next scene).
+            p.grudge = 0; p.blip = null;
+            if (p.state === 'down' || p.state === 'getup') p.after = 'cower';
+            else { p.state = 'cower'; p.t = 999; }
+            continue;
+          }
           left++;
           if (p.state === 'flee' || p.state === 'walk' || p.state === 'cower') { p.state = 'fight'; p.t = 60; }
           if (p.state === 'down') p.after = 'fight';
@@ -360,11 +396,11 @@ export const Steps = {
    * points: [{x, z}] ; finish = last point.
    */
   race(points, rivals, text = 'Win the race.') {
-    let idx = 0;
+    let idx = 0, shown = '';
     return {
       kind: 'race', points,
       enter(c) {
-        idx = 0;
+        idx = 0; shown = '';
         c.objective(text);
         for (const n of rivals) {
           const v = c.ent[n];
@@ -396,8 +432,9 @@ export const Steps = {
           v.raceDriver.maxSpeed = v.spec.top * 0.92 * band;
           g.controls.set(v, v.raceDriver.control(dt));
         }
-        g.hud.toastRace?.(ahead + 1, rivals.length + 1);
-        c.m.vars.position = ahead + 1;
+        // Your place and the checkpoints left, as the street races show them.
+        const place = `${ahead + 1}/${rivals.length + 1}`;
+        if (`${place} ${idx}` !== shown) { shown = `${place} ${idx}`; c.objective(`${text} Position <b>${place}</b> · checkpoint ${idx + 1}/${points.length}`); }
         if (dist(pos.x, pos.z, p.x, p.z) < 8 && g.player.vehicle) {
           idx++;
           g.audio?.sfx('checkpoint');
@@ -415,12 +452,21 @@ export const Steps = {
    * entity `driverAs` (for a fight on foot) when given.
    */
   chase(name, to, text, { lose = 170, loseAfter = 6, rams = 3, stopAt = 450, driverAs = null, speed = 0.85 } = {}) {
-    let far = 0, hits = 0, seen = 0, last = -9;
+    let far = 0, hits = 0, seen = 0, last = -9, pilot = null;
+    /** Caught: the chase AI lets go, the car you chased in is no longer needed, the driver `p` is on foot. */
+    const caught = (c, v, p) => {
+      if (c.g.player.vehicle !== v) c.g.controls.delete(v);
+      v.flee = null; v.arrow = false; v.blip = null;
+      for (const e of Object.values(c.ent)) if (e?.id && e !== v) e.vital = false;
+      if (p) { p.keep = true; p.mission = true; if (driverAs) c.ent[driverAs] = p; }
+      return 'done';
+    };
     return {
       kind: 'chase', vehicle: name,
       enter(c) {
         const v = c.ent[name];
         if (!v) return;
+        pilot = v.pilot ?? v.driver;
         const dest = typeof to === 'function' ? to(c) : to, r = c.g.net.route(v.x, v.z, dest.x, dest.z);
         v.kinematic = false; v.role = 'mission'; v.vital = false; v.blip = '#ff4d4d'; v.arrow = true;
         v.flee = c.driver(v, { aggression: 0.8, maxSpeed: v.spec.top * speed });
@@ -431,6 +477,9 @@ export const Steps = {
       update(c, dt) {
         const g = c.g, v = c.ent[name], pos = g.player.pos, mine = g.player.vehicle;
         if (!v) return 'fail:They got away.';
+        // Pulled out of the seat (the player carjacked it, now or before the chase): caught, and the
+        // driver is already on foot. Never drive the player's car or eject the player's own body.
+        if (mine === v || (pilot && v.driver !== pilot)) return caught(c, v, g.peds.list.find(p => p.h === pilot));
         c.m.target = { x: v.x, z: v.z, marker: false };
         // A fresh knock while we're alongside counts as a ram (grinding along it counts once).
         if ((v.lastHit || 0) !== seen) {
@@ -438,24 +487,23 @@ export const Steps = {
           if (mine && dist(mine.x, mine.z, v.x, v.z) < v.hd + mine.hd + 2.5 && c.m.time - last > 0.7) { hits++; last = c.m.time; }
         }
         if (hits >= rams || v.health < stopAt || v.wrecked) {
-          g.controls.delete(v);
-          v.flee = null; v.arrow = false; v.blip = null; v.role = 'abandoned';
+          v.role = 'abandoned';
           const h = g.vehicles.ejectDriver(v);
+          let p = null;
           if (h) {
             const door = g.vehicles.doorWorld(v);
             h.x = door.x; h.z = door.z; h.pose = 'lie';
-            const p = g.peds._make(h, h.x, h.z, null);
-            p.state = 'down'; p.t = 1.2; p.after = 'flee'; p.keep = true; p.mission = true;
-            if (driverAs) c.ent[driverAs] = p;
+            p = g.peds._make(h, h.x, h.z, null);
+            p.state = 'down'; p.t = 1.2; p.after = 'flee';
           }
-          return 'done';
+          return caught(c, v, p);
         }
         far = dist(pos.x, pos.z, v.x, v.z) > lose ? far + dt : 0;
         if (far > loseAfter || !v.flee || v.flee.done) return `fail:${v.label || 'They'} got away.`;
         g.controls.set(v, v.flee.control(dt));
         return null;
       },
-      exit(c) { const v = c.ent[name]; if (v) { c.g.controls.delete(v); v.arrow = false; } },
+      exit(c) { const v = c.ent[name]; if (v) { if (c.g.player.vehicle !== v) c.g.controls.delete(v); v.arrow = false; } },
     };
   },
 
@@ -485,6 +533,8 @@ export function driveHunters(game, dt) {
   const pos = game.player.pos;
   for (const v of Object.values(m.ent)) {
     if (!v || !v.hunt || v.wrecked) continue;
+    // Carjacked by the player: the hunt is over (and the AI must not steer the player's car).
+    if (v === game.player.vehicle) { v.hunt = null; v.blip = null; continue; }
     const d = dist(v.x, v.z, pos.x, pos.z);
     if (d > 300) continue;
     v.hunt.ignore = game.player.vehicle;

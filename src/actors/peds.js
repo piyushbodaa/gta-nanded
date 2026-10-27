@@ -29,8 +29,13 @@ export class Peds {
     this.list = [];
     this.seed = 1;
     this.spawnT = 0;
-    this._p = {}; this._q = {}; this._o = {}; this._c = { x: 0, z: 0 };
+    this._p = {}; this._q = {}; this._n = {}; this._o = {}; this._c = { x: 0, z: 0 };
     this.panic = 0;
+    // Streets at ground level (any but a flyover: a river bridge is at ground level too), the
+    // same without bridges, and a flyover deck someone is up on.
+    this._ground = r => !this.net.raised[r];
+    this._street = r => !this.net.raised[r] && !this.net.bridge[r];
+    this._deck = r => this.net.raised[r] === 1;
   }
 
   randomOutfit(x) {
@@ -69,8 +74,13 @@ export class Peds {
       h, road, dir: 1, s: 0, side: 1, speed: 0, state: 'walk', t: 0, after: null, vx: 0, vz: 0, hits: 0, grudge: 0, cool: 0, onRoadOk: false, id: this.seed++,
       lat: 0, latHold: 0, stuck: 0, shoveX: 0, shoveZ: 0, // sidestep off the walking line, and how long they've been held up
       fx: 0, fz: 0, nx: 0, nz: 0, // walking direction and the outward normal of their footpath
+      pave: 0, under: 0, underX: undefined, underZ: 0, lookT: 0, // the footpath under them (_floor), and when to look for a street
+      role: null, homeX: undefined, homeZ: undefined, backT: 0, // a part to go back to after a scare (_keepRole)
+      punchT: 0, barkCool: 0,
     };
     h.x = x; h.z = z;
+    // Upright, whatever seat they came from (a two-wheeler's lean is its rider's roll).
+    h.roll = 0; h.pitch = 0; h.air = false;
     this.list.push(p);
     return p;
   }
@@ -126,7 +136,7 @@ export class Peds {
     if (Math.abs(across) > PERSONAL + 0.1) return;
     // Away from them across the footpath; dead ahead, to the walker's own left.
     const away = Math.abs(across) > 0.05 ? -Math.sign(across) : Math.sign(p.fz * p.nx - p.fx * p.nz) || 1;
-    p.lat = clamp(p.lat + away * 1.5 * dt, -(this._offset(p.road) - this.net.width[p.road] / 2) - 0.2, 1.1);
+    p.lat = this._sidestep(p.road, p.lat + away * 1.5 * dt);
     p.latHold = Math.max(p.latHold, 0.5);
   }
 
@@ -158,18 +168,69 @@ export class Peds {
 
   /** True when (x, z) is within `margin` of any vehicle's footprint. */
   _inVehicle(x, z, margin) {
-    for (const v of this.game.vehicles.list) {
-      const dx = x - v.x, dz = z - v.z;
-      if (v.y > 1.5 || dx * dx + dz * dz > (v.hd + margin + 1) ** 2) continue;
-      const c = Math.cos(v.heading), s = Math.sin(v.heading);
-      if (Math.abs(dx * c - dz * s) < v.hw + margin && Math.abs(dx * s + dz * c) < v.hd + margin) return true;
-    }
+    for (const v of this.game.vehicles.list) if (v.y <= 1.5 && this._byVehicle(v, x, z, margin)) return true;
     return false;
+  }
+
+  /** True when (x, z) is within `margin` of vehicle v's footprint. */
+  _byVehicle(v, x, z, margin) {
+    const dx = x - v.x, dz = z - v.z;
+    if (dx * dx + dz * dz > (v.hd + margin + 1) ** 2) return false;
+    const c = Math.cos(v.heading), s = Math.sin(v.heading);
+    return Math.abs(dx * c - dz * s) < v.hw + margin && Math.abs(dx * s + dz * c) < v.hd + margin;
   }
 
   _offset(road) {
     const w = this.net.width[road];
+    // Up on a flyover (out of a vehicle that stopped there) or out on a river bridge: along the
+    // inside of its parapet.
+    if (this.net.raised[road] || this.net.bridge[road]) return w / 2 - 0.5;
     return w >= 8 ? w / 2 + 0.95 : w / 2 + 0.45;
+  }
+
+  /**
+   * A walker's sidestep off their line: at most a step onto the road's edge to pass a post, more
+   * room on the building side; on a deck or a bridge, into the road and never into the parapet.
+   */
+  _sidestep(road, lat) {
+    const w = this.net.width[road], off = this._offset(road);
+    return off < w / 2 ? clamp(lat, -1.2, 0.2) : clamp(lat, -(off - w / 2) - 0.2, 1.1);
+  }
+
+  /** The height whose walls and railings hold a person in: a flyover deck they're on, else the ground's. */
+  _level(h) { return h.y > 1.5 ? h.y : 0; }
+
+  /**
+   * What a person stands on: the ground (a station platform, the riverbank), a flyover deck
+   * they're up on, or the footpath. Walkers know their footpath from their line; anyone else
+   * looks up the one under them, and again once they have moved.
+   */
+  _floor(p) {
+    const g = this.game, h = p.h;
+    let pave = p.pave || 0;
+    if (p.state !== 'walk') {
+      if (p.underX === undefined || Math.abs(h.x - p.underX) + Math.abs(h.z - p.underZ) > 0.3) {
+        const n = this.net.nearest(h.x, h.z, 14, this._n, this._ground);
+        p.under = n ? g.city.pavementAt(n.seg, n.dist) : 0; p.underX = h.x; p.underZ = h.z;
+      }
+      pave = p.under;
+    }
+    // Only someone already up off the street (out of a vehicle on a flyover) can be on a deck.
+    const deck = h.y > 0.3 ? this.net.surfaceAt(h.x, h.z, h.y) : 0;
+    return Math.max(g.city.groundHeight(h.x, h.z), deck, pave);
+  }
+
+  /** A fare waiting for a ride or a story's actor keeps their part (and spot) to go back to after a scare. */
+  _keepRole(p) {
+    if (p.state !== 'hail' && p.state !== 'scripted') return;
+    p.role = p.state; p.homeX ??= p.h.x; p.homeZ ??= p.h.z;
+  }
+
+  /** The scare is over: back to their part (and spot) if they have one, else back to walking their street. */
+  _calm(p) {
+    if (p.role && p.keep) { p.state = p.role; p.backT = 0; return; }
+    p.state = 'walk';
+    this._resnap(p);
   }
 
   bark(p, kind) {
@@ -183,6 +244,7 @@ export class Peds {
   /** Knock a person over (car, punch, explosion). (vx, vz) is the shove. */
   knock(p, vx, vz, seconds, cause) {
     if (p.state === 'down' || p.state === 'dead') return;
+    this._keepRole(p);
     p.state = 'down'; p.t = seconds; p.vx = vx; p.vz = vz; p.vy = Math.min(6, Math.hypot(vx, vz) * 0.35);
     p.hits++;
     p.h.pose = 'lie';
@@ -203,22 +265,25 @@ export class Peds {
     if (p.state !== 'down') {
       for (const v of g.vehicles.list) {
         const dx = h.x - v.x, dz = h.z - v.z;
-        if (v.y > 1.5 || dx * dx + dz * dz > 120) continue; // up on a flyover
+        if (Math.abs(v.y - (h.y || 0)) > 1.5 || dx * dx + dz * dz > 120) continue; // one of them up on a flyover
         const spd = speedOf(v);
         const c = Math.cos(v.heading), s = Math.sin(v.heading);
         const lx = dx * c - dz * s, lz = dx * s + dz * c;
         if (Math.abs(lx) < v.hw + 0.3 && Math.abs(lz) < v.hd + 0.3) {
-          if (spd > 3.5) {
-            this.knock(p, v.vx * 0.9 + lx * 1.5, v.vz * 0.9, 2.5 + Math.random() * 2, 'vehicle');
+          // Run over only by a vehicle coming at them: one pulling away from someone at its back or
+          // side leaves them behind (not a hit-and-run on the cop who ran up to the player's car).
+          if ((v.vx * dx + v.vz * dz) / Math.max(Math.hypot(dx, dz), 0.1) > 3.5) {
+            // Thrown on with the car, and off to whichever side of it they were.
+            this.knock(p, v.vx * 0.9 + c * lx * 1.5, v.vz * 0.9 - s * lx * 1.5, 2.5 + Math.random() * 2, 'vehicle');
             g.onPedHitByVehicle?.(p, v, spd);
           } else {
-            // Shoved aside by a crawling or parked car; walkers then step round it.
+            // Shoved aside by a crawling, parked or passing car; walkers then step round it.
             const push = (v.hw + 0.3 - Math.abs(lx)) * Math.sign(lx || 1);
             h.x += c * push; h.z -= s * push;
             p.shoveX += c * push; p.shoveZ -= s * push;
           }
-        } else if (spd > 8 && v.role === 'player' && lz > 0 && lz < 14 && Math.abs(lx) < v.hw + 1.2 && p.state !== 'dive') {
-          // Leap aside.
+        } else if (spd > 8 && v.role === 'player' && lz > 0 && lz < 14 && Math.abs(lx) < v.hw + 1.2 && p.state !== 'dive' && p.state !== 'hail' && p.state !== 'scripted') {
+          // Leap aside (not a fare waving the player down, nor a story's actor).
           const side = Math.sign(lx || (Math.random() - 0.5));
           p.state = 'dive'; p.t = 0.6;
           p.vx = c * side * 6.5; p.vz = -s * side * 6.5;
@@ -229,10 +294,24 @@ export class Peds {
     switch (p.state) {
       case 'down': {
         h.pose = 'lie';
+        // Thrown in steps of 20 cm or less, so a hard throw on a phone's long frame stops at a
+        // wall instead of passing through it, and slides along it.
+        const steps = clamp(Math.ceil(Math.hypot(p.vx, p.vz) * dt / 0.2), 1, 8), c = this._c, o = this._o;
+        for (let k = 0; k < steps; k++) {
+          h.x += p.vx * dt / steps; h.z += p.vz * dt / steps;
+          c.x = h.x; c.z = h.z;
+          if (g.colliders.resolveCircle(c, 0.3, o, Infinity, this._level(h))) {
+            h.x = c.x; h.z = c.z;
+            const vn = p.vx * o.nx + p.vz * o.nz;
+            if (vn < 0) { p.vx -= vn * o.nx; p.vz -= vn * o.nz; }
+          }
+        }
+        // Down onto whatever is under them: the footpath, a flyover's deck, the ground.
+        const floor = this._floor(p);
         p.vy = (p.vy || 0) - 18 * dt;
-        h.y = Math.max(0, (h.y || 0) + (p.vy || 0) * dt);
-        h.x += p.vx * dt; h.z += p.vz * dt;
-        p.vx *= Math.exp(-dt * (h.y > 0.05 ? 0.3 : 4)); p.vz *= Math.exp(-dt * (h.y > 0.05 ? 0.3 : 4));
+        h.y = Math.max(floor, (h.y || 0) + p.vy * dt);
+        const slow = Math.exp(-dt * (h.y > floor + 0.05 ? 0.3 : 4));
+        p.vx *= slow; p.vz *= slow;
         if (p.t <= 0) { p.state = 'getup'; p.t = GETUP_TIME; }
         break;
       }
@@ -252,26 +331,32 @@ export class Peds {
         const sp = 5.6;
         h.x += Math.sin(h.yaw) * sp * dt; h.z += Math.cos(h.yaw) * sp * dt;
         h.pose = 'run'; h.speed = sp;
-        if (p.t < 0 && dPlayer > 30) { p.state = 'walk'; this._resnap(p); }
+        if (p.t < 0 && (dPlayer > 30 || (p.role && p.keep))) this._calm(p);
         if (Math.random() < dt * 0.3) this.bark(p, 'flee');
         break;
       }
       case 'cower':
         h.pose = 'cower'; h.speed = 0;
-        if (p.t <= 0) { p.state = dPlayer < 12 ? 'flee' : 'walk'; p.t = 6; if (p.state === 'walk') this._resnap(p); }
+        if (p.t <= 0) { p.t = 6; if (dPlayer < 12) p.state = 'flee'; else this._calm(p); }
         break;
       case 'fight': {
-        // Square up to the player; give up after a while or once they're far away.
+        // Square up to the player. A bystander gives up after a while, or once the player is far
+        // off, out of reach (up on a flyover) or driving; a cop on the job keeps after them, on
+        // foot, until the police stand down (police.js).
         const to = Math.atan2(-dpx, -dpz);
         h.yaw = dampAngle(h.yaw, to, 10, dt);
-        if (player.state === 'driving' || dPlayer > 25 || p.t < -14) { p.state = 'flee'; p.t = 5; break; }
-        if (dPlayer > 1.15) {
+        const apart = Math.abs((h.y || 0) - (pp.y || 0)) > 1.5;
+        if (!(p.cop && p.keep) && (player.state === 'driving' || dPlayer > 25 || apart || p.t < -14)) { p.state = 'flee'; p.t = 5; break; }
+        // In to arm's reach of someone on foot; up to a step from the car they're in, not into it
+        // (pressed against it as it pulls away, a cop would be run over).
+        const car = player.vehicle;
+        if (car ? !this._byVehicle(car, h.x, h.z, 0.8) : dPlayer > 1.15) {
           const sp = 4.2;
           h.x += Math.sin(h.yaw) * sp * dt; h.z += Math.cos(h.yaw) * sp * dt;
           h.pose = 'run'; h.speed = sp;
         } else {
           h.pose = 'idle'; h.speed = 0;
-          if (p.cool <= 0) { p.cool = 0.9 + Math.random() * 0.5; p.punchT = 0.3; g.pedAttacks?.(p, h.outfit.kind === 'police' ? 7 : 5); }
+          if (p.cool <= 0 && !apart && !car) { p.cool = 0.9 + Math.random() * 0.5; p.punchT = 0.3; g.pedAttacks?.(p, h.outfit.kind === 'police' ? 7 : 5); }
         }
         if (p.punchT > 0) { p.punchT -= dt; h.punch = 1 - p.punchT / 0.3; } else h.punch = 0;
         break;
@@ -282,37 +367,55 @@ export class Peds {
         if (dPlayer < 3 && player.state === 'foot') h.lookYaw = clamp(wrapAngle(Math.atan2(-dpx, -dpz) - h.yaw), -1, 1);
         else h.lookYaw *= 0.9;
         break;
-      case 'hail':
-        h.pose = 'wave'; h.speed = 0;
-        h.yaw = dampAngle(h.yaw, Math.atan2(-dpx, -dpz), 3, dt);
+      case 'hail': case 'scripted': {
+        // A fare waving down a ride at their spot at the kerb, or a story's actor at theirs (posed
+        // by the story until a scare). First back to the spot if a scare moved them off it (not
+        // for ever: held up on the way, they stay wherever they are), then wave, or stand.
+        if (p.state === 'scripted' && !p.role) break;
+        const bx = (p.homeX ?? h.x) - h.x, bz = (p.homeZ ?? h.z) - h.z, back = Math.hypot(bx, bz);
+        if (back > 0.5 && (p.backT = (p.backT || 0) + dt) < 40) {
+          const sp = 1.4, step = Math.min(back, sp * dt) / back;
+          h.yaw = dampAngle(h.yaw, Math.atan2(bx, bz), 8, dt);
+          h.x += bx * step; h.z += bz * step;
+          h.pose = 'walk'; h.speed = sp;
+        } else {
+          h.pose = p.state === 'hail' ? 'wave' : 'idle'; h.speed = 0;
+          h.yaw = dampAngle(h.yaw, Math.atan2(-dpx, -dpz), 3, dt);
+        }
         break;
-      case 'scripted':
-        break;
+      }
       default: this._walk(p, dt);
     }
-    // Fists up when squaring up to the player.
+    // Fists up when squaring up to the player. Out of a fight the fists come down (mid-punch,
+    // too), and the head turns back from the player once they stop standing about.
     h.guard = p.state === 'fight' && dPlayer < 4 ? 1 : 0;
+    if (p.state !== 'fight') { h.punch = 0; p.punchT = 0; }
+    if (p.state !== 'idle' && p.state !== 'phone') h.lookYaw = 0;
     // Global panic: wanted chases and crashes scatter people.
     if ((p.state === 'walk' || p.state === 'idle' || p.state === 'phone') && g.police?.level >= 2 && dPlayer < 14 && player.state === 'foot') { p.state = 'flee'; p.t = 6; }
-    // Stay out of buildings (walkers do this in _walk, stepping round what they meet).
+    // Stay out of buildings (walkers do this in _walk, stepping round what they meet; a story
+    // stands its actors where it wants them, until a scare sets them moving).
     if (p.state !== 'walk') p.shoveX = p.shoveZ = 0;
-    if (p.state !== 'walk' && p.state !== 'scripted') {
+    if (p.state !== 'walk' && !(p.state === 'scripted' && !p.role) && p.state !== 'down') {
       const c = this._c; c.x = h.x; c.z = h.z;
-      if (g.colliders.resolveCircle(c, 0.3, this._o)) { h.x = c.x; h.z = c.z; if (p.state === 'flee') h.yaw += 0.8; }
+      if (g.colliders.resolveCircle(c, 0.3, this._o, Infinity, this._level(h))) { h.x = c.x; h.z = c.z; if (p.state === 'flee') h.yaw += 0.8; }
     }
     // People push past each other and the player.
     if (dPlayer < 0.7 && player.state === 'foot' && p.state !== 'down') {
       const k = (0.7 - dPlayer) / Math.max(dPlayer, 0.05);
       h.x += dpx * k * 0.5; h.z += dpz * k * 0.5;
     }
-    // The ground, or the footpath they walk (and stop on to chat or check a phone).
-    const onLine = p.state === 'walk' || p.state === 'idle' || p.state === 'phone';
-    if (p.state !== 'down') h.y = Math.max(g.city.groundHeight(h.x, h.z), onLine ? p.pave || 0 : 0);
+    // On whatever is under them, whatever they're doing (the fallen land on it above).
+    if (p.state !== 'down') h.y = this._floor(p);
   }
 
   _walk(p, dt) {
     const net = this.net, h = p.h, g = this.game;
-    if (p.road === null || p.road === undefined) { this._resnap(p); if (p.road === null) return; }
+    if (p.road === null || p.road === undefined) {
+      // No street to walk (yet): stand, and look again now and then.
+      if ((p.lookT = (p.lookT || 0) - dt) <= 0) { p.lookT = 1; this._resnap(p); }
+      if (p.road === null || p.road === undefined) { h.pose = 'idle'; h.speed = 0; return; }
+    }
     const len = net.length[p.road];
     p.s += p.speed * dt;
     if (p.s > len - 0.5) {
@@ -320,7 +423,8 @@ export class Peds {
       const j = p.dir > 0 ? net.rb[p.road] : net.ra[p.road];
       const roads = net.jRoads[j].filter(r => r !== p.road && !net.bridge[r] && !net.raised[r]);
       const r = rng(hash2(p.id, Math.floor(this.game.time)));
-      const next = roads.length ? r.pick(roads) : p.road;
+      // Up on a flyover, with no street to step onto yet: on the way it leads down.
+      const next = roads.length ? r.pick(roads) : net.raised[p.road] ? this._downDeck(p.road, j) : p.road;
       p.dir = next === p.road ? -p.dir : net.ra[next] === j ? 1 : -1;
       p.road = next; p.s = 0.5;
       p.side = net.kerbSide(next) || (r.chance(0.5) ? -p.side : p.side);
@@ -350,12 +454,11 @@ export class Peds {
     const c = this._c; c.x = h.x; c.z = h.z;
     let px = p.shoveX, pz = p.shoveZ;
     p.shoveX = p.shoveZ = 0;
-    if (g.colliders.resolveCircle(c, PED_R, this._o)) { px += c.x - h.x; pz += c.z - h.z; h.x = c.x; h.z = c.z; }
+    if (g.colliders.resolveCircle(c, PED_R, this._o, Infinity, this._level(h))) { px += c.x - h.x; pz += c.z - h.z; h.x = c.x; h.z = c.z; }
     if (px * px + pz * pz > 1e-6) {
       const side = px * nx + pz * nz;
       const step = (Math.abs(side) > 0.005 ? Math.sign(side) : -1) * Math.min(0.25, 0.08 + Math.hypot(px, pz) * 2);
-      // At most a step onto the road edge to pass a post; more room on the building side.
-      p.lat = clamp(p.lat + step, -(this._offset(p.road) - net.width[p.road] / 2) - 0.2, 1.1);
+      p.lat = this._sidestep(p.road, p.lat + step);
       p.latHold = 0.4;
       // Pushed back against the way they are walking: held up.
       if (px * fx + pz * fz < -0.004) p.stuck += dt; else p.stuck = Math.max(0, p.stuck - dt * 0.5);
@@ -374,10 +477,33 @@ export class Peds {
     p.onRoadOk = false;
   }
 
+  /**
+   * Up on a flyover at its junction j, coming along `road`: the road on from there whose far end
+   * is lowest (a river bridge at the ramp's foot, or the deck that leads down; back along `road`
+   * if that is lower still), so they follow its ramps down to the ground.
+   */
+  _downDeck(road, j) {
+    const net = this.net, end = r => (net.raised[r] ? net.jDeck[net.otherEnd(r, j)] : 0);
+    let best = road, low = end(road);
+    for (const o of net.jRoads[j]) if (o !== road && end(o) <= low) { best = o; low = end(o); }
+    return best;
+  }
+
   _resnap(p) {
-    const n = this.net.nearest(p.h.x, p.h.z, 30, this._q);
+    const net = this.net, h = p.h;
+    // A street at their level: the deck (or ramp) they're up on, else never a flyover overhead,
+    // and a river bridge only for someone out on it (from the bank they'd walk into its railing).
+    // Someone who ran off across open ground heads back to the nearest street, however far.
+    const up = h.y > 0.3 && net.surfaceAt(h.x, h.z, h.y) > 0.3;
+    let n = net.nearest(h.x, h.z, 30, this._q, up ? this._deck : this._ground);
+    if (n && !up && net.bridge[n.road] && n.dist > net.width[n.road] / 2 + 0.4) n = net.nearest(h.x, h.z, 30, this._q, this._street);
+    n ||= net.nearest(h.x, h.z, 200, this._q, up ? this._deck : this._street);
     if (!n) { p.road = null; return; }
+    // Out of a seat or a scene, they have no pace of their own yet: an everyday one.
+    if (!p.speed) p.speed = 1.1 + (p.id % 10) * 0.045;
     p.road = n.road; p.dir = Math.random() < 0.5 ? 1 : -1; p.lat = 0; p.stuck = 0;
+    // On a deck, the way it comes down.
+    if (up) p.dir = net.jDeck[net.rb[n.road]] < net.jDeck[net.ra[n.road]] ? 1 : -1;
     p.s = p.dir > 0 ? n.s : this.net.length[n.road] - n.s;
     const lx = p.h.x - n.x, lz = p.h.z - n.z;
     p.side = this.net.kerbSide(n.road) || (lx * n.dz - lz * n.dx >= 0 ? 1 : -1);
@@ -388,7 +514,7 @@ export class Peds {
     const fx = Math.sin(player.heading), fz = Math.cos(player.heading);
     let best = null, bd = 1.6;
     for (const p of this.list) {
-      if (p.state === 'down') continue;
+      if (p.state === 'down' || Math.abs((p.h.y || 0) - (player.y || 0)) > 1.5) continue; // not through a flyover's deck
       const dx = p.h.x - player.x, dz = p.h.z - player.z, d = Math.hypot(dx, dz);
       if (d > bd || d < 0.01) continue;
       if ((dx * fx + dz * fz) / d < 0.45) continue;
@@ -397,7 +523,7 @@ export class Peds {
     if (!best) return null;
     const strong = player.combo === 2;
     if (strong || best.hits >= 1 || Math.random() < 0.55) this.knock(best, fx * (strong ? 5 : 3), fz * (strong ? 5 : 3), 1.8 + Math.random(), 'punch');
-    else { best.state = best.grudge || Math.random() < 0.4 ? 'fight' : 'flee'; best.t = 8; best.hits++; this.bark(best, best.state === 'fight' ? 'fight' : 'punched'); this.game.onPedHurt?.(best, 'punch'); }
+    else { this._keepRole(best); best.state = best.grudge || Math.random() < 0.4 ? 'fight' : 'flee'; best.t = 8; best.hits++; this.bark(best, best.state === 'fight' ? 'fight' : 'punched'); this.game.onPedHurt?.(best, 'punch'); }
     return best;
   }
 

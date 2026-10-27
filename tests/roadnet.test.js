@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { world, place } from './helpers.js';
+import { pointSegDist2 } from '../src/core/math.js';
 
 test('the street network is one connected graph of polylines', () => {
   const { net } = world();
@@ -24,6 +25,24 @@ test('every researched place sits on a reachable street', () => {
     assert.ok(r && r.length > 0, `route station -> ${id}`);
     assert.ok(r.length < 6000, `${id} route is plausible (${r.length.toFixed(0)} m)`);
   }
+});
+
+test('the nearest road is the nearest, even well away from the streets', () => {
+  const { net } = world();
+  // Off-road probes round the town (a map tap in a field, a player off the road), against every segment.
+  let s = 11, probes = 0;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  while (probes < 80) {
+    const x = -2000 + rnd() * 5000, z = -2000 + rnd() * 4000;
+    const n = net.nearest(x, z, 200, {});
+    if (!n || n.dist < 24) continue;
+    probes++;
+    let best = Infinity;
+    for (let i = 0; i < net.px.length - 1; i++) if (net.ptRoad[i] === net.ptRoad[i + 1]) best = Math.min(best, pointSegDist2(x, z, net.px[i], net.pz[i], net.px[i + 1], net.pz[i + 1]));
+    assert.ok(Math.abs(n.dist - Math.sqrt(best)) < 1e-3, `at ${x.toFixed(1)}, ${z.toFixed(1)}: found ${n.dist.toFixed(1)} m, nearest ${Math.sqrt(best).toFixed(1)} m`);
+  }
+  // The probe a reviewer found: road 7634 is 34 m away, not road 7631 at 42.
+  assert.ok(Math.abs(net.nearest(-114.6, -608.9, 60, {}).dist - 34.1) < 0.1);
 });
 
 test('routes follow roads: consecutive points are close to the network', () => {

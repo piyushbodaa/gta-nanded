@@ -1,16 +1,21 @@
 // One input state for keyboard + mouse, gamepad and touch. Systems read
 // continuous axes from `state` and consume one-shot presses with `pressed()`.
+import { clamp } from './math.js';
+
 const KEYMAP = {
   KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyF: 'enter', KeyE: 'enter', KeyQ: 'action', KeyH: 'horn',
   KeyM: 'map', Escape: 'pause', KeyP: 'pause', KeyV: 'camera', KeyR: 'radio', KeyC: 'lookBack', KeyN: 'job', KeyJ: 'attack',
-  ControlLeft: 'attack', KeyX: 'photo', Tab: 'map', KeyB: 'phone', Enter: 'confirm',
-};
+  KeyX: 'photo', Tab: 'map', KeyB: 'phone', Enter: 'confirm',
+}; // No Ctrl: held for a punch, Ctrl+W would close the tab, and no page can stop that.
 
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
     this.held = new Set();
+    this.keys = new Set(); // physical keys down (codes), so W and ArrowUp can share 'up'
+    this.padHeld = new Set(); // gamepad buttons down, for one-shot presses on the way down
+    this.padRun = new Set(); // gamepads whose L3 click started a run (their index)
     this.events = new Set();
     this.state = { moveX: 0, moveY: 0, throttle: 0, brake: 0, steer: 0, handbrake: false, sprint: false, horn: false, lookBack: false, attackHeld: false };
     this.look = { x: 0, y: 0 }; // accumulated look delta (radians), consumed by the camera
@@ -19,6 +24,7 @@ export class Input {
     this.mode = 'keyboard'; // keyboard | touch | gamepad
     this.keyboardUsed = false;
     this.enabled = true;
+    this.live = false; // set when play starts: until then keys belong to the cover and the intro
     this.pointerLocked = false;
     this.setSensitivity(1);
     this._bind();
@@ -33,19 +39,37 @@ export class Input {
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
       const a = KEYMAP[e.code];
       if (!a) return;
-      if (['up', 'down', 'left', 'right', 'jump', 'map'].includes(a) || e.code === 'Tab') e.preventDefault();
+      // A focused button takes Space and Enter itself; cancelling the keydown would stop its click.
       if (t instanceof HTMLButtonElement && (e.code === 'Space' || e.code === 'Enter')) return;
+      // Before play, and on a menu button, Tab moves focus as usual: the only way a keyboard reaches them.
+      if (e.code === 'Tab' && (!this.live || (t !== this.canvas && t !== document.body))) return;
       this.mode = 'keyboard'; this.keyboardUsed = true;
+      // Keys pressed on the cover or during the intro would otherwise act on the first frame of play.
+      if (!this.live) return;
+      if (['up', 'down', 'left', 'right', 'jump', 'map'].includes(a)) e.preventDefault();
       if (!e.repeat) this.events.add(a);
+      this.keys.add(e.code);
       this.held.add(a);
     });
-    addEventListener('keyup', e => { const a = KEYMAP[e.code]; if (a) this.held.delete(a); });
+    addEventListener('keyup', e => {
+      const a = KEYMAP[e.code];
+      if (!a) return;
+      this.keys.delete(e.code);
+      // Let go of ArrowUp while W is still down: still driving.
+      for (const k of this.keys) if (KEYMAP[k] === a) return;
+      this.held.delete(a);
+    });
     addEventListener('blur', () => this.clear());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.clear(); });
 
     const c = this.canvas;
+    // A tap fires the mouse events of a click after the finger lifts. They are not clicks, or
+    // every tap on the view would throw a punch: Chrome marks them, and the time since the
+    // last touch on the view catches the rest (Safari).
+    const fromTouch = e => e.sourceCapabilities?.firesTouchEvents || performance.now() - this._touchAt < 1000;
+    this._touchAt = -1e9;
     c.addEventListener('mousedown', e => {
-      if (!this.enabled) return;
+      if (!this.enabled || fromTouch(e)) return;
       if (e.button === 0) {
         if (!this.pointerLocked && matchMedia('(pointer: fine)').matches) c.requestPointerLock?.()?.catch?.(() => {});
         else { this.events.add('attack'); this.held.add('attackMouse'); }
@@ -66,7 +90,7 @@ export class Input {
     let drag = null;
     c.addEventListener('pointerdown', e => {
       if (e.pointerType === 'mouse' && this.pointerLocked) return;
-      if (e.pointerType !== 'mouse') this.mode = 'touch';
+      if (e.pointerType !== 'mouse') { this.mode = 'touch'; this._touchAt = performance.now(); }
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
     });
     addEventListener('pointermove', e => {
@@ -77,14 +101,30 @@ export class Input {
       drag.x = e.clientX; drag.y = e.clientY;
       this.lastLookAt = performance.now();
     });
-    const end = e => { if (drag && e.pointerId === drag.id) drag = null; };
+    const end = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      drag = null;
+      if (e.pointerType !== 'mouse') this._touchAt = performance.now(); // a long press's mouse events come after this
+    };
     addEventListener('pointerup', end);
     addEventListener('pointercancel', end);
-    addEventListener('wheel', e => { this.zoom = (this.zoom || 0) + Math.sign(e.deltaY); }, { passive: true });
+    // Zoom only over the street itself: wheeling the pause menu's city map must not move the camera.
+    // One notch is a step; a trackpad's stream of small deltas adds up to the same.
+    addEventListener('wheel', e => {
+      if (e.target !== c || !this.enabled) return;
+      this.zoom = (this.zoom || 0) + clamp(e.deltaY / (e.deltaMode ? 3 : 100), -1, 1);
+    }, { passive: true });
   }
 
+  /**
+   * Drop everything held and pressed (menus opening, the window losing focus). Gamepad buttons
+   * still down stay remembered (`padHeld`): Start, held while the pause menu opens, would
+   * otherwise read as a fresh press next frame and close it again.
+   */
   clear() {
     this.held.clear();
+    this.keys.clear();
+    this.padRun.clear();
     this.events.clear();
     Object.assign(this.touch, { moveX: 0, moveY: 0, gas: 0, brake: 0, handbrake: false, sprint: false, horn: false });
   }
@@ -124,10 +164,17 @@ export class Input {
       throttle = Math.max(throttle, val(7));
       brake = Math.max(brake, val(6));
       if (rx || ry) { this.look.x -= rx * 0.05 * this.lookScale; this.look.y -= ry * 0.04 * this.lookScale; this.lastLookAt = performance.now(); }
-      handbrake ||= btn(0); sprint ||= btn(2); horn ||= btn(10); lookBack ||= btn(11);
-      const edge = (i, a) => { const k = `pad${i}`; if (btn(i) && !this.held.has(k)) { this.events.add(a); this.held.add(k); } else if (!btn(i)) this.held.delete(k); };
+      handbrake ||= btn(0); horn ||= btn(10); lookBack ||= btn(11);
+      // True on the frame a button goes down (and queues its action, if it has one). Kept per pad.
+      const edge = (i, a) => { const k = `${pad.index}.${i}`; if (btn(i) && !this.padHeld.has(k)) { if (a) this.events.add(a); this.padHeld.add(k); return true; } if (!btn(i)) this.padHeld.delete(k); return false; };
       edge(0, 'jump'); edge(3, 'enter'); edge(1, 'attack'); edge(9, 'pause'); edge(8, 'map'); edge(2, 'action'); edge(5, 'radio'); edge(4, 'camera');
       edge(12, 'job'); edge(13, 'photo');
+      // L3 runs on foot (X is the action: snacks, photos, the siren, so a run buys nothing). A click
+      // starts the run and another ends it, as does letting the stick come back to the middle: held
+      // in, a stick pushed to its edge slips out of the click. At the wheel L3 is the horn, held.
+      if (edge(10)) this.padRun.has(pad.index) ? this.padRun.delete(pad.index) : this.padRun.add(pad.index);
+      if (!lx && !ly) this.padRun.delete(pad.index);
+      sprint ||= this.padRun.has(pad.index);
     }
     const l = Math.hypot(mx, my);
     if (l > 1) { mx /= l; my /= l; }

@@ -9,6 +9,8 @@ test('speed breakers stand on ordinary streets, never on a flyover, a bridge or 
   const { net, city } = world();
   const B = city.bumps;
   assert.ok(B.bumps.length > 600, `${B.bumps.length} speed breakers`);
+  // Nor under a flyover, where traffic on the deck would ride over them too.
+  for (const o of [...B.bumps, ...B.holes]) assert.equal(net.deckOver(o.x, o.z), 0, `nothing under a deck at ${o.x.toFixed(0)}, ${o.z.toFixed(0)}`);
   for (const b of B.bumps) {
     assert.ok(!net.raised[b.road] && !net.bridge[b.road], `breaker on road ${b.road} is on the ground`);
     assert.ok(b.s >= net.trimStart(b.road) + 6 && b.s <= net.length[b.road] - net.trimEnd(b.road) - 6, 'clear of the junction pads');

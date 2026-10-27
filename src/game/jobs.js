@@ -31,6 +31,7 @@ export class Jobs {
     this.food = this.places.filter(p => ['restaurant', 'cafe'].includes(p.category));
     this.seed = 1;
     this.races = RACES;
+    this._routeAt = -Infinity; // when the job's GPS line was last worked out
   }
 
   /** Map blips for activities that can be started right now. */
@@ -57,7 +58,7 @@ export class Jobs {
     const g = this.game, P = g.player;
     if (P.state === 'foot') {
       const stall = this._nearStall();
-      if (stall) { const s = this._snackFor(stall); return { label: `Buy ${s[0]} · ₹${s[2]}`, run: () => this._buy(s) }; }
+      if (stall !== null) { const s = this._snackFor(stall); return { label: `Buy ${s[0]} · ₹${s[2]}`, run: () => this._buy(s) }; }
       const lm = this._nearLandmark();
       if (lm) return { label: g.save.data.stamps.includes(lm.id) ? `Photo of ${lm.shortName}` : `Photograph ${lm.shortName} · passport stamp`, run: () => this.photo(lm) };
     } else if (P.state === 'driving' && !g.missions.active) {
@@ -97,7 +98,9 @@ export class Jobs {
     if (!a) return;
     if (a.passenger) { g.vehicles.list.includes(a.vehicle) && a.vehicle.passengers.splice(a.vehicle.passengers.indexOf(a.passenger), 1); g.humans.remove(a.passenger); }
     if (a.hail) g.peds.remove(a.hail);
-    for (const v of a.rivals || []) { v.role = 'abandoned'; g.controls.delete(v); }
+    // Rivals become ordinary abandoned cars, towed once you're far away (unless you took one).
+    for (const v of a.rivals || []) { v.keep = false; v.raceDriver = null; if (v.role === 'rival') { v.role = 'abandoned'; g.controls.delete(v); } }
+    g.hud.blipList = [];
     this.active = null;
     g.hud.objective(''); g.hud.setTimer(null); g.hud.route = null;
     g.effects.markers.set([]);
@@ -106,10 +109,11 @@ export class Jobs {
 
   _markersAndRoute(t) {
     const g = this.game;
-    if (!t) { g.effects.markers.set([]); return; }
+    if (!t) { g.effects.markers.set([]); g.hud.blipList = []; return; }
     g.effects.markers.set([{ x: t.x, z: t.z, r: t.r ?? 3, h: 4, color: t.color ?? 0x7edac8 }]);
-    if ((this._routeT = (this._routeT || 0) - 1 / 60) <= 0) {
-      this._routeT = 1.2;
+    // The GPS line every 1.2 s of game time, whatever the frame rate.
+    if (g.time - this._routeAt >= 1.2) {
+      this._routeAt = g.time;
       const pos = g.player.pos;
       g.hud.route = g.net.route(pos.x, pos.z, t.x, t.z);
       if (g.hud.route) g.hud.route.color = '#7edac8';
@@ -127,6 +131,8 @@ export class Jobs {
   _nextFare() {
     const g = this.game, a = this.active, pos = g.player.pos;
     const r = rng(hash2(this.seed++, 31));
+    // Until someone is found (it can take another try next frame): no fare, nothing to pay out.
+    a.stage = 'search'; a.target = null;
     // A passenger waiting at a kerb 60-260 m away.
     for (let k = 0; k < 20; k++) {
       const ang = r() * 6.28, d = r.range(60, 260);
@@ -169,6 +175,7 @@ export class Jobs {
       }
       return;
     }
+    if (a.stage !== 'ride') return this._nextFare();
     a.left -= dt;
     g.hud.setTimer(Math.max(0, a.left), 'TIP');
     const t = a.target;
@@ -273,7 +280,7 @@ export class Jobs {
     let ahead = 0;
     const pos = P.vehicle;
     for (const r of a.rivals) {
-      if (r.wrecked) continue;
+      if (r.wrecked || r === P.vehicle) continue; // a rival you jacked is yours to drive
       const rp = pts[Math.min(r.raceIdx, pts.length - 1)];
       if (dist(r.x, r.z, rp.x, rp.z) < 15) r.raceIdx++;
       if (r.raceIdx >= pts.length) { g.hud.big('RACE LOST', `A rival won the ${a.def.name}`, 'failed', 4); this.stop(true); return; }
@@ -303,12 +310,17 @@ export class Jobs {
 
   // ---------------------------------------------------------------- snacks, photos, respray
   _nearStall() {
-    const g = this.game, P = g.player, props = g.city.props;
-    const c = g.city.chunk(Math.floor(P.x / 192), Math.floor(P.z / 192));
-    if (!c) return null;
-    for (const i of c.props) {
-      const k = props.kind[i];
-      if ((k === PROP.STALL || k === PROP.CART) && dist(props.x[i], props.z[i], P.x, P.z) < 3.2) return i;
+    const g = this.game, P = g.player, props = g.city.props, R = 3.2;
+    // Props are filed under their own chunk: look in every chunk the reach overlaps (usually one).
+    for (let cx = Math.floor((P.x - R) / 192); cx <= Math.floor((P.x + R) / 192); cx++) {
+      for (let cz = Math.floor((P.z - R) / 192); cz <= Math.floor((P.z + R) / 192); cz++) {
+        const c = g.city.chunk(cx, cz);
+        if (!c) continue;
+        for (const i of c.props) {
+          const k = props.kind[i];
+          if ((k === PROP.STALL || k === PROP.CART) && dist(props.x[i], props.z[i], P.x, P.z) < R) return i;
+        }
+      }
     }
     return null;
   }

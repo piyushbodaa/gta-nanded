@@ -31,20 +31,22 @@ export function installRules(g) {
       g.audio.sfx('punch');
       g.camera.addShake(0.08);
       g.save.stat('punches');
-      g.police.report(hit.cop ? 'hitCop' : 'punch', player.x, player.z, { cop: hit.cop });
+      // The one report of a landed punch (peds.onPedHurt fires for it too). A fight the story
+      // picks, with its own enemies, is not a crime.
+      if (!hit.mission) g.police.report(hit.cop ? 'hitCop' : 'punch', player.x, player.z, { cop: hit.cop });
     }
   };
 
   g.pedAttacks = (p, dmg) => {
+    if (g.cutscene) return; // the player is held still and can't fight back
     const P = g.player;
     if (P.state !== 'foot' || dist(p.h.x, p.h.z, P.x, P.z) > 1.5) return;
     P.damage(dmg, p.cop ? 'police' : 'fight');
     g.audio.sfx('punch', 0.7);
     g.camera.addShake(0.12);
-    if (p.cop && Math.random() < 0.15) P.knockDown(Math.sin(p.h.yaw) * 2, Math.cos(p.h.yaw) * 2, 0.9);
+    // Down long enough to fall before getting up (a shorter one skips the fall: player.js _down).
+    if (p.cop && Math.random() < 0.15) P.knockDown(Math.sin(p.h.yaw) * 2, Math.cos(p.h.yaw) * 2, 1.5);
   };
-
-  g.onPedHurt = (p, cause) => { if (p.cop && cause === 'punch') g.police.report('hitCop', p.h.x, p.h.z, { cop: true }); };
 
   g.onPedHitByVehicle = (p, v, spd) => {
     if (v.role !== 'player') return;
@@ -62,9 +64,15 @@ export function installRules(g) {
     g.save.stat('jacked');
     g.audio.sfx('door');
     if (v.type === 'police') g.police.report('hitCop', v.x, v.z, { cop: true });
-    else if (v.role === 'traffic' || v.role === 'mission') g.police.report('carjack', v.x, v.z);
-    // Passengers bail out too.
-    for (const ph of v.passengers.splice(0)) { ph.x = door.x + 1; ph.z = door.z + 1; const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6; }
+    // A car off the street is a crime. Pulling out a mission's own driver (the man you chase, the
+    // one hunting you) is the job: it ends a chase, and a star then would bring police to the fight.
+    else if (v.role === 'traffic') g.police.report('carjack', v.x, v.z);
+    // Passengers bail out too; a police jeep's second officer stays on the job, as when its crew
+    // gets out (police._dismount).
+    for (const ph of v.passengers.splice(0)) {
+      ph.x = door.x + 1; ph.z = door.z + 1; const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6;
+      if (v.type === 'police' && g.police.level > 0) { Object.assign(pp, { state: 'fight', t: 30, keep: true, cop: true, grudge: 2 }); g.police.foot.push(pp); }
+    }
   };
 
   g.onBeginEnter = v => { if (v.driver && v.ai) { v.ai.wait = 3; } };
@@ -83,12 +91,30 @@ export function installRules(g) {
 
   g.onExitedVehicle = (v, spd) => { g.audio.sfx('door'); if (spd > 7) g.camera.addShake(0.3); };
 
+  // Who ran into whom: each car's speed toward the other before this frame's physics (onImpact
+  // comes after the bounce; the rules hook notes the speeds just before it). Police units ram the
+  // player on purpose, and being rammed is no crime.
+  const playerRammed = (v, pv) => {
+    const dx = v.x - pv.x, dz = v.z - pv.z, d = Math.hypot(dx, dz) || 1;
+    const mine = ((pv.vx0 ?? pv.vx) * dx + (pv.vz0 ?? pv.vz) * dz) / d;
+    const theirs = -((v.vx0 ?? v.vx) * dx + (v.vz0 ?? v.vz) * dz) / d;
+    return mine > 3 && mine > theirs;
+  };
+  // Barging a mission's or a race's own cars is part of the job, not a crime: for the whole
+  // mission, not just while the car is still 'mission' (a chase marks its target 'abandoned' the
+  // frame the last ram lands, with the shunt still going and the car maybe burning).
+  const storyCar = v => v.role === 'mission' || v.role === 'rival' || Object.values(g.missions.active?.ent || {}).includes(v);
+
   g.vehicles.onImpact = (v, speed, other) => {
     if (v.role === 'player' || other?.role === 'player') {
       const k = clamp(speed / 20, 0.1, 1);
       if (v.role === 'player') { g.camera.addShake(k * 0.7); g.audio.sfx('crash', k); g.save.stat('crashes'); }
-      if (other && other.role === 'player' && v.type === 'police' && !v.wrecked) g.police.report('ramPolice', v.x, v.z, { cop: true });
-      if (speed > 9) g.effects.sparks(v.x, 0.7, v.z, Math.round(4 + speed * 0.4));
+      if (other?.role === 'player' && !storyCar(v) && playerRammed(v, other)) {
+        const fresh = g.time - (v.rammedT ?? -9) > 1; // one shunt (and its bounces) is one crime
+        v.rammedT = g.time; // and if it blows up, that's the player's doing too (explode)
+        if (fresh && v.type === 'police' && !v.wrecked) g.police.report('ramPolice', v.x, v.z, { cop: true });
+      }
+      if (speed > 9) g.effects.sparks(v.x, v.y + 0.7, v.z, Math.round(4 + speed * 0.4));
       // Hard hits through the windscreen hurt.
       if (v.role === 'player' && speed > 16 && !v.spec.two) g.player.damage((speed - 16) * 1.6, 'crash');
       if (v.role === 'player' && speed > 8 && v.spec.two) {
@@ -107,7 +133,7 @@ export function installRules(g) {
     const k = clamp(speed / (hole ? 4 : 6), 0.15, 1);
     g.camera.addShake(k * (hole ? 0.22 : 0.4));
     g.audio.sfx('thud', k);
-    if (!hole && speed > 3) g.effects.dust(v.x, v.z, 3);
+    if (!hole && speed > 3) g.effects.dust(v.x, v.z, 3, undefined, v.y);
   };
 
   g.vehicles.onWreck = v => {
@@ -116,28 +142,44 @@ export function installRules(g) {
     v.explodeAt = g.time + (v.role === 'player' ? 3.5 : 2.5);
   };
 
+  // Damage that isn't a crash (a blast, a cow) ends the way a crash's does (Vehicles._impact):
+  // below 250 the car catches fire, at nothing it is wrecked and blows up in turn.
+  const damaged = v => {
+    if (v.wrecked) return;
+    if (v.health <= 0) { v.health = 0; v.wrecked = true; v.onFire = 0; g.vehicles.onWreck(v); }
+    else if (v.health < 250 && !v.onFire) v.onFire = 0.01;
+  };
+
   const explode = v => {
     v.exploded = true;
     v.onFire = 0;
-    g.effects.explosion(v.x, 0.5, v.z);
-    g.audio.sfx('explosion');
+    g.effects.explosion(v.x, v.y + 0.5, v.z);
     const P = g.player, pos = P.pos;
     const d = dist(pos.x, pos.z, v.x, v.z);
+    g.audio.sfx('explosion', 1 / (1 + d / 30)); // a bang down the road, not in your ear
     g.camera.addShake(clamp(1.2 - d / 40, 0, 1.2));
+    // The blast throws people and cars away from it, hardest close in, and only on its own level
+    // (a car blowing up on a flyover doesn't reach the street below).
+    const level = o => Math.abs((o.y || 0) - v.y) < 3;
     if (P.vehicle === v) { P.leaveVehicle(true); P.damage(70, 'explosion'); P.knockDown(Math.random() * 4 - 2, Math.random() * 4 - 2, 2); }
-    else if (d < 7 && P.state === 'foot') { P.damage((7 - d) * 12, 'explosion'); P.knockDown((pos.x - v.x) * 1.5, (pos.z - v.z) * 1.5, 1.5); }
-    // Throw nearby people and cars.
-    g.peds.forEachNear(v.x, v.z, 8, p => g.peds.knock(p, (p.h.x - v.x) * 2, (p.h.z - v.z) * 2, 3, 'explosion'));
+    else if (d < 7 && P.state === 'foot' && level(P)) { const k = (3 + 6 * (1 - d / 7)) / Math.max(d, 0.5); P.damage((7 - d) * 12, 'explosion'); P.knockDown((pos.x - v.x) * k, (pos.z - v.z) * k, 1.5); }
+    g.peds.forEachNear(v.x, v.z, 8, p => {
+      if (!level(p.h)) return;
+      const dx = p.h.x - v.x, dz = p.h.z - v.z, pd = Math.max(0.5, Math.hypot(dx, dz)), k = (3 + 9 * (1 - pd / 8)) / pd;
+      g.peds.knock(p, dx * k, dz * k, 3, 'explosion');
+    });
     for (const o of g.vehicles.list) {
-      if (o === v) continue;
+      if (o === v || !level(o)) continue;
       const od = dist(o.x, o.z, v.x, v.z);
       if (od > 9) continue;
       if (o.kinematic) g.vehicles.wake(o);
       const k = (9 - od) * 1.2;
       o.vx += (o.x - v.x) / Math.max(od, 0.5) * k; o.vz += (o.z - v.z) / Math.max(od, 0.5) * k;
       o.health -= (9 - od) * 60;
+      damaged(o);
     }
-    if (v.role === 'player' || v.lastHitBy === 'player') g.police.report('wreck', v.x, v.z);
+    // Blowing up a car you rammed is a crime (your own, wrecked by the police or a wall, isn't).
+    if (g.time - (v.rammedT ?? -1e9) < 30) g.police.report('wreck', v.x, v.z);
   };
 
   // Per-frame rules.
@@ -151,16 +193,19 @@ export function installRules(g) {
     // Damage effects and wrecks.
     smokeT -= dt;
     for (const v of g.vehicles.list) {
+      v.vx0 = v.vx; v.vz0 = v.vz; // speeds before this frame's physics: who rammed whom (onImpact)
       if (v.exploded) continue;
       const near = dist(v.x, v.z, P.pos.x, P.pos.z) < 140;
       if (v.explodeAt && g.time > v.explodeAt) { explode(v); continue; }
       if (!near) continue;
-      if (smokeT <= 0) {
+      // Nothing burns under the river (a car that sank is wrecked, but not on fire).
+      if (smokeT <= 0 && !(v.sinking > 0.4)) {
         const hx = v.x + Math.sin(v.heading) * v.hd * 0.7, hz = v.z + Math.cos(v.heading) * v.hd * 0.7;
-        if (v.onFire || v.wrecked) { for (let k = 0; k < 2; k++) g.effects.fire(hx, 1.0, hz); g.effects.smoke(hx, 1.6, hz, 0.12, 1); }
-        else if (v.health < 450) g.effects.smoke(hx, 1.2, hz, v.health < 300 ? 0.2 : 0.55, 1);
+        if (v.onFire || v.wrecked) { for (let k = 0; k < 2; k++) g.effects.fire(hx, v.y + 1.0, hz); g.effects.smoke(hx, v.y + 1.6, hz, 0.12, 1); }
+        else if (v.health < 450) g.effects.smoke(hx, v.y + 1.2, hz, v.health < 300 ? 0.2 : 0.55, 1);
       }
-      if (v.onFire && !v.wrecked) { v.health -= dt * 40; if (v.health <= 0) { v.wrecked = true; g.vehicles.onWreck(v); } }
+      if (v.onFire && !v.wrecked) v.health -= dt * 40;
+      damaged(v);
     }
     if (smokeT <= 0) smokeT = 0.08;
     // Skids and tyre smoke for the player's car.
@@ -172,10 +217,10 @@ export function installRules(g) {
       for (const side of [-1, 1]) {
         const x = v.x - s * v.hd * 0.7 - c * side * v.hw * 0.75, z = v.z - c * v.hd * 0.7 + s * side * v.hw * 0.75;
         g.effects.skid(v, x, z, v.heading);
-        if (v.slip > 0.45) g.effects.tyreSmoke(x, z);
+        if (v.slip > 0.45) g.effects.tyreSmoke(x, z, v.y);
       }
     }
-    if (v && Math.abs(forwardSpeed(v)) > 8 && g.city.densityAt(v.x, v.z) < 0.15 && Math.random() < 0.3) g.effects.dust(v.x - Math.sin(v.heading) * v.hd, v.z - Math.cos(v.heading) * v.hd, 1);
+    if (v && Math.abs(forwardSpeed(v)) > 8 && g.city.densityAt(v.x, v.z) < 0.15 && Math.random() < 0.3) g.effects.dust(v.x - Math.sin(v.heading) * v.hd, v.z - Math.cos(v.heading) * v.hd, 1, undefined, v.y);
     // Vehicle into the Godavari.
     if (v && v.sinking > 0.4) { if (!v.splashed) { v.splashed = true; g.effects.splash(v.x, v.z); g.audio.sfx('crash', 0.5); } if (v.sinking > 1.5) { const vv = v; P.leaveVehicle(true); g.wasted('drowned'); vv.wrecked = true; } }
     // Health regenerates slowly to half.
@@ -230,32 +275,35 @@ export function installRules(g) {
   });
 
   // ---------------------------------------------------------------- death and arrest
+  // A mission fails at once, but its card waits for the respawn: the HUD has one big-message slot.
+  const endMission = reason => g.missions.active ? (g.missions.fail(reason), reason) : null;
   g.wasted = cause => {
     if (g.player.state === 'dead' || g.respawning) return;
     g.player.state = 'dead';
     g.player.human.pose = 'lie';
     g.respawning = true;
     document.body.classList.add('wasted');
+    const failed = endMission('You were wasted.');
     g.hud.big('WASTED', cause === 'drowned' ? 'The Godavari wins this one' : '', 'wasted', 4.2);
     g.audio.sfx('wasted');
     g.save.stat('wasted');
-    g.missions.active && g.missions.fail('You were wasted.');
     g.jobs.stop(true);
-    setTimeout(() => respawn(HOSPITAL, 'SGGS Civil Hospital: ₹200 for the stitches.', 200), 4200);
+    setTimeout(() => respawn(HOSPITAL, fee => fee ? `SGGS Civil Hospital: ₹${fee} for the stitches.` : 'SGGS Civil Hospital patched you up for free.', 200, failed), 4200);
   };
   g.busted = () => {
     if (g.respawning) return;
     g.respawning = true;
     g.player.state = 'dead';
     document.body.classList.add('busted');
+    const failed = endMission('You were busted.');
     g.hud.big('BUSTED', 'Inspector Kadam sends his regards', 'busted', 4);
     g.audio.sfx('busted');
     g.save.stat('busted');
-    g.missions.active && g.missions.fail('You were busted.');
     g.jobs.stop(true);
-    setTimeout(() => respawn(POLICE_STATION, 'Released from Vazirabad Police Station. Fine: ₹300.', 300), 4000);
+    setTimeout(() => respawn(POLICE_STATION, fee => fee ? `Released from Vazirabad Police Station. Fine: ₹${fee}.` : 'Released from Vazirabad Police Station with a warning.', 300, failed), 4000);
   };
-  function respawn(at, msg, fee) {
+  /** Back on your feet at `at`; msg(fee charged) says where. A mission that failed shows its card now. */
+  function respawn(at, msg, fee, failed) {
     const P = g.player;
     if (P.vehicle) P.leaveVehicle(true);
     g.police.clear();
@@ -267,13 +315,14 @@ export function installRules(g) {
     const off = n ? (g.net.width[n.road] / 2 + 1) * (g.net.kerbSide(n.road) || 1) : 0;
     P.teleport(n ? n.x + n.dz * off : at.x, n ? n.z - n.dx * off : at.z, n ? Math.atan2(n.dx, n.dz) : 0);
     g.respawning = false;
-    g.hud.help(msg, 5);
+    g.hud.help(msg(fine), 5);
+    if (failed) g.hud.big('MISSION FAILED', failed, 'failed', 4);
     g.save.flush();
   }
 
   g.onPlayerDamage = () => {};
   g.onWantedChange = (level, before) => {
-    if (level > before) { g.audio.sfx('wanted'); if (before === 0 && !g.save.data.seenWantedHelp) { g.save.data.seenWantedHelp = true; g.hud.help('You are <b>wanted</b>. Break line of sight and get out of the flashing search area on the radar to lose the police. A respray at Anna\'s garage works too.', 8); } }
+    if (level > before) { g.audio.sfx('wanted'); if (before === 0 && !g.save.data.seenWantedHelp) { g.save.data.seenWantedHelp = true; g.hud.help(`You are <b>wanted</b>. Break line of sight and get out of the flashing search area on the radar to lose the police.${g.save.data.garage ? ' A respray at Anna\'s garage works too.' : ''}`, 8); } }
   };
   g.onEvaded = () => g.hud.toast('Lost them. <b>Wanted level cleared.</b>');
 

@@ -332,23 +332,36 @@ export class RoadNet {
 
   /**
    * The surface height under (x, z) for something now at height y: a flyover deck it is
-   * on (or driving up onto from the ramp's foot), else the ground (0). Decks far above
-   * or below y are passed under or over.
+   * on (or driving up onto from the ramp's foot), else the street or river bridge it is on
+   * (0), else the ground (`ground`, which citygen sets to the river valleys). Decks far above
+   * or below y are passed under or over, and so are streets and bridges a body is well below
+   * (walking the riverbank under a bridge).
    */
   surfaceAt(x, z, y = 0) {
-    let best = 0, bestErr = Math.abs(y), t = this._t;
+    let street = false, deck = 0, deckErr = Infinity, t = this._t;
     this.grid.query(x - 1, z - 1, x + 1, z + 1, i => {
       const r = this.ptRoad[i];
-      if (!this.raised[r]) return;
       const d2 = pointSegDist2(x, z, this.px[i], this.pz[i], this.px[i + 1], this.pz[i + 1], t);
       const hw = this.width[r] / 2 + 0.4;
       if (d2 > hw * hw) return;
-      const h = this.deckAt(r, this.cum[i] + (this.cum[i + 1] - this.cum[i]) * t[0]);
+      if (!this.raised[r]) { street = true; return; }
+      // A ramp's foot inside a junction on the ground is the junction (drawn flat), so traffic
+      // crossing it isn't lifted onto the ramp.
+      const s = this.cum[i] + (this.cum[i + 1] - this.cum[i]) * t[0];
+      if ((s < this.trimStart(r) && this.jDeck[this.ra[r]] < 0.05) || (s > this.length[r] - this.trimEnd(r) && this.jDeck[this.rb[r]] < 0.05)) return;
+      const h = this.deckAt(r, s);
       const err = Math.abs(h - y);
-      if (err < 2.6 && err < bestErr) { best = h; bestErr = err; }
+      if (err < 2.6 && err < deckErr) { deck = h; deckErr = err; }
     });
-    return best;
+    // Streets lie on the ground or (over the river valleys) above it; one a step or less
+    // above the body is the one it is on.
+    const ground = street && y > -0.6 ? Math.max(0, this.ground(x, z)) : this.ground(x, z);
+    // A deck within a step of the body beats the ground, so it can walk up from a ramp's foot.
+    return deckErr < Math.max(Math.abs(y - ground), 0.6) ? deck : ground;
   }
+
+  /** The ground under (x, z) away from the streets: flat until citygen cuts the river valleys. */
+  ground(x, z) { return 0; }
 
   name(road) { return this.names[this.nameId[road]] || ''; }
   trimStart(road) { return Math.min(this.jRadius[this.ra[road]], this.length[road] * 0.45); }
@@ -437,13 +450,16 @@ export class RoadNet {
   nearest(x, z, maxDist = 60, out = {}, filter = null) {
     let best = maxDist * maxDist, found = -1, bestT = 0;
     const t = this._t;
-    for (let radius = Math.min(24, maxDist); ; radius = Math.min(radius * 2, maxDist)) {
+    for (let radius = Math.min(24, maxDist); ; ) {
       this.grid.query(x - radius, z - radius, x + radius, z + radius, i => {
         if (filter && !filter(this.ptRoad[i])) return;
         const d2 = pointSegDist2(x, z, this.px[i], this.pz[i], this.px[i + 1], this.pz[i + 1], t);
         if (d2 < best) { best = d2; found = i; bestT = t[0]; }
       });
-      if (found >= 0 || radius >= maxDist) break;
+      // Every segment within `radius` has been seen; one found farther out (in a corner of the
+      // box) may lose to a closer one just beyond its side, so look once more that far.
+      if ((found >= 0 && best <= radius * radius) || radius >= maxDist) break;
+      radius = Math.min(found >= 0 ? Math.sqrt(best) + 0.01 : radius * 2, maxDist);
     }
     if (found < 0) return null;
     const road = this.ptRoad[found];

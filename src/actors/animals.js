@@ -2,8 +2,10 @@
 // the middle of the road, where traffic waits and honks; dogs trot about and bark.
 import * as THREE from 'three';
 import { clamp, dist, rng, hash2, dampAngle, wrapAngle } from '../core/math.js';
+import { sendFirst } from '../core/buffers.js';
+import { WATER_Y } from '../world/water.js';
 
-const _m = new THREE.Matrix4(), _a = new THREE.Matrix4(), _e = new THREE.Euler(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
+const _m = new THREE.Matrix4(), _a = new THREE.Matrix4(), _h = new THREE.Matrix4(), _b = new THREE.Matrix4(), _e = new THREE.Euler(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const COW = [0xf2efe6, 0xe8dcc8, 0x8a6a4f, 0xd8c8b0, 0x5a4636];
 const DOG = [0xc49a6c, 0x8a6a4f, 0x2b2622, 0xd8c8b0, 0xa0764a];
 
@@ -35,6 +37,10 @@ export class Animals {
     for (let i = this.list.length - 1; i >= 0; i--) if (dist(this.list[i].x, this.list[i].z, pos.x, pos.z) > 170) this.list.splice(i, 1);
     if (this.list.length < target) this._spawn(pos);
     for (const a of this.list) this._step(a, dt);
+    // Into the sun's shadow map only where it follows them, as for people and vehicles (game.js):
+    // a static one would leave their shadows behind as they move.
+    const cast = !!g.quality.settings.dynamicShadows;
+    if (cast !== this.cast) { this.cast = cast; for (const k in this.parts) this.parts[k].castShadow = cast; }
     this._render(g.camera3.position);
   }
 
@@ -48,17 +54,35 @@ export class Animals {
     const side = net.kerbSide(n.road) || (r.chance(0.5) ? 1 : -1), off = net.width[n.road] / 2 + (cow ? 0.6 : 1.0);
     const x = n.x + n.dz * off * side, z = n.z - n.dx * off * side;
     if (g.colliders.blocked(x, z, 0.7)) return;
-    this.list.push({
-      cow, x, z, heading: Math.atan2(n.dx, n.dz) * (r.chance(0.5) ? 1 : -1), speed: 0, state: 'walk', t: r.range(3, 10),
+    const a = {
+      // Along the street, either way.
+      cow, x, z, y: 0, heading: Math.atan2(n.dx, n.dz) + (r.chance(0.5) ? 0 : Math.PI), speed: 0, state: 'walk', t: r.range(3, 10),
       color: cow ? r.pick(COW) : r.pick(DOG), scale: cow ? r.range(0.9, 1.1) : r.range(0.8, 1.1), phase: r() * 6, road: n.road, id: this.seed, bark: 0,
-    });
+    };
+    if (this._settle(a)) this.list.push(a);
+  }
+
+  /**
+   * Stand an animal on what is under it: the footpath where the street has one, a road (level
+   * across the riverbank's slope, and over a bridge), else the ground itself (a ghat's slope, a
+   * station platform). False at the river's edge, where the bank goes under the water.
+   */
+  _settle(a) {
+    const g = this.game, net = g.net, city = g.city;
+    this._flat ||= r => !net.raised[r];
+    const n = net.nearest(a.x, a.z, 14, this._n || (this._n = {}), this._flat);
+    const onRoad = n && n.dist < net.width[n.road] / 2 + 0.3, ground = city.groundHeight(a.x, a.z);
+    if (!onRoad && ground < WATER_Y + 0.1) return false;
+    const pave = n ? city.pavementAt(n.seg, n.dist) : 0;
+    a.y = pave > 0 ? Math.max(ground, pave) : onRoad ? Math.max(ground, 0) : ground;
+    return true;
   }
 
   /** Does anything with legs block this point? (traffic look-ahead) */
   forEachNear(x, z, r, fn) { for (const a of this.list) if (Math.abs(a.x - x) < r && Math.abs(a.z - z) < r) fn(a); }
 
   _step(a, dt) {
-    const g = this.game, P = g.player;
+    const g = this.game, P = g.player, x0 = a.x, z0 = a.z;
     a.t -= dt; a.bark -= dt;
     const dP = dist(a.x, a.z, P.pos.x, P.pos.z);
     if (a.cow) {
@@ -105,14 +129,25 @@ export class Animals {
       const ew = v.hw + (a.cow ? 0.55 : 0.3), ed = v.hd + (a.cow ? 1.0 : 0.4);
       if (Math.abs(lx) > ew || Math.abs(lz) > ed) continue;
       if (a.cow) {
+        // Apart across whichever of the vehicle's sides or ends the cow is least far inside
+        // (n points from the vehicle to the cow), as Game.pushOutOfVehicles does for people.
+        const inX = ew - Math.abs(lx), inZ = ed - Math.abs(lz), across = inX < inZ;
+        const k = Math.sign(across ? lx : lz) || 1, push = across ? inX : inZ;
+        const nx = across ? k * c2 : k * s2, nz = across ? -k * s2 : k * c2;
+        if (v.kinematic) {
+          // Traffic waits for cows (traffic.js) and parked vehicles stay put: a cow that wanders
+          // into one steps round it.
+          a.x += nx * push; a.z += nz * push;
+          continue;
+        }
         // The car stops dead; the cow looks round, faintly annoyed.
-        const nx = Math.sign(lz) * s2, nz = Math.sign(lz) * c2;
-        const push = ed - Math.abs(lz);
         v.x -= nx * push; v.z -= nz * push;
-        const vn = v.vx * -nx + v.vz * -nz;
-        if (vn > 0) { v.vx += nx * vn * 1.3; v.vz += nz * vn * 1.3; if (vn > 4 && v.role === 'player') { g.audio?.sfx('crash', 0.4); g.audio?.moo?.(); g.camera.addShake(0.4); v.health -= vn * 6; } }
+        const vn = v.vx * nx + v.vz * nz; // closing on the cow
+        if (vn > 0) { v.vx -= nx * vn * 1.3; v.vz -= nz * vn * 1.3; if (vn > 4 && v.role === 'player') { g.audio?.sfx('crash', 0.4); g.audio?.moo?.(); g.camera.addShake(0.4); v.health -= vn * 6; } }
       } else if (Math.hypot(v.vx, v.vz) > 2) { a.heading = Math.atan2(dx, dz); a.state = 'walk'; a.t = 2; a.speed = 6; }
     }
+    // On whatever is under them now; never out into the river (they turn back at the bank).
+    if ((a.x !== x0 || a.z !== z0) && !this._settle(a)) { a.x = x0; a.z = z0; a.heading += Math.PI; }
   }
 
   _render(cam) {
@@ -126,7 +161,7 @@ export class Animals {
       const legLen = 0.75;
       const bodyY = sit ? (cow ? 0.46 : 0.5) : legLen + 0.34;
       _e.set(0, a.heading, 0, 'YXZ'); _q.setFromEuler(_e);
-      _v.set(a.x, 0, a.z); _s.set(s, s, s);
+      _v.set(a.x, a.y || 0, a.z); _s.set(s, s, s);
       _a.compose(_v, _q, _s);
       // Body: a deep barrel for a cow, a compact one for a dog.
       _m.makeScale(cow ? 0.82 : 0.82, cow ? 1.05 : 0.9, cow ? 1.1 : 0.78); _m.setPosition(0, bodyY, 0);
@@ -135,19 +170,19 @@ export class Animals {
       const graze = a.state === 'graze' ? 0.6 : 0;
       _e.set(0.35 + graze, 0, 0); _q.setFromEuler(_e);
       _m.compose(_v.set(0, bodyY + (cow ? 0.3 : 0.32) - graze * 0.55, cow ? 1.12 : 0.82), _q, _s.set(cow ? 0.55 : 0.62, cow ? 0.62 : 0.6, cow ? 0.85 : 0.75));
-      const head = _m.clone().premultiply(_a);
+      const head = _h.copy(_m).premultiply(_a);
       emit('head', head, cow && a.color === 0x5a4636 ? 0x4a3a2c : a.color);
       if (cow) {
-        for (const sx of [-0.2, 0.2]) { _m.makeRotationZ(sx * 3.2); _m.setPosition(sx, 0.36, 0.15); emit('horn', _m.clone().premultiply(head), 0xd8ccb0); }
+        for (const sx of [-0.2, 0.2]) { _m.makeRotationZ(sx * 3.2); _m.setPosition(sx, 0.36, 0.15); emit('horn', _b.copy(_m).premultiply(head), 0xd8ccb0); }
         _m.makeScale(1.3, 1.1, 1.2); _m.setPosition(0, bodyY + 0.42, 0.55); emit('hump', _m.premultiply(_a), a.color);
       }
-      // Legs: a walk cycle standing; tucked out of sight lying down.
-      const swing = a.speed > 0 ? Math.sin(a.phase) * 0.45 : 0;
+      // Legs: a walk cycle standing, down to the ground; tucked out of sight lying down.
+      const swing = a.speed > 0 ? Math.sin(a.phase) * 0.45 : 0, hip = bodyY - 0.2;
       for (const [lx, lz, ph] of [[-0.3, 0.72, 0], [0.3, 0.72, Math.PI], [-0.3, -0.72, Math.PI], [0.3, -0.72, 0]]) {
         const ang = sit ? 0 : swing * Math.cos(ph);
         _e.set(ang, 0, 0); _q.setFromEuler(_e);
         const zz = lz * (cow ? 1 : 0.62);
-        _m.compose(_v.set(lx * (cow ? 1 : 0.9), bodyY - 0.2, zz), _q, _s.set(cow ? 1 : 0.85, sit ? 0.3 : legLen, cow ? 1 : 0.85));
+        _m.compose(_v.set(lx * (cow ? 1 : 0.9), hip, zz), _q, _s.set(cow ? 1 : 0.85, sit ? 0.3 : hip, cow ? 1 : 0.85));
         emit('leg', _m.premultiply(_a), a.color === 0xf2efe6 ? 0xe0d8c8 : a.color);
       }
       // Tail: a swishing rope for a cow, curled up over a dog's back.
@@ -156,6 +191,11 @@ export class Animals {
       _m.compose(_v.set(0, bodyY + (cow ? 0.3 : 0.2), cow ? -1.12 : -0.72), _q, _s.set(1, cow ? 1 : 0.55, 1));
       emit('tail', _m.premultiply(_a), a.color);
     }
-    for (const k in P) { P[k].count = Math.min(this.n[k], P[k].instanceMatrix.count); P[k].visible = P[k].count > 0; P[k].instanceMatrix.needsUpdate = true; if (P[k].instanceColor) P[k].instanceColor.needsUpdate = true; }
+    // Only the instances in use go to the graphics chip.
+    for (const k in P) {
+      const m = P[k];
+      m.count = Math.min(this.n[k], m.instanceMatrix.count); m.visible = m.count > 0;
+      sendFirst(m.instanceMatrix, m.count); if (m.instanceColor) sendFirst(m.instanceColor, m.count);
+    }
   }
 }

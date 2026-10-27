@@ -17,9 +17,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;700&family=Noto+Sans+Devanagari:wght@600;700;800&display=swap" />
     <link rel="preload" as="image" href="/media/gta-nanded-chase.webp" fetchpriority="high" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://gta.nanded.fun/" />
     <meta property="og:title" content="GTA Nanded" />
     <meta property="og:description" content="Your city. Your rules. An open-world game of Nanded in your browser." />
-    <meta property="og:image" content="/media/nanded-key-art.webp" />
+    <!-- The share card is a JPEG: WhatsApp's link preview has been known to show nothing for WebP. -->
+    <meta property="og:image" content="https://gta.nanded.fun/media/nanded-share.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <canvas id="game-canvas" tabindex="-1" aria-label="GTA Nanded 3D city"></canvas>
@@ -156,7 +163,7 @@
             <section class="for-touch"><h3>Everywhere</h3><p><kbd class="tap">MAP</kbd> city map · <kbd class="tap">❚❚</kbd> pause<br />Hold your phone sideways for the full city.</p></section>
             <section class="for-desk"><h3>On foot</h3><p><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump<br /><kbd>Click</kbd>/<kbd>J</kbd> punch · <kbd>F</kbd> get in / jack a vehicle<br /><kbd>Q</kbd> buy, talk, photograph · <kbd>X</kbd> photo</p></section>
             <section class="for-desk"><h3>Driving</h3><p><kbd>W</kbd> gas · <kbd>S</kbd> brake / reverse · <kbd>A D</kbd> steer<br /><kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio · <kbd>V</kbd> camera<br /><kbd>C</kbd> look back · <kbd>N</kbd> start a job · <kbd>Q</kbd> siren · <kbd>F</kbd> get out</p></section>
-            <section class="for-desk"><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepad: sticks to move and look, <kbd>RT</kbd>/<kbd>LT</kbd> gas and brake, <kbd>A</kbd> jump/handbrake, <kbd>B</kbd> punch, <kbd>X</kbd> sprint/buy, <kbd>Y</kbd> get in/out, <kbd>D-pad ↑</kbd> job, <kbd>Back</kbd> map, <kbd>Start</kbd> pause.</p></section>
+            <section class="for-desk"><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepad: sticks to move and look, <kbd>RT</kbd>/<kbd>LT</kbd> gas and brake, <kbd>A</kbd> jump/handbrake, <kbd>B</kbd> punch, <kbd>L3</kbd> sprint, <kbd>X</kbd> buy, <kbd>Y</kbd> get in/out, <kbd>D-pad ↑</kbd> job, <kbd>Back</kbd> map, <kbd>Start</kbd> pause.</p></section>
             <section><h3>Wanted</h3><p>Crimes the police see raise your stars. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.</p></section>
           </div>
         </div>

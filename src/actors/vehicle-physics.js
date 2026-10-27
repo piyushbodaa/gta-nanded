@@ -128,8 +128,11 @@ export function stepBody(v, ctl, dt, assist = 1) {
     nR *= 1 - clamp(dt * 0.8 * assist, 0, 0.5);
   }
   if (two) { v.w *= 1 - clamp(dt * 2.5, 0, 0.5); nR *= 1 - clamp(dt * 3, 0, 0.6); }
-  if (nF > s.top * 1.08) nF = s.top * 1.08;
-  if (nF < -s.reverseTop * 1.2) nF = -s.reverseTop * 1.2;
+  // Faster than its engine could drive it (thrown back by a crash or a blast): the tyres skid it down
+  // to that, rather than it stopping dead like a wall in front of whatever hit it.
+  const skid = mu * G * dt;
+  if (nF > s.top * 1.08) nF = Math.max(s.top * 1.08, nF - skid);
+  if (nF < -s.reverseTop * 1.2) nF = Math.min(-s.reverseTop * 1.2, nF + skid);
   if (drive === 0 && brake > 0 && Math.abs(nF) < 0.4) nF = 0;
   if (drive === 0 && brake === 0 && Math.abs(nF) < 0.08) nF = 0;
 
@@ -192,6 +195,12 @@ export function collideStatic(v, colliders, contact) {
 }
 
 const _sat = {};
+/** How fast A and B close along their contact normal (from the centres' velocities); 0 if apart or parting. */
+export function closingSpeed(A, B) {
+  const res = obbSat(A.x, A.z, A.hw, A.hd, Math.cos(A.heading), Math.sin(A.heading), B.x, B.z, B.hw, B.hd, Math.cos(B.heading), Math.sin(B.heading), _sat);
+  return res ? Math.max(0, (B.vx - A.vx) * res.nx + (B.vz - A.vz) * res.nz) : 0;
+}
+
 /** Vehicle-vehicle impulse. Either body may be kinematic (mass Infinity). Returns impact speed or 0. */
 export function collidePair(A, B) {
   const ca = Math.cos(A.heading), sa = Math.sin(A.heading), cb = Math.cos(B.heading), sb = Math.sin(B.heading);

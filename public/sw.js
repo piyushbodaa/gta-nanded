@@ -1,13 +1,35 @@
 /* GTA Nanded offline shell.
    - Pages and world data: network first, so a new release shows up on the next
      visit; the cached copy is only a fallback for flaky connections.
-   - Hashed build assets and media: cache first (their names change when they do).
-   Range requests (audio seeking) always go to the network. */
-const VERSION = 'gta-nanded-v2-2026-10-21';
+   - Hashed build assets: cache first (their names change when they do). The page
+     names its release's files, so each fresh page drops the older releases' files
+     instead of letting them pile up on the phone.
+   - Media keep their names when they are replaced: shown from the cache at once,
+     and checked in the background so the next visit has the new file.
+   Installing caches the page, its build files, its cover art and the world, so one visit
+   online is enough to play offline. Range requests (audio seeking) always go to the network.
+   VERSION only needs a bump to clear everything at once; releases do not need one. */
+const VERSION = 'gta-nanded-v3-2026-10-27';
 const CORE = ['/', '/manifest.webmanifest', '/icon.svg'];
+const WORLD = '/data/world.json';
+
+// The build files a page loads: its script, module preloads and stylesheet.
+const releaseFiles = html => [...new Set(html.match(/\/assets\/[\w.-]+/g) || [])];
+// The art the page itself loads (src/href), not the share image named by full address in og:image.
+const pageArt = html => [...new Set([...html.matchAll(/(?:src|href)="(\/media\/[\w.-]+)"/g)].map(m => m[1]))];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
+  event.waitUntil((async () => {
+    const cache = await caches.open(VERSION);
+    await cache.addAll(CORE);
+    // These mostly come from the HTTP cache the page has just filled. A miss is not fatal:
+    // the file is cached when the page next asks for it.
+    const page = await cache.match('/');
+    const html = page ? await page.text() : '';
+    const files = [...releaseFiles(html), ...pageArt(html), WORLD];
+    await Promise.all(files.map(file => cache.add(file).catch(() => {})));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', event => {
@@ -24,23 +46,59 @@ self.addEventListener('activate', event => {
   })());
 });
 
-const put = (request, response) => {
-  if (response.ok && response.status === 200) {
-    const copy = response.clone();
-    caches.open(VERSION).then(cache => cache.put(request, copy));
-  }
-  return response;
+// Keeps a copy of a good response; settles to true once it is stored.
+const store = (key, response) => {
+  if (!response.ok || response.status !== 200) return Promise.resolve(false);
+  const copy = response.clone();
+  return caches.open(VERSION).then(cache => cache.put(key, copy)).then(() => true, () => false);
 };
+
+// Drops cached build files that the current page no longer names: older releases'.
+async function prune() {
+  const cache = await caches.open(VERSION);
+  const page = await cache.match('/');
+  const keep = new Set(page ? releaseFiles(await page.text()) : []);
+  if (!keep.size) return; // not the game's page: leave the cache alone
+  for (const request of await cache.keys()) {
+    const path = new URL(request.url).pathname;
+    if (path.startsWith('/assets/') && !keep.has(path)) await cache.delete(request);
+  }
+}
 
 self.addEventListener('fetch', event => {
   const { request } = event;
   if (request.method !== 'GET' || request.headers.has('range')) return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  const immutable = url.pathname.startsWith('/assets/') || url.pathname.startsWith('/media/');
-  if (immutable) {
-    event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(res => put(request, res))));
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(res => {
+      event.waitUntil(store(request, res));
+      return res;
+    })));
     return;
   }
-  event.respondWith(fetch(request).then(res => put(request, res)).catch(() => caches.match(request).then(hit => hit || caches.match('/'))));
+  if (url.pathname.startsWith('/media/')) {
+    event.respondWith(caches.match(request).then(hit => {
+      if (!hit) return fetch(request).then(res => { event.waitUntil(store(request, res)); return res; });
+      // The check names the cached copy's own ETag, so an unchanged file costs a 304 even after the
+      // browser's HTTP cache has dropped it (a plain fetch would then download it again in full).
+      // A request with its own condition skips the HTTP cache, so the 304 arrives here as it is.
+      const etag = hit.headers.get('etag');
+      const check = etag ? fetch(new Request(request.url, { headers: { 'If-None-Match': etag }, cache: 'no-store' })) : fetch(request);
+      event.waitUntil(check.then(res => res.status === 304 || (etag && res.headers.get('etag') === etag) || store(request, res))
+        .catch(() => null));
+      return hit;
+    }));
+    return;
+  }
+  // A page is kept under its path alone, so '?perf' or a share link's tags add no extra copies.
+  // Offline, only a page falls back to the game's page: data or a script that was never cached
+  // gets a plain network error, not HTML in its place.
+  const navigate = request.mode === 'navigate';
+  const key = navigate ? url.pathname : request;
+  event.respondWith(fetch(request).then(res => {
+    const stored = store(key, res);
+    event.waitUntil(navigate && url.pathname === '/' ? stored.then(ok => ok && prune()).catch(() => {}) : stored);
+    return res;
+  }).catch(() => caches.match(key).then(hit => hit || (navigate ? caches.match('/') : Response.error()))));
 });

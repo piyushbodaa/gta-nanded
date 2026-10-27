@@ -1,6 +1,7 @@
 // Third-person camera: orbit on foot, chase behind vehicles, pull in before walls.
 import * as THREE from 'three';
 import { clamp, damp, dampAngle, wrapAngle } from '../core/math.js';
+import { WATER_Y } from '../world/water.js';
 
 const DIST = { hatch: 6.4, sedan: 6.8, suv: 7.4, police: 7.4, auto: 5.6, bike: 4.6, scooter: 4.4, bus: 13, truck: 11.5, tractor: 7, tempo: 7.6, ambulance: 8 };
 const HEIGHT = { hatch: 1.6, sedan: 1.6, suv: 2.0, police: 2.0, auto: 1.8, bike: 1.5, scooter: 1.5, bus: 3.2, truck: 3.2, tractor: 2.2, tempo: 2.0, ambulance: 2.2 };
@@ -41,7 +42,12 @@ export class GameCamera {
   update(dt, input, subject) {
     this.time += dt;
     const cam = this.camera;
-    if (this.cinematic) return this._cinematic(dt);
+    if (this.cinematic) {
+      // The shot owns the camera: drags and wheel turns during it are dropped, not saved up
+      // to swing the view somewhere random the moment it ends.
+      input.look.x = input.look.y = 0; input.zoom = 0;
+      return this._cinematic(dt);
+    }
     const look = input.look;
     const manual = Math.abs(look.x) + Math.abs(look.y) > 1e-5;
     if (manual) this.lastManual = this.time;
@@ -105,7 +111,8 @@ export class GameCamera {
     // Squeezed by walls: rise up and look down over the shoulder instead of into the back of the head.
     const squeeze = clamp(1 - this.curDist / dist, 0, 1);
     py += squeeze * (vehicle ? 1.6 : 1.1);
-    py = Math.max(py, (subject.groundY ?? 0) + 0.4);
+    // Above the ground, and above the river (its surface is drawn from above only).
+    py = Math.max(py, (subject.groundY ?? 0) + 0.4, WATER_Y + 0.3);
     // Shake.
     if (this.shake > 0.001) {
       const s = this.shake * 0.25;

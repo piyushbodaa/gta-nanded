@@ -2,9 +2,10 @@
 import * as THREE from 'three';
 import { VEHICLE_TYPES, TYPE_KEYS } from './vehicle-types.js';
 import { vehicleModel } from './vehicle-models.js';
-import { createBody, stepBody, collideStatic, collidePair, speedOf } from './vehicle-physics.js';
+import { createBody, stepBody, collideStatic, collidePair, closingSpeed, speedOf, forwardSpeed } from './vehicle-physics.js';
 import { makeOutfit, inShadowBox } from './humans.js';
 import { radialTexture } from '../world/citymat.js';
+import { WATER_Y } from '../world/water.js';
 import { clamp, rng } from '../core/math.js';
 import { sendFirst } from '../core/buffers.js';
 
@@ -29,6 +30,7 @@ export class Vehicles {
     const vcol = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 });
     const glass = new THREE.MeshStandardMaterial({ color: 0x0e1418, roughness: 0.04, metalness: 0.3 });
     const lit = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
+    lit.onBeforeCompile = lampShader;
     for (const type of TYPE_KEYS) {
       const model = vehicleModel(type);
       const cap = CAPACITY[type] || 10;
@@ -111,9 +113,11 @@ export class Vehicles {
   remove(v) {
     const i = this.list.indexOf(v);
     if (i >= 0) this.list.splice(i, 1);
-    if (v.driver) this.humans.remove(v.driver);
+    // The player's own body stays: they step off where it stood on their next update (Player.update).
+    if (v.driver && v.role !== 'player') this.humans.remove(v.driver);
     for (const p of v.passengers) this.humans.remove(p);
     v.driver = null; v.passengers = [];
+    v.removed = true;
   }
 
   /** Seat position of the driver in world space. */
@@ -122,50 +126,121 @@ export class Vehicles {
     out.x = v.x + s.x * c + s.z * sn; out.z = v.z - s.x * sn + s.z * c;
     return out;
   }
-  /** Door position (driver's side, right-hand drive) where people get in and out. */
+  /**
+   * Door position where people get in and out: the driver's side (right-hand drive), and the left of
+   * a two-wheeler, the side its stand and the rider's foot are on (local +x is the vehicle's left).
+   */
   doorWorld(v, out = {}) {
-    const s = v.model.seat, c = Math.cos(v.heading), sn = Math.sin(v.heading);
-    const side = v.spec.two ? -(v.hw + 0.5) : s.x <= 0 ? -(v.hw + 0.55) : v.hw + 0.55;
-    out.x = v.x + side * c + s.z * sn; out.z = v.z - side * sn + s.z * c;
+    return local(v, doorSide(v), v.model.seat.z, out);
+  }
+  /**
+   * Where someone getting out stands, {x, z, y}: the door, or else the other side, behind or ahead,
+   * whichever is first on the vehicle's own level (not off a flyover's deck), clear of walls and
+   * railings, and out of the river. Hemmed in all round, the door.
+   */
+  exitWorld(v, out = {}) {
+    const city = this.city, rd = this._rd || (this._rd = {}), s = v.model.seat, side = doorSide(v);
+    const ground = () => Math.max(city.groundHeight(out.x, out.z), city.net.surfaceAt(out.x, out.z, v.y));
+    // On a bridge over the river everything around is water: its parapets decide.
+    const dry = city.riverDistance(v.x, v.z, rd).d >= -1;
+    for (const [lx, lz] of [[side, s.z], [-side, s.z], [0, -v.hd - 0.6], [0, v.hd + 0.6]]) {
+      local(v, lx, lz, out);
+      const y = ground();
+      if (Math.abs(y - v.y) > 1 || this.colliders.blocked(out.x, out.z, 0.34, y)) continue;
+      if (dry && city.riverDistance(out.x, out.z, rd).d < -1) continue;
+      out.y = y;
+      return out;
+    }
+    local(v, side, s.z, out);
+    out.y = ground();
     return out;
   }
 
-  /** Physics for every non-kinematic body, then collisions. */
+  /** Physics for every non-kinematic body, then collisions, in substeps. */
   step(dt, controls) {
-    const sub = 2, h = dt / sub;
+    if (!(dt > 0)) return;
+    const sub = this._nearPairs(dt), h = dt / sub;
     for (let k = 0; k < sub; k++) {
       for (const v of this.list) {
-        if (v.kinematic) continue;
-        const ctl = controls.get(v) || IDLE;
+        // Driven along its lane, a body forgets its last ride: woken again on a speed breaker, it
+        // would otherwise take the whole hump as one substep's rise and fly.
+        if (v.kinematic) { if (v.base !== undefined) v.base = undefined; continue; }
+        // No controls this frame: lane traffic (its driver takes over next frame), the player's car and
+        // one they bailed out of roll on; anything parked or left waiting holds still.
+        const rolls = v.ai || v.role === 'player' || v.role === 'abandoned';
+        const ctl = controls.get(v) || (rolls ? IDLE : parked(v));
         stepBody(v, ctl, h, v.role === 'player' ? 1 : 1.3);
-        // Up a flyover's ramp and along its deck, or on the street beneath it; over a speed
+        // Up a flyover's ramp and along its deck, on the street beneath it or down a riverbank; over a speed
         // breaker the body rises with the hump, and taken fast it leaves the road for a moment.
         v.y = this.city.net.surfaceAt(v.x, v.z, v.y - (v.hop || 0));
         this._ride(v, h);
         v.y += v.hop;
         const hit = collideStatic(v, this.colliders, this._contact);
         if (hit > 4) this._impact(v, hit, null);
-        // Water: the riverbank is a hard edge for anything with wheels.
+        // Water: down the bank and into the channel, a body sinks. A bridge deck stands clear of it.
         const rd = this.city.riverDistance(v.x, v.z, this._rd || (this._rd = {}));
-        if (rd.d < -1.5) v.sinking = (v.sinking || 0) + h; else v.sinking = 0;
+        if (rd.d < -1.5 && v.y < WATER_Y) v.sinking = (v.sinking || 0) + h; else v.sinking = 0;
       }
+      // Lane traffic was placed where it will be at the end of the frame: meet it where it is now.
+      this._collidePairs(dt - (k + 1) * h);
     }
-    // Vehicle-vehicle (only pairs involving a dynamic body).
-    const dyn = this.list.filter(v => !v.kinematic);
-    for (const a of dyn) {
+  }
+
+  /**
+   * The pairs of vehicles (at least one dynamic) near enough to touch this frame, and the substeps it
+   * needs: two, or more while a pair closes fast on a collision course, so that vehicles about to meet
+   * are checked every 35 cm of closing. At a slow phone's 20 fps a bike meeting an oncoming bike closes
+   * 2.5 m between frames; checked only then, they would slip through each other.
+   */
+  _nearPairs(dt) {
+    const pairs = this._pairs || (this._pairs = []);
+    pairs.length = 0;
+    let closing = 0;
+    for (const a of this.list) {
+      if (a.kinematic) continue;
+      // Near enough to meet in this frame even head-on at full speed (90 m/s), lane traffic counted
+      // from where it was before it moved on (up to 40 m/s).
+      const ax = a.x, az = a.z, reach = a.hd + 0.5 + 130 * dt;
       for (const b of this.list) {
         if (a === b || (!b.kinematic && b.id < a.id)) continue;
-        const dx = a.x - b.x, dz = a.z - b.z, rr = a.hd + b.hd + 0.5;
-        if (dx * dx + dz * dz > rr * rr || Math.abs(a.y - b.y) > 2) continue; // on a flyover and under it
-        const was = b.kinematic;
-        if (was) { b.vx = b.kinematic ? (b.vx || 0) : b.vx; }
-        const imp = collidePair(a, b);
-        if (imp > 1.5) {
-          this._impact(a, imp, b);
-          this._impact(b, imp, a);
-          if (b.kinematic && b.role !== 'parked-static') this.wake(b);
-        }
+        let dx = ax - b.x, dz = az - b.z;
+        const near = reach + b.hd;
+        if (dx * dx + dz * dz > near * near || Math.abs(a.y - b.y) > 2) continue;
+        pairs.push(a, b);
+        // Where b was as the frame began.
+        if (b.kinematic) { dx += b.vx * dt; dz += b.vz * dt; }
+        const rvx = a.vx - b.vx, rvz = a.vz - b.vz, rv = Math.hypot(rvx, rvz);
+        if (rv * dt <= 0.7 || rv <= closing) continue; // two substeps are enough
+        // On a collision course: their paths overlap side to side (oncoming traffic in its own
+        // lane passes by), and b is ahead within this frame's travel.
+        const ux = rvx / rv, uz = rvz / rv, side = Math.abs(dz * ux - dx * uz), ahead = -(dx * ux + dz * uz);
+        const width = span(a, -uz, ux) + span(b, -uz, ux), length = span(a, ux, uz) + span(b, ux, uz);
+        if (side < width && ahead > -length && ahead - length < rv * dt) closing = rv;
       }
+    }
+    return clamp(Math.ceil((closing * dt) / 0.35), 2, 8);
+  }
+
+  /** Vehicle-vehicle, for this frame's near pairs; kinematic ones are met `lag` seconds back along their way. */
+  _collidePairs(lag) {
+    const pairs = this._pairs;
+    for (let i = 0; i < pairs.length; i += 2) {
+      const a = pairs[i], b = pairs[i + 1];
+      const back = b.kinematic ? lag : 0, x = b.x, z = b.z;
+      const dx = a.x - x + b.vx * back, dz = a.z - z + b.vz * back, rr = a.hd + b.hd + 0.5;
+      if (dx * dx + dz * dz > rr * rr || Math.abs(a.y - b.y) > 2) continue; // on a flyover and under it
+      b.x = x - b.vx * back; b.z = z - b.vz * back;
+      // Traffic and parked vehicles meet a crash with their real mass: as walls, a scooter would throw
+      // a hatch back the way it came. A brush leaves them to their drivers.
+      const wakes = b.kinematic && b.role !== 'parked-static' && closingSpeed(a, b) > 1.5;
+      if (wakes) b.kinematic = false;
+      const imp = collidePair(a, b);
+      if (imp > 1.5) {
+        this._impact(a, imp, b);
+        this._impact(b, imp, a);
+      }
+      if (wakes) { b.kinematic = true; this.wake(b); }
+      if (b.kinematic) { b.x = x; b.z = z; }
     }
   }
 
@@ -177,12 +252,14 @@ export class Vehicles {
   _ride(v, h) {
     const B = this.city.bumps, fx = Math.sin(v.heading), fz = Math.cos(v.heading), half = v.spec.wheelbase / 2;
     const hf = B.heightAt(v.x + fx * half, v.z + fz * half), hr = B.heightAt(v.x - fx * half, v.z - fz * half);
-    const base = (hf + hr) / 2;
+    const base = (hf + hr) / 2, speed = speedOf(v);
     v.hopV = (v.hopV || 0) - 9.81 * h;
     v.hop = (v.hop || 0) + v.hopV * h;
     if (v.hop <= base) {
       if (v.air && v.hopV < -1.6) this.onBump?.(v, -v.hopV);
-      const rise = (base - (v.base ?? base)) / h;
+      // No faster than a hump can rise under wheels at this speed (its steepest slope is about 1 in 6):
+      // a body put down on one (a police jeep unstuck out of sight) must not take it as one substep's rise.
+      const rise = Math.min((base - (v.base ?? base)) / h, speed * 0.2 + 0.3);
       v.hop = base; v.hopV = Math.max(v.hopV, rise * 1.2); v.air = false;
       v.bumpPitch = Math.atan2(hf - hr, 2 * half);
     } else {
@@ -191,7 +268,7 @@ export class Vehicles {
     }
     v.base = base;
     // Potholes under the front wheels (the rear ones follow the same line).
-    const speed = speedOf(v), tw = v.spec.two ? 0 : v.hw * 0.78;
+    const tw = v.spec.two ? 0 : v.hw * 0.78;
     for (const side of v.spec.two ? [0] : [-1, 1]) {
       const hole = B.holeAt(v.x + fx * half - fz * tw * side, v.z + fz * half + fx * tw * side);
       const key = side < 0 ? 'holeL' : 'holeR';
@@ -218,6 +295,8 @@ export class Vehicles {
     v.health = Math.max(0, v.health - dmg);
     v.lastHit = this.time;
     v.lastImpact = Math.max(v.lastImpact || 0, speed);
+    // Rammed by the player: when it goes up in flames, that is the player's crime (rules.js).
+    if (other?.role === 'player') v.lastHitBy = 'player';
     if (this.onImpact) this.onImpact(v, speed, other);
     if (v.health <= 0 && !v.wrecked) {
       v.wrecked = true;
@@ -242,8 +321,12 @@ export class Vehicles {
         const near = dx * dx + dz * dz < maxD2;
         const M = this.meshes[v.type];
         // Body transform with suspension pitch/roll and two-wheeler lean. A two-wheeler stopped with
-        // a rider tips onto the rider's left foot.
-        if (v.spec.two) v.standLean = (v.standLean || 0) + ((v.driver && speedOf(v) < 0.8 ? 0.09 : 0) - (v.standLean || 0)) * Math.min(1, dt * 4);
+        // a rider tips onto the rider's left foot; parked, it leans further onto its side stand.
+        if (v.spec.two) {
+          const spd = speedOf(v), stand = v.driver ? (spd < 0.8 ? 0.09 : 0) : !v.wrecked && spd < 0.3 ? 0.2 : 0;
+          const was = v.standLean ?? stand; // one parked as we came near is already on its stand
+          v.standLean = was + (stand - was) * Math.min(1, dt * 4);
+        }
         const lean = v.spec.two ? -(v.lean + v.standLean) : v.roll;
         _e.set(v.pitch - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
         _q.setFromEuler(_e);
@@ -259,14 +342,13 @@ export class Vehicles {
         M.paint.setMatrixAt(i, _m); M.glass.setMatrixAt(i, _m); M.fixed.setMatrixAt(i, _m); M.lights.setMatrixAt(i, _m);
         M.paint.setColorAt(i, _c.setHex(v.wrecked ? WRECK : v.color));
         M.fixed.setColorAt(i, v.wrecked ? _c.setHex(0x444444) : _c.setHex(0xffffff));
-        // Lamps: brighter at night and when braking; light bars flash.
-        let lamp = 0.55 + night * 0.9 + (v.braking ? 0.5 : 0);
-        if (v.wrecked) lamp = 0.15;
-        if (v.sirenOn) {
-          const ph = Math.floor(this.time * 7 + v.id) % 2;
-          _c.setRGB(ph ? 2.4 : 0.25, 0.45, ph ? 0.25 : 2.6);
-        } else _c.setRGB(lamp, lamp, lamp);
-        M.lights.setColorAt(i, _c);
+        // Lamps (the colour is decoded per kind of lamp, see lampShader): switched on, and brighter at
+        // night, only with someone at the wheel (off, they darken with the night like the paint);
+        // tail lamps brighter braking; the light bar flashing red (1) and blue (2) with the siren.
+        const lit = Boolean(v.driver) && !v.wrecked;
+        const lamp = v.wrecked ? 0.15 : lit ? 0.55 + night * 0.9 : 0.55 - night * 0.4;
+        const flash = v.sirenOn && !v.wrecked ? 1 + (Math.floor(this.time * 7 + v.id) % 2) : 0;
+        M.lights.setColorAt(i, _c.setRGB(lamp, lamp + (lit && v.braking ? 0.5 : 0), flash));
         // Wheels.
         const model = v.model;
         for (const [wx, wz, r, front, width] of model.wheels) {
@@ -286,8 +368,8 @@ export class Vehicles {
           _t.compose(_p, _q, _s);
           this.blobs.setMatrixAt(bn++, _t);
         }
-        // Headlight pool ahead at night.
-        if (night > 0.05 && !v.wrecked && hn < this.beams.instanceMatrix.count) {
+        // Headlight pool ahead at night, from vehicles with their lamps on.
+        if (night > 0.05 && lit && hn < this.beams.instanceMatrix.count) {
           const ahead = v.hd + 5;
           _e.set(0, v.heading, 0); _q.setFromEuler(_e);
           _p.set(v.x + Math.sin(v.heading) * ahead, v.y + 0.09, v.z + Math.cos(v.heading) * ahead);
@@ -335,6 +417,44 @@ export class Vehicles {
 }
 
 const IDLE = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+const PARKED = { throttle: 0, brake: 0, steer: 0, handbrake: true };
+
+/**
+ * A parked vehicle is left in gear with its handbrake on: every wheel drags, so a crash shoves it a few
+ * metres instead of sending it gliding down the street. The pedals brake whichever way it rolls (held
+ * at a stop, the brake pedal would reverse it).
+ */
+function parked(v) {
+  const f = forwardSpeed(v);
+  PARKED.throttle = f < -0.5 ? 1 : 0; PARKED.brake = f > 0.5 ? 1 : 0;
+  return PARKED;
+}
+
+/**
+ * A vehicle's lamps are one instanced part, so its instance colour carries levels instead of a tint:
+ * x for the lamps in front (head lamps, indicators), y for the tail lamps, z for the light bar (0: lit
+ * like the rest; 1 flashing red, 2 blue). Each lamp's kind is in its geometry (vehicle-models.js).
+ */
+function lampShader(s) {
+  s.vertexShader = s.vertexShader.replace('#include <common>', 'attribute float lamp;\n#include <common>').replace('#include <color_vertex>', `
+    vec3 bar = instanceColor.z > 1.5 ? vec3(0.25, 0.45, 2.6) : instanceColor.z > 0.5 ? vec3(2.4, 0.45, 0.25) : instanceColor.xxx;
+    vColor = color * (lamp > 1.5 ? bar : lamp > 0.5 ? instanceColor.yyy : instanceColor.xxx);`);
+}
+
+/** Half the vehicle's extent along the unit direction (px, pz). */
+const span = (v, px, pz) => {
+  const s = Math.sin(v.heading), c = Math.cos(v.heading);
+  return v.hd * Math.abs(s * px + c * pz) + v.hw * Math.abs(c * px - s * pz);
+};
+
+/** The door's sideways offset in the vehicle's frame (+x is its left). */
+const doorSide = v => (v.spec.two ? v.hw + 0.5 : v.model.seat.x <= 0 ? -(v.hw + 0.55) : v.hw + 0.55);
+/** A point (lx to the left, lz ahead) of the vehicle, in world space. */
+function local(v, lx, lz, out) {
+  const c = Math.cos(v.heading), s = Math.sin(v.heading);
+  out.x = v.x + lx * c + lz * s; out.z = v.z - lx * s + lz * c;
+  return out;
+}
 
 /**
  * Unit wheel (radius 1, width 1, axle along x): a tyre with rounded shoulders and

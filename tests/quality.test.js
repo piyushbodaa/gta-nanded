@@ -157,3 +157,98 @@ test('the first seconds after the start or a teleport are left out', () => {
   run(q, g, 2.1, 40);
   assert.equal(q.scale, 0.9);
 });
+
+/** Feed `seconds` of frames that repeat a pattern of frame times (ms), as a capped screen paces them. */
+const paced = (q, g, seconds, pattern) => { for (let t = 0, i = 0; t < seconds; i++) { const ms = pattern[i % pattern.length]; q.sample(ms / 1000, g); t += ms / 1000; } };
+/** How many frames the cap lets through in each second of a screen refreshing `hz` times a second. */
+const drawn = (q, hz, seconds) => { let n = 0; q.nextFrame = 0; for (let k = 1; k <= seconds * hz; k++) if (q.frameDue(k * 1000 / hz)) n++; return n / seconds; };
+
+test('the 60 fps cap draws 60 frames a second on any screen, and 30 in battery saver', () => {
+  const q = phone('Adreno 740');
+  for (const hz of [60, 75, 90, 120]) { const n = drawn(q, hz, 10); assert.equal(Math.round(n), 60, `${hz} Hz: ${n} fps`); }
+  const fast = drawn(q, 144, 10);
+  assert.ok(fast >= 60 && fast < 63, `144 Hz: ${fast} fps`);
+  assert.equal(drawn(q, 60.5, 10), 60.5, 'a screen a little over 60 Hz shows every frame, without dropping one every few seconds');
+  q.cycleFps(); q.cycleFps();
+  assert.equal(q.fpsCap, 30);
+  for (const hz of [60, 75, 90, 120]) { const n = drawn(q, hz, 10); assert.equal(Math.round(n), 30, `${hz} Hz in battery saver: ${n} fps`); }
+});
+
+test('a 60 fps cap paced unevenly by a 90 or 75 Hz screen is not read as missed frames', () => {
+  const r90 = 1000 / 90, r75 = 1000 / 75;
+  // A fast phone at 90 Hz: frames of one refresh and two in turn (11 and 22 ms), 60 a second.
+  const q = phone('Adreno 740'), g = { ...game(), cpuMs: 5 };
+  paced(q, g, 95, [r90, 2 * r90]);
+  assert.equal(q.tier, 'high');
+  assert.equal(q.scale, 1, 'full resolution, not Fast at half (the old cap gave 45 fps and the governor took it for a weak GPU)');
+  assert.equal(q.learned?.promote, true, 'and room for a tier up is still noticed');
+  // At 75 Hz every fourth frame is two refreshes.
+  store.clear();
+  const q75 = phone('Adreno 740');
+  paced(q75, g, 30, [r75, r75, r75, 2 * r75]);
+  assert.equal(q75.scale, 1);
+  // A resolution that came down for a real reason comes back up at 90 Hz too.
+  q.scale = 0.7;
+  paced(q, g, 20, [r90, 2 * r90]);
+  assert.ok(q.scale > 0.7, `back up (${q.scale})`);
+  // A phone that really falls behind the cap there (every frame two refreshes: 45 fps) still comes down.
+  store.clear();
+  const slow = phone('Adreno 740');
+  paced(slow, g, 2.1, [2 * r90]);
+  assert.equal(slow.scale, 0.9);
+});
+
+test('what the governor learned under the old 45 fps cap is forgotten once', () => {
+  store.set('gta-nanded-auto-v1', JSON.stringify({ gpu: 'Adreno 740', tier: 'low', scale: 0.5, tooHeavy: ['high', 'medium'] }));
+  const q = phone('Adreno 740');
+  assert.equal(q.learned, null, 'calibrated again at the next launch');
+  assert.equal(q.tier, 'high');
+  assert.equal(q.scale, 1);
+});
+
+test('first-launch tuning times each tier with its own traffic and people, and play opens with the crowd it settles on', async () => {
+  const { Game } = await import('../src/game/game.js');
+  /** Tune a phone whose frames take `ms(tier, crowd)`, on a clock the test keeps. */
+  const tune = (gpu, ms) => {
+    const q = phone(gpu), timed = [];
+    // Streets that fill up to the tier's numbers as play fills them: topped up, never thinned.
+    const vehicles = { list: [], add(v = {}) { this.list.push(v); return v; }, remove(v) { const i = this.list.indexOf(v); if (i >= 0) this.list.splice(i, 1); } };
+    const traffic = { cars: [], update() { this.cars = this.cars.filter(v => vehicles.list.includes(v)); while (this.cars.length < q.settings.traffic * q.crowd) this.cars.push(vehicles.add()); } };
+    const peds = { list: [], update() { while (this.list.length < q.settings.peds * q.crowd) this.list.push({}); }, remove(p) { this.list.splice(this.list.indexOf(p), 1); } };
+    const parked = {
+      bySeg: new Map(), t: 0,
+      update(dt) {
+        if ((this.t -= dt) > 0) return;
+        this.t = 0.8;
+        for (const [seg, v] of this.bySeg) if (!vehicles.list.includes(v)) this.bySeg.delete(seg);
+        for (let seg = 0; this.bySeg.size < Math.round(q.settings.traffic * 0.7); seg++) if (!this.bySeg.has(seg)) this.bySeg.set(seg, vehicles.add());
+      },
+    };
+    const crowd = () => ({ cars: traffic.cars.length, people: peds.list.length, parked: parked.bySeg.size });
+    let clock = 0;
+    const g = {
+      quality: q, vehicles, traffic, peds, parked, input: {}, camera: { update() {} },
+      player: { pos: { x: 0, z: 0 }, human: {}, teleport(x, z, heading) { Object.assign(this, { x, z, heading }); Object.assign(this.pos, { x, z }); } },
+      renderer: { getContext: () => ({ readPixels() {} }) }, world: { chunks: { queue: [], update() {} } },
+      applyQuality() {}, resize() {},
+      renderWorld() { const c = crowd(); timed.push({ tier: q.tier, ...c }); clock += ms(q.tier, c.cars + c.people + c.parked); },
+    };
+    const now = performance.now;
+    performance.now = () => clock;
+    try { Game.prototype.calibrate.call(g, { x: 0, z: 0, heading: 0 }); } finally { performance.now = now; }
+    const own = tier => { const s = q.tiers[tier]; return { cars: s.traffic, people: s.peds, parked: Math.round(s.traffic * 0.7) }; };
+    for (const { tier, ...c } of timed) assert.deepEqual(c, own(tier), `${tier} timed with its own crowd`);
+    assert.deepEqual(crowd(), own(q.tier), `play opens with ${q.tier}'s crowd`);
+    return { q, tiers: [...new Set(timed.map(t => t.tier))] };
+  };
+  // Guessed High, too slow there: Balanced, timed with Balanced's crowd, holds (with High's it wouldn't).
+  const BASE = { low: 5, medium: 9.2, high: 10, ultra: 14 };
+  const down = tune('Adreno 740', (tier, n) => BASE[tier] + 0.05 * n);
+  assert.deepEqual(down.tiers, ['high', 'medium']);
+  assert.equal(down.q.tier, 'medium');
+  // Guessed Balanced with plenty of room: High is tried with High's crowd, and kept.
+  store.clear();
+  const up = tune('Adreno 710', (tier, n) => 1 + 0.02 * n);
+  assert.deepEqual(up.tiers, ['medium', 'high']);
+  assert.equal(up.q.tier, 'high');
+});

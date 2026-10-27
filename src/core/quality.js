@@ -15,7 +15,9 @@ const TIERS = {
   ultra: { name: 'Ultra', pr: 2, phonePr: 2.25, msaa: true, bloom: true, shadows: 2048, dynamicShadows: true, viewDistance: 680, traffic: 42, peds: 60, nearRadius: 30, nearPeople: 24 },
 };
 export const ORDER = ['low', 'medium', 'high', 'ultra'];
-const KEY = 'gta-nanded-quality-v2', FPS_KEY = 'gta-nanded-fps-v1', LEARN_KEY = 'gta-nanded-auto-v1';
+// v2 of what the automatic setting learned: v1 was learned from frames the 60 fps cap itself
+// held to 45 fps on 90 Hz screens, which settled fast phones on Fast at half resolution.
+const KEY = 'gta-nanded-quality-v2', FPS_KEY = 'gta-nanded-fps-v1', LEARN_KEY = 'gta-nanded-auto-v2';
 /** The lowest resolution scale the governor goes to before it gives up a tier. */
 export const MIN_SCALE = 0.5;
 /** The fewest cars, people and animals (a share of the tier's numbers) a slow processor thins them to. */
@@ -62,6 +64,7 @@ export class Quality {
     const fps = read(FPS_KEY);
     this.fpsMode = fps === 'auto' ? 'auto' : fps !== null && FPS_CAPS.includes(Number(fps)) ? Number(fps) : this.phone ? 'auto' : 0;
     this.autoCap = 60;
+    this.nextFrame = 0; // when the frame-rate cap lets the next frame be drawn (ms)
     this.crowd = 1; // traffic, people and animals, as a share of the tier's numbers
     this.gpu = '';
     this.learned = null;
@@ -98,6 +101,21 @@ export class Quality {
   fpsLabel() {
     if (this.fpsMode === 'auto') return `Auto (${this.fpsCap} fps)`;
     return this.fpsCap === 30 ? '30 fps · battery saver' : this.fpsCap === 60 ? '60 fps · smooth' : 'Unlimited';
+  }
+
+  /**
+   * The frame-rate cap: whether to draw on the display refresh at `t` (the browser's frame time,
+   * ms). Frames keep to a steady beat of 1/cap. At 90 Hz a 60 fps beat is one refresh, then two,
+   * in turn; restarted from each frame that came late, it would wait two refreshes every time
+   * (45 fps). A late frame keeps the beat; one a little early (a screen just over 60 Hz) moves it.
+   */
+  frameDue(t) {
+    const cap = this.fpsCap;
+    if (!cap) return true;
+    const step = 1000 / cap, due = this.nextFrame;
+    if (t < due - 2) return false;
+    this.nextFrame = t < due || t - due > step ? t + step : due + step;
+    return true;
   }
   /** Tiers the automatic setting has found too heavy for this GPU. */
   get tooHeavy() { return this.learned?.tooHeavy || []; }
@@ -171,9 +189,17 @@ export class Quality {
     const target = 1 / (this.fpsCap || 60);
     const sorted = frames.sort((a, b) => a - b);
     const p80 = sorted[Math.floor(sorted.length * 0.8)];
+    // Under a cap, refreshes seldom divide the beat evenly: a steady 60 fps on a 90 Hz screen
+    // is frames of one refresh and two in turn (11 and 22 ms), and on 75 Hz every fourth frame
+    // takes 27 ms. Those long frames are the cap's pacing, not missed ones, so a capped game is
+    // slow only if it also falls behind the cap on average, and keeps up if it doesn't. (On a
+    // screen whose refresh divides the cap, missing a fifth of the frames already does both.)
+    const mean = spent / frames.length, capped = this.fpsCap > 0;
+    const slow = p80 > target * 1.3 && (!capped || mean > target * 1.08);
+    const keepsUp = p80 <= target * 1.05 || (capped && mean <= target * 1.05);
     this.ceilingT = Math.max(0, this.ceilingT - spent);
     const cpu = game.cpuMs || 0, cpuBound = cpu > target * 1000 * 0.55 && cpu > (1000 / this.fps) * 0.7;
-    if (p80 > target * 1.3) {
+    if (slow) {
       this.goodT = 0; this.headroomT = 0; this.idleCpuT = 0;
       if (cpuBound) {
         // Two slow windows in a row before each step: crowds only thin for a sustained load.
@@ -189,7 +215,7 @@ export class Quality {
       return;
     }
     this.slowWindows = 0; this.cpuSlow = 0;
-    if (p80 > target * 1.05) return;
+    if (!keepsUp) return;
     this.goodT += spent;
     // Crowds come back a step at a time once the frame has room again, never within a minute.
     if (this.crowd < 1 && (this.crowdT -= spent) <= 0 && (game.cpuMs || 0) < target * 1000 * 0.4) { this.crowd = Math.min(1, Math.round((this.crowd + 0.1) * 100) / 100); this.crowdT = 20; this.learn(); }

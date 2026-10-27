@@ -6,7 +6,7 @@
 // that are a pixel or two at that distance.
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
-import { CHUNK, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD } from './citygen.js';
+import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
@@ -239,8 +239,7 @@ export class ChunkManager {
 }
 
 // ------------------------------------------------------------------ ground
-const GROUND_CELL = 6;
-function groundTint(city, x, z) {
+function groundTint(city, x, z, rd = city.riverDistance(x, z, groundTint._rd || (groundTint._rd = {}))) {
   const dens = city.densityAt(x, z);
   const h = hashFloat((Math.floor(x / 23) * 73856093) ^ (Math.floor(z / 23) * 19349663));
   const h2 = hashFloat((Math.floor(x / 9) * 83492791) ^ (Math.floor(z / 9) * 2654435761));
@@ -266,7 +265,6 @@ function groundTint(city, x, z) {
     const conc = clamp((cv - 0.42) * 2.6, 0, 1) * smoothstep(0.3, 0.6, dens) * (1 - grass);
     r = r * (1 - conc) + 0.64 * conc; g = g * (1 - conc) + 0.62 * conc; b = b * (1 - conc) + 0.58 * conc;
   }
-  const rd = city.riverDistance(x, z, groundTint._rd || (groundTint._rd = {}));
   if (rd.d < 40) { const t = 1 - rd.d / 40; r = r * (1 - t) + 0.5 * t; g = g * (1 - t) + 0.6 * t; b = b * (1 - t) + 0.38 * t; }
   if (rd.d < 4) { r = 0.46; g = 0.42; b = 0.34; }
   const j = 0.92 + h2 * 0.16;
@@ -276,15 +274,17 @@ function groundTint(city, x, z) {
 function buildGround(ctx) {
   const { g, city, cx, cz } = ctx;
   const x0 = cx * CHUNK, z0 = cz * CHUNK, n = CHUNK / GROUND_CELL;
-  // Only cut the river valley where it actually runs.
-  const nearRiver = city.riverDistance(x0 + CHUNK / 2, z0 + CHUNK / 2, {}).d < CHUNK;
+  // Only cut the river valley where it actually runs: anywhere in the chunk, not just at its
+  // centre (a river crossing a corner would be covered over by flat ground).
+  const nearRiver = (ctx.valley = city.valleyIn(x0, z0, x0 + CHUNK, z0 + CHUNK));
   g.setTile(TILE.DIRT[0], TILE.DIRT[1], 1, 4);
-  const base = g.n;
+  const base = g.n, rd = ctx._rd || (ctx._rd = {});
   for (let iz = 0; iz <= n; iz++) {
     for (let ix = 0; ix <= n; ix++) {
       const x = x0 + ix * GROUND_CELL, z = z0 + iz * GROUND_CELL;
-      g.setTint(groundTint(city, x, z), 0);
-      g.v(x, nearRiver ? city.groundHeight(x, z) : 0, z);
+      // One look at the river for both the colour and the valley (citygen's valleyAt, here).
+      g.setTint(groundTint(city, x, z, city.riverDistance(x, z, rd)), 0);
+      g.v(x, nearRiver ? valleyDepth(rd.d) : 0, z);
     }
   }
   const row = n + 1;
@@ -635,16 +635,11 @@ function buildBridgeSpan(ctx, p, q, o0, o1, e0, e1, median, d0 = 0, d1 = 0) {
   const a = g.v(ax + nx0 * l0, u0, az + nz0 * l0), b = g.v(bx + nx1 * l1, u1, bz + nz1 * l1);
   const c = g.v(bx - nx1 * r1, u1, bz - nz1 * r1), d = g.v(ax - nx0 * r0, u0, az - nz0 * r0);
   g.quad(a, b, c, d);
-  // Piers every ~18 m where the riverbed is below.
-  const steps = Math.floor(len / 18);
-  for (let k = 0; k <= steps; k++) {
-    const t = steps ? k / steps : 0.5;
-    const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-    const gh = city.groundHeight(x, z);
-    if (gh > -0.8) continue;
+  // Piers every ~18 m where the riverbed is below (colliders.js stands the same ones in the way).
+  city.riverPiers(ax, az, bx, bz, hw, (x, z, y0, y1, hx, hz, rot) => {
     g.color(0xa39d90, 0);
-    g.cbox(x, gh - 1.5, z, hw * 0.75, -1.1 - gh + 1.5, 0.9, Math.atan2(bx - ax, bz - az) + Math.PI / 2);
-  }
+    g.cbox(x, y0, z, hx, y1 - y0, hz, rot);
+  });
 }
 
 function buildJunction(ctx, j) {
@@ -728,6 +723,24 @@ function band(g, X, Z, hw, hd, on, y0, y1, out, trim = 0, under = true) {
   }
 }
 
+/**
+ * A building on the river valley's slope stands on a stone plinth carried down to the ground
+ * (its walls start at the street's level), so its river side doesn't hang over the bank.
+ */
+function foundation(ctx, i, X, Z, hw, hd, color, sb) {
+  const { g, city } = ctx;
+  // Down to the lowest corner's ground (colliders.js stands the building from there too).
+  const low = ctx.valley ? city.footing(i) : 0;
+  if (!low) return 0;
+  const P = CORNERS(hw, hd);
+  g.setTint(mix(color, 0x6b6359, 0.5), sb).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
+  for (const [a, b] of WALLS) {
+    const ax = X(P[a][0], P[a][1]), az = Z(P[a][0], P[a][1]), bx = X(P[b][0], P[b][1]), bz = Z(P[b][0], P[b][1]);
+    g.wall(ax, az, bx, bz, low - 0.1, 0, 0, Math.hypot(bx - ax, bz - az) / FLOOR, (low - 0.1) / FLOOR, 0);
+  }
+  return low;
+}
+
 /** A thin vertical bar as two back-to-back quads (railing balusters, terrace railings). */
 function slat(g, x, z, y0, y1, ux, uz, w = 0.022) {
   const ax = x - ux * w, az = z - uz * w, bx = x + ux * w, bz = z + uz * w;
@@ -736,7 +749,7 @@ function slat(g, x, z, y0, y1, ux, uz, w = 0.022) {
 }
 
 /** Contact shadow where walls meet bare ground: ground-textured strips, darker at the wall. */
-function skirt(ctx, X, Z, hw, hd, on, width = 1.1) {
+function skirt(ctx, X, Z, hw, hd, on, width = 1.1, slope = false) {
   const { g, city } = ctx;
   const P = CORNERS(hw, hd);
   g.setTile(TILE.DIRT[0], TILE.DIRT[1], 1, 4);
@@ -748,7 +761,7 @@ function skirt(ctx, X, Z, hw, hd, on, width = 1.1) {
     const ids = pts.map(([lx, lz, k2]) => {
       const x = X(lx, lz), z = Z(lx, lz), t = groundTint(city, x, z);
       g.setTint(mix(0, t, k2), 0);
-      return g.v(x, 0.035, z);
+      return g.v(x, (slope ? city.groundHeight(x, z) : 0) + 0.035, z);
     });
     // Up-facing (the wall runs A->B with the outside on its right).
     g.quad(ids[0], ids[3], ids[2], ids[1]);
@@ -774,6 +787,7 @@ function buildLot(ctx, i) {
   const c = Math.cos(rot), s = Math.sin(rot);
   const X = (lx, lz) => x + lx * c + lz * s, Z = (lx, lz) => z - lx * s + lz * c;
   const sb = seed & 255;
+  const footing = foundation(ctx, i, X, Z, hw, hd, color, sb);
   g.setTint(color, sb);
 
   if (style === STYLE.SHED || style === STYLE.HUT) return buildShed(ctx, x, z, hw, hd, rot, h, color, sb, style, r);
@@ -998,7 +1012,7 @@ function buildLot(ctx, i) {
     g.wall(X(bw, -hd + 0.5), Z(bw, -hd + 0.5), X(-bw, -hd + 0.5), Z(-bw, -hd + 0.5), y0, y1, 0, 1, 0, 1);
   }
   // Ground contact: darker earth along walls that stand on open ground.
-  if (!unfinished && !far) skirt(ctx, X, Z, hw + 0.06, hd + 0.06, open.map((o, k) => o && !(k === 0 && shops)));
+  if (!unfinished && !far) skirt(ctx, X, Z, hw + 0.06, hd + 0.06, open.map((o, k) => o && !(k === 0 && shops)), 1.1, footing < 0);
 }
 
 /**

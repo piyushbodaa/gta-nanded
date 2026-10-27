@@ -31,11 +31,36 @@ const status = (text, f) => { $('loading-status').textContent = text.toUpperCase
 
 function fatal(msg) { $('fatal-msg').textContent = msg; $('fatal').hidden = false; }
 
-/** Phones and tablets play full screen, sideways. Browsers that can't (iPhone Safari) carry on as they are. */
+let wentFull = false; // full screen was granted once: this is a device that plays that way
+
+/**
+ * Phones and tablets play full screen, sideways. Browsers that can't (iPhone Safari) carry on as they are.
+ * Returns a promise that settles once the screen is full and turned (or the browser said no), or null if nothing was asked.
+ */
 function fullscreen() {
   const el = document.documentElement;
-  if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement || !el.requestFullscreen) return;
-  el.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+  if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement || !el.requestFullscreen) return null;
+  return el.requestFullscreen({ navigationUI: 'hide' }).then(() => { wentFull = true; return screen.orientation?.lock?.('landscape'); }).catch(() => {});
+}
+
+/**
+ * Android leaves full screen when the player switches apps (the game pauses itself) or swipes
+ * back. Pause then too, and go full screen again on the next tap in the pause menu, a user
+ * gesture. That tap is usually RESUME, so the menu holds its close until the screen has settled:
+ * two frames drawn at the new size, 1.5 s at most. The stall of the screen changing size (about
+ * a second on a budget phone) then comes while paused, not in the traffic just after.
+ */
+function keepFullscreen(game) {
+  document.addEventListener('fullscreenchange', () => {
+    if (wentFull && !document.fullscreenElement && game.started && !game.paused && !game.respawning) game.pause.openMenu(game.pause.tab);
+  });
+  addEventListener('pointerup', () => {
+    if (!wentFull || !game.started || !game.paused || game.pause.hold) return;
+    const going = fullscreen();
+    if (!going) return;
+    const drawn = going.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+    game.pause.hold = Promise.race([drawn, new Promise(r => setTimeout(r, 1500))]).then(() => { game.pause.hold = null; });
+  }, { capture: true, passive: true });
 }
 
 async function boot() {
@@ -64,9 +89,13 @@ async function boot() {
   game.missions = new Missions(game, STORY);
   dressWorld(game);
   game.jobs = new Jobs(game);
-  game.staticBlips = [...game.jobs.staticBlips(), ...game.city.pumps.map(p => ({ x: p.x, z: p.z, kind: 'icon', label: '⛽', color: '#f07c1e' }))];
+  // The radar's activity icons follow the save: the garage opens in the story, stamped landmarks
+  // drop off and NEW STORY starts over, so they are read fresh each time (a few dozen, 30 times a second).
+  const pumps = game.city.pumps.map(p => ({ x: p.x, z: p.z, kind: 'icon', label: '⛽', color: '#f07c1e' }));
+  Object.defineProperty(game, 'staticBlips', { get: () => [...game.jobs.staticBlips(), ...pumps] });
   game.touch = new TouchControls(game);
   game.pause = new PauseMenu(game);
+  keepFullscreen(game);
   installRules(game);
   game.hud.radioText = (name, tag, color = '#fff') => {
     const el = $('hud-radio');
@@ -80,7 +109,7 @@ async function boot() {
   game.toggleSound = async () => {
     if (!game.audio.ctx) { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); st.sound = true; }
     else { game.audio.setEnabled(!game.audio.enabled); st.sound = game.audio.enabled; }
-    game.save.flush();
+    game.save.dirty(); game.save.flush();
   };
   // Draw the city once behind the cover so the first frame after it is instant.
   await compiled;
@@ -89,7 +118,8 @@ async function boot() {
   if (game.quality.mode === 'auto' && (!game.quality.learned || game.quality.learned.promote)) {
     status('Tuning the graphics for this device');
     await new Promise(r => setTimeout(r, 30)); // let the status paint before the GPU is busy
-    game.calibrate();
+    // Timed on the station forecourt, where a new story opens: the busiest place play begins.
+    game.calibrate({ x: 5.3 - 4, z: 10.9 + 2, heading: Math.PI * 0.75 });
   }
   status('The city is yours', 1);
   const has = game.save.hasProgress;
@@ -100,8 +130,11 @@ async function boot() {
   let onMenu = true;
   game.warmShaders(() => onMenu && !game.started);
 
+  // Set at the first tap: a second one while the sound starts up (a double tap) must not start the game twice.
+  let starting = false;
   const begin = async mode => {
-    if (game.started) return;
+    if (starting || game.started) return;
+    starting = true;
     onMenu = false;
     fullscreen(); // while the tap still counts as a user gesture
     if (st.sound !== false) { try { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
@@ -110,18 +143,33 @@ async function boot() {
     else play();
   };
   $('menu-continue').addEventListener('click', () => begin('continue'));
-  $('menu-new').addEventListener('click', () => {
-    if (has && !$('menu-new').dataset.confirm) {
-      $('menu-new').dataset.confirm = '1';
-      $('menu-new').querySelector('small').textContent = `${matchMedia('(pointer: coarse)').matches ? 'TAP' : 'CLICK'} AGAIN: THIS ERASES YOUR SAVE`;
-      return;
+  // Over a save, NEW STORY asks first, in its big label: a phone player can't read the small one.
+  // The second tap must be a deliberate one: not the other half of a double tap, and not one
+  // long after the question went away.
+  const newBtn = $('menu-new'), newSmall = newBtn.querySelector('small'), newBig = newBtn.querySelector('strong');
+  const newLabel = [newSmall.textContent, newBig.textContent];
+  let armedAt = 0, disarm = 0;
+  newBtn.addEventListener('click', () => {
+    if (starting) return;
+    if (has) {
+      const since = performance.now() - armedAt;
+      if (!armedAt) {
+        armedAt = performance.now();
+        newSmall.textContent = `${matchMedia('(pointer: coarse)').matches ? 'TAP' : 'CLICK'} AGAIN TO ERASE`;
+        newBig.textContent = 'ERASE SAVE?';
+        disarm = setTimeout(() => { armedAt = 0; [newSmall.textContent, newBig.textContent] = newLabel; }, 4000);
+        return;
+      }
+      if (since < 600) return;
+      clearTimeout(disarm);
+      // Start over, but keep the player's settings (sound, look speed), on disk too.
+      const settings = game.save.data.settings; game.save.reset(); game.save.data.settings = settings; game.save.dirty(); game.save.flush();
     }
-    if (has) { const settings = game.save.data.settings; game.save.reset(); game.save.data.settings = settings; }
     begin('new');
   });
   $('menu-free').addEventListener('click', () => begin('free'));
   // Development only: start without the menu (automated checks).
-  if (import.meta.env.DEV) game.debugStart = mode => { if (mode === 'new') { const s2 = game.save.data.settings; game.save.reset(); game.save.data.settings = s2; } startGame(game, mode); };
+  if (import.meta.env.DEV) game.debugStart = mode => { if (mode === 'new') { const s2 = game.save.data.settings; game.save.reset(); game.save.data.settings = s2; game.save.dirty(); } startGame(game, mode); };
 }
 
 function startGame(game, mode) {
@@ -144,8 +192,11 @@ function startGame(game, mode) {
   // Populate the streets before the first frame.
   for (let i = 0; i < 40; i++) { game.traffic.update(0.05); game.peds.update(0.05); }
   game.parked.t = 0; game.parked.update(1);
+  // Keys pressed on the cover or during the intro were not meant for the street.
+  game.input.clear(); game.input.live = true;
   game.start();
-  game.save.flush();
+  // `started`, the intro seen and settings kept over a NEW STORY are all set straight on the data.
+  game.save.dirty(); game.save.flush();
   // Ask the browser to keep the save through storage clean-ups (granted quietly where it is).
   navigator.storage?.persist?.().catch(() => {});
   // iPhones clear a site's saves after a week away unless it is on the Home Screen: say so once.
@@ -155,10 +206,11 @@ function startGame(game, mode) {
       game.hud.help('<b>Tip:</b> add GTA Nanded to your Home Screen — tap <b>Share</b>, then <b>Add to Home Screen</b>. It opens full screen, and your iPhone keeps your progress.', 9);
     }, 150000);
   }
-  // A new game: the story's title, then its first mission.
+  // A new game: the story's title, then its first mission. Once the story is finished there is no next contact to promise.
+  const finished = STORY.every(m => game.save.done(m.id));
   if (mode === 'new') { game.hud.big('गोदावरी गोल्ड', 'GODAVARI GOLD', 'title', 3.4); setTimeout(() => game.missions.start(STORY[0].id), 3600); }
-  else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map, or find a contact marker to play the story.`, 7);
-  else game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. Your next contact is on the radar.`, 6);
+  else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map${finished ? ': races and landmarks to photograph are marked on it.' : ', or find a contact marker to play the story.'}`, 7);
+  else game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. ${finished ? `Godavari Gold is done: the city is yours. ${press(game, 'map')} for races and landmarks.` : 'Your next contact is on the radar.'}`, 6);
   game.canvas.focus();
 }
 
