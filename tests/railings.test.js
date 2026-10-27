@@ -15,14 +15,18 @@ import { STORY_PLACES } from '../src/game/story.js';
 let cached = null;
 const colliders = () => cached || (cached = new Colliders(world().city));
 
-/** How far (x, z) is inside the carriageway of a road at street level other than r (negative: outside them all). */
-function onStreet(r, x, z) {
+/**
+ * How far (x, z) is inside the carriageway of a road other than r, where any deck it has is
+ * below `below` (0: a road that never leaves the ground) (negative: outside them all).
+ */
+function onStreet(r, x, z, below = 2) {
   const { net } = world(), t = [0];
   let most = -Infinity;
-  net.grid.query(x - 1, z - 1, x + 1, z + 1, i => {
+  // (The grid holds the centre lines: a 12 m road's reaches 7 m out from one.)
+  net.grid.query(x - 7, z - 7, x + 7, z + 7, i => {
     const o = net.ptRoad[i], ax = net.px[i], az = net.pz[i], dx = net.px[i + 1] - ax, dz = net.pz[i + 1] - az;
     const d = Math.sqrt(pointSegDist2(x, z, ax, az, ax + dx, az + dz, t)), s = net.cum[i] + (net.cum[i + 1] - net.cum[i]) * t[0];
-    if (o === r || net.deckAt(o, s) >= 2) return;
+    if (o === r || (net.raised[o] && net.deckAt(o, s) >= below)) return;
     most = Math.max(most, net.edgeAt(o, s, (x - ax - dx * t[0]) * dz - (z - az - dz * t[0]) * dx >= 0 ? 1 : -1) - d);
   });
   return most;
@@ -117,6 +121,88 @@ test('a ramp\'s end is shut across the ramp, but not across a street that runs o
   }
   assert.ok(ends >= 40, `${ends} ramp ends`);
   assert.ok(streets >= 20 && open > 100 && shut > 100, `${streets} ramp ends with a street under them; ${open} spots open, ${shut} shut`);
+});
+
+// A car (a hatchback): its half width and half length.
+const HATCH = { hw: VEHICLE_TYPES.hatch.W / 2, hd: VEHICLE_TYPES.hatch.L / 2 };
+// A deck this little above the street is driven straight onto (as net.surfaceAt steps).
+const STEP = 0.6;
+
+test("a street through a low ramp's side wall drives on through it, and the deck keeps its parapet", () => {
+  const { net } = world();
+  const col = colliders(), p = {}, q = {}, sat = {};
+  /** Is (x, z) in a wall lying along (dx, dz), 0.4 m thick or less, that stands in the way at `level`? */
+  const wallAt = (x, z, level, dx, dz) => col.near(x - 1, z - 1, x + 1, z + 1, i => {
+    if (col.type[i] !== SOLID.OBB || col.hw[i] > 0.201 || Math.abs(dx * col.s[i] + dz * col.c[i]) < 0.99 || !col._atLevel(i, level)) return false;
+    const ex = x - col.x[i], ez = z - col.z[i];
+    return Math.abs(ex * col.c[i] - ez * col.s[i]) <= col.hw[i] + 0.01 && Math.abs(ex * col.s[i] + ez * col.c[i]) <= col.hd[i] + 0.01;
+  });
+  // Every low ramp piece (as colliders.js lays them, 4 m long: its deck off the street, and below
+  // SOLID_BELOW at its low end), looked along the middle of each of its side walls.
+  const n = { open: 0, shut: 0, rail: 0 }, streets = new Set();
+  for (let r = 0; r < net.count; r++) {
+    if (!net.raised[r]) continue;
+    const w = net.width[r], ms = net.oneway[r] ? -net.oneway[r] : 0, s0 = net.trimStart(r), s1 = net.length[r] - net.trimEnd(r);
+    for (let i = net.ptStart[r]; i < net.ptStart[r + 1] - 1; i++) {
+      const sa = Math.max(net.cum[i], s0), sb = Math.min(net.cum[i + 1], s1), m = Math.ceil((sb - sa) / 4);
+      for (let k = 0; sb - sa >= 0.05 && k < m; k++) {
+        const s = sa + ((sb - sa) * k) / m, e = sa + ((sb - sa) * (k + 1)) / m, sm = (s + e) / 2;
+        const lo = Math.min(net.deckAt(r, s), net.deckAt(r, e)), hi = Math.max(net.deckAt(r, s), net.deckAt(r, e));
+        if (hi <= 0.05 || lo >= SOLID_BELOW) continue;
+        net.pointAt(r, sm, p);
+        const inner = ms ? net.innerAt(r, sm) : w / 2;
+        for (const side of [1, -1]) {
+          const off = (side === ms && inner < w / 2 - 0.05 ? inner - 0.15 : w / 2 + 0.2) * side;
+          for (let lz = -(e - s) / 2; lz <= (e - s) / 2; lz += 0.5) {
+            const x = p.x + p.dz * off + p.dx * lz, z = p.z - p.dx * off + p.dz * lz, on = onStreet(r, x, z, 0), at = `ramp ${r} at (${x.toFixed(1)}, ${z.toFixed(1)})`;
+            // Across a street that never leaves the ground and runs through it, open to the
+            // street's traffic; elsewhere walled to the ground.
+            if (on > 0.6) { n.open++; assert.ok(!wallAt(x, z, 0, p.dx, p.dz), `${at}: its wall stands across the street through it`); }
+            if (on < -0.6) { n.shut++; assert.ok(wallAt(x, z, 0, p.dx, p.dz), `${at}: open into the embankment`); }
+            // Up on the deck its traffic is kept on it all the same, unless the deck is a step off the street.
+            if (lo >= STEP) { n.rail++; assert.ok(wallAt(x, z, net.deckAt(r, sm + lz), p.dx, p.dz), `${at}: nothing keeps the deck's traffic on it`); }
+          }
+          const x = p.x + p.dz * off, z = p.z - p.dx * off;
+          net.grid.query(x - 8, z - 8, x + 8, z + 8, j => { const o = net.ptRoad[j]; if (!net.raised[o] && !net.bridge[o]) streets.add(o); });
+        }
+      }
+    }
+  }
+  assert.ok(n.open > 300 && n.shut > 3000 && n.rail > 3000, JSON.stringify(n));
+  // A car in each lane of every street that passes a low ramp, wherever the street runs straight
+  // under the whole car, meets none of the ramp's walls (traffic drives those lanes). A ramp's wall
+  // stands along it, on its kerb edge or just in from its median edge.
+  const rampWall = i => {
+    if (col.type[i] !== SOLID.OBB || col.hw[i] > 0.201 || !col._atLevel(i, 0)) return false;
+    const r = net.nearest(col.x[i], col.z[i], 12, q, o => net.raised[o]);
+    if (!r || Math.abs(r.dx * col.s[i] + r.dz * col.c[i]) < 0.99) return false;
+    const lateral = Math.abs((col.x[i] - r.x) * r.dz - (col.z[i] - r.z) * r.dx), ms = net.oneway[r.road] ? -net.oneway[r.road] : 0;
+    return Math.abs(lateral - net.width[r.road] / 2 - 0.2) < 0.05 || (ms !== 0 && Math.abs(lateral - net.innerAt(r.road, r.s) + 0.15) < 0.05);
+  };
+  let lanes = 0, into = 0, worst = 0, where = '';
+  for (const r of streets) {
+    const len = net.length[r], ow = net.oneway[r];
+    for (const dir of ow ? [ow] : [1, -1]) for (let lane = 0; lane < (ow ? 2 : net.lanes[r]); lane++) {
+      const from = dir > 0 ? net.trimStart(r) : net.trimEnd(r), to = len - (dir > 0 ? net.trimEnd(r) : net.trimStart(r));
+      let deepest = 0;
+      for (let u = from; u <= to; u += 0.5) {
+        const s = dir > 0 ? u : len - u, seg = net.pointAt(r, s, p).seg;
+        if (net.cum[seg] > s - HATCH.hd || net.cum[seg + 1] < s + HATCH.hd) continue;
+        net.lanePoint(r, dir, u, net.laneOffset(r, lane, s), p);
+        const ca = Math.cos(p.heading), sa = Math.sin(p.heading), R = HATCH.hd + HATCH.hw;
+        col.near(p.x - R, p.z - R, p.x + R, p.z + R, i => {
+          const res = obbSat(p.x, p.z, HATCH.hw, HATCH.hd, ca, sa, col.x[i], col.z[i], col.hw[i], col.hd[i], col.c[i], col.s[i], sat);
+          if (!res || res.depth <= Math.max(deepest, 0.02) || !rampWall(i)) return;
+          deepest = res.depth;
+          if (deepest > worst) { worst = deepest; where = `road ${r} lane ${lane} at (${p.x.toFixed(1)}, ${p.z.toFixed(1)})`; }
+        });
+      }
+      lanes++;
+      if (deepest > 0.05) into++;
+    }
+  }
+  assert.ok(streets.size > 100 && lanes > 250, `${lanes} lanes of ${streets.size} streets`);
+  assert.equal(into, 0, `${into} of them run into a ramp's wall, the worst ${worst.toFixed(2)} m on ${where}`);
 });
 
 // A truck (the c4 sand tipper): its half width and half length.

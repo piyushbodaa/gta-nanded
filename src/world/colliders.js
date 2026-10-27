@@ -142,10 +142,36 @@ export class Colliders {
           const dA = lift ? net.deckAt(r, s) : 0, dB = lift ? net.deckAt(r, e) : 0, lo = Math.min(dA, dB), hi = Math.max(dA, dB);
           if (bridge || hi > 0.05) {
             // Railings ride on a deck you can pass under; a low ramp is walled down to the ground.
-            const y0 = lo >= SOLID_BELOW ? lo - 0.3 : 0, top = hi + 1.0;
+            const y0 = lo >= SOLID_BELOW ? lo - 0.3 : 0, top = hi + 1.0, low = lift && y0 === 0;
             for (const side of [1, -1]) {
-              const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2;
-              this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, top - y0, y0);
+              const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2, hw = mid ? 0.15 : 0.2;
+              const x = p.x + p.dz * off * side, z = p.z - p.dx * off * side, len = half + 0.3;
+              // A low ramp's wall down to the ground is left open to a street that runs through it,
+              // as its closing box is (below): the map lays service roads half under their ramps,
+              // and their traffic drives on through. Only to a street that never leaves the ground
+              // (onOther counts no deck at all): another ramp beside it, such as the other
+              // carriageway of its divided road coming down, is no street. There the deck keeps a
+              // parapet for its own traffic, from 2 m up (or on a deck higher than that), out of
+              // the way of anything on the street (see _atLevel); but none where the deck is still
+              // within a STEP of the street, where a car just drives on or off it. Tested every
+              // 0.25 m along the wall, on both faces and down the middle.
+              if (low) gather(r, x, z, len + hw);
+              if (!low || !others.length) { this.addBox(x, z, hw, len, rot, top - y0, y0); continue; }
+              const m = Math.ceil((2 * len) / 0.25), along = j => -len + (2 * len * j) / m;
+              clear.length = 0;
+              for (let j = 0; j <= m; j++) {
+                const lz = along(j);
+                clear.push([-hw, 0, hw].every(lx => !onOther(x + p.dz * lx + p.dx * lz, z - p.dx * lx + p.dz * lz, 0, 0)));
+              }
+              const box = (j, k, from, to) => {
+                const lz = (along(j) + along(k)) / 2;
+                this.addBox(x + p.dx * lz, z + p.dz * lz, hw, (along(k) - along(j)) / 2, rot, to - from, from);
+              };
+              const rail = Math.max(lo - 0.3, 2);
+              const parapet = (j, k) => { if (k > j && lo >= STEP) box(j, k, rail, Math.max(top, rail + 0.5)); };
+              let last = 0;
+              runs((j, k) => { parapet(last, j); box(j, k, 0, top); last = k; });
+              parapet(last, m);
             }
             if (lo < SOLID_BELOW && hi >= SOLID_BELOW) {
               // Here the deck comes down onto its solid embankment, and chunks.js slopes the
@@ -368,6 +394,8 @@ const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 // Half the width of the widest vehicle in a lane (a bus or truck): how far either side of a lane's
 // line traffic reaches. And half a truck's length.
 const LANE_HW = 1.25, LANE_HD = 3.8;
+// A deck this little above the street is driven or walked straight onto (as net.surfaceAt steps).
+const STEP = 0.6;
 
 /**
  * Tests against the other roads at street level, for laying a median, a ramp's side wall or its
@@ -407,13 +435,13 @@ function otherStreets(net) {
         if (o !== r && o !== a && o !== b && pointSegDist2(x, z, px[i], pz[i], px[i + 1], pz[i + 1]) < reach * reach) others.push(i);
       });
     },
-    /** Is (x, z) more than `slack` metres inside one of their carriageways? */
-    onOther(x, z, slack) {
+    /** Is (x, z) more than `slack` metres inside one of their carriageways (where its deck, if any, is below `below`)? */
+    onOther(x, z, slack, below = 2) {
       for (const i of others) {
         const o = net.ptRoad[i], ax = net.px[i], az = net.pz[i], dx = net.px[i + 1] - ax, dz = net.pz[i + 1] - az;
         const d2 = pointSegDist2(x, z, ax, az, ax + dx, az + dz, t), hw = net.width[o] / 2 - slack;
         if (hw <= 0 || d2 >= hw * hw) continue;
-        if (net.raised[o] && net.deckAt(o, net.cum[i] + (net.cum[i + 1] - net.cum[i]) * t[0]) >= 2) continue;
+        if (net.raised[o] && net.deckAt(o, net.cum[i] + (net.cum[i + 1] - net.cum[i]) * t[0]) >= below) continue;
         // Its edge on this side, as net.edgeAt has it but read off this segment (this runs a
         // few hundred thousand times while the game loads): a carriageway's median side stops short.
         const side = (x - ax - dx * t[0]) * dz - (z - az - dz * t[0]) * dx >= 0 ? 1 : -1;
