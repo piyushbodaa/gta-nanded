@@ -626,8 +626,15 @@ export function driveHunters(game, dt) {
     const d = dist(v.x, v.z, pos.x, pos.z);
     if (d > 300) continue;
     v.hunt.ignore = game.player.vehicle;
-    if (d < 45) game.controls.set(v, v.hunt.control(dt, { x: pos.x, z: pos.z }));
-    else {
+    v.huntRoads = Math.max(0, (v.huntRoads || 0) - dt);
+    if (d < 45 && !v.huntRoads) {
+      // Straight at the player. Not closing in for seconds (rocking against the median between
+      // two carriageways, or a wall): round by the roads for a while, as from further off.
+      if (d < (v.huntBest ?? Infinity) - 2) { v.huntBest = d; v.huntStall = 0; }
+      else if ((v.huntStall = (v.huntStall || 0) + dt) > 5) { v.huntRoads = 8; v.huntT = 0; }
+      game.controls.set(v, v.hunt.control(dt, { x: pos.x, z: pos.z }));
+    } else {
+      v.huntBest = Infinity; v.huntStall = 0;
       if (!v.huntT || (v.huntT -= dt) <= 0) { v.huntT = 1.5; const r = game.net.route(v.x, v.z, pos.x, pos.z, { plain: true }); if (r) v.hunt.setPath(r.points); }
       game.controls.set(v, v.hunt.control(dt));
     }

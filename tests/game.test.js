@@ -248,6 +248,21 @@ test('a hunter car the player jacks stops hunting and never steers the player', 
   assert.equal(v.hunt, null);
 });
 
+test('a hunter that rams straight at the player and gets nowhere (a median between) goes round by the roads', () => {
+  const g = fakeGame();
+  let routed = 0, rams = 0;
+  g.net.route = () => { routed++; return { points: [0, 26, 0, 0] }; };
+  const v = { id: 1, x: 0, z: 26, hunt: { setPath() {}, control: (dt, target) => { if (target) rams++; return {}; } } };
+  g.missions = { active: { ent: { tigerCar: v } } };
+  for (let t = 0; t < 4; t += 0.1) driveHunters(g, 0.1);
+  assert.equal(routed, 0, 'straight at the player at first');
+  for (let t = 0; t < 3; t += 0.1) driveHunters(g, 0.1);
+  assert.ok(routed > 0 && v.huntRoads > 0, 'then round by the roads');
+  rams = 0;
+  for (let t = 0; t < 9; t += 0.1) driveHunters(g, 0.1);
+  assert.ok(rams > 0, 'and at the player again');
+});
+
 test('a step that fails leaves no GPS line to its target', () => {
   const g = fakeGame();
   let routed = 0;
