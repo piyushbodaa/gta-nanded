@@ -205,3 +205,50 @@ test('what the governor learned under the old 45 fps cap is forgotten once', () 
   assert.equal(q.tier, 'high');
   assert.equal(q.scale, 1);
 });
+
+test('first-launch tuning times each tier with its own traffic and people, and play opens with the crowd it settles on', async () => {
+  const { Game } = await import('../src/game/game.js');
+  /** Tune a phone whose frames take `ms(tier, crowd)`, on a clock the test keeps. */
+  const tune = (gpu, ms) => {
+    const q = phone(gpu), timed = [];
+    // Streets that fill up to the tier's numbers as play fills them: topped up, never thinned.
+    const vehicles = { list: [], add(v = {}) { this.list.push(v); return v; }, remove(v) { const i = this.list.indexOf(v); if (i >= 0) this.list.splice(i, 1); } };
+    const traffic = { cars: [], update() { this.cars = this.cars.filter(v => vehicles.list.includes(v)); while (this.cars.length < q.settings.traffic * q.crowd) this.cars.push(vehicles.add()); } };
+    const peds = { list: [], update() { while (this.list.length < q.settings.peds * q.crowd) this.list.push({}); }, remove(p) { this.list.splice(this.list.indexOf(p), 1); } };
+    const parked = {
+      bySeg: new Map(), t: 0,
+      update(dt) {
+        if ((this.t -= dt) > 0) return;
+        this.t = 0.8;
+        for (const [seg, v] of this.bySeg) if (!vehicles.list.includes(v)) this.bySeg.delete(seg);
+        for (let seg = 0; this.bySeg.size < Math.round(q.settings.traffic * 0.7); seg++) if (!this.bySeg.has(seg)) this.bySeg.set(seg, vehicles.add());
+      },
+    };
+    const crowd = () => ({ cars: traffic.cars.length, people: peds.list.length, parked: parked.bySeg.size });
+    let clock = 0;
+    const g = {
+      quality: q, vehicles, traffic, peds, parked, input: {}, camera: { update() {} },
+      player: { pos: { x: 0, z: 0 }, human: {}, teleport(x, z, heading) { Object.assign(this, { x, z, heading }); Object.assign(this.pos, { x, z }); } },
+      renderer: { getContext: () => ({ readPixels() {} }) }, world: { chunks: { queue: [], update() {} } },
+      applyQuality() {}, resize() {},
+      renderWorld() { const c = crowd(); timed.push({ tier: q.tier, ...c }); clock += ms(q.tier, c.cars + c.people + c.parked); },
+    };
+    const now = performance.now;
+    performance.now = () => clock;
+    try { Game.prototype.calibrate.call(g, { x: 0, z: 0, heading: 0 }); } finally { performance.now = now; }
+    const own = tier => { const s = q.tiers[tier]; return { cars: s.traffic, people: s.peds, parked: Math.round(s.traffic * 0.7) }; };
+    for (const { tier, ...c } of timed) assert.deepEqual(c, own(tier), `${tier} timed with its own crowd`);
+    assert.deepEqual(crowd(), own(q.tier), `play opens with ${q.tier}'s crowd`);
+    return { q, tiers: [...new Set(timed.map(t => t.tier))] };
+  };
+  // Guessed High, too slow there: Balanced, timed with Balanced's crowd, holds (with High's it wouldn't).
+  const BASE = { low: 5, medium: 9.2, high: 10, ultra: 14 };
+  const down = tune('Adreno 740', (tier, n) => BASE[tier] + 0.05 * n);
+  assert.deepEqual(down.tiers, ['high', 'medium']);
+  assert.equal(down.q.tier, 'medium');
+  // Guessed Balanced with plenty of room: High is tried with High's crowd, and kept.
+  store.clear();
+  const up = tune('Adreno 710', (tier, n) => 1 + 0.02 * n);
+  assert.deepEqual(up.tiers, ['medium', 'high']);
+  assert.equal(up.q.tier, 'high');
+});

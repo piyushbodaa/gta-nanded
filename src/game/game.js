@@ -155,7 +155,12 @@ export class Game {
 
   /** A fault that won't go away: stop, and say so instead of leaving a frozen picture. */
   _fatal(err) {
-    this.renderer.setAnimationLoop(null);
+    // Stopped from inside a frame, three still asks for the next one once the frame returns:
+    // stop again after it has, or the browser goes on calling an empty loop every refresh.
+    const stop = () => this.renderer.setAnimationLoop(null);
+    stop(); setTimeout(stop);
+    // Without frames nothing fades the engine, siren and street out: silence them now.
+    this.audio?.halt();
     const box = document.getElementById('fatal');
     if (!box) return;
     box.querySelector('h2').textContent = 'The game stopped on an error.';
@@ -180,9 +185,20 @@ export class Game {
       P.teleport(spot.x, spot.z, spot.heading);
       h.x = P.x; h.y = P.y; h.z = P.z; h.yaw = P.heading;
       this.camera.update(0, this.input, { human: h, speed: 0, heading: P.heading, groundY: P.groundY });
-      for (let i = 0; i < 40; i++) { this.traffic?.update(0.05); this.peds?.update(0.05); }
-      if (this.parked) { this.parked.t = 0; this.parked.update(1); }
     }
+    // Each tier has its own traffic, people and parked cars, and play only tops them up (nothing
+    // goes until it is 150 m off or more): fill the streets afresh for every tier tried, so each
+    // is timed with its own crowd and play opens with the crowd of the tier it settles on.
+    const fill = () => {
+      if (!spot) return;
+      const { traffic, peds, parked } = this;
+      for (const v of traffic?.cars.splice(0) ?? []) this.vehicles.remove(v);
+      for (const p of peds?.list.slice() ?? []) peds.remove(p);
+      for (const v of parked?.bySeg.values() ?? []) this.vehicles.remove(v);
+      parked?.bySeg.clear();
+      for (let i = 0; i < 40; i++) { traffic?.update(0.05); peds?.update(0.05); }
+      if (parked) { parked.t = 0; parked.update(1); }
+    };
     const gl = this.renderer.getContext(), chunks = this.world.chunks, p = this.player.pos;
     const budget = 1000 / (q.fpsCap || 60);
     // Milliseconds per frame: the median of three short runs, so one busy moment can't decide.
@@ -202,7 +218,7 @@ export class Game {
       }
       return runs.sort((a, b) => a - b)[1];
     };
-    const set = tier => { q.autoTier = tier; q.scale = 1; this.applyQuality(); };
+    const set = tier => { q.autoTier = tier; q.scale = 1; this.applyQuality(); fill(); };
     const up = t => ORDER[ORDER.indexOf(t) + 1], down = t => ORDER[ORDER.indexOf(t) - 1];
     const heavy = new Set(q.tooHeavy), first = !q.learned;
     set(q.learned?.promote && up(q.autoTier) && !heavy.has(up(q.autoTier)) ? up(q.autoTier) : q.autoTier);

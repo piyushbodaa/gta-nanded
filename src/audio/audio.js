@@ -73,6 +73,14 @@ export class GameAudio {
     else setTimeout(() => { if (!this.enabled) this.ctx.suspend(); }, 300);
   }
 
+  /** The game stopped on an error: silence everything now, and for good. */
+  halt() {
+    if (!this.ctx) return;
+    this.enabled = false; // neither the page coming back nor a touch starts it again
+    if (this.radio) this._hush(); // made last: everything is there to hush
+    this.ctx.suspend();
+  }
+
   /** Every continuous sound to silence now, without waiting for update() to fade it. */
   _hush() {
     const now = this.ctx.currentTime, e = this.eng;

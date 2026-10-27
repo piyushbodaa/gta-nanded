@@ -99,6 +99,26 @@ test('a hidden page goes quiet at once, and Sound off stops the audio altogether
   assert.equal(audio.ctx.state, 'running');
 });
 
+test('a game stopped on an error falls silent for good, and stops asking for frames', async () => {
+  const { Game } = await import('../src/game/game.js');
+  const audio = new GameAudio();
+  await audio.init();
+  const g = fakeGame();
+  g.player.vehicle = car;
+  audio.update(1 / 60, g);
+  const loops = [];
+  document.getElementById = () => null;
+  Game.prototype._fatal.call({ audio, renderer: { setAnimationLoop: f => loops.push(f) } }, new Error('broken'));
+  // No more frames to fade the engine, siren or street out.
+  assert.equal(audio.ctx.state, 'suspended');
+  for (const p of [audio.eng.gain.gain, audio.eng.wind.gain, audio.amb.bed.gain, audio.sir.g.gain, audio.radio.out.gain]) assert.equal(p.value, 0);
+  setHidden(true); setHidden(false);
+  assert.equal(audio.ctx.state, 'suspended', 'coming back to the page keeps it quiet');
+  // three asks for the next frame after a frame returns, so it is stopped again once it has.
+  await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(loops, [null, null]);
+});
+
 test('horn cooldowns are forgotten once over', async () => {
   const audio = new GameAudio();
   await audio.init();
