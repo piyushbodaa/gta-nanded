@@ -7,7 +7,7 @@ const NAMES = {
   },
   gamepad: {
     gas: 'RT', brake: 'LT', handbrake: 'A', horn: 'L3', radio: 'RB', camera: 'LB', enter: 'Y', exit: 'Y', map: 'Back', pause: 'Start',
-    job: 'D-pad ↑', action: 'X', siren: 'X', attack: 'B', photo: 'D-pad ↓', sprint: 'X', jump: 'A',
+    job: 'D-pad ↑', action: 'X', siren: 'X', attack: 'B', photo: 'D-pad ↓', sprint: 'L3', jump: 'A',
   },
   touch: {
     gas: 'GAS', brake: 'BRAKE', handbrake: 'DRIFT', horn: 'HORN', radio: '📻', camera: '🎥', enter: 'ENTER', exit: 'EXIT', map: 'MAP', pause: '❚❚',
