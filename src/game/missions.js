@@ -451,6 +451,8 @@ export const Steps = {
    */
   race(points, rivals, text = 'Win the race.') {
     let idx = 0, shown = '', ys = [];
+    // How far on someone at `pos` is, for the player: checkpoints passed, then metres to the next.
+    const progress = pos => { const p = points[Math.min(idx, points.length - 1)]; return idx * 1e5 - dist(pos.x, pos.z, p.x, p.z); };
     return {
       kind: 'race', points,
       enter(c) {
@@ -465,8 +467,8 @@ export const Steps = {
           v.raceIdx = 0;
           planLegs(c.g, v, points);
           // Wedged (a turn into a lane missed at speed, a wall): out of sight, back on the road
-          // a little further on, as police.js does for its jeeps.
-          v.raceDriver.onStuck = () => putBack(c.g, v, v.raceDriver);
+          // a little further on, as police.js does for its jeeps, short of its next checkpoint.
+          v.raceDriver.onStuck = () => putBack(c.g, v, v.raceDriver, points[Math.min(v.raceIdx, points.length - 1)], progress(c.g.player.pos));
         }
       },
       update(c, dt) {
@@ -475,13 +477,14 @@ export const Steps = {
         c.m.target = { x: p.x, z: p.z, y: ys[idx], r: 6, h: 7, markerColor: idx === points.length - 1 ? 0xff5252 : 0xffc83d };
         // Rivals drive the route with a little rubber band.
         let ahead = 0;
+        const mine = progress(pos);
         for (const n of rivals) {
           const v = c.ent[n];
           if (!v || v.wrecked || g.player.vehicle === v) continue;
           const rp = points[Math.min(v.raceIdx, points.length - 1)];
           if (dist(v.x, v.z, rp.x, rp.z) < 14 && ++v.raceIdx < points.length) planLegs(g, v, points);
           if (v.raceIdx >= points.length) { if (!c.m.vars.lost) { c.m.vars.lost = true; } return `fail:${v.label || 'A rival'} won the race.`; }
-          const mine = idx * 1e5 - dist(pos.x, pos.z, p.x, p.z), theirs = v.raceIdx * 1e5 - dist(v.x, v.z, rp.x, rp.z);
+          const theirs = v.raceIdx * 1e5 - dist(v.x, v.z, rp.x, rp.z);
           if (theirs > mine) ahead++;
           const band = clamp(1 + (mine - theirs) / 900, 0.82, 1.18);
           v.raceDriver.maxSpeed = v.spec.top * 0.92 * band;
@@ -595,23 +598,67 @@ function planLegs(g, v, points) {
   v.raceDriver.goal = points[v.raceIdx];
 }
 
+const _view = new THREE.Frustum(), _pv = new THREE.Matrix4(), _ball = new THREE.Sphere();
 /**
- * A rival wedged where the player can't see it is put back on the road a few points further along
- * its route, facing along it (police.js does the same for its jeeps). Never on or under a flyover,
- * nor onto another car. Returns true when handled.
+ * Could the player see a car at (x, y, z) vanish or appear? Close by, whatever the camera faces;
+ * in the camera's view (as the last frame drew it) out to where the haze sets in. With no camera
+ * to ask, anywhere within 45 m.
  */
-function putBack(g, v, driver) {
-  const P = g.player.pos, path = driver.path, net = g.net;
-  if (!path || dist(v.x, v.z, P.x, P.z) < 45) return false;
-  const k = Math.min(path.length / 2 - 1, driver.i + 3), x = path[k * 2], z = path[k * 2 + 1];
-  if (net.deckOver(x, z) > 0.3 || dist(x, z, P.x, P.z) < 45) return false;
-  const n = net.nearest(x, z, 20, {}, r => !net.raised[r]);
-  if (!n || g.vehicles.list.some(o => o !== v && dist(o.x, o.z, n.x, n.z) < 6)) return false;
-  const ahead = Math.min(path.length / 2 - 1, k + 1);
-  v.x = n.x; v.z = n.z; v.y = 0; v.vx = v.vz = 0; v.w = 0;
-  v.heading = Math.atan2(path[ahead * 2] - n.x, path[ahead * 2 + 1] - n.z);
-  driver.i = k; driver.reverseT = 0; driver.stuck = 0;
-  return true;
+function inSight(g, x, y, z) {
+  const P = g.player.pos, d = dist(x, z, P.x, P.z), cam = g.camera3;
+  if (!cam?.projectionMatrix) return d < 45;
+  if (d < 15) return true;
+  if (d > 150) return false;
+  _view.setFromProjectionMatrix(_pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+  _ball.center.set(x, y + 1, z); _ball.radius = 4;
+  return _view.intersectsSphere(_ball);
+}
+
+/**
+ * A rival wedged where the player can't see it is put back on the road a little further along its
+ * route, facing along it (police.js does the same for its jeeps). Up to 30 m on from where it was
+ * driving, measured along the path, whose points can be 200 m apart on a long straight. Never
+ * near the checkpoint it owes (`cp`: it must still drive through it), never from behind the player
+ * (`mine`, their progress as race() counts it) to level with or ahead of them, never where the
+ * player could see it appear, on or under a flyover, or onto another car. Returns true when handled.
+ */
+function putBack(g, v, driver, cp, mine) {
+  const path = driver.path, net = g.net, n = path ? path.length / 2 : 0;
+  if (n < 2 || inSight(g, v.x, v.y || 0, v.z)) return false;
+  const progress = (x, z) => v.raceIdx * 1e5 - dist(x, z, cp.x, cp.z);
+  const behind = progress(v.x, v.z) < mine;
+  // Where it is along the stretch it was driving (from the point before the one it heads for),
+  // then on along the path in 2 m steps, each spot one it may be put on.
+  let k = clamp(driver.i, 1, n - 1);
+  const ax = path[k * 2 - 2], az = path[k * 2 - 1], sx = path[k * 2] - ax, sz = path[k * 2 + 1] - az;
+  const t = clamp(((v.x - ax) * sx + (v.z - az) * sz) / Math.max(sx * sx + sz * sz, 1e-6), 0, 1);
+  let x = ax + sx * t, z = az + sz * t;
+  const spots = [];
+  for (let walked = 0; walked <= 30; walked += 2) {
+    if (dist(x, z, cp.x, cp.z) < 20 || (behind && progress(x, z) > mine - 10)) break;
+    spots.push({ x, z, k });
+    // 2 m further on, round the path's corners.
+    let left = 2;
+    while (left > 0 && k < n) {
+      const seg = dist(x, z, path[k * 2], path[k * 2 + 1]);
+      if (seg >= left) { x += (path[k * 2] - x) * left / seg; z += (path[k * 2 + 1] - z) * left / seg; left = 0; }
+      else { x = path[k * 2]; z = path[k * 2 + 1]; left -= seg; k++; }
+    }
+    if (left > 0) break; // the end of the path
+  }
+  // The furthest on that is clear: on the road there, not too near the checkpoint, unseen.
+  for (const s of spots.reverse()) {
+    const r = net.nearest(s.x, s.z, 20, {}, rd => !net.raised[rd]);
+    if (!r || net.deckOver(r.x, r.z) > 0.3 || dist(r.x, r.z, cp.x, cp.z) < 16 || inSight(g, r.x, 0, r.z)) continue;
+    if (g.vehicles.list.some(o => o !== v && dist(o.x, o.z, r.x, r.z) < 6)) continue;
+    // Facing the next path point at least a couple of metres on.
+    const a = s.k < n - 1 && dist(r.x, r.z, path[s.k * 2], path[s.k * 2 + 1]) < 2 ? s.k + 1 : s.k;
+    v.x = r.x; v.z = r.z; v.y = 0; v.vx = v.vz = 0; v.w = 0;
+    v.heading = Math.atan2(path[a * 2] - r.x, path[a * 2 + 1] - r.z);
+    driver.i = a; driver.reverseT = 0; driver.stuck = 0;
+    return true;
+  }
+  return false;
 }
 
 /** Drive hunter vehicles each frame (called from the game loop while a mission is active). */
