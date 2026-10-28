@@ -66,19 +66,22 @@
         <div class="radar"><canvas id="radar"></canvas></div>
         <div class="bars"><div class="bar health"><i id="hud-health"></i></div><div class="bar stamina"><i id="hud-stamina"></i></div></div>
       </div>
-      <div id="hud-help" class="help-box" hidden></div>
       <div id="hud-area" class="area-name" hidden></div>
       <div id="hud-vehicle" class="vehicle-name" hidden></div>
       <div id="hud-speed" class="speedo" hidden><b id="hud-speed-num">0</b><small>KM/H</small><span id="hud-gear">N</span><i class="hp"></i></div>
       <div id="hud-timer" class="timer" hidden></div>
-      <div id="hud-objective" class="objective" hidden></div>
-      <div id="hud-subtitle" class="subtitle" hidden></div>
+      <!-- Text for the middle of the screen: placed one by one on big screens, stacked on phones. -->
+      <div class="hud-stack">
+        <div id="hud-objective" class="objective" hidden></div>
+        <div id="hud-subtitle" class="subtitle" hidden></div>
+        <div id="hud-help" class="help-box" hidden></div>
+        <div id="hud-toast" class="toast" hidden></div>
+        <div id="hud-radio" class="radio-card" hidden></div>
+      </div>
       <div id="hud-bark" class="bark" hidden></div>
-      <div id="hud-toast" class="toast" hidden></div>
       <div id="hud-prompt" class="prompt" hidden></div>
       <div id="hud-big" class="big-message" hidden></div>
-      <div id="hud-radio" class="radio-card" hidden></div>
-      <div id="hud-hint" class="corner-hint"><kbd>ESC</kbd> Pause <kbd>M</kbd> Map</div>
+      <div id="hud-hint" class="corner-hint"><kbd>Esc</kbd> Pause <kbd>M</kbd> Map</div>
       <div id="hud-perf" class="perf-readout" hidden></div>
     </div>
 
@@ -140,28 +143,28 @@
         <div class="tab" data-pane="stats"><div id="stats-list" class="stats"></div></div>
         <div class="tab" data-pane="settings">
           <div class="settings">
-            <label>Graphics <button id="set-quality" type="button"></button></label>
-            <label>Frame rate <button id="set-fps" type="button"></button></label>
-            <label>Performance readout <button id="set-perf" type="button"></button></label>
-            <label id="set-install-row" hidden>Home Screen <button id="set-install" type="button">Add to Home Screen</button></label>
+            <div class="row">Graphics <button id="set-quality" type="button"></button></div>
+            <div class="row">Frame rate <button id="set-fps" type="button"></button></div>
+            <div class="row">Performance readout <button id="set-perf" type="button"></button></div>
+            <div id="set-install-row" class="row" hidden>Home Screen <button id="set-install" type="button">Add to Home Screen</button></div>
             <p id="set-install-help" class="small" hidden>Tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>. The game then opens full screen like an app, and your iPhone keeps your progress even if you don't play for a while.</p>
-            <label>Sound <button id="set-sound" type="button"></button></label>
+            <div class="row">Sound <button id="set-sound" type="button"></button></div>
             <label>Music volume <input id="set-music" type="range" min="0" max="1" step="0.05" /></label>
             <label>Effects volume <input id="set-sfx" type="range" min="0" max="1" step="0.05" /></label>
             <label>Look sensitivity <input id="set-sens" type="range" min="0.3" max="2.5" step="0.1" /></label>
-            <label>Time of day <button id="set-time" type="button">Advance 3 hours</button></label>
-            <label>Weather <button id="set-weather" type="button"></button></label>
+            <div class="row">Time of day <button id="set-time" type="button">Advance 3 hours</button></div>
+            <div class="row">Weather <button id="set-weather" type="button"></button></div>
             <form id="set-cheat-form" class="cheat" autocomplete="off"><label for="set-cheat">Cheat code</label><input id="set-cheat" type="text" maxlength="14" spellcheck="false" autocapitalize="characters" enterkeyhint="go" placeholder="Type a code" /><button type="submit">Enter</button></form>
-            <label>Save <button id="set-reset" type="button" class="danger">Start over (erase progress)</button></label>
+            <div class="row">Save <button id="set-reset" type="button" class="danger">Start over (erase progress)</button></div>
             <p class="small">Progress saves automatically on this device. Map data © OpenStreetMap contributors (ODbL). All characters and stories are fictional.</p>
           </div>
         </div>
         <div class="tab" data-pane="help">
           <div class="help-grid">
-            <section class="for-touch"><h3>On foot</h3><p>Left thumb: walk (push further to jog) · drag the right side to look<br /><kbd class="tap">RUN</kbd> sprint · <kbd class="tap">JUMP</kbd> · <kbd class="tap">PUNCH</kbd> · <kbd class="tap">📷</kbd> photo<br /><kbd class="tap">ENTER</kbd> or <kbd class="tap">JACK</kbd> shows up next to a vehicle; buy, talk and photograph with the button that appears</p></section>
+            <section class="for-touch"><h3>On foot</h3><p>Left thumb: walk (push further to jog) · drag the right side to look<br /><kbd class="tap">RUN</kbd> sprint · <kbd class="tap">JUMP</kbd> · <kbd class="tap">PUNCH</kbd> · <kbd class="tap">📷</kbd> photo<br /><kbd class="tap">ENTER</kbd> or <kbd class="tap">JACK</kbd> shows up next to a vehicle; buy and photograph with the button that appears</p></section>
             <section class="for-touch"><h3>Driving</h3><p>Left thumb: steer · <kbd class="tap">GAS</kbd> · <kbd class="tap">BRAKE</kbd> (hold to reverse) · <kbd class="tap">DRIFT</kbd> handbrake<br /><kbd class="tap">HORN</kbd> · <kbd class="tap">📻</kbd> radio · <kbd class="tap">🎥</kbd> camera distance · <kbd class="tap">EXIT</kbd> get out<br /><kbd class="tap">START JOB</kbd> in an auto or on a two-wheeler · <kbd class="tap">SIREN</kbd> in a police jeep or ambulance</p></section>
             <section class="for-touch"><h3>Everywhere</h3><p><kbd class="tap">MAP</kbd> city map · <kbd class="tap">❚❚</kbd> pause<br />Hold your phone sideways for the full city.</p></section>
-            <section class="for-desk"><h3>On foot</h3><p><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump<br /><kbd>Click</kbd>/<kbd>J</kbd> punch · <kbd>F</kbd> get in / jack a vehicle<br /><kbd>Q</kbd> buy, talk, photograph · <kbd>X</kbd> photo</p></section>
+            <section class="for-desk"><h3>On foot</h3><p><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump<br /><kbd>Click</kbd>/<kbd>J</kbd> punch · <kbd>F</kbd> get in / jack a vehicle<br /><kbd>Q</kbd> buy, photograph · <kbd>X</kbd> photo</p></section>
             <section class="for-desk"><h3>Driving</h3><p><kbd>W</kbd> gas · <kbd>S</kbd> brake / reverse · <kbd>A D</kbd> steer<br /><kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio · <kbd>V</kbd> camera<br /><kbd>C</kbd> look back · <kbd>N</kbd> start a job · <kbd>Q</kbd> siren · <kbd>F</kbd> get out</p></section>
             <section class="for-desk"><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepad: sticks to move and look, <kbd>RT</kbd>/<kbd>LT</kbd> gas and brake, <kbd>A</kbd> jump/handbrake, <kbd>B</kbd> punch, <kbd>L3</kbd> sprint, <kbd>X</kbd> buy, <kbd>Y</kbd> get in/out, <kbd>D-pad ↑</kbd> job, <kbd>Back</kbd> map, <kbd>Start</kbd> pause.</p></section>
             <section><h3>Wanted</h3><p>Crimes the police see raise your stars. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.</p></section>

@@ -3,8 +3,8 @@
 // standing from a base height y0 (0 on the ground; a flyover's railings ride on
 // its deck) up h metres. Queries say at what level they are asked, so a car on a
 // flyover and a car on the street beneath it never meet each other's walls.
-import { SpatialGrid, clamp } from '../core/math.js';
-import { PROP, PUMP_HW, PUMP_HD } from './citygen.js';
+import { SpatialGrid, clamp, pointSegDist2 } from '../core/math.js';
+import { PROP, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
 import { placeColliders } from './landmarks.js';
 
@@ -94,39 +94,112 @@ export class Colliders {
       const k = P.kind[i], x = P.x[i], z = P.z[i], rot = P.rot[i];
       if (k === PROP.LAMP || k === PROP.POLE) this.addCircle(x, z, 0.18, 8, P.y[i]);
       else if (k === PROP.MEDIAN_LAMP) this.addCircle(x, z, 0.3, 8, P.y[i]);
-      else if (k === PROP.STALL) this.addBox(x, z, 1.05, 0.85, rot, 2.2);
+      else if (k === PROP.STALL) {
+        this.addBox(x, z, 1.05, 0.85, rot, 2.2);
+        // Its bench, where chunks.js draws it (if it has one).
+        const side = city.stallBench(i), c = Math.cos(rot), s = Math.sin(rot), lx = side * BENCH.x;
+        if (side) this.addBox(x + lx * c + BENCH.z * s, z - lx * s + BENCH.z * c, BENCH.hw, BENCH.hd, rot, BENCH.h);
+      }
       else if (k === PROP.CART) this.addBox(x, z, 0.95, 0.6, rot, 1.2);
       else if (k === PROP.SHRINE) this.addBox(x, z, 0.75, 0.75, rot, 2.5);
       else if (k === PROP.VENDOR) this.addBox(x, z, 1.0, 0.75, rot, 1.2);
       else if (k === PROP.HOARDING) { const c = Math.cos(rot), s = Math.sin(rot); this.addCircle(x + c * 2.2, z - s * 2.2, 0.15, 8); this.addCircle(x - c * 2.2, z + s * 2.2, 0.15, 8); }
     }
-    // Bridge railings and wide-road medians, segment by segment.
-    const net = city.net, p = {};
+    // Bridge railings and flyover ramps, piece by piece along each straight stretch of the
+    // polyline as chunks.js draws them (a flyover in 4 m pieces), and the medians along the runs
+    // chunks.js draws them in (see medianRuns). One piece laid across a bend would leave the drawn
+    // line: an invisible wall in the lane on one side of it and a gap through it on the other.
+    const net = city.net, p = {}, q = {}, { others, gather, onOther } = otherStreets(net);
+    // clear[j] says whether the j-th of a piece's evenly spaced cross-sections is clear: lay(j, k)
+    // each run between two of them with every one in between clear too.
+    const clear = [];
+    const runs = lay => {
+      for (let j = 0, n = clear.length - 1; j < n; j++) {
+        if (!clear[j] || !clear[j + 1]) continue;
+        let k = j + 1;
+        while (k < n && clear[k + 1]) k++;
+        lay(j, k);
+        j = k;
+      }
+    };
     for (let r = 0; r < net.count; r++) {
       const w = net.width[r], lift = net.raised[r];
       // A carriageway of a divided road has its half of the median on its right (ms: +1 left of a->b, -1 right).
       const ms = net.oneway[r] ? -net.oneway[r] : 0;
-      const bridge = net.bridge[r], median = w >= 11.5 && !bridge && !ms;
-      if (!bridge && !lift && !median && !ms) continue;
+      const bridge = net.bridge[r];
+      if (!bridge && !lift) continue;
       const s0 = net.trimStart(r), s1 = net.length[r] - net.trimEnd(r), step = lift ? 4 : 8;
-      for (let s = s0; s < s1 - 0.5; s += step) {
-        const e = Math.min(s + step, s1), sm = (s + e) / 2;
-        net.pointAt(r, sm, p);
-        const rot = Math.atan2(p.dx, p.dz);
-        const half = (e - s) / 2;
-        const inner = ms ? net.innerAt(r, sm) : w / 2, divided = inner < w / 2 - 0.05;
-        const dA = lift ? net.deckAt(r, s) : 0, dB = lift ? net.deckAt(r, e) : 0, lo = Math.min(dA, dB), hi = Math.max(dA, dB);
-        if (bridge || hi > 0.05) {
-          // Railings ride on a deck you can pass under; a low ramp is walled down to the ground.
-          const y0 = lo >= SOLID_BELOW ? lo - 0.3 : 0, top = hi + 1.0;
-          for (const side of [1, -1]) {
-            const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2;
-            this.addBox(p.x + p.dz * off * side, p.z - p.dx * off * side, mid ? 0.15 : 0.2, half + 0.3, rot, top - y0, y0);
+      for (let i = net.ptStart[r]; i < net.ptStart[r + 1] - 1; i++) {
+        const sa = Math.max(net.cum[i], s0), sb = Math.min(net.cum[i + 1], s1);
+        if (sb - sa < 0.05) continue;
+        const n = Math.ceil((sb - sa) / step);
+        for (let k = 0; k < n; k++) {
+          const s = sa + ((sb - sa) * k) / n, e = sa + ((sb - sa) * (k + 1)) / n, sm = (s + e) / 2;
+          net.pointAt(r, sm, p);
+          const rot = Math.atan2(p.dx, p.dz);
+          const half = (e - s) / 2;
+          const inner = ms ? net.innerAt(r, sm) : w / 2, divided = inner < w / 2 - 0.05;
+          const dA = lift ? net.deckAt(r, s) : 0, dB = lift ? net.deckAt(r, e) : 0, lo = Math.min(dA, dB), hi = Math.max(dA, dB);
+          if (bridge || hi > 0.05) {
+            // Railings ride on a deck you can pass under; a low ramp is walled down to the ground.
+            const y0 = lo >= SOLID_BELOW ? lo - 0.3 : 0, top = hi + 1.0, low = lift && y0 === 0;
+            for (const side of [1, -1]) {
+              const mid = side === ms && divided, off = mid ? inner - 0.15 : w / 2 + 0.2, hw = mid ? 0.15 : 0.2;
+              const x = p.x + p.dz * off * side, z = p.z - p.dx * off * side, len = half + 0.3;
+              // A low ramp's wall down to the ground is left open to a street that runs through it,
+              // as its closing box is (below): the map lays service roads half under their ramps,
+              // and their traffic drives on through. Only to a street that never leaves the ground
+              // (onOther counts no deck at all): another ramp beside it, such as the other
+              // carriageway of its divided road coming down, is no street. There the deck keeps a
+              // parapet for its own traffic, from 2 m up (or on a deck higher than that), out of
+              // the way of anything on the street (see _atLevel); but none where the deck is still
+              // within a STEP of the street, where a car just drives on or off it. Tested every
+              // 0.25 m along the wall, on both faces and down the middle.
+              if (low) gather(r, x, z, len + hw);
+              if (!low || !others.length) { this.addBox(x, z, hw, len, rot, top - y0, y0); continue; }
+              const m = Math.ceil((2 * len) / 0.25), along = j => -len + (2 * len * j) / m;
+              clear.length = 0;
+              for (let j = 0; j <= m; j++) {
+                const lz = along(j);
+                clear.push([-hw, 0, hw].every(lx => !onOther(x + p.dz * lx + p.dx * lz, z - p.dx * lx + p.dz * lz, 0, 0)));
+              }
+              const box = (j, k, from, to) => {
+                const lz = (along(j) + along(k)) / 2;
+                this.addBox(x + p.dx * lz, z + p.dz * lz, hw, (along(k) - along(j)) / 2, rot, to - from, from);
+              };
+              const rail = Math.max(lo - 0.3, 2);
+              const parapet = (j, k) => { if (k > j && lo >= STEP) box(j, k, rail, Math.max(top, rail + 0.5)); };
+              let last = 0;
+              runs((j, k) => { parapet(last, j); box(j, k, 0, top); last = k; });
+              parapet(last, m);
+            }
+            if (lo < SOLID_BELOW && hi >= SOLID_BELOW) {
+              // Here the deck comes down onto its solid embankment, and chunks.js slopes the
+              // underside from the deck to the ground across this piece. Close its lower half,
+              // where the slope comes down below a car's roof, across the carriageway: else a car
+              // or someone on foot under the deck goes on into the ramp. It stays below the deck,
+              // so the deck's own traffic passes over it. Out to the embankment's sides: 0.35 m
+              // past the kerb edge, and on the edge on a divided road's median side. But not across
+              // a street that runs on under the ramp here (a service road the map lays half under
+              // it): its traffic drives on through, and so must everyone else. Tested every 0.25 m
+              // across, at the box's front, middle and back.
+              net.pointAt(r, dA > dB ? (sm + e) / 2 : (s + sm) / 2, q);
+              const out = side => (side === ms && divided ? 0 : 0.35);
+              const eL = net.edgeAt(r, sm, 1) + out(1), eR = net.edgeAt(r, sm, -1) + out(-1);
+              const m = Math.ceil((eL + eR) / 0.25), across = j => -eR + ((eL + eR) * j) / m;
+              gather(r, q.x, q.z, Math.hypot(Math.max(eL, eR), half / 2));
+              clear.length = 0;
+              for (let j = 0; j <= m; j++) {
+                const lx = across(j);
+                clear.push(!others.length || [-half / 2, 0, half / 2].every(lz => !onOther(q.x + p.dz * lx + p.dx * lz, q.z - p.dx * lx + p.dz * lz, 0)));
+              }
+              runs((j, k) => {
+                const off = (across(j) + across(k)) / 2;
+                this.addBox(q.x + p.dz * off, q.z - p.dx * off, (across(k) - across(j)) / 2, half / 2, rot, Math.max(0.5, lo - 1.1));
+              });
+            }
           }
-        } else if (divided) {
-          const off = inner + MEDIAN_W / 4;
-          this.addBox(p.x + p.dz * off * ms, p.z - p.dx * off * ms, MEDIAN_W / 4, half, rot, 0.35);
-        } else if (median) this.addBox(p.x, p.z, 0.35, half, rot, 0.35);
+        }
       }
       if (lift) for (const pier of net.deckPiers(r)) this.addCircle(pier.x, pier.z, 0.6, pier.d - 1.1);
       // A river bridge's piers, span by span as chunks.js draws them: in the way down on the bank.
@@ -137,6 +210,30 @@ export class Colliders {
           const a = net.pointAt(r, sa, {}), b = net.pointAt(r, sb, {});
           const hw = Math.max(net.edgeAt(r, sa, 1), net.edgeAt(r, sa, -1), net.edgeAt(r, sb, 1), net.edgeAt(r, sb, -1));
           city.riverPiers(a.x, a.z, b.x, b.z, hw, (x, z, y0, y1, hx, hz, rot) => this.addBox(x, z, hx, hz, rot, y1 - y0, y0));
+        }
+      }
+    }
+    // The medians, along the runs chunks.js draws them in: a divided carriageway's half from its
+    // edge out to the middle, or a wide two-way road's whole median down the centre line, hw
+    // either side of `edge + out` (left of the centre line). In pieces at most 8 m long, and where
+    // the carriageways close in and the median narrows towards a junction, short enough for its
+    // slanting edge to stay within TAPER / 2 of them (else one end of a long one stands in the lane).
+    const TAPER = 0.2, all = medianRuns(net);
+    for (let r = 0; r < net.count; r++) {
+      const lay = all[r];
+      if (!lay) continue;
+      const ms = net.oneway[r] ? -net.oneway[r] : 0, hw = ms ? MEDIAN_W / 4 : 0.35, out = ms ? ms * hw : hw;
+      for (let k = 0; k < lay.length; k += 2) {
+        for (let i = net.pointAt(r, lay[k], p).seg; i < net.ptStart[r + 1] - 1 && net.cum[i] < lay[k + 1]; i++) {
+          const a = Math.max(lay[k], net.cum[i]), b = Math.min(lay[k + 1], net.cum[i + 1]);
+          if (b - a < 0.01) continue;
+          const dk = (net.inner[i + 1] - net.inner[i]) / (net.cum[i + 1] - net.cum[i]); // net.innerAt, read off this segment
+          const n = Math.ceil((b - a) / (ms && dk ? Math.min(8, Math.max(1, TAPER / Math.abs(dk))) : 8));
+          for (let j = 0; j < n; j++) {
+            const u = a + ((b - a) * (j + 0.5)) / n, off = (ms ? ms * (net.inner[i] + dk * (u - net.cum[i])) : -0.35) + out;
+            net.pointAt(r, u, p);
+            this.addBox(p.x + p.dz * off, p.z - p.dx * off, hw, (b - a) / n / 2, Math.atan2(p.dx, p.dz), 0.35);
+          }
         }
       }
     }
@@ -293,6 +390,170 @@ export class Colliders {
 }
 
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+// Half the width of the widest vehicle in a lane (a bus or truck): how far either side of a lane's
+// line traffic reaches. And half a truck's length.
+const LANE_HW = 1.25, LANE_HD = 3.8;
+// A deck this little above the street is driven or walked straight onto (as net.surfaceAt steps).
+const STEP = 0.6;
+
+/**
+ * Tests against the other roads at street level, for laying a median, a ramp's side wall or its
+ * closing box. The map is at half scale and the road widths are not, so roads overlap: the arms
+ * of a junction that meet at a narrow angle run into each other for metres before it, a divided
+ * road's two carriageways converge into the one street they came from, a service road runs half
+ * under its flyover's ramp. A median laid there, or a ramp's wall, stands in the other road's
+ * lane, where nothing following it can pass (traffic, which drives its lanes, goes through). So
+ * those are laid only where these find them clear, as citygen keeps the median lamps; a deck above
+ * passes over, and the same street going on round a plain bend (a junction of just the two) is no
+ * other. gather(r, x, z, R) collects the segments of roads other than r that could reach within R
+ * of (x, z), once for a piece's tests (this runs while the game loads, on every median).
+ */
+function otherStreets(net) {
+  const others = [], t = [0];
+  const onward = (r, j) => {
+    const l = net.jRoads[j], o = l[0] === r ? l[1] : l[0], ow = net.oneway;
+    // (A divided carriageway is only going on as one that carries its traffic on, the same way.)
+    const arrives = k => (net.rb[k] === j) === (ow[k] > 0);
+    return l.length === 2 && !ow[r] === !ow[o] && (!ow[r] || arrives(r) !== arrives(o)) ? o : r;
+  };
+  // How far from its centre line road o's carriageway or its traffic reaches (a narrow street's
+  // lane is less than a truck's width in from its kerb).
+  const reachOf = o => Math.max(net.width[o] / 2, net.width[o] / 4 + LANE_HW);
+  // The median-side edge v metres along the road, on (or past an end of) its segment j, as net.innerAt has it.
+  const innerOn = (j, v) => {
+    const span = net.cum[j + 1] - net.cum[j], f = span > 1e-6 ? Math.min(1, Math.max(0, (v - net.cum[j]) / span)) : 0;
+    return net.inner[j] + (net.inner[j + 1] - net.inner[j]) * f;
+  };
+  return {
+    others,
+    gather(r, x, z, R) {
+      const a = onward(r, net.ra[r]), b = onward(r, net.rb[r]), { px, pz } = net;
+      others.length = 0;
+      net.grid.query(x - R, z - R, x + R, z + R, i => {
+        const o = net.ptRoad[i], reach = reachOf(o) + R;
+        if (o !== r && o !== a && o !== b && pointSegDist2(x, z, px[i], pz[i], px[i + 1], pz[i + 1]) < reach * reach) others.push(i);
+      });
+    },
+    /** Is (x, z) more than `slack` metres inside one of their carriageways (where its deck, if any, is below `below`)? */
+    onOther(x, z, slack, below = 2) {
+      for (const i of others) {
+        const o = net.ptRoad[i], ax = net.px[i], az = net.pz[i], dx = net.px[i + 1] - ax, dz = net.pz[i + 1] - az;
+        const d2 = pointSegDist2(x, z, ax, az, ax + dx, az + dz, t), hw = net.width[o] / 2 - slack;
+        if (hw <= 0 || d2 >= hw * hw) continue;
+        if (net.raised[o] && net.deckAt(o, net.cum[i] + (net.cum[i + 1] - net.cum[i]) * t[0]) >= below) continue;
+        // Its edge on this side, as net.edgeAt has it but read off this segment (this runs a
+        // few hundred thousand times while the game loads): a carriageway's median side stops short.
+        const side = (x - ax - dx * t[0]) * dz - (z - az - dz * t[0]) * dx >= 0 ? 1 : -1;
+        const edge = (net.oneway[o] && side === -net.oneway[o] ? net.inner[i] + (net.inner[i + 1] - net.inner[i]) * t[0] : net.width[o] / 2) - slack;
+        if (edge > 0 && d2 < edge * edge) return true;
+      }
+      return false;
+    },
+    /**
+     * Does traffic in one of their lanes reach (x, z), LANE_HW either side of the lane's line?
+     * A two-way street's lanes run either side of its centre line out to the kerb lane (lane 0);
+     * a one-way carriageway's between its kerb lane and its median lane (the same one where it is
+     * narrow), and the middle that lanePath keeps to, all on the driver's left. Where its median
+     * closes in towards a junction those lanes drift across, and a truck's straight body, LANE_HD
+     * either way along, is where its lane was at its middle: so where they are that far along too.
+     */
+    inLane(x, z) {
+      for (const i of others) {
+        const o = net.ptRoad[i], ax = net.px[i], az = net.pz[i], dx = net.px[i + 1] - ax, dz = net.pz[i + 1] - az;
+        const d2 = pointSegDist2(x, z, ax, az, ax + dx, az + dz, t), reach = reachOf(o);
+        if (d2 >= reach * reach) continue;
+        const s = net.cum[i] + (net.cum[i + 1] - net.cum[i]) * t[0], ow = net.oneway[o], w = net.width[o];
+        if (net.raised[o] && net.deckAt(o, s) >= 2) continue;
+        // Left of a->b is positive.
+        const d = Math.sqrt(d2) * ((x - ax - dx * t[0]) * dz - (z - az - dz * t[0]) * dx >= 0 ? 1 : -1);
+        // (The lanes as net.laneOffset has them, worked out here from the median-side edge read
+        // off the polyline: this runs for every metre of every median beside another road.)
+        if (!ow) { if (Math.abs(d) < (net.lanes[o] > 1 ? 0.375 : 0.25) * w + LANE_HW) return true; continue; }
+        // The least and greatest median-side edge over a truck's length either way: the lanes
+        // move with it, along straight lines, so they are furthest out at one or the other.
+        const a = net.ptStart[o], b = net.ptStart[o + 1] - 1;
+        let j = i, k0 = Infinity, k1 = -Infinity;
+        for (; j > a && net.cum[j] > s - LANE_HD; j--) { k0 = Math.min(k0, net.inner[j]); k1 = Math.max(k1, net.inner[j]); }
+        const back = innerOn(j, s - LANE_HD);
+        for (j = i + 1; j < b && net.cum[j] < s + LANE_HD; j++) { k0 = Math.min(k0, net.inner[j]); k1 = Math.max(k1, net.inner[j]); }
+        const on = innerOn(j - 1, s + LANE_HD);
+        k0 = Math.min(k0, back, on); k1 = Math.max(k1, back, on);
+        // Kerb lane and median lane, or the one lane where it is narrow (and lanePath's middle,
+        // which lies between the two), towards the driver's left: ow * d is on that side.
+        const hw = w / 2;
+        let lo = Infinity, hi = -Infinity;
+        for (let n = 0; n < 2; n++) {
+          const k = n ? k1 : k0, W = hw + k, mid = (hw - k) / 2;
+          const l0 = W < 6.4 ? mid + W * 0.08 : hw - W / 4, l1 = W < 6.4 ? mid : W / 4 - k;
+          lo = Math.min(lo, l0, l1); hi = Math.max(hi, l0, l1);
+        }
+        if (ow * d > lo - LANE_HW && ow * d < hi + LANE_HW) return true;
+      }
+      return false;
+    },
+  };
+}
+
+const RUNS = new WeakMap();
+
+/**
+ * Where the medians run, so that chunks.js draws each one exactly where colliders.js makes it
+ * solid: medianRuns(net)[r] is null, or road r's runs [from, to, from, to, ...] in metres along
+ * it. A median runs where chunks.js draws one, along a divided carriageway's median side (where
+ * the other carriageway is alongside) or down a wide two-way road's centre line, on the ground;
+ * but not where it would stand in another road's lane (see otherStreets). It is tested a metre
+ * at a time, at both of its edges, worked out once and kept.
+ */
+export function medianRuns(net) {
+  let all = RUNS.get(net);
+  if (all) return all;
+  all = new Array(net.count).fill(null);
+  RUNS.set(net, all);
+  const { others, gather, inLane } = otherStreets(net), p = {};
+  for (let r = 0; r < net.count; r++) {
+    const w = net.width[r], lift = net.raised[r];
+    // A carriageway of a divided road has its half of the median on its right (ms: +1 left of a->b, -1 right).
+    const ms = net.oneway[r] ? -net.oneway[r] : 0;
+    if (net.bridge[r] || (!ms && w < 11.5)) continue;
+    // Its half from its median-side edge out to the middle, or the whole median down the centre
+    // line: hw either side of `edge + out`, left of the centre line.
+    const hw = ms ? MEDIAN_W / 4 : 0.35, out = ms ? ms * hw : hw, s0 = net.trimStart(r), s1 = net.length[r] - net.trimEnd(r), runs = [];
+    for (let i = net.ptStart[r]; i < net.ptStart[r + 1] - 1; i++) {
+      const sa = Math.max(net.cum[i], s0), sb = Math.min(net.cum[i + 1], s1);
+      if (sb - sa < 0.05) continue;
+      const c0 = net.cum[i], k0 = net.inner[i], dk = (net.inner[i + 1] - k0) / (net.cum[i + 1] - c0); // net.innerAt, read off this segment
+      const edge = u => (ms ? ms * (k0 + dk * (u - c0)) : -0.35);
+      // In the pieces chunks.js draws: a flyover's 4 m at a time, as its deck leaves the ground.
+      const n = lift ? Math.max(1, Math.ceil((sb - sa) / 4)) : 1;
+      for (let k = 0; k < n; k++) {
+        const ca = sa + ((sb - sa) * k) / n, cb = sa + ((sb - sa) * (k + 1)) / n;
+        if (lift && (net.deckAt(r, ca) > 0.05 || net.deckAt(r, cb) > 0.05)) continue;
+        if (ms && !(net.edgeAt(r, ca, ms) < w / 2 - 0.05 || net.edgeAt(r, cb, ms) < w / 2 - 0.05)) continue;
+        // Up to 8 m at a time for one gather, a cross-section a metre or less apart.
+        for (let h = 0, n8 = Math.ceil((cb - ca) / 8); h < n8; h++) {
+          const s = ca + ((cb - ca) * h) / n8, e = ca + ((cb - ca) * (h + 1)) / n8, sm = (s + e) / 2, m = Math.ceil(e - s);
+          net.pointAt(r, sm, p);
+          const sway = Math.max(Math.abs(edge(s) - edge(sm)), Math.abs(edge(e) - edge(sm)));
+          gather(r, p.x + p.dz * (edge(sm) + out), p.z - p.dx * (edge(sm) + out), (e - s) / 2 + hw + sway);
+          let was = false;
+          for (let j = 0; j <= m; j++) {
+            const u = s + ((e - s) * j) / m, x = p.x + p.dx * (u - sm), z = p.z + p.dz * (u - sm), a = edge(u), b = a + 2 * out;
+            const clear = !others.length || (!inLane(x + p.dz * a, z - p.dx * a) && !inLane(x + p.dz * b, z - p.dx * b));
+            // Each stretch between two clear cross-sections is laid, on from the last where they meet.
+            if (clear && was) {
+              const from = s + ((e - s) * (j - 1)) / m, last = runs.length - 1;
+              if (last > 0 && Math.abs(runs[last] - from) < 1e-6) runs[last] = u; else runs.push(from, u);
+            }
+            was = clear;
+          }
+        }
+      }
+    }
+    if (runs.length) all[r] = runs;
+  }
+  return all;
+}
 
 /** SAT for boxes given cos/sin; normal points from B to A. */
 export function obbSat(ax, az, ahw, ahd, ac, as, bx, bz, bhw, bhd, bc, bs, out) {

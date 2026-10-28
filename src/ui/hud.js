@@ -2,8 +2,29 @@
 import { Minimap } from './minimap.js';
 import { clamp, dist } from '../core/math.js';
 import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
+import { key } from './controls.js';
 
 const $ = id => document.getElementById(id);
+
+/**
+ * Whether two shown HUD elements share any rows of the screen. On a touch screen the middle column and the
+ * cards under it (area and vehicle names, big cards) are all centred across the screen, so that is overlapping.
+ */
+function shareRows(a, b) {
+  if (a.hidden || b.hidden) return false;
+  const r = a.getBoundingClientRect(), s = b.getBoundingClientRect();
+  return r.top < s.bottom && s.top < r.bottom;
+}
+
+/**
+ * The cash counter's next value. It counts towards the real amount like a slot machine: a share of the gap
+ * each frame, but at least ₹1, because at 60 fps a rounded share of a small gap is 0 and it would stop short.
+ */
+export function countCash(shown, cash, dt) {
+  const diff = cash - shown;
+  if (Math.abs(diff) < 3) return cash;
+  return shown + (Math.round(diff * Math.min(1, dt * 8)) || Math.sign(diff));
+}
 
 export class Hud {
   constructor(game) {
@@ -14,7 +35,7 @@ export class Hud {
       clock: $('hud-clock'), cash: $('hud-cash'), stars: $('hud-stars'), health: $('hud-health'), stamina: $('hud-stamina'),
       help: $('hud-help'), area: $('hud-area'), vehicle: $('hud-vehicle'), speed: $('hud-speed'), speedNum: $('hud-speed-num'), gear: $('hud-gear'),
       objective: $('hud-objective'), subtitle: $('hud-subtitle'), bark: $('hud-bark'), timer: $('hud-timer'), big: $('hud-big'), toast: $('hud-toast'),
-      cashDelta: $('hud-cash-delta'), prompt: $('hud-prompt'), perf: $('hud-perf'),
+      cashDelta: $('hud-cash-delta'), prompt: $('hud-prompt'), perf: $('hud-perf'), hint: $('hud-hint'), radio: $('hud-radio'),
     };
     this.perfOn = false;
     this.perfT = 0;
@@ -25,42 +46,193 @@ export class Hud {
     this.route = null;
     this.radarT = 0;
     this.textT = 0;
+    this.waypointT = 0;
     this.prompts = [];
+    // What the per-frame readouts show now, so they touch the DOM only when it changes.
+    this.objText = '';
+    this.timerHtml = '';
+    this.speedShown = { kmh: -1, gear: '', hp: -1 };
+    this.helpLater = null; // [html, seconds] waiting for a big card, or for room in the middle column
+    this.radioUp = false; // the radio's station card (main.js shows it)
+    this.radioSeen = ''; // the station card last checked against the vehicle's name card
     addEventListener('resize', () => this.radar.resize());
     requestAnimationFrame(() => this.radar.resize());
   }
 
   show(on) { this.root.hidden = !on; if (on) requestAnimationFrame(() => this.radar.resize()); }
 
-  help(html, seconds = 6) { this.el.help.innerHTML = html; this.el.help.hidden = false; this.timers.help = seconds; }
+  help(html, seconds = 6) {
+    // On touch screens the help box sits mid-screen, where a big card (MISSION PASSED, WANTED) goes: it waits for the card.
+    if (this.timers.big > 0 && this.game.input.touch?.active) { this.helpLater = [html, seconds]; return; }
+    this.el.help.innerHTML = html; this.el.help.hidden = false; this.timers.help = seconds;
+    this._fitColumn();
+  }
   subtitle(speaker, text, seconds = 4.5, color = '#ffd27a') {
     this.el.subtitle.innerHTML = speaker ? `<b style="color:${color}">${speaker}:</b> ${text}` : text;
     this.el.subtitle.hidden = false; this.timers.subtitle = seconds;
+    this._fitColumn();
   }
-  clearSubtitle() { this.el.subtitle.hidden = true; this.timers.subtitle = 0; }
-  objective(text) { this.el.objective.innerHTML = text || ''; this.el.objective.hidden = !text; }
+  clearSubtitle() { this.el.subtitle.hidden = true; this.timers.subtitle = 0; this._helpBack(); }
+  /** Something came up in the middle column, or grew, or went: on a touch screen, make room in it and under it. */
+  _fitColumn() { this._checkRadio(); this._helpFits(); this._cutSubtitle(); this._placeBig(); this._clearUnderColumn(); }
+  /**
+   * On a touch screen the help box stacks with the subtitle, a toast and the radio card in the middle column.
+   * On the shortest phones they can run off the bottom of the screen, cutting off the help or the card under
+   * it: then the help steps aside while they are up (they are short), and comes back after.
+   */
+  _helpFits() {
+    const { help, subtitle, toast, radio } = this.el;
+    this._cut(0); // measured with the whole line of dialogue
+    if (!this.game.input.touch?.active || help.hidden || (subtitle.hidden && toast.hidden && radio.hidden)) return;
+    if (help.parentElement.getBoundingClientRect().bottom > innerHeight - 4) this._helpAside();
+  }
+  /**
+   * ...and when a long objective and a long line of dialogue still leave no room for a toast or the station card
+   * under them (c7's NDPS call on the shortest phones), the line is cut short, with an ellipsis, while they
+   * are up: they are the newest and go in a few seconds, and the line comes back whole when they do.
+   */
+  _cutSubtitle() {
+    const { subtitle, toast, radio } = this.el;
+    if (!this.game.input.touch?.active || subtitle.hidden || (toast.hidden && radio.hidden)) return;
+    const over = subtitle.parentElement.getBoundingClientRect().bottom - (innerHeight - 4);
+    if (over <= 0) return;
+    const line = parseFloat(getComputedStyle(subtitle).lineHeight);
+    const lines = Math.round(subtitle.offsetHeight / line);
+    this._cut(Math.max(1, lines - Math.ceil(over / line)));
+  }
+  /** Show only this many lines of the subtitle (0: all of it). */
+  _cut(lines) {
+    const el = this.el.subtitle;
+    if (!lines && !el.classList.contains('cut')) return;
+    el.classList.toggle('cut', lines > 0);
+    el.style.webkitLineClamp = lines ? String(lines) : '';
+  }
+  /** The help box steps aside, to come back with the time it had left. */
+  _helpAside() {
+    this.helpLater = [this.el.help.innerHTML, this.timers.help];
+    this.el.help.hidden = true; this.timers.help = 0;
+  }
+  _helpBack() {
+    if (!this.helpLater) return;
+    const [html, seconds] = this.helpLater;
+    this.helpLater = null;
+    this.help(html, seconds); // which waits again if a big card is up, or the column still runs off the screen
+  }
+  objective(text) {
+    // Missions and jobs set it every frame: write only when it changes.
+    text = text || '';
+    if (text === this.objText) return;
+    this.objText = text;
+    this.el.objective.innerHTML = text; this.el.objective.hidden = !text;
+    this._fitColumn();
+  }
   bark(text) { this.el.bark.textContent = text; this.el.bark.hidden = false; this.timers.bark = 2.6; this.el.bark.classList.remove('pop'); void this.el.bark.offsetWidth; this.el.bark.classList.add('pop'); }
-  toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; }
+  toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; this._fitColumn(); }
   big(title, sub = '', kind = 'passed', seconds = 4.5) {
     const el = this.el.big;
+    // The line under the title is a sentence, even when it starts with a name ('Sand tipper was wrecked.').
+    if (sub) sub = String(sub)[0].toUpperCase() + String(sub).slice(1);
     el.className = `big-message ${kind}`;
     el.innerHTML = `<strong>${title}</strong>${sub ? `<span>${sub}</span>` : ''}`;
     el.hidden = false; this.timers.big = seconds;
+    el.style.top = '';
+    if (!this.game.input.touch?.active) return;
+    // A help box already up on a touch screen steps aside, and comes back after the card with the time it had left.
+    if (!this.el.help.hidden && this.timers.help > 0) this._helpAside();
+    this._fitBigTitle();
+    this._placeBig();
   }
-  area(name) { this.el.area.innerHTML = name; this.el.area.hidden = false; this.timers.area = 4; this.el.area.classList.remove('fade'); void this.el.area.offsetWidth; this.el.area.classList.add('fade'); }
-  vehicleName(name, extra = '') { this.el.vehicle.innerHTML = `<strong>${name}</strong>${extra ? `<span>${extra}</span>` : ''}`; this.el.vehicle.hidden = false; this.timers.vehicle = 3.5; }
-  setTimer(seconds, label = '') {
-    if (seconds === null || seconds === undefined) { this.el.timer.hidden = true; return; }
+  /**
+   * On the shortest phones the card is narrow (left of the round buttons) and keeps its title on one line
+   * (game.css): a long title ('NEW COLOUR, NEW LIFE', a race's name) gets smaller until it fits, rather than
+   * wrapping into a card too tall for the screen. One too long even then wraps after all.
+   */
+  _fitBigTitle() {
+    const t = this.el.big.querySelector('strong');
+    for (let i = 0; i < 4 && t.scrollWidth > t.clientWidth; i++) {
+      const size = parseFloat(getComputedStyle(t).fontSize);
+      if (size <= 26) { t.style.whiteSpace = 'normal'; return; }
+      t.style.fontSize = `${Math.max(26, Math.floor(size * t.clientWidth / t.scrollWidth) - 1)}px`;
+    }
+  }
+  /**
+   * On a touch screen a big card goes under the middle column, not across it: lower than its usual place when
+   * the column reaches that far down (a long objective and a subtitle, on the shortest phones). When the column
+   * grows under it (the next line of dialogue), it moves down again. But never past the bottom of the screen:
+   * a card too tall for its place there (one whose line wraps) moves up as far as it has to.
+   */
+  _placeBig() {
+    const el = this.el.big;
+    if (el.hidden || !this.game.input.touch?.active) return;
+    const below = Math.ceil(this.el.help.parentElement.getBoundingClientRect().bottom + 6);
+    const top = Math.max(0, Math.min(Math.max(el.offsetTop, below), innerHeight - el.offsetHeight - 8));
+    if (top !== el.offsetTop) el.style.top = `${top}px`;
+    this._makeRoom(el);
+  }
+  area(name) { this.el.area.innerHTML = name; this.el.area.hidden = false; this.timers.area = 4; this.el.area.classList.remove('fade'); void this.el.area.offsetWidth; this.el.area.classList.add('fade'); this._makeRoom(this.el.area); }
+  vehicleName(name, extra = '') { this.el.vehicle.innerHTML = `<strong>${name}</strong>${extra ? `<span>${extra}</span>` : ''}`; this.el.vehicle.hidden = false; this.timers.vehicle = 3.5; this._makeRoom(this.el.vehicle); }
+  /**
+   * Touch screens: the area name, the vehicle name and a big card can meet under the middle column (on the
+   * shortest phones the two names share the bottom, and a card moved down under a long column reaches them).
+   * Where a name would print over another card the newer name stays, and a big card beats both.
+   */
+  _makeRoom(shown) {
+    if (!this.game.input.touch?.active) return;
+    const { big, area, vehicle } = this.el;
+    if (shown !== big && shareRows(shown, big)) { this._drop(shown); return; }
+    for (const el of [area, vehicle]) if (el !== shown && shareRows(el, shown)) this._drop(el);
+    this._clearUnderColumn();
+  }
+  /**
+   * ...and a name the middle column reaches down to goes too: the column is what there is to read (a new
+   * district's name comes with a toast that names it). On the shortest phones the names sit at the bottom,
+   * where a long column ends.
+   */
+  _clearUnderColumn() {
+    const { area, vehicle } = this.el;
+    this._checkRadio(); // first: a station card that goes doesn't push the column down onto the vehicle's name
+    if (!this.game.input.touch?.active || (area.hidden && vehicle.hidden)) return;
+    const end = this.el.help.parentElement.getBoundingClientRect().bottom;
+    for (const el of [area, vehicle]) if (!el.hidden && el.getBoundingClientRect().top < end + 4) this._drop(el);
+  }
+  _drop(el) {
+    el.hidden = true;
+    for (const k in this.timers) if (this.el[k] === el) this.timers[k] = 0;
+  }
+  /**
+   * The radio puts up its station card as a song starts, the first one as you get in, while the vehicle's name
+   * card is up: on a phone the end of the middle column, where the station card goes, can reach that card. It
+   * names the station already, so on a touch screen the station card goes; one for another station (📻
+   * tapped) means the name card is out of date, and that goes instead.
+   */
+  _checkRadio() {
+    const { radio, vehicle } = this.el;
+    if (radio.hidden || vehicle.hidden) { this.radioSeen = ''; return; }
+    if (radio.textContent === this.radioSeen) return;
+    this.radioSeen = radio.textContent;
+    if (!this.game.input.touch?.active) return;
+    const station = radio.querySelector('strong')?.textContent;
+    if (station && vehicle.textContent.includes(station)) radio.hidden = true;
+    else this._drop(vehicle);
+  }
+  /** A countdown (red in its last 10 s), or a stopwatch with urgent false: counting up never runs out. */
+  setTimer(seconds, label = '', urgent = seconds < 10) {
+    const el = this.el.timer;
+    if (seconds === null || seconds === undefined) { el.hidden = true; return; }
     const s = Math.max(0, Math.ceil(seconds));
-    this.el.timer.innerHTML = `${label ? `<small>${label}</small>` : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-    this.el.timer.hidden = false;
-    this.el.timer.classList.toggle('urgent', seconds < 10);
+    const html = `${label ? `<small>${label}</small>` : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    // Set every frame: write only when the readout changes.
+    if (html !== this.timerHtml) { this.timerHtml = html; el.innerHTML = html; }
+    el.hidden = false;
+    el.classList.toggle('urgent', Boolean(urgent));
   }
   cashChange(delta) {
     const el = this.el.cashDelta;
     el.textContent = `${delta >= 0 ? '+' : '−'}₹${Math.abs(delta).toLocaleString('en-IN')}`;
     el.className = `cash-delta ${delta >= 0 ? 'gain' : 'loss'}`;
     el.hidden = false; this.timers.cash = 2.5;
+    // Restart the rise, or a change soon after another shows at the first one's faded end.
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   }
   /** The performance readout (Settings): what this device really does, for tuning and bug reports. */
   showPerf(on) { this.perfOn = on; this.el.perf.hidden = !on; this.perfT = 0; }
@@ -70,13 +242,14 @@ export class Hud {
     this.el.perf.textContent = `${Math.round(p.fps)} fps · ${Math.round(p.ms)} ms (worst ${Math.round(p.worstMs)}) · CPU ${g.cpuMs.toFixed(1)} · ${c.width}×${c.height} ${q.settings.name}${q.crowd < 1 ? ` · crowd ${Math.round(q.crowd * 100)}%` : ''} · ${q.gpu}${mem}`;
   }
 
-  /** Contextual button hints near the bottom: [{key, label}] */
+  /** Contextual button hints near the bottom: [{action, label}], with the key or button of the device in use. */
   prompt(list) {
-    const key = list.map(p => p.key + p.label).join('|');
-    if (key === this._promptKey) return;
-    this._promptKey = key;
-    const touch = this.game.input.mode === 'touch';
-    this.el.prompt.innerHTML = list.map(p => `<span>${touch ? '' : `<kbd>${p.key}</kbd>`}${p.label}</span>`).join('');
+    const mode = this.game.input.mode;
+    const id = mode + list.map(p => p.action + p.label).join('|');
+    if (id === this._promptKey) return;
+    this._promptKey = id;
+    const touch = mode === 'touch';
+    this.el.prompt.innerHTML = list.map(p => `<span>${touch ? '' : key(this.game, p.action)}${p.label}</span>`).join('');
     this.el.prompt.hidden = !list.length || touch;
   }
 
@@ -88,13 +261,23 @@ export class Hud {
       if (this.timers[k] <= 0) {
         if (k === 'cash') this.el.cashDelta.hidden = true;
         else if (this.el[k]) this.el[k].hidden = true;
+        if (k === 'big' || k === 'subtitle' || k === 'toast') this._helpBack();
+        if (k === 'toast') this._fitColumn(); // the line of dialogue whole again
       }
+    }
+    this._checkRadio();
+    // The station card in the middle column, like a toast: room for it, and the help back and the line of
+    // dialogue whole once it has gone.
+    const radio = this.el.radio;
+    if (this.radioUp !== !radio.hidden) {
+      this.radioUp = !radio.hidden;
+      if (!this.radioUp) this._helpBack();
+      this._fitColumn();
     }
     // Cash counts up like a slot machine.
     const cash = g.save?.cash ?? 0;
     if (this.shownCash !== cash) {
-      const diff = cash - this.shownCash;
-      this.shownCash += Math.abs(diff) < 3 ? diff : Math.round(diff * Math.min(1, dt * 8));
+      this.shownCash = countCash(this.shownCash, cash, dt);
       this.el.cash.textContent = `₹${Math.round(this.shownCash).toLocaleString('en-IN')}`;
     }
     this.textT -= dt;
@@ -112,22 +295,37 @@ export class Hud {
       const d = g.city.district(pos.x, pos.z).name;
       if (d !== this.lastDistrict) { if (this.lastDistrict) this.area(d); this.lastDistrict = d; g.onDistrict?.(d); }
       this._prompts();
+      // The corner hint names the keys of the device in use (touch screens hide it).
+      if (g.input.mode !== this.hintMode) { this.hintMode = g.input.mode; this.el.hint.innerHTML = `${key(g, 'pause')} Pause ${key(g, 'map')} Map`; }
     }
-    // Speedometer.
-    const v = g.player.vehicle;
-    this.el.speed.hidden = !v;
+    // Speedometer: every frame while driving, so it writes only what changed.
+    const v = g.player.vehicle, shown = this.speedShown;
+    if (this.el.speed.hidden !== !v) this.el.speed.hidden = !v;
     if (v) {
       const kmh = Math.round(Math.abs(v.vx * Math.sin(v.heading) + v.vz * Math.cos(v.heading)) * 3.6);
-      this.el.speedNum.textContent = kmh;
-      this.el.gear.textContent = v.gear < 0 ? 'R' : kmh < 1 ? 'N' : String(v.gear);
+      const gear = v.gear < 0 ? 'R' : kmh < 1 ? 'N' : String(v.gear);
+      if (kmh !== shown.kmh) { shown.kmh = kmh; this.el.speedNum.textContent = kmh; }
+      if (gear !== shown.gear) { shown.gear = gear; this.el.gear.textContent = gear; }
       const hp = clamp(v.health / 1000, 0, 1);
-      this.el.speed.style.setProperty('--hp', hp);
-      this.el.speed.classList.toggle('damaged', hp < 0.35);
+      if (hp !== shown.hp) { shown.hp = hp; this.el.speed.style.setProperty('--hp', hp); this.el.speed.classList.toggle('damaged', hp < 0.35); }
     }
+    // The waypoint's GPS line follows the player whenever no mission or job is drawing its own route.
+    this.waypointT -= dt;
+    if (this.waypointT <= 0) { this.waypointT = 1.2; this._waypointRoute(); }
     // Radar at ~30 fps.
     this.radarT -= dt;
     if (this.radarT <= 0) { this.radarT = 1 / 30; this.radar.draw(this.collectBlips(), this.route); }
     if (this.perfOn && (this.perfT -= dt) <= 0) { this.perfT = 0.5; this._perf(); }
+  }
+
+  /** Route to the map waypoint from where the player is now; arriving clears it. */
+  _waypointRoute() {
+    const g = this.game, wp = g.waypoint;
+    if (!wp || g.missions?.active || g.jobs?.active) return;
+    const pos = g.player.pos;
+    if (dist(pos.x, pos.z, wp.x, wp.z) < 20) { g.waypoint = null; this.route = null; return; }
+    this.route = g.net.route(pos.x, pos.z, wp.x, wp.z);
+    if (this.route) this.route.color = '#c77dff';
   }
 
   collectBlips() {
@@ -147,12 +345,13 @@ export class Hud {
     const g = this.game, P = g.player, list = [];
     if (P.state === 'foot') {
       const v = g.nearestEnterable(P.x, P.z, 4.2);
-      if (v) list.push({ key: 'F', label: v.driver ? `Jack ${VEHICLE_TYPES[v.type].name}` : `Get in ${VEHICLE_TYPES[v.type].name}` });
+      if (v) list.push({ action: 'enter', label: v.driver ? `Jack ${VEHICLE_TYPES[v.type].name}` : `Get in ${VEHICLE_TYPES[v.type].name}` });
       const act = g.contextAction?.();
-      if (act) list.push({ key: 'Q', label: act.label });
+      if (act) list.push({ action: 'action', label: act.label });
     } else if (P.state === 'driving') {
+      // Behind the wheel the context action starts or stops a job (jobs.contextAction names its key, N).
       const act = g.contextAction?.();
-      if (act) list.push({ key: act.key || 'Q', label: act.label });
+      if (act) list.push({ action: act.key === 'N' ? 'job' : 'action', label: act.label });
     }
     this.prompt(list);
   }

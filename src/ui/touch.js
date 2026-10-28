@@ -60,7 +60,9 @@ export class TouchControls {
     const end = e => {
       if (!this.stick || e.pointerId !== this.stick.id) return;
       this.stick = null; t.moveX = 0; t.moveY = 0;
+      // The resting ring goes home (its CSS place, which follows rotation) rather than staying where the thumb lifted.
       this.knob.style.transform = ''; this.base.classList.remove('on');
+      this.base.style.left = ''; this.base.style.top = '';
     };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) this.stickZone.addEventListener(ev, end);
 
@@ -79,6 +81,11 @@ export class TouchControls {
       const up = () => { b.classList.remove('down'); if (hold) t[hold] = hold === 'gas' || hold === 'brake' ? 0 : false; };
       for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
     }
+    // Everything here acts on pointerdown, so the click a tap makes afterwards is a ghost: MAP and ❚❚ open the
+    // pause menu under the finger, and the click would land on whatever tab is there. Cancelling
+    // the touchend stops that click; touch events stay with the button the finger went down on. (A touchend
+    // after a drag on the stick can't be cancelled, and makes no click; asking anyway only warns in the console.)
+    this.root.addEventListener('touchend', e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
   }
 
   /** Swap button sets for on foot / driving and show contextual ones. */
@@ -92,8 +99,12 @@ export class TouchControls {
     setButton('tb-enter', near && (near.driver ? 'JACK' : 'ENTER'));
     const act = g.contextAction?.();
     setButton('tb-action', !driving && act && (act.label.length > 18 ? act.label.split('·')[0].trim() : act.label));
-    setButton('tb-job', driving && act?.key === 'N' && (g.jobs?.active ? 'STOP JOB' : act.label.startsWith('Start race') ? 'START RACE' : 'START JOB'));
-    setButton('tb-siren', driving && v && (v.type === 'police' || v.type === 'ambulance') && (v.sirenOn ? 'SIREN OFF' : 'SIREN'));
+    const job = driving && act?.key === 'N' && (g.jobs?.active ? 'STOP JOB' : act.label.startsWith('Start race') ? 'START RACE' : 'START JOB');
+    setButton('tb-job', job);
+    // One wide button beside EXIT: a third row would push EXIT up over the wanted stars and cash. So in a police
+    // jeep or ambulance at a race start, or racing, the siren waits for START RACE / STOP JOB to go (a race
+    // turns it off as it starts, jobs.js, so it can't be left wailing with no button).
+    setButton('tb-siren', driving && !job && v && (v.type === 'police' || v.type === 'ambulance') && (v.sirenOn ? 'SIREN OFF' : 'SIREN'));
   }
 }
 

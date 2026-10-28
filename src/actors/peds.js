@@ -207,17 +207,26 @@ export class Peds {
    */
   _floor(p) {
     const g = this.game, h = p.h;
-    let pave = p.pave || 0;
+    // The footpath's top, or -Infinity off one (the street or the ground decides), as for the player.
+    let pave = p.pave || -Infinity;
     if (p.state !== 'walk') {
       if (p.underX === undefined || Math.abs(h.x - p.underX) + Math.abs(h.z - p.underZ) > 0.3) {
         const n = this.net.nearest(h.x, h.z, 14, this._n, this._ground);
-        p.under = n ? g.city.pavementAt(n.seg, n.dist) : 0; p.underX = h.x; p.underZ = h.z;
+        p.under = (n && g.city.pavementAt(n.seg, n.dist)) || -Infinity; p.underX = h.x; p.underZ = h.z;
       }
       pave = p.under;
     }
-    // Only someone already up off the street (out of a vehicle on a flyover) can be on a deck.
-    const deck = h.y > 0.3 ? this.net.surfaceAt(h.x, h.z, h.y) : 0;
-    return Math.max(g.city.groundHeight(h.x, h.z), deck, pave);
+    // Down a river valley the streets say what is underfoot: a street stays level across the
+    // slope, off it is the bank itself (standing at street level there floated them 3 m up).
+    // Only someone already up off the street (out of a vehicle on a flyover) can be on a deck:
+    // on level ground, walkers passing a ramp's foot would climb it into the air. One walking a
+    // flyover keeps to its deck wherever they are over it: down its ramps, and up the next where
+    // it comes down to the street between two (else on into that ramp's embankment).
+    const net = this.net, fly = p.state === 'walk' && p.road != null && net.raised[p.road];
+    const y = fly ? net.deckAt(p.road, p.dir > 0 ? p.s : net.length[p.road] - p.s) : h.y;
+    const ground = g.city.groundHeight(h.x, h.z);
+    const top = y > 0.3 || ground < 0 ? net.surfaceAt(h.x, h.z, y) : ground;
+    return Math.max(top, pave);
   }
 
   /** A fare waiting for a ride or a story's actor keeps their part (and spot) to go back to after a scare. */

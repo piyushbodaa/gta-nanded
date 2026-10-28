@@ -3,6 +3,7 @@
 import { dist, rng, hash2, clamp } from '../core/math.js';
 import { speedOf } from '../actors/vehicle-physics.js';
 import { GARAGE } from './story.js';
+import { markerY } from './missions.js';
 import { PROP } from '../world/citygen.js';
 import { key, pick } from '../ui/controls.js';
 
@@ -110,7 +111,7 @@ export class Jobs {
   _markersAndRoute(t) {
     const g = this.game;
     if (!t) { g.effects.markers.set([]); g.hud.blipList = []; return; }
-    g.effects.markers.set([{ x: t.x, z: t.z, r: t.r ?? 3, h: 4, color: t.color ?? 0x7edac8 }]);
+    g.effects.markers.set([{ x: t.x, z: t.z, y: t.y, r: t.r ?? 3, h: 4, color: t.color ?? 0x7edac8 }]);
     // The GPS line every 1.2 s of game time, whatever the frame rate.
     if (g.time - this._routeAt >= 1.2) {
       this._routeAt = g.time;
@@ -252,6 +253,9 @@ export class Jobs {
   }
   _startRace(def) {
     const g = this.game, v = g.player.vehicle;
+    // A race is run with the siren off: on a phone the SIREN button gives way to STOP JOB until it ends, so a
+    // siren left on would wail all race with no button to stop it.
+    v.sirenOn = false;
     const rivals = [];
     const types = ['hatch', 'bike', 'sedan'];
     for (let i = 0; i < 3; i++) {
@@ -266,7 +270,9 @@ export class Jobs {
       rv.raceDriver.setPath(pts); rv.raceIdx = 0;
       rivals.push(rv);
     }
-    this.active = { kind: 'race', label: def.name, def, rivals, idx: 0, t: -3, vehicle: v, earned: 0 };
+    // Checkpoints up on a flyover (Station to Airport's first) stand on its deck, where the GPS leads.
+    const ys = def.points.map(p => markerY(g.net, p.x, p.z));
+    this.active = { kind: 'race', label: def.name, def, rivals, ys, idx: 0, t: -3, vehicle: v, earned: 0 };
     g.hud.big(def.name.toUpperCase(), 'STREET RACE', 'title', 2.5);
     g.hud.help('Reach every checkpoint first. Rivals play dirty.', 5);
   }
@@ -290,8 +296,8 @@ export class Jobs {
       g.controls.set(r, r.raceDriver.control(dt));
     }
     g.hud.objective(`${a.def.name}: position <b>${ahead + 1}/${a.rivals.length + 1}</b> · checkpoint ${a.idx + 1}/${pts.length}`);
-    g.hud.setTimer(a.t, 'TIME');
-    a.target = { x: p.x, z: p.z, r: 6, color: a.idx === pts.length - 1 ? 0xff5252 : 0xffc83d };
+    g.hud.setTimer(a.t, 'TIME', false); // a stopwatch: never 'running out'
+    a.target = { x: p.x, z: p.z, y: a.ys?.[a.idx], r: 6, color: a.idx === pts.length - 1 ? 0xff5252 : 0xffc83d };
     this._markersAndRoute(a.target);
     if (dist(pos.x, pos.z, p.x, p.z) < 9) {
       a.idx++; g.audio?.sfx('checkpoint');

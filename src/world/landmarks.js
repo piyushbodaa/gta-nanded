@@ -4,11 +4,18 @@
 // from the street, and that every college and coaching class has its board up.
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2 } from '../core/math.js';
-import { STATION_HD, BUS_STAND } from './citygen.js';
+import { STATION_HD, BUS_STAND, KAMANS, LANGAR_HALL, campusWing, mallSize } from './citygen.js';
 import { LEAF } from './foliage.js';
 
 const FLOOR = 3.2;
 const GOLD = 0xe2a93b, MARBLE = 0xf4f1ea, SAFFRON = 0xff8c1a, STONE = 0x6a635b;
+// The gurudwaras' scale (Hazur Sahib has its own), shared by the drawing and the colliders.
+const GURUDWARA = { 'nagina-ghat': 0.75, 'langar-sahib': 0.8, 'sangat-sahib': 0.7, 'mata-sahib': 0.75, 'hira-ghat': 0.6, 'shikar-ghat': 0.6, 'banda-ghat': 0.65 };
+// Mal Tekdi's foot, where hillTemple's two jittered blobs meet the ground: circles [dx, dz, r]
+// at full size, in world axes like the blobs. Fitted to the drawn mesh (its jitter is fixed) so a
+// body stops within about 0.7 m of the visible foot all round, neither short of it nor into the
+// slope; the foot scales with the hill's fit. Redo the fit if hillTemple's blobs change.
+const MAL_TEKDI_FOOT = [[-2.9, 3.9, 23.2], [3.7, -2.5, 21.6]];
 
 /** Rotation that turns a place's front (toward its approach) to local -z. */
 export const placeRot = p => p.rot + Math.PI;
@@ -20,16 +27,16 @@ function frame(p, rot = placeRot(p)) {
 
 const SPECIAL = {
   'hazur-sahib': hazurSahib,
-  'nagina-ghat': (ctx, p) => { gurudwara(ctx, p, 0.75); ghat(ctx, p, 26); },
-  'langar-sahib': (ctx, p) => { gurudwara(ctx, p, 0.8); langarHall(ctx, p); },
-  'sangat-sahib': (ctx, p) => gurudwara(ctx, p, 0.7),
-  'mata-sahib': (ctx, p) => gurudwara(ctx, p, 0.75),
-  'hira-ghat': (ctx, p) => { gurudwara(ctx, p, 0.6); ghat(ctx, p, 22); },
-  'shikar-ghat': (ctx, p) => { gurudwara(ctx, p, 0.6); ghat(ctx, p, 20); },
-  'banda-ghat': (ctx, p) => { gurudwara(ctx, p, 0.65); ghat(ctx, p, 22); },
-  'ram-ghat': (ctx, p) => { ghat(ctx, p, 34); smallTemple(ctx, p, 6, -4); },
-  'govardhan-ghat': (ctx, p) => { ghat(ctx, p, 36); smallTemple(ctx, p, -8, -6); },
-  'urvashi-ghat': (ctx, p) => { ghat(ctx, p, 28); smallTemple(ctx, p, 0, -6); },
+  'nagina-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
+  'langar-sahib': (ctx, p) => { gurudwara(ctx, p); langarHall(ctx, p); },
+  'sangat-sahib': (ctx, p) => gurudwara(ctx, p),
+  'mata-sahib': (ctx, p) => gurudwara(ctx, p),
+  'hira-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
+  'shikar-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
+  'banda-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
+  'ram-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, 6, -4); },
+  'govardhan-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, -8, -6); },
+  'urvashi-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, 0, -6); },
   'nanded-station': station,
   'nanded-bus-stand': busStand,
   'sggs-stadium': stadium,
@@ -73,20 +80,50 @@ export function buildPlace(ctx, p, index) {
 export function placeColliders(p) {
   const { X, Z, rot } = frame(p);
   const box = (lx, lz, hw, hd, h = 6) => ({ x: X(lx, lz), z: Z(lx, lz), hw, hd, rot, h });
+  const post = (lx, lz, r, h) => ({ x: X(lx, lz), z: Z(lx, lz), r, h });
+  if (GURUDWARA[p.id]) {
+    // The gurudwara on its plinth and its Nishan Sahib (a ghat's steps stay open).
+    const s = GURUDWARA[p.id], hw = 7 * s;
+    const out = [box(0, 0, hw + 1.5, hw + 1.5, 0.9 + 6.5 * s + 2 + hw), post(hw + 4, -hw - 2, 0.9, 18 * s + 6)];
+    if (p.id === 'langar-sahib') { const [lx, lz, hw2, hd2] = LANGAR_HALL; out.push(box(lx, lz, hw2, hd2, 4.9)); }
+    return out;
+  }
   switch (p.id) {
     case 'hazur-sahib': {
-      const out = [box(0, 0, 9.5, 9.5, 30)];
+      const out = [box(0, 0, 9.5, 9.5, 30), box(0, 0, 12, 12, 1.4)];
       // Courtyard walls with the Darshani Deori gap at the front.
       const R = 26 * (p.fit ?? 1);
       out.push(box(0, R, R, 0.6, 4), box(-R, 0, 0.6, R, 4), box(R, 0, 0.6, R, 4), box(-R / 2 - 3.5, -R, R / 2 - 3.5, 0.6, 4), box(R / 2 + 3.5, -R, R / 2 - 3.5, 0.6, 4));
-      out.push(box(-6, -R + 6, 0.35, 0.35, 25), box(6, -R + 6, 0.35, 0.35, 25));
+      // The Darshani Deori is solid either side of its 5 m arch; the Angitha Sahib; the Nishan Sahibs' bases.
+      out.push(box(-4.75, -R, 2.25, 2.2, 11), box(4.75, -R, 2.25, 2.2, 11), box(-R * 0.62, R * 0.45, 3.2, 3.2, 9));
+      out.push(post(-6, -R + 6, 0.9, 25), post(6, -R + 6, 0.9, 25), post(0, -R - 9, 0.9, 32));
       return out;
     }
     case 'godavari-river': case 'navghat-bridge': case 'govardhan-ghat-bridge': case 'visava-garden': return [];
     case 'ram-ghat': case 'govardhan-ghat': case 'urvashi-ghat': return [];
-    case 'sggs-stadium': return [box(0, -p.d / 2 + 2, p.w / 2, 2.5, 8), box(0, p.d / 2 - 2, p.w / 2, 2.5, 8), box(-p.w / 2 + 2, 0, 2.5, p.d / 2, 8), box(p.w / 2 - 2, 0, 2.5, p.d / 2, 8)];
+    case 'sggs-stadium': {
+      // Each stand from its first tier's inner face to its top tier's back; the corners between them stay open.
+      const hw = p.w / 2, hd = p.d / 2, out = [];
+      for (const side of [-1, 1]) out.push(box(0, side * (hd - 0.35), hw - 2, 2.25, 8), box(side * (hw - 0.35), 0, 2.25, hd - 6, 8));
+      for (const [lx, lz] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]]) out.push(post(lx, lz, 0.35, 22)); // floodlight masts
+      return out;
+    }
+    case 'nandgiri-fort': {
+      // Curtain walls on three sides, the round bastions and the gate block (its arch is painted on); the courtyard is open.
+      const k = p.fit ?? 1, out = [box(-30 * k, 0, 1.4, 10 * k, 7), box(0, 10 * k, 30 * k, 1.4, 7), box(30 * k, 0, 1.4, 10 * k, 7), box(0, -10 * k, 6, 2, 9)];
+      for (const [lx, lz] of [[-30 * k, 10 * k], [30 * k, 10 * k], [-30 * k, -10 * k], [30 * k, -10 * k], [0, 10 * k]]) out.push(post(lx, lz, 4, 9.5));
+      return out;
+    }
+    case 'bhagya-nagar-kaman': case 'hingoli-gate': {
+      // The arch's two pillars either side of the street it spans (see City._siteArch).
+      const A = p.arch, K = KAMANS[p.id];
+      if (!A) return [];
+      return [-A.span, A.span].map(lx => ({ x: A.x + lx * Math.cos(A.rot), z: A.z - lx * Math.sin(A.rot), hw: K.hw, hd: K.hd, rot: A.rot, h: K.h }));
+    }
+    // The hill's steep foot (it can't be climbed), following the outline of its two blobs.
+    case 'mal-tekdi': { const k = p.fit ?? 1; return MAL_TEKDI_FOOT.map(([dx, dz, r]) => ({ x: p.x + dx * k, z: p.z + dz * k, r: r * k, h: 8 })); }
     case 'shivaji-putla': case 'gandhi-putla': case 'ambedkar-chowk-latur-phata': return [{ x: p.x, z: p.z, r: 4.3, h: 1.2 }, box(0, 0, 2.2, 2.2, 10)];
-    case 'bhagya-nagar-kaman': case 'hingoli-gate': case 'mal-tekdi': case 'vishnupuri-dam': return [];
+    case 'vishnupuri-dam': return [];
     case 'old-mondha-clock-tower': return [box(0, 0, 2.6, 2.6, 22)];
     case 'nanded-airport': {
       const out = [box(0, 0, 18, 8, 10), box(27, 6, 1.7, 1.7, 24)];
@@ -110,9 +147,21 @@ export function placeColliders(p) {
       if (S.train) out.push(box((-S.train.a0 - S.train.a1) / 2, S.train.b, (S.train.a1 - S.train.a0) / 2, 1.6, 4.3));
       return out;
     }
-    default:
+    default: {
       if (p.category === 'junction' || p.category === 'park') return [];
-      return [box(0, 0, p.w / 2, p.d / 2, p.h || 10)];
+      if ((p.category === 'cinema' || p.category === 'shopping') && !SPECIAL[p.id]) {
+        // A mall's block and its glass atrium out in front.
+        const [hw, hd] = mallSize(p);
+        return [box(0, 0, hw, hd, 15), box(0, -hd - 1, hw * 0.4, 1, 13)];
+      }
+      const out = [box(0, 0, p.w / 2, p.d / 2, p.h || 10)];
+      // A campus's rear wing, where it had room.
+      if ((p.category === 'college' || p.category === 'school') && p.wing !== false) {
+        const [lx, lz, hw, hd] = campusWing(p);
+        out.push(box(lx, lz, hw, hd, FLOOR * (p.category === 'school' ? 2 : 3) + 0.9));
+      }
+      return out;
+    }
   }
 }
 
@@ -284,10 +333,10 @@ function hazurSahib(ctx, p) {
   for (const [lx, lz, r] of [[0, -14, 9], [-14, 0, 8], [14, 0, 8], [0, 14, 8], [0, -R - 3, 7]]) pool(pg, X(lx, lz), Z(lx, lz), r);
 }
 
-function gurudwara(ctx, p, s = 0.7) {
+function gurudwara(ctx, p) {
   const { g, pg } = ctx;
   const { X, Z, rot } = frame(p);
-  const hw = 7 * s;
+  const s = GURUDWARA[p.id], hw = 7 * s;
   texBox(g, X, Z, rot, 0, 0, 0, hw + 1.5, 0.9, hw + 1.5, TILE.MARBLE, 0xffffff, 4);
   texBox(g, X, Z, rot, 0, 0.9, 0, hw, 6.5 * s + 2, hw, TILE.MARBLE, 0xffffff, 4);
   const top = 0.9 + 6.5 * s + 2;
@@ -303,52 +352,47 @@ function gurudwara(ctx, p, s = 0.7) {
 function langarHall(ctx, p) {
   const { g } = ctx;
   const { X, Z, rot } = frame(p);
-  facadeBox(g, X, Z, rot, 0, 14, 10, 5, 4, ROW.OLD, 0xf0e6d2, 7);
+  const [lx, lz, hw, hd] = LANGAR_HALL;
+  facadeBox(g, X, Z, rot, lx, lz, hw, hd, 4, ROW.OLD, 0xf0e6d2, 7);
   g.color(0x8d9ea4, 0); g.cbox(X(0, 8), 3.4, Z(0, 8), 10.5, 0.15, 1.8, rot);
 }
-
-/** Ghat steps from street level down to the river, laid toward the water. */
-function ghat(ctx, p, width) {
-  const { g, city, pg } = ctx;
-  // Find the direction to the river.
-  let best = null, bd = Infinity;
-  for (const s of city.waterSegs) {
-    const dx = s[2] - s[0], dz = s[3] - s[1], l2 = dx * dx + dz * dz;
-    let t = l2 ? ((p.x - s[0]) * dx + (p.z - s[1]) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t));
-    const qx = s[0] + dx * t, qz = s[1] + dz * t, d = Math.hypot(qx - p.x, qz - p.z) - s[4] / 2;
-    if (d < bd) { bd = d; best = { qx, qz, w: s[4], dx, dz }; }
-  }
-  if (!best || bd > 140) return;
-  const len = Math.hypot(best.qx - p.x, best.qz - p.z) || 1;
-  const ux = (best.qx - p.x) / len, uz = (best.qz - p.z) / len; // toward water
-  const rot = Math.atan2(ux, uz); // local +z toward water
-  const c = Math.cos(rot), s = Math.sin(rot);
-  const edge = len - best.w / 2; // distance to the water's edge from the place
-  const startD = Math.max(0, edge - 22), endD = edge + 2;
+/**
+ * Ghat steps from street level down to the river, as the city laid them (p.ghat, ghats.js):
+ * the treads drawn are the treads walked on.
+ */
+function ghat(ctx, p) {
+  const { g, city, pg, net } = ctx;
+  const G = p.ghat;
+  if (!G) return;
+  const { rot, hw, start: startD, end: endD } = G;
+  const c = Math.cos(rot), s = Math.sin(rot); // local +z toward the water
   const X = (lx, lz) => p.x + lx * c + lz * s, Z = (lx, lz) => p.z - lx * s + lz * c;
-  const hw = width / 2;
-  const steps = 12;
-  for (let k = 0; k < steps; k++) {
-    const d0 = startD + ((endD - startD) * k) / steps, d1 = startD + ((endD - startD) * (k + 1)) / steps;
-    const y = city.groundHeight(X(0, d0), Z(0, d0)) + 0.05;
-    // Sandstone steps, a shade darker every other tread.
+  G.treads.forEach((t, k) => {
+    // Sandstone steps, a shade darker every other tread, down into the bank under them.
     g.color(k % 2 ? 0xcdb894 : 0xd9c7a3, 0);
-    g.cbox(X(0, (d0 + d1) / 2), y - 0.6, Z(0, (d0 + d1) / 2), hw, 0.6, (d1 - d0) / 2 + 0.02, rot);
-  }
-  // Side walls with a lamp at each end, and a couple of umbrellas for the pandas.
+    const bottom = Math.min(t.top - 0.6, t.low - 0.1);
+    g.cbox(X(0, (t.d0 + t.d1) / 2), bottom, Z(0, (t.d0 + t.d1) / 2), hw, t.top - bottom, (t.d1 - t.d0) / 2 + 0.02, rot);
+  });
+  // Side walls with a lamp at each end, and a couple of umbrellas for the pandas. None of them
+  // stands on a road (Govardhan Ghat's steps start at the bridge).
+  const clear = (lx, d, r) => net.roadClearance(X(lx, d), Z(lx, d), 10) >= r;
+  const walls = 6, run = (endD - startD) / walls;
   for (const sx of [-hw - 0.5, hw + 0.5]) {
     g.color(0xb8ad98, 0);
-    for (let k = 0; k < steps; k += 2) {
-      const d = startD + ((endD - startD) * k) / steps;
+    for (let k = 0; k < walls; k++) {
+      const d = startD + run * k;
+      if (!clear(sx, d + 1, 1)) continue;
       const y = city.groundHeight(X(sx, d), Z(sx, d));
-      g.cbox(X(sx, d + 1), y - 0.4, Z(sx, d + 1), 0.5, 1.6, (endD - startD) / steps, rot);
+      g.cbox(X(sx, d + 1), y - 0.4, Z(sx, d + 1), 0.5, 1.6, run / 2, rot);
     }
+    if (!clear(sx, startD, 0.5)) continue;
     g.color(0x6f7779, 0); g.cyl(X(sx, startD), 0, Z(sx, startD), 0.08, 4.2, 5);
     pool(pg, X(sx, startD), Z(sx, startD), 5, 4.2);
   }
   const r = rng(hash2(Math.round(p.x), Math.round(p.z)));
   for (let k = 0; k < 3; k++) {
     const lx = r.range(-hw + 3, hw - 3), d = startD + r.range(4, 12);
+    if (!clear(lx, d, 1.5)) continue;
     const y = city.groundHeight(X(lx, d), Z(lx, d));
     g.color(0x6b5440, 0); g.cyl(X(lx, d), y, Z(lx, d), 0.05, 2.2, 4);
     g.color(r.pick([0xc0392b, 0xf1c40f, 0xe67e22]), 0); g.cone(X(lx, d), y + 2.0, Z(lx, d), 1.5, 0.6, 8);
@@ -727,10 +771,14 @@ function dam(ctx, p) {
 
 function hillTemple(ctx, p) {
   const { g } = ctx;
-  g.color(0x8a7a5c, 0); g.blob(p.x, -6, p.z, 34, 16, 30, 11);
-  g.color(0x7d8a4a, 0); g.blob(p.x + 8, -4, p.z - 6, 22, 13, 20, 12);
-  const top = 8.5;
-  g.color(0xf2efe6, 0); g.cbox(p.x, top, p.z, 2.4, 3, 2.4);
+  // The hill keeps its height but narrows to the ground it has between the streets (at full
+  // size its foot reaches about MAL_TEKDI_R from the centre).
+  const k = p.fit ?? 1;
+  g.color(0x8a7a5c, 0); g.blob(p.x, -6, p.z, 34 * k, 16, 30 * k, 11);
+  g.color(0x7d8a4a, 0); g.blob(p.x + 8 * k, -4, p.z - 6 * k, 22 * k, 13, 20 * k, 12);
+  // The summit is about 8.1 m up: the shrine's plinth is sunk into it.
+  const top = 8;
+  g.color(0xf2efe6, 0); g.cbox(p.x, top - 2, p.z, 2.4, 5, 2.4);
   g.color(0xe0773a, 0); g.lathe(p.x, top + 3, p.z, [[2.4, 0], [1.4, 2.4], [0.05, 4.2]], 4);
   g.color(SAFFRON, 0);
   const a = g.v(p.x, top + 9, p.z), b = g.v(p.x + 2, top + 8.4, p.z), c = g.v(p.x, top + 7.8, p.z);
@@ -959,24 +1007,23 @@ function statue(ctx, p, kind) {
   for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.785; pool(pg, p.x + Math.cos(a) * 3.6, p.z + Math.sin(a) * 3.6, 2.5, 0.6); }
 }
 
-/** Gateway arch spanning the street at the place's approach. */
+/** Gateway arch spanning the street at the place's approach (sited by City._siteArch). */
 function kaman(ctx, p, style) {
-  const { g, net, pg } = ctx;
-  const n = net.nearest(p.ax, p.az, 40, {});
-  if (!n) return;
-  const w = net.width[n.road];
-  const rot = Math.atan2(n.dx, n.dz); // local z along the road, local x across it
+  const { g, pg } = ctx;
+  const A = p.arch, K = KAMANS[p.id];
+  if (!A) return;
+  const rot = A.rot; // local z along the road, local x across it
   const c = Math.cos(rot), s = Math.sin(rot);
-  const X = (lx, lz) => n.x + lx * c + lz * s, Z = (lx, lz) => n.z - lx * s + lz * c;
-  const span = w / 2 + (style === 'old' ? 2.2 : 1.6);
+  const X = (lx, lz) => A.x + lx * c + lz * s, Z = (lx, lz) => A.z - lx * s + lz * c;
+  const span = A.span;
   if (style === 'old') {
-    for (const sx of [-span, span]) texBox(g, X, Z, rot, sx, 0, 0, 1.6, 9.5, 2.6, TILE.STONE, 0xffffff, 2.5);
-    texBox(g, X, Z, rot, 0, 7.2, 0, span + 1.6, 3.4, 2.6, TILE.STONE, 0xffffff, 2.5);
+    for (const sx of [-span, span]) texBox(g, X, Z, rot, sx, 0, 0, K.hw, K.h, K.hd, TILE.STONE, 0xffffff, 2.5);
+    texBox(g, X, Z, rot, 0, 7.2, 0, span + K.hw, 3.4, K.hd, TILE.STONE, 0xffffff, 2.5);
     g.color(0x5c5650, 0);
-    for (let k = -3; k <= 3; k++) g.cbox(X(k * span / 3.2, 0), 10.6, Z(k * span / 3.2, 0), 0.5, 0.8, 2.6, rot);
+    for (let k = -3; k <= 3; k++) g.cbox(X(k * span / 3.2, 0), 10.6, Z(k * span / 3.2, 0), 0.5, 0.8, K.hd, rot);
   } else {
     g.color(0xe9dcc0, 0);
-    for (const sx of [-span, span]) { g.cbox(X(sx, 0), 0, Z(sx, 0), 0.9, 8, 0.9, rot); onionDome(g, X(sx, 0), 8, Z(sx, 0), 1.0, 0xe0773a); }
+    for (const sx of [-span, span]) { g.cbox(X(sx, 0), 0, Z(sx, 0), K.hw, K.h, K.hd, rot); onionDome(g, X(sx, 0), K.h, Z(sx, 0), 1.0, 0xe0773a); }
     g.color(0xd8c8a8, 0); g.cbox(X(0, 0), 6.4, Z(0, 0), span, 1.4, 0.7, rot);
     g.color(0xc0392b, 0); g.cbox(X(0, 0), 7.8, Z(0, 0), span * 0.6, 0.9, 0.5, rot);
     g.gilt(GOLD); onionDome(g, X(0, 0), 8.7, Z(0, 0), 1.2);
@@ -1039,9 +1086,9 @@ function campus(ctx, p, index, school = false) {
   const r = rng(hash2(index, 77));
   const color = r.pick([0xf0e6d2, 0xe8d8b8, 0xdce3e6, 0xf2d27a, 0xe9c9b2]);
   namedBlock(ctx, p, { floors: school ? 2 : 3, row: school ? ROW.RES : r.chance(0.5) ? ROW.MODERN : ROW.OLD, color, flag: !school && r.chance(0.5) });
-  // A wing behind and a gate pillar pair in front.
-  const hw = Math.max(4, p.w / 2), hd = Math.max(3.5, p.d / 2);
-  facadeBox(g, X, Z, rot, hw * 0.6, hd + 6, hw * 0.55, 4, FLOOR * (school ? 2 : 3), ROW.RES, color, index * 7);
+  // A wing behind (where it had room) and a gate pillar pair in front.
+  const hd = Math.max(3.5, p.d / 2);
+  if (p.wing !== false) { const [lx, lz, whw, whd] = campusWing(p); facadeBox(g, X, Z, rot, lx, lz, whw, whd, FLOOR * (school ? 2 : 3), ROW.RES, color, index * 7); }
   g.color(0xd8d0bc, 0);
   for (const sx of [-4, 4]) g.cbox(X(sx, -hd - 7), 0, Z(sx, -hd - 7), 0.6, 2.8, 0.6, rot);
   g.color(0x2d5d8a, 0); g.cbox(X(0, -hd - 7), 2.6, Z(0, -hd - 7), 4.2, 0.5, 0.15, rot);
@@ -1050,7 +1097,7 @@ function campus(ctx, p, index, school = false) {
 function mall(ctx, p) {
   const { g, pg } = ctx;
   const { X, Z, rot } = frame(p);
-  const hw = p.w / 2 + 4, hd = p.d / 2 + 3;
+  const [hw, hd] = mallSize(p);
   facadeBox(g, X, Z, rot, 0, 0, hw, hd, 14, ROW.MODERN, 0xd7dde0, hash2(Math.round(p.x), 3), ROW.SHOP);
   // Glass atrium on the front.
   g.color(0x3f6f86, 0); g.cbox(X(0, -hd - 1), 0, Z(0, -hd - 1), hw * 0.4, 13, 1, rot);

@@ -6,10 +6,11 @@
 // that are a pixel or two at that distance.
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
-import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD } from './citygen.js';
+import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
 import { ROW, TILE, SIGN_COLS } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
+import { medianRuns } from './colliders.js';
 import { buildAirfieldPiece } from './airfield.js';
 import { buildPlace } from './landmarks.js';
 import { FoliageGeo, LEAF } from './foliage.js';
@@ -326,6 +327,9 @@ function buildRoads(ctx, data) {
   if (data.junctions) for (const j of data.junctions) buildJunction(ctx, j);
 }
 
+// Where a median's run starts and ends inside a road piece.
+const medianP = {}, medianQ = {};
+
 /** The stretch of road segment i from sa to sb (s0..s1 is the whole drawn segment). */
 function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   const { g, city, net } = ctx;
@@ -351,8 +355,19 @@ function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   if (net.bridge[road] || d0 > 0.05 || d1 > 0.05) buildBridgeSpan(ctx, p, q, off0, off1, e0, e1, divided ? ms : 0, d0, d1);
   else {
     if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1]);
-    if (divided) buildMedianHalf(ctx, p, q, off0, off1, ms, e0[mk], e1[mk]);
-    else if (w >= 11.5 && !ms) buildMedian(ctx, p, q, off0, off1);
+    // The median, along the runs colliders.js makes solid (none where it would stand in another
+    // road's lane), with an end where one stops short along the road.
+    const runs = medianRuns(net)[road], from = net.trimStart(road) + 0.01, to = len - net.trimEnd(road) - 0.01;
+    for (let k = 0; runs && k < runs.length; k += 2) {
+      const ra = Math.max(runs[k], sa), rb = Math.min(runs[k + 1], sb);
+      if (rb - ra < 0.01) continue;
+      // A run inside this piece starts or ends on a plain stretch of the segment, not at its mitred ends.
+      const P = ra > sa ? medianP : p, Q = rb < sb ? medianQ : q;
+      const o0 = ra > sa ? offsetAt(net, road, i, true, start, end, ra, P) : off0, o1 = rb < sb ? offsetAt(net, road, i + 1, true, start, end, rb, Q) : off1;
+      const ends = (runs[k] > from && ra === runs[k] ? 1 : 0) | (runs[k + 1] < to && rb === runs[k + 1] ? 2 : 0);
+      if (ms) buildMedianHalf(ctx, P, Q, o0, o1, ms, net.edgeAt(road, ra, ms), net.edgeAt(road, rb, ms), ends);
+      else buildMedian(ctx, P, Q, o0, o1, ends);
+    }
   }
   // Zebra crossing just before a big junction (on the ground).
   if (w >= 8 && sb === s1 && d1 < 0.3 && s1 >= len - net.trimEnd(road) - 0.01 && net.jRoads[net.rb[road]].length >= 3 && s1 - s0 > 4) zebra(ctx, q, off1, e1, -1, s1);
@@ -565,7 +580,8 @@ function buildFootpaths(ctx, p, q, o0, o1, hw, sides) {
   }
 }
 
-function buildMedian(ctx, p, q, o0, o1) {
+/** A wide two-way road's median down its centre line, from p to q; `ends` 1 and 2 close it off at p and at q. */
+function buildMedian(ctx, p, q, o0, o1, ends = 0) {
   const { g } = ctx;
   const hw = 0.35, h = 0.32;
   const ax = p.x + o0.nx * hw, az = p.z + o0.nz * hw, bx = q.x + o1.nx * hw, bz = q.z + o1.nz * hw;
@@ -574,6 +590,9 @@ function buildMedian(ctx, p, q, o0, o1) {
   g.setTint(0xffffff, 0).setTile(TILE.KERB[0], TILE.KERB[1], 1, 1);
   g.wall(bx, bz, ax, az, 0.03, h, 0, len / 2.4, 0, 0.3);
   g.wall(dx, dz, cx, cz, 0.03, h, 0, len / 2.4, 0, 0.3);
+  // Its ends, facing back along the road at p and on along it at q.
+  if (ends & 1) g.wall(ax, az, dx, dz, 0.03, h, 0, (2 * hw) / 2.4, 0, 0.3);
+  if (ends & 2) g.wall(cx, cz, bx, bz, 0.03, h, 0, (2 * hw) / 2.4, 0, 0.3);
   g.color(0x8c9a5a, 0);
   const a = g.v(ax, h, az), b = g.v(bx, h, bz), c = g.v(cx, h, cz), d = g.v(dx, h, dz);
   g.quad(a, d, c, b);
@@ -582,9 +601,9 @@ function buildMedian(ctx, p, q, o0, o1) {
 /**
  * This carriageway's half of a divided road's median, on `side` (+1 left of a->b, -1 right)
  * from its edge (e0, e1 at each end) to the middle: a kerb facing the traffic and a planted
- * top. The other carriageway builds the other half.
+ * top. The other carriageway builds the other half. `ends` 1 and 2 close it off at p and at q.
  */
-function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1) {
+function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1, ends = 0) {
   const { g } = ctx;
   const h = 0.32, f0 = (e0 + MEDIAN_W / 2 + 0.05) * side, f1 = (e1 + MEDIAN_W / 2 + 0.05) * side;
   const ax = p.x + o0.nx * e0 * side, az = p.z + o0.nz * e0 * side, bx = q.x + o1.nx * e1 * side, bz = q.z + o1.nz * e1 * side;
@@ -592,6 +611,10 @@ function buildMedianHalf(ctx, p, q, o0, o1, side, e0, e1) {
   const len = Math.hypot(bx - ax, bz - az);
   g.setTint(0xffffff, 0).setTile(TILE.KERB[0], TILE.KERB[1], 1, 1);
   if (side > 0) g.wall(ax, az, bx, bz, 0.03, h, 0, len / 2.4, 0, 0.3); else g.wall(bx, bz, ax, az, 0.03, h, 0, len / 2.4, 0, 0.3);
+  // Its ends, facing back along the road at p and on along it at q (each drawn left to right as seen from outside).
+  const u = (MEDIAN_W / 2 + 0.05) / 2.4;
+  if (ends & 1) { if (side > 0) g.wall(dx, dz, ax, az, 0.03, h, 0, u, 0, 0.3); else g.wall(ax, az, dx, dz, 0.03, h, 0, u, 0, 0.3); }
+  if (ends & 2) { if (side > 0) g.wall(bx, bz, cx, cz, 0.03, h, 0, u, 0, 0.3); else g.wall(cx, cz, bx, bz, 0.03, h, 0, u, 0, 0.3); }
   g.color(0x8c9a5a, 0);
   const a = g.v(ax, h, az), b = g.v(bx, h, bz), c = g.v(cx, h, cz), d = g.v(dx, h, dz);
   if (side > 0) g.quad(a, b, c, d); else g.quad(a, d, c, b);
@@ -1228,25 +1251,31 @@ function buildProp(ctx, i) {
       break;
     }
     case PROP.STALL: {
-      // Tea stall: tin box, overhanging roof, a bench and a kettle on the counter.
+      // Tea stall: tin box, overhanging roof, a bench and a kettle on the counter (local -z faces the road).
       const col = r.pick([0x2f6fb5, 0x2e8b57, 0xc0392b, 0xd4a017, 0x1f9aa8]);
       g.color(col, 0); g.cbox(x, 0, z, 1.0, 2.1, 0.8, rot);
       g.color(0x8d9ea4, 0); g.cbox(x - s * 0.5, 2.1, z - c * 0.5, 1.4, 0.08, 1.4, rot);
       g.color(0x7a5a3c, 0); g.cbox(x - s * 1.0, 0.9, z - c * 1.0, 1.0, 0.1, 0.22, rot);
       g.color(0xc0c4c6, 0); g.cyl(x - s * 0.95, 1.0, z - c * 0.95, 0.18, 0.3, 6);
-      g.color(0x6d4c33, 0); g.cbox(x - s * 2.2 + c * 0.3, 0, z - c * 2.2 - s * 0.3, 0.9, 0.45, 0.2, rot);
+      // The bench stands beside the stall's back half, past the footpath (in front it would stand
+      // in the road, and along the stall's side across the walkers' line).
+      const bench = city.stallBench(i);
+      if (bench) {
+        const lx = bench * BENCH.x, lz = BENCH.z;
+        g.color(0x6d4c33, 0); g.cbox(x + lx * c + lz * s, 0, z - lx * s + lz * c, BENCH.hw, BENCH.h, BENCH.hd, rot);
+      }
       lightPool(pg, x - s * 1.2, z - c * 1.2, 4, 2.0);
       break;
     }
     case PROP.CART: {
-      // Vada-pav / fruit handcart with a big umbrella.
-      g.color(0x8a6a3a, 0); g.cbox(x, 0.7, z, 0.9, 0.25, 0.55, rot);
+      // Vada-pav / fruit handcart with a big umbrella (y0: up on the footpath, where it stands on one).
+      g.color(0x8a6a3a, 0); g.cbox(x, y0 + 0.7, z, 0.9, 0.25, 0.55, rot);
       g.color(0x2b2b2b, 0);
-      for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) g.wheel(x + lx * c + lz * s, 0.32, z - lx * s + lz * c, 0.32, 0.07, s, c);
+      for (const [lx, lz] of [[-0.6, -0.61], [0.6, -0.61], [-0.6, 0.61], [0.6, 0.61]]) g.wheel(x + lx * c + lz * s, y0 + 0.32, z - lx * s + lz * c, 0.32, 0.07, s, c);
       const goods = r.pick([0xe67e22, 0xf1c40f, 0xc0392b, 0x27ae60]);
-      g.color(goods, 0); g.blob(x, 1.05, z, 0.7, 0.18, 0.4, i);
-      g.color(0x555555, 0); g.cyl(x, 0.95, z, 0.03, 1.6, 4);
-      g.color(r.pick([0xc0392b, 0xf1c40f, 0x2f6fb5, 0x8e44ad]), 0); g.cone(x, 2.4, z, 1.35, 0.55, 8);
+      g.color(goods, 0); g.blob(x, y0 + 1.05, z, 0.7, 0.18, 0.4, i);
+      g.color(0x555555, 0); g.cyl(x, y0 + 0.95, z, 0.03, 1.6, 4);
+      g.color(r.pick([0xc0392b, 0xf1c40f, 0x2f6fb5, 0x8e44ad]), 0); g.cone(x, y0 + 2.4, z, 1.35, 0.55, 8);
       break;
     }
     case PROP.SHRINE: {
@@ -1319,10 +1348,15 @@ function wire(out, x0, z0, x1, z1, c, s) {
   }
 }
 
+// The ground pool lies over the footpaths (WALK_Y), shop platforms (0.3 m) and medians (0.32 m):
+// any lower and they hide it, cutting the light off in a straight line at the kerb. It is
+// additive and soft-edged, so 0.4 m up it reads as light on the street and what stands in it.
+const POOL_Y = 0.4;
+
 function lightPool(pg, x, z, radius, headY, base = 0) {
   // Ground pool, and a small bright quad under the lamp head (base: the deck it stands on).
   pg.setTint(0xffffff, 0).setTile(0, 0, 1, 0);
-  const y = base + 0.12;
+  const y = base + POOL_Y;
   if (headY) headY += base;
   const a = pg.v(x - radius, y, z - radius, 0, 0), b = pg.v(x - radius, y, z + radius, 0, 1);
   const c = pg.v(x + radius, y, z + radius, 1, 1), d = pg.v(x + radius, y, z - radius, 1, 0);

@@ -65,6 +65,11 @@ export class Player {
     this.x += rd.nx * out; this.z += rd.nz * out;
     if (vn < 0) { this.vx -= vn * rd.nx; this.vz -= vn * rd.nz; }
   }
+  /** Feet down on the ground at height gy: a hard enough landing hurts. */
+  _land(gy) {
+    if (!this.onGround && this.vy < -9) this.damage((-this.vy - 9) * 6, 'fall');
+    this.y = this.groundY = gy; this.vy = 0; this.onGround = true;
+  }
   /** The ground, or a flyover deck if that is where we are, or the footpath. */
   _groundAt(g) {
     return Math.max(g.city.groundHeight(this.x, this.z), g.net.surfaceAt(this.x, this.z, this.groundY ?? 0), this._pavement(g));
@@ -106,12 +111,13 @@ export class Player {
     if (input.pressed('jump') && this.onGround) { this.vy = 4.6; this.onGround = false; g.audio?.sfx('jump'); }
     this.vy -= 15 * dt;
     this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
-    const gy = this._groundAt(g);
+    let gy = this._groundAt(g);
     this.groundY = gy;
-    if (this.y <= gy) { if (!this.onGround && this.vy < -9) this.damage((-this.vy - 9) * 6, 'fall'); this.y = gy; this.vy = 0; this.onGround = true; }
+    if (this.y <= gy) this._land(gy);
     else if (this.onGround && this.y - gy < 0.3) { this.y = gy; this.vy = 0; } // down a kerb or a slope: still on our feet
     else this.onGround = false; // off a ledge: falling, and the landing can hurt
     // Collide: buildings and props, then vehicles, then keep out of deep water.
+    const stoodX = this.x, stoodZ = this.z;
     const p = this._p || (this._p = { x: 0, z: 0 }), o = this._o || (this._o = {});
     p.x = this.x; p.z = this.z;
     if (g.colliders.resolveCircle(p, 0.34, o, Infinity, this.groundY)) {
@@ -122,6 +128,13 @@ export class Player {
     }
     g.pushOutOfVehicles(this, 0.34);
     this._keepOutOfRiver(dt);
+    // Pushed back onto higher ground than we stood on (off the lower bank past the last ghat
+    // tread, back onto the tread at the water's edge): stand on it, not in it. Every frame of
+    // pushing into the river steps off the tread again, so the next frame would not catch it.
+    if (this.x !== stoodX || this.z !== stoodZ) {
+      const back = this._groundAt(g);
+      if (back > this.y) this._land((gy = back));
+    }
     this.speed = Math.hypot(this.vx, this.vz);
     // Punch.
     if (this.punchT > 0) this.punchT -= dt;

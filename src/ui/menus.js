@@ -2,8 +2,9 @@
 import { CityMap } from './minimap.js';
 import { STORY, CHARACTERS } from '../game/story.js';
 import { dist } from '../core/math.js';
-import { key, verb, pick } from './controls.js';
+import { key, keyName, verb, pick } from './controls.js';
 import { installKind, promptInstall } from './install.js';
+import { tapButtons } from './tap.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -15,9 +16,11 @@ export class PauseMenu {
     this.open = false;
     this.tab = 'map';
     this.hold = null; // a promise close() waits for: the screen going full screen again (main.js)
+    this.tabs = this.root.querySelector('.tabs');
     this.map = new CityMap(game, $('city-map'));
     this.map.onPick = (x, z) => this.setWaypoint(x, z);
     this._bind();
+    tapButtons(this.root);
   }
 
   _bind() {
@@ -66,7 +69,8 @@ export class PauseMenu {
       this._resetArmedAt = performance.now(); $('set-reset').textContent = `${verb(g) === 'tap' ? 'Tap' : 'Click'} again to erase everything`;
       setTimeout(() => { this._resetArmedAt = 0; $('set-reset').textContent = 'Start over (erase progress)'; }, 4000);
     });
-    addEventListener('resize', () => { if (this.open && this.tab === 'map') this._drawMap(); });
+    this.tabs.addEventListener('scroll', () => tabEdges(this.tabs), { passive: true });
+    addEventListener('resize', () => { tabEdges(this.tabs); if (this.open && this.tab === 'map') this._drawMap(); });
   }
 
   setWaypoint(x, z, label) {
@@ -108,7 +112,13 @@ export class PauseMenu {
 
   show(tab) {
     this.tab = tab;
-    for (const b of this.root.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    $('pause-resume').querySelector('kbd').textContent = keyName(this.game, 'pause'); // Esc, or Start on a gamepad
+    for (const b of this.root.querySelectorAll('[data-tab]')) {
+      const on = b.dataset.tab === tab;
+      b.setAttribute('aria-selected', String(on));
+      if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // when the tab row scrolls sideways
+    }
+    tabEdges(this.tabs);
     for (const p of this.root.querySelectorAll('[data-pane]')) p.classList.toggle('on', p.dataset.pane === tab);
     if (tab === 'map') { requestAnimationFrame(() => this._drawMap()); this._search(); }
     if (tab === 'story') this._story();
@@ -160,7 +170,7 @@ export class PauseMenu {
     const cards = [
       ['RICKSHAW FARES', 'रिक्षा', `Get in any auto-rickshaw and ${job}. Pick up passengers and drive them to real places across Nanded. Fast, clean rides earn tips and streak bonuses.`, `${g.save.data.stats.fares} fares so far`],
       ['BHOOKH EXPRESS', 'डिलिव्हरी', `On any bike or scooty ${job}. Collect orders from restaurants and deliver them while they are still hot.`, `${g.save.data.stats.deliveries} deliveries`],
-      ...j.races.map(r => [r.name.toUpperCase(), 'STREET RACE', `Drive into the orange marker to start. ₹${r.reward} for first place.`, rec[r.id] ? `Best: ${rec[r.id].toFixed(1)}s` : 'Not raced yet', r]),
+      ...j.races.map(r => [r.name.toUpperCase(), 'STREET RACE', `Drive into the orange marker and ${pick(g, { keyboard: job, gamepad: job, touch: 'tap <kbd class="tap">START RACE</kbd>' })}. ₹${r.reward} for first place.`, rec[r.id] ? `Best: ${rec[r.id].toFixed(1)}s` : 'Not raced yet', r]),
       ['RANG GARAGE', 'रंग गॅरेज', g.save.data.garage ? "Drive into Anna's garage at Workshop Corner while wanted: new colour, repairs, stars cleared. ₹250." : 'Unlocks during the story.', ''],
       ['ROADSIDE SNACKS', 'चहा · वडा पाव', `Walk up to a tea stall or handcart and ${pick(g, { keyboard: `press ${key(g, 'action')}`, gamepad: `press ${key(g, 'action')}`, touch: 'tap the button that appears' })}: chai, vada pav, misal… They heal you and give you a burst of energy.`, ''],
     ];
@@ -206,4 +216,10 @@ export class PauseMenu {
     $('set-weather').textContent = { clear: 'Clear', haze: 'Summer haze', rain: 'Monsoon rain' }[g.sky.weather];
     $('set-time').textContent = `${g.sky.clockText()} · advance 3 hours`;
   }
+}
+
+/** Fade the ends of the tab row that have tabs past them, so a row that has to scroll sideways says so. */
+export function tabEdges(nav) {
+  nav.classList.toggle('more-l', nav.scrollLeft > 1);
+  nav.classList.toggle('more-r', nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
 }

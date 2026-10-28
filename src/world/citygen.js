@@ -5,6 +5,7 @@ import { SpatialGrid, rng, clamp, pointSegDist2, obbOverlap, hash2, smoothstep }
 import { MEDIAN_W } from './roadnet.js';
 import { airfieldPieces } from './airfield.js';
 import { RoadBumps } from './roadbumps.js';
+import { GHAT_WIDTH, layGhat, ghatTop } from './ghats.js';
 
 // Building styles. The renderer maps each to facade rows in the texture atlas.
 export const STYLE = {
@@ -47,6 +48,10 @@ export const valleyDepth = d => (d > 14 ? 0 : d > 0 ? -3.2 * (1 - smoothstep(0, 
 // Paved footpath along the busy roads; buildings keep behind it.
 export const FOOTPATH_W = 1.9;
 export const WALK_Y = 0.2; // the top of a footpath: its kerb's height
+// A tea stall's bench, in the stall's frame (local -z toward the road; the stall's box is 1 x 0.8
+// m half-size and stands 1.8 m out from the kerb): beside the stall's back half, from 1.95 m out,
+// past a footpath and the walkers' line along it. `x` is how far to the side its middle stands.
+export const BENCH = { x: 1.35, z: 0.5, hw: 0.2, hd: 0.35, h: 0.45 };
 
 export class City {
   constructor(world, net) {
@@ -60,6 +65,9 @@ export class City {
     this.raisedAreas = [];
     this._buildDensity();
     this._buildWaterIndex();
+    // Ghat steps down the riverbanks, laid on the bank as it is drawn (ghats.js, landmarks.js).
+    this.ghats = [];
+    for (const p of this.places) if (GHAT_WIDTH[p.id] && (p.ghat = layGhat(this, p, GHAT_WIDTH[p.id]))) this.ghats.push(p.ghat);
     // Off the streets and decks, bodies stand on the ground as it is drawn: the river valleys.
     net.ground = (x, z) => this.groundHeight(x, z);
   }
@@ -145,16 +153,74 @@ export class City {
 
   /** Depth of the raised platform (ota) along a shop front; 0 when there is none. */
   shopPlatform(i) {
-    if (!(this.lots.flags[i] & 1) || this.lots.style[i] === STYLE.SHED || this.lots.style[i] === STYLE.HUT) return 0;
+    const L = this.lots;
+    if (!(L.flags[i] & 1) || L.style[i] === STYLE.SHED || L.style[i] === STYLE.HUT) return 0;
     // Leave the kerb-side walking line (0.45 m from the road edge) clear.
     const d = Math.min(0.9, this.frontRoom(i) - 0.65);
-    return d > 0.25 ? d : 0;
+    if (d <= 0.25) return 0;
+    // A street tree whose trunk would stand in the platform: the shop does without one. Asked once
+    // the city is built, like compoundWall; its end against a neighbour's side wall is hidden.
+    const cache = this._ota || (this._ota = new Int8Array(L.cap).fill(-1));
+    if (cache[i] < 0) {
+      const T = this.trees, c = Math.cos(L.rot[i]), s = Math.sin(L.rot[i]), lz = -L.hd[i] - d / 2;
+      const x = L.x[i] + lz * s, z = L.z[i] + lz * c, ext = L.hw[i] + 1;
+      cache[i] = this.lotGrid.query(x - ext, z - ext, x + ext, z + ext, id => {
+        if (id > -100000 || id <= -200000) return false;
+        const k = -100000 - id - 1, r = T.kind[k] === 2 ? 0.75 : T.kind[k] === 5 ? 0.6 : 0.32; // its trunk, as colliders.js stands it
+        const dx = T.x[k] - x, dz = T.z[k] - z;
+        return Math.abs(dx * c - dz * s) < L.hw[i] + r && Math.abs(dx * s + dz * c) < d / 2 + r;
+      }) ? 0 : 1;
+    }
+    return cache[i] === 1 ? d : 0;
   }
 
-  /** A compound wall stands 1.6 m in front of the house, only where it leaves the kerb free. */
+  /**
+   * A compound wall stands 1.6 m in front of the house, only where it leaves the kerb free and
+   * its line is clear: a back-row or infill house's wall would otherwise run into the house in
+   * front of it, and a street tree or stall would stand in it. Asked once the city is built
+   * (by the renderer and the colliders alike), when every lot, tree and stall is in lotGrid.
+   */
   compoundWall(i) {
     const L = this.lots;
-    return Boolean(L.flags[i] & 32) && L.style[i] !== STYLE.SHED && L.style[i] !== STYLE.HUT && this.frontRoom(i) >= 2.4;
+    if (!(L.flags[i] & 32) || L.style[i] === STYLE.SHED || L.style[i] === STYLE.HUT || this.frontRoom(i) < 2.4) return false;
+    const cache = this._wall || (this._wall = new Int8Array(L.cap).fill(-1));
+    if (cache[i] < 0) {
+      const lz = -L.hd[i] - 1.5, s = Math.sin(L.rot[i]), c = Math.cos(L.rot[i]);
+      cache[i] = this._overlapsLots(L.x[i] + lz * s, L.z[i] + lz * c, L.hw[i], 0.15, L.rot[i], 0) ? 0 : 1;
+    }
+    return cache[i] === 1;
+  }
+
+  /**
+   * Which side of tea stall i its bench stands on: +1 (local +x), -1, or 0 for no bench. It goes
+   * where its whole seat is past the footpath of every street (by a junction or on a bend one
+   * side may reach another road, or its own), clear of the buildings and of any tree's trunk.
+   * Asked once the city is built, by the renderer and the colliders alike, so what you see is
+   * what you hit.
+   */
+  stallBench(i) {
+    const P = this.props, T = this.trees;
+    const cache = this._bench || (this._bench = new Int8Array(P.count).fill(2));
+    if (cache[i] !== 2) return cache[i];
+    const c = Math.cos(P.rot[i]), s = Math.sin(P.rot[i]);
+    const at = (lx, lz) => [P.x[i] + lx * c + lz * s, P.z[i] - lx * s + lz * c];
+    cache[i] = 0;
+    for (const side of [1, -1]) {
+      const seat = [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([a, b]) => {
+        const [x, z] = at(side * BENCH.x + a * BENCH.hw, BENCH.z + b * BENCH.hd);
+        return this.net.roadClearance(x, z, 10) >= FOOTPATH_W - 0.05;
+      });
+      const [x, z] = at(side * BENCH.x, BENCH.z);
+      if (!seat || this.builtAt(x, z, BENCH.hd)) continue;
+      const tree = this.lotGrid.query(x - 2, z - 2, x + 2, z + 2, id => {
+        if (id > -100000 || id <= -200000) return false;
+        const k = -100000 - id - 1, r = T.kind[k] === 2 ? 0.75 : T.kind[k] === 5 ? 0.6 : 0.32; // its trunk, as colliders.js stands it
+        const dx = T.x[k] - x, dz = T.z[k] - z;
+        return Math.abs(dx * c - dz * s) < BENCH.hw + r && Math.abs(dx * s + dz * c) < BENCH.hd + r;
+      });
+      if (!tree) { cache[i] = side; break; }
+    }
+    return cache[i];
   }
 
   /** True when (x, z) lies inside (or within `pad` of) a building lot or reserved landmark. */
@@ -250,7 +316,8 @@ export class City {
 
   /**
    * Ground height: flat city, with the river valleys cut into it exactly as the ground mesh
-   * draws them, so what people walk and drive on is what they see.
+   * draws them, the station's platforms and the ghats' steps on it, so what people walk and
+   * drive on is what they see.
    */
   groundHeight(x, z) {
     // Raised ground: the station's platforms.
@@ -260,6 +327,18 @@ export class City {
       const u = dx * a.ux + dz * a.uz, v = dx * a.vx + dz * a.vz;
       if (Math.abs(u) <= a.hu && Math.abs(v) <= a.hv) return a.h;
     }
+    const y = this.bareGround(x, z);
+    // A ghat's stone treads, laid over the bank (where the bank rises above one, the bank).
+    for (const gh of this.ghats) {
+      if ((x - gh.cx) ** 2 + (z - gh.cz) ** 2 > gh.r2) continue;
+      const top = ghatTop(gh, x, z);
+      if (top > y) return top;
+    }
+    return y;
+  }
+
+  /** The ground mesh itself (chunks.js), before anything is built on it: flat, cut by the river valleys. */
+  bareGround(x, z) {
     // Every corner of this ground cell is out of the valley: flat.
     if (this.riverDistance(x, z, this._rd || (this._rd = {})).d > 14 + GROUND_CELL * Math.SQRT2) return 0;
     // The valley at the cell's corners, between them the triangle the mesh draws (split from
@@ -547,7 +626,9 @@ export class City {
         p.fit = 1;
         this.reserved.push({ x: p.x, z: p.z, hw: p.w / 2 + 2, hd: p.d / 2 + 2, rot, place: i });
       }
+      if (KAMANS[p.id]) this._siteArch(p, KAMANS[p.id], i);
     }
+    this.places.forEach((p, i) => this._reserveParts(p, i));
     // The airfield: nothing is built on the runway strip, the taxiways or the aprons.
     const af = this.world.airfield;
     if (af) {
@@ -581,11 +662,67 @@ export class City {
       if (this._overlapsLots(x, z, hw, hd, yaw)) continue;
       const floors = clamp(Math.round(h / 3.2), 1, 6);
       const style = typeStyle[type] ?? STYLE.HOUSE;
-      this._addLot(x, z, hw, hd, this._faceRoad(x, z, yaw), floors, style, hash2(Math.round(x * 10), Math.round(z * 10)), -1);
+      // A quarter turn swaps width and depth, so the lot keeps the very box that was checked.
+      const rot = this._faceRoad(x, z, yaw), odd = Math.round((rot - yaw) / (Math.PI / 2)) & 1;
+      this._addLot(x, z, odd ? hd : hw, odd ? hw : hd, rot, floors, style, hash2(Math.round(x * 10), Math.round(z * 10)), -1);
     }
   }
 
-  /** Choose the box rotation (of the 4 symmetric ones) whose front (-z) faces the nearest road. */
+  /**
+   * Ground for the parts a landmark draws beyond its catalogue box: a mall's whole block and
+   * atrium, the langar hall, and a campus's rear wing, which is left off (p.wing = false) where
+   * it would stand on a street or on another place.
+   */
+  _reserveParts(p, i) {
+    const rot = p.rot + Math.PI, c = Math.cos(rot), s = Math.sin(rot);
+    const part = ([lx, lz, hw, hd]) => ({ x: p.x + lx * c + lz * s, z: p.z - lx * s + lz * c, hw: hw + 1, hd: hd + 1, rot, place: i });
+    if (p.category === 'college' || p.category === 'school') {
+      const wing = part(campusWing(p)), ov = {};
+      p.wing = this._clearOfStreets(wing.x, wing.z, wing.hw - 1, wing.hd - 1, rot, 0.3)
+        && !this.reserved.some(q => q.place !== i && obbOverlap(wing.x, wing.z, wing.hw, wing.hd, rot, q.x, q.z, q.hw, q.hd, q.rot, ov));
+      if (p.wing) this.reserved.push(wing);
+    } else if (p.category === 'cinema' || p.category === 'shopping') {
+      // (Sarafa Bazaar is drawn as shops, not a mall, but its stalls stand about as far out in front.)
+      const [hw, hd] = mallSize(p);
+      this.reserved.push(part([0, 0, hw, hd]), part([0, -hd - 1, hw * 0.4, 1]));
+    } else if (p.id === 'langar-sahib') this.reserved.push(part(LANGAR_HALL));
+  }
+
+  /**
+   * A kaman spans the street at its place's approach: the nearest street on the ground (never a
+   * flyover or bridge), slid along it until neither pillar stands on another road or the railway
+   * and no deck passes over the arch, or else the next nearest street. p.arch = { x, z, rot, span }, local
+   * x across the street; none if no spot nearby fits. The pillars' ground is reserved.
+   */
+  _siteArch(p, K, i) {
+    const net = this.net, q = {}, tried = new Set();
+    const ext = Math.hypot(K.hw, K.hd) + 8;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const n = net.nearest(p.ax, p.az, 40, {}, r => !net.raised[r] && !net.bridge[r] && !tried.has(r));
+      if (!n) return;
+      const road = n.road, len = net.length[road], span = net.width[road] / 2 + K.out;
+      tried.add(road);
+      const pillarBlocked = (x, z, rot) => this.railDistance(x, z) < Math.hypot(K.hw, K.hd) + 3 // off the track and its ballast
+        || net.grid.query(x - ext, z - ext, x + ext, z + ext, k => net.ptRoad[k] !== road
+          && segBoxDist(net.px[k], net.pz[k], net.px[k + 1], net.pz[k + 1], x, z, K.hw, K.hd, Math.cos(rot), Math.sin(rot)) < net.width[net.ptRoad[k]] / 2 + 0.3);
+      for (let k = 0; k <= 16; k++) {
+        const s = n.s + Math.ceil(k / 2) * (k % 2 ? 3 : -3); // 0, +3, -3, +6, -6, ... out to 24 m
+        if (s < net.trimStart(road) + K.hd || s > len - net.trimEnd(road) - K.hd) continue;
+        net.pointAt(road, s, q);
+        const rot = Math.atan2(q.dx, q.dz), c = Math.cos(rot), sn = Math.sin(rot);
+        const X = (lx, lz) => q.x + lx * c + lz * sn, Z = (lx, lz) => q.z - lx * sn + lz * c;
+        if ([-span, span].some(lx => pillarBlocked(X(lx, 0), Z(lx, 0), rot))) continue;
+        let open = true;
+        for (let lx = -span - K.hw; lx <= span + K.hw && open; lx += 1) for (const lz of [-K.hd, 0, K.hd]) if (net.deckOver(X(lx, lz), Z(lx, lz)) > 0.3) open = false;
+        if (!open) continue;
+        p.arch = { x: q.x, z: q.z, rot, span };
+        for (const lx of [-span, span]) this.reserved.push({ x: X(lx, 0), z: Z(lx, 0), hw: K.hw + 0.5, hd: K.hd + 0.5, rot, place: i });
+        return;
+      }
+    }
+  }
+
+  /** Choose the box rotation (of the 4 that cover the same ground) whose front (-z) faces the nearest road. */
   _faceRoad(x, z, yaw) {
     const n = this.net.nearest(x, z, 80, {});
     if (!n) return yaw;
@@ -859,9 +996,38 @@ export class City {
     // and the odd tea stall, handcart or shrine near busy corners.
     const P = (this.props = { x: [], z: [], rot: [], kind: [], road: [], y: [] });
     const net = this.net, p = {};
-    const add = (x, z, rot, kind, road, y = 0) => { P.x.push(x); P.z.push(z); P.rot.push(rot); P.kind.push(kind); P.road.push(road); P.y.push(y); };
+    // Lamp posts and electric poles aren't in lotGrid (they'd crowd out half the street), but a
+    // handcart's or vendor's umbrella, 1.35-1.45 m round, must not have one standing through it.
+    const posts = new SpatialGrid(8);
+    const add = (x, z, rot, kind, road, y = 0) => {
+      P.x.push(x); P.z.push(z); P.rot.push(rot); P.kind.push(kind); P.road.push(road); P.y.push(y);
+      if (kind === PROP.LAMP || kind === PROP.POLE) posts.insertPoint(P.x.length - 1, x, z);
+    };
+    const nearPost = (x, z, r) => posts.query(x - r, z - r, x + r, z + r, i => (P.x[i] - x) ** 2 + (P.z[i] - z) ** 2 < r * r);
     // Nothing stands on the street under a flyover's deck.
     const clear = (x, z) => net.deckOver(x, z) < 0.3;
+    // A lamp post or pole set out from its own street can land in the lane of another beside
+    // it (a river bridge, a flyover's ramp near its foot): keep it 0.4 m off every carriageway.
+    const offLanes = (x, z) => net.roadClearance(x, z, 10) >= 0.4;
+    // A lamp on a bridge's or flyover's parapet, or down a median, stands on its own road on
+    // purpose, but must keep out of every other road at its height: the street a river bridge
+    // lands beside, the one a flyover's ramp (or its stretch back down at street level) runs
+    // along, the far arm of a junction. Measured to that road's carriageway edge on the lamp's
+    // side (a divided road's median is no lane); a road a deck above or below passes it by.
+    const seg = [0];
+    const offOtherLanes = (x, z, y, own, margin) => !net.grid.query(x - 1, z - 1, x + 1, z + 1, i => {
+      const o = net.ptRoad[i];
+      if (o === own) return false;
+      const ax = net.px[i], az = net.pz[i], dx = net.px[i + 1] - ax, dz = net.pz[i + 1] - az;
+      const d = Math.sqrt(pointSegDist2(x, z, ax, az, ax + dx, az + dz, seg));
+      const s = net.cum[i] + (net.cum[i + 1] - net.cum[i]) * seg[0];
+      if (Math.abs(net.deckAt(o, s) - y) >= 2) return false;
+      const side = (x - ax - dx * seg[0]) * dz - (z - az - dz * seg[0]) * dx >= 0 ? 1 : -1;
+      return d - net.edgeAt(o, s, side) < margin;
+    });
+    // A median lamp's post (0.3 m round in colliders.js) needs no more room than itself: the
+    // median it stands on keeps traffic off.
+    const MEDIAN_POST = 0.3;
     for (let road = 0; road < net.count; road++) {
       const len = net.length[road], w = net.width[road], type = net.type[road];
       const r = rng(hash2(road, 15485863));
@@ -873,7 +1039,22 @@ export class City {
         // Along a bridge, or a flyover's deck and ramps: lamps on the parapets, standing on the deck.
         for (let s = 6; s < len - 6; s += 24) {
           net.pointAt(road, s, p);
-          for (const side of kerb ? [kerb] : [1, -1]) add(p.x + p.dz * side * (w / 2 - 0.2), p.z - p.dx * side * (w / 2 - 0.2), Math.atan2(p.dx, p.dz) + (side > 0 ? 0 : Math.PI), PROP.LAMP, road, net.deckAt(road, s));
+          // Turned like the lamps beside a street, so the arm and its pool reach over the deck.
+          const y = net.deckAt(road, s);
+          for (const side of kerb ? [kerb] : [1, -1]) {
+            const rot = Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
+            const x = p.x + p.dz * side * (w / 2 - 0.2), z = p.z - p.dx * side * (w / 2 - 0.2);
+            if (offOtherLanes(x, z, y, road, 0.4)) { add(x, z, rot, PROP.LAMP, road, y); continue; }
+            // Where a flyover is back down at street level it often runs along another street,
+            // and its lamp would stand in that street's lane. It has no parapet there: stand the
+            // lamp beside the street instead, at the first spot out from the kerb that is clear
+            // (like the side lamps), so the stretch keeps its light.
+            if (!net.raised[road] || y >= 0.05) continue;
+            for (let off = w / 2 + 0.7; off <= w / 2 + 8; off += 0.5) {
+              const x2 = p.x + p.dz * side * off, z2 = p.z - p.dx * side * off;
+              if (offLanes(x2, z2) && clear(x2, z2) && !this._overlapsLots(x2, z2, 0.3, 0.3, 0, 0)) { add(x2, z2, rot, PROP.LAMP, road, 0); break; }
+            }
+          }
         }
         continue;
       }
@@ -881,7 +1062,7 @@ export class City {
         // Twin-arm lamps down the median of the wide roads.
         for (let s = net.trimStart(road) + 8; s < len - net.trimEnd(road) - 8; s += 34) {
           net.pointAt(road, s, p);
-          if (clear(p.x, p.z)) add(p.x, p.z, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
+          if (clear(p.x, p.z) && offOtherLanes(p.x, p.z, 0, road, MEDIAN_POST)) add(p.x, p.z, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
         }
       } else if (w >= 12 && kerb) {
         // On a divided road they stand on the median between the carriageways; the one
@@ -893,7 +1074,7 @@ export class City {
           const inner = net.innerAt(road, s);
           if (inner > w / 2 - 0.05) continue;
           const m = inner + MEDIAN_W / 2;
-          if (clear(p.x - fz * m, p.z + fx * m)) add(p.x - fz * m, p.z + fx * m, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
+          if (clear(p.x - fz * m, p.z + fx * m) && offOtherLanes(p.x - fz * m, p.z + fx * m, 0, road, MEDIAN_POST)) add(p.x - fz * m, p.z + fx * m, Math.atan2(p.dx, p.dz), PROP.MEDIAN_LAMP, road);
         }
       } else if (w >= 8 || (dens > 0.5 && type <= 4)) {
         let side = 1;
@@ -902,7 +1083,7 @@ export class City {
           const off = w / 2 + 0.7;
           if (kerb) side = kerb;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
-          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road);
+          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z) && offLanes(x, z)) add(x, z, Math.atan2(p.dx, p.dz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2), PROP.LAMP, road);
           side = -side;
         }
       } else if (dens > 0.12) {
@@ -911,7 +1092,7 @@ export class City {
           net.pointAt(road, s, p);
           const off = w / 2 + 0.55;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
-          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z)) add(x, z, Math.atan2(p.dx, p.dz), PROP.POLE, road);
+          if (!this._overlapsLots(x, z, 0.3, 0.3, 0, 0) && clear(x, z) && offLanes(x, z)) add(x, z, Math.atan2(p.dx, p.dz), PROP.POLE, road);
         }
       }
       // Life at the corners: tea stalls, vada-pav carts, shrines, hoardings.
@@ -924,16 +1105,23 @@ export class City {
           net.pointAt(road, s, p);
           const side = kerb || (r.chance(0.5) ? 1 : -1);
           const kind = r.pick([PROP.STALL, PROP.STALL, PROP.CART, PROP.CART, PROP.SHRINE, PROP.HOARDING]);
-          const off = w / 2 + (kind === PROP.HOARDING ? 3.5 : 1.8);
+          // A handcart's wheels can't straddle the edge of a footpath: where there is one, it
+          // stands on it, like the sabzi vendors' carts.
+          const onPath = kind === PROP.CART && this.footpathAt(p.seg);
+          const off = w / 2 + (kind === PROP.HOARDING ? 3.5 : onPath ? 0.95 : 1.8);
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           const rad = kind === PROP.HOARDING ? 3 : 1.4;
           if (net.roadClearance(x, z, 10) < (kind === PROP.HOARDING ? 1.2 : 0.4) || this._overlapsLots(x, z, rad, rad * 0.6, 0, 0) || !clear(x, z)) continue;
-          add(x, z, Math.atan2(-p.dz * side, p.dx * side), kind, road);
+          // A lamp placed later keeps off it through lotGrid; one placed already has to be looked for.
+          if (kind === PROP.CART && nearPost(x, z, 1.5)) continue;
+          // Local -z toward the road: buildProp draws a stall's counter, a shrine's niche and a
+          // hoarding's face on that side.
+          add(x, z, Math.atan2(p.dz * side, -p.dx * side), kind, road, onPath ? WALK_Y : 0);
           this.lotGrid.insertRect(-200000 - P.x.length, x - rad, z - rad, x + rad, z + rad);
         }
       }
     }
-    this._placeMarkets(add, clear);
+    this._placeMarkets(add, clear, nearPost);
     for (const k of ['x', 'z', 'rot', 'y']) P[k] = Float32Array.from(P[k]);
     P.kind = Uint8Array.from(P.kind);
     P.road = Int32Array.from(P.road);
@@ -944,7 +1132,7 @@ export class City {
    * Sabzi markets: on busy old-town and market streets, vendors line the kerb with handcarts
    * and mats of vegetables and fruit. this.markets = [{ x, z, vendors: [prop index] }].
    */
-  _placeMarkets(add, clear) {
+  _placeMarkets(add, clear, nearPost) {
     const net = this.net, P = this.props, p = {}, markets = (this.markets = []);
     const known = ['sarafa-bazar', 'old-mondha-clock-tower', 'hazur-sahib', 'shivaji-putla'].map(id => this.places.find(q => q.id === id)).filter(Boolean);
     const cands = [];
@@ -970,6 +1158,8 @@ export class City {
           const off = w / 2 + 0.95;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           if (!clear(x, z) || this._overlapsLots(x, z, 1.1, 0.9, Math.atan2(p.dx, p.dz), 0) || net.roadClearance(x, z, 10) < 0.25) continue;
+          // Its umbrella, 1.45 m round, is centred 0.35 m back from the goods.
+          if (nearPost(x + p.dz * side * 0.35, z - p.dx * side * 0.35, 1.6)) continue;
           // Local +z toward the road: the goods face the street.
           add(x, z, Math.atan2(-p.dz * side, p.dx * side), PROP.VENDOR, road, this.pavementAt(p.seg, off));
           vendors.push(P.x.length - 1);
@@ -1030,12 +1220,33 @@ const HERITAGE_R = 140;
 export const STATION_HD = 11.75;
 // The bus stand's: [half width, half depth] for its bays, shed and building.
 export const BUS_STAND = [26, 13];
+// Mal Tekdi's hill: about the radius of its foot at full size (it shrinks to the ground it has).
+export const MAL_TEKDI_R = 32;
 
 // Landmarks that need more ground than their catalogue footprint: [half width, half depth, min scale].
 export const BIG_PLACES = {
   'hazur-sahib': [26, 26, 0.42], 'sggs-stadium': [21, 17.5], 'nanded-station': [34, STATION_HD], 'nandgiri-fort': [34, 14],
   'visava-garden': [18.5, 17], 'nanded-bus-stand': BUS_STAND, 'kaleshwar-temple': [10, 13, 0.6], 'nanded-airport': [22, 12],
   'langar-sahib': [12, 14], 'nagina-ghat': [8, 8], 'sangat-sahib': [8, 8], 'mata-sahib': [8, 8], 'old-mondha-clock-tower': [3.4, 3.4],
+  'mal-tekdi': [MAL_TEKDI_R, MAL_TEKDI_R, 0.3],
+};
+
+// Parts some landmarks draw beyond their catalogue box. Their ground is reserved too, and
+// landmarks.js draws and collides them from the same numbers.
+/** A college or school's rear wing behind its main block, as a local box [lx, lz, hw, hd]. */
+export function campusWing(p) {
+  const hw = Math.max(4, p.w / 2), hd = Math.max(3.5, p.d / 2);
+  return [hw * 0.6, hd + 6, hw * 0.55, 4];
+}
+/** A mall or multiplex block, larger than its catalogue box: [half width, half depth]. A glass atrium stands 2 m out in front. */
+export const mallSize = p => [p.w / 2 + 4, p.d / 2 + 3];
+/** Langar Sahib's dining hall behind the gurudwara: [lx, lz, hw, hd]. */
+export const LANGAR_HALL = [0, 14, 10, 5];
+// Gateway arches (kamans) over the street: how far each pillar stands outside the kerb, and
+// its half size across and along the street, and height.
+export const KAMANS = {
+  'hingoli-gate': { out: 2.2, hw: 1.6, hd: 2.6, h: 9.5 },
+  'bhagya-nagar-kaman': { out: 1.6, hw: 0.9, hd: 0.9, h: 8 },
 };
 
 export const PROP = { LAMP: 0, MEDIAN_LAMP: 1, POLE: 2, STALL: 3, CART: 4, SHRINE: 5, HOARDING: 6, SIGNAL: 7, VENDOR: 8 };

@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { world } from './helpers.js';
 import { ChunkManager } from '../src/world/chunks.js';
+import { buildPlace } from '../src/world/landmarks.js';
 import { Colliders } from '../src/world/colliders.js';
 import { CHUNK, GROUND_CELL } from '../src/world/citygen.js';
 import { WATER_Y } from '../src/world/water.js';
 import { DECK_H } from '../src/world/roadnet.js';
 import { Vehicles } from '../src/actors/vehicles.js';
-import { createBody } from '../src/actors/vehicle-physics.js';
+import { createBody, speedOf } from '../src/actors/vehicle-physics.js';
 import { Player } from '../src/actors/player.js';
 
 // The ground people walk and drive on is the ground that is drawn: the river valleys, the
@@ -118,6 +119,86 @@ test('cars cross the Godavari bridges without sinking, and sink in the river bes
   assert.ok(v.y < WATER_Y && v.sinking > 0.9, `in the river: y ${v.y.toFixed(2)}, sinking ${v.sinking.toFixed(2)}`);
 });
 
+/** Points 12 m up the Godavari's bank, clear of roads, facing the water: where cars go in. */
+function riverSites(n) {
+  const { net, city } = world();
+  const sites = [];
+  for (let i = 0; i < city.waterSegs.length && sites.length < n; i += 17) {
+    const [ax, az, bx, bz, w] = city.waterSegs[i], l = Math.hypot(bx - ax, bz - az);
+    const x = (ax + bx) / 2 + ((bz - az) / l) * (w / 2 + 12), z = (az + bz) / 2 - ((bx - ax) / l) * (w / 2 + 12);
+    const rd = city.riverDistance(x, z);
+    if (w < 40 || Math.abs(rd.d - 12) > 1.5 || net.nearest(x, z, 25, {})) continue;
+    sites.push({ i, x, z, w, heading: Math.atan2(-rd.nx, -rd.nz), nx: rd.nx, nz: rd.nz });
+  }
+  return sites;
+}
+
+/** A body sent down the bank at `speed`, left to roll (bailed out of) or driven on flat out, for `secs`. */
+function intoRiver(H, s, type, role, speed, secs = 8) {
+  const { city } = world(), dt = 1 / 60;
+  const v = createBody(type, s.x, s.z, s.heading);
+  v.y = city.groundHeight(s.x, s.z); v.role = role; v.vx = -s.nx * speed; v.vz = -s.nz * speed;
+  H.list = [v];
+  const ctl = new Map(role === 'player' ? [[v, { throttle: 1, brake: 0, steer: 0, handbrake: false }]] : []);
+  let farthest = Infinity;
+  for (let t = 0; t < secs; t += dt) { H.step(dt, ctl); farthest = Math.min(farthest, city.riverDistance(v.x, v.z).d); }
+  return { v, farthest, depth: WATER_Y - v.y };
+}
+
+test('a car rolled or driven into the river stops a few metres out, nowhere near the far bank', () => {
+  const H = host();
+  let runs = 0;
+  for (const s of riverSites(8)) for (const role of ['abandoned', 'player']) {
+    const { v, farthest } = intoRiver(H, s, 'hatch', role, 12);
+    if (v.y > WATER_Y) continue; // a tree on the bank stopped it short of the water
+    runs++;
+    assert.ok(farthest > -10, `${role} car at ${s.i}: ${(-farthest).toFixed(1)} m out into the ${s.w} m channel`);
+    assert.ok(speedOf(v) < 0.05, `${role} car at ${s.i}: still going at ${speedOf(v).toFixed(2)} m/s`);
+    // Driven in, it ploughs on until the water is over most of it, and drowns there.
+    if (role === 'player') assert.ok(v.wrecked && v.sinking > 1.5 && !v.onFire, `${role} car at ${s.i}: drowned where it lies`);
+  }
+  assert.ok(runs >= 10, `${runs} cars into the river`);
+});
+
+test('a body drowns in the river only once the water is over most of it; in the shallows it is merely stuck', () => {
+  const H = host();
+  let drowned = 0, stuck = 0;
+  for (const s of riverSites(6)) for (const type of ['bike', 'hatch', 'suv', 'truck', 'bus']) for (const speed of [12, 25]) for (const role of ['abandoned', 'player']) {
+    const { v, depth } = intoRiver(H, s, type, role, speed);
+    if (v.y > WATER_Y) continue;
+    const at = `${role} ${type} at ${speed} m/s, site ${s.i}: ${depth.toFixed(2)} m of water on a ${v.spec.H} m body`;
+    if (v.sinking > 1.5) {
+      drowned++;
+      // What the player sees on the WASTED screen: a body mostly under the river, not one in the shallows.
+      assert.ok(depth >= 0.6 * v.spec.H, `${at}: drowned`);
+      assert.ok(v.wrecked && !v.onFire && !v.explodeAt, `${at}: a write-off`);
+    } else if (depth < 0.6 * v.spec.H) {
+      stuck++;
+      assert.ok(!v.wrecked && v.sinking <= 1, `${at}: merely stuck (wrecked ${v.wrecked}, clock ${v.sinking.toFixed(2)})`);
+    }
+  }
+  assert.ok(drowned > 20 && stuck > 20, `${drowned} drowned, ${stuck} stuck`);
+});
+
+test('a truck or an SUV stuck in the river\'s shallows reverses back out', () => {
+  const { city } = world();
+  const H = host(), dt = 1 / 60;
+  let runs = 0;
+  for (const s of riverSites(4)) for (const type of ['truck', 'suv']) {
+    const { v } = intoRiver(H, s, type, 'abandoned', 12);
+    if (v.y > WATER_Y) continue;
+    runs++;
+    // Back at the wheel, reversing.
+    v.role = 'player';
+    const back = new Map([[v, { throttle: 0, brake: 1, steer: 0, handbrake: false }]]);
+    let t = 0;
+    for (; t < 40 && v.y < WATER_Y; t += dt) H.step(dt, back);
+    assert.ok(v.y >= WATER_Y && !v.wrecked, `${type} at ${s.i}: still in the river after ${t.toFixed(0)} s (y ${v.y.toFixed(2)}, wrecked ${v.wrecked})`);
+    assert.ok(city.riverDistance(v.x, v.z).d > -1.5, `${type} at ${s.i}: out on the bank`);
+  }
+  assert.ok(runs >= 6, `${runs} stuck in the river`);
+});
+
 /** The real Player in a minimal game, walked by a stick held toward `aim(player)`. */
 function walker(x, z, y = world().net.surfaceAt(x, z, 0)) {
   const { net, city } = world();
@@ -177,6 +258,91 @@ test('on foot: across a bridge, down the ghat to the water, and out of the river
     const d = city.riverDistance(w.P.x, w.P.z).d;
     assert.ok(d > -1.05, `${toBank ? 'walking' : 'standing'}: ${(-d).toFixed(2)} m in after 4 s`);
   }
+});
+
+/** The sandstone treads landmarks.js draws for place i (a ghat): the boxes given Geo.cbox. */
+function treadsDrawn(city, i) {
+  const boxes = [];
+  let color = 0;
+  const g = new Proxy({}, {
+    get: (_, k) => k === 'color' ? (c => { color = c; return g; })
+      : k === 'cbox' ? ((x, y0, z, hw, h, hd, rot = 0) => { if (color === 0xcdb894 || color === 0xd9c7a3) boxes.push({ x, y0, z, hw, h, hd, rot }); return g; })
+        : () => g,
+  });
+  buildPlace({ g, sg: g, pg: g, fg: g, wires: g, city, net: city.net, signSlots: new Map(), cx: 0, cz: 0, far: false }, city.places[i], i);
+  return boxes;
+}
+
+test('down every ghat the feet are on its steps as drawn, a step at a time', () => {
+  const { city, net } = world();
+  let ghats = 0, frames = 0;
+  city.places.forEach((p, i) => {
+    if (!p.ghat) return;
+    ghats++;
+    const G = p.ghat, boxes = treadsDrawn(city, i);
+    assert.equal(boxes.length, G.treads.length, `${p.id}: every tread drawn`);
+    // A riser is a step down (the player stays on its feet down 0.3 m), not a jump.
+    for (let k = 1; k < G.treads.length; k++) assert.ok(G.treads[k - 1].top - G.treads[k].top < 0.25, `${p.id}: riser ${k}`);
+    // The top of the stone drawn under (x, z), well inside a tread (not on the seam where one meets the next).
+    const stone = (x, z) => {
+      let top = -Infinity;
+      for (const b of boxes) {
+        const c = Math.cos(b.rot), s = Math.sin(b.rot), dx = x - b.x, dz = z - b.z;
+        if (Math.abs(dx * c - dz * s) < b.hw && Math.abs(dx * s + dz * c) < b.hd - 0.05) top = Math.max(top, b.y0 + b.h);
+      }
+      return top;
+    };
+    // Walked down its middle and near either side, from the landing at the top to the water.
+    for (const lat of [0, -0.7, 0.7]) {
+      const lx = lat * G.hw, at = d => ({ x: G.x + lx * G.uz + d * G.ux, z: G.z - lx * G.ux + d * G.uz });
+      const from = at(G.start + 1), to = at(G.end + 3);
+      const w = walker(from.x, from.z, city.groundHeight(from.x, from.z));
+      let sunk = 0, aloft = 0, falls = 0, onSteps = 0;
+      w.walk(14, P => {
+        const top = stone(P.x, P.z);
+        if (top > -Infinity) {
+          onSteps++;
+          sunk = Math.max(sunk, top - P.y);
+          aloft = Math.max(aloft, P.y - Math.max(top, city.bareGround(P.x, P.z)));
+          // People and vehicles stand on what the player does.
+          assert.equal(net.surfaceAt(P.x, P.z, P.y), P.y);
+          if (!P.onGround) falls++;
+        }
+        return to;
+      });
+      frames += onSteps;
+      assert.ok(onSteps > 60, `${p.id} at ${lat}: ${onSteps} frames on the steps`);
+      assert.ok(sunk < 0.01, `${p.id} at ${lat}: feet ${sunk.toFixed(2)} m down in a tread`);
+      assert.ok(aloft < 0.01, `${p.id} at ${lat}: ${aloft.toFixed(2)} m above the steps`);
+      assert.equal(falls, 0, `${p.id} at ${lat}: ${falls} frames off their feet on the steps`);
+    }
+  });
+  assert.ok(ghats >= 6, `${ghats} ghats with steps`);
+  assert.ok(frames > 2000, `${frames} frames on the steps`);
+});
+
+test('pushing on into the river from the last ghat tread, the feet stay on top of it', () => {
+  const { city } = world();
+  let walks = 0, frames = 0;
+  for (const { id, ghat: G } of city.places.filter(p => p.ghat)) {
+    // Across the whole width of the stairs: where the water's edge runs slantwise to them, the
+    // river turns you back onto the last tread just short of its end, above the lower bank past it.
+    for (let lat = -0.9; lat < 0.95; lat += 0.15) {
+      const lx = lat * G.hw, at = d => ({ x: G.x + lx * G.uz + d * G.ux, z: G.z - lx * G.ux + d * G.uz });
+      const from = at(G.end - 6), to = at(G.end + 6);
+      const w = walker(from.x, from.z, city.groundHeight(from.x, from.z));
+      let sunk = 0, where = '';
+      w.walk(6, P => {
+        const under = city.groundHeight(P.x, P.z);
+        if (under - P.y > sunk) { sunk = under - P.y; where = `(${P.x.toFixed(1)}, ${P.z.toFixed(1)})`; }
+        frames++;
+        return to;
+      });
+      walks++;
+      assert.ok(sunk < 0.01, `${id} at ${lat.toFixed(2)}: feet ${sunk.toFixed(2)} m into the ground at ${where}`);
+    }
+  }
+  assert.ok(walks >= 70 && frames > 20000, `${walks} walks, ${frames} frames`);
 });
 
 test('down on the riverbank, trees, buildings on their plinths and bridge piers stand in the way', () => {

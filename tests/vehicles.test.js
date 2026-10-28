@@ -359,7 +359,7 @@ function rulesGame() {
   };
   const g = {
     city: { places: [] }, vehicles: V, humans: V.humans, peds, player: { pos: { x: 0, z: 0 } },
-    save: { stat() {}, data: {} }, audio: { sfx() {} }, hud: { help() {} },
+    save: { stat() {}, set(k, v) { this.data[k] = v; }, data: {} }, audio: { sfx() {} }, hud: { help() {} },
   };
   g.police = new Police(g);
   installRules(g);

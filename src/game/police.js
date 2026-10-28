@@ -36,11 +36,18 @@ export class Police {
     else if (Math.random() < (crime === 'punch' ? 0.25 : 0.6)) this.pending.push({ t: 3 + Math.random() * 3, heat, x, z });
   }
 
-  addHeat(h, x, z) {
+  /**
+   * Heat for a crime at (x, z). Seen by an officer, the police know where the player is. `heard`
+   * from a witness, they know only where the crime was: they search from there, unseen, and start
+   * the search afresh, unless a hunt has the player in sight right now (its sight check keeps it on
+   * the player). `seen` is only kept up during a hunt, so a call that starts one never trusts it.
+   */
+  addHeat(h, x, z, heard = false) {
     const before = this.level;
     this.heat = clamp(Math.max(this.heat, this.level) + h, 0, 5.99);
     this.level = Math.max(this.level, Math.min(5, Math.floor(this.heat + 0.001)));
-    if (this.level > 0) { this.lastSeen.x = x; this.lastSeen.z = z; this.unseenT = 0; this.seen = true; }
+    const inSight = heard && before > 0 && this.seen;
+    if (this.level > 0 && !inSight) { this.lastSeen.x = x; this.lastSeen.z = z; this.unseenT = 0; this.seen = !heard; }
     if (this.level > before) this.game.onWantedChange?.(this.level, before);
   }
 
@@ -64,9 +71,13 @@ export class Police {
 
   update(dt) {
     const g = this.game, P = g.player, pos = P.pos;
+    // A witness calls a crime in where it happened: the police hear what was done there, not where
+    // the player has got to since. Too late once the player steps into a mission's start marker:
+    // the mission waits for the call (missions.js), and a star landing there kept it from starting.
+    if (this.pending.length && this._atMissionStart()) this.pending.length = 0;
     for (let i = this.pending.length - 1; i >= 0; i--) {
       const c = this.pending[i];
-      if ((c.t -= dt) <= 0) { this.pending.splice(i, 1); this.addHeat(c.heat, pos.x, pos.z); }
+      if ((c.t -= dt) <= 0) { this.pending.splice(i, 1); this.addHeat(c.heat, c.x, c.z, true); }
     }
     if (this.level === 0) {
       // Small crimes are forgotten after a while: a punch long ago doesn't count toward a star.
@@ -129,8 +140,21 @@ export class Police {
     if (this.bustT > (P.vehicle ? 3.2 : 1.6)) { this.bustT = 0; g.busted?.(); }
   }
 
+  /** The player is in a mission's start marker, ready to begin it (as Missions.update decides). */
+  _atMissionStart() {
+    const g = this.game, M = g.missions, P = g.player, pos = P.pos;
+    if (!M || M.active || M.cooldown > 0 || g.respawning || g.jobs?.active || this.level > 0) return false;
+    if (P.vehicle && speedOf(P.vehicle) >= 3) return false;
+    return M.available().some(d => { const s = M.startPoint(d); return dist(pos.x, pos.z, s.x, s.z) < 2.6; });
+  }
+
   _spawnUnit(pos) {
     const g = this.game, net = g.net;
+    // Never more jeeps than there are instance slots to draw them: one past that is solid but
+    // invisible, its officers sitting in the air. Units, the jeeps officers got out of, wrecks and
+    // the player's own all count; another unit comes when one is towed or left behind.
+    const cap = g.vehicles.meshes?.police?.cap;
+    if (cap && g.vehicles.list.reduce((n, v) => n + (v.type === 'police'), 0) >= cap) return null;
     const r = rng(hash2(this.seed++, 4271));
     for (let tries = 0; tries < 8; tries++) {
       const ang = r() * Math.PI * 2, d = r.range(110, 180);

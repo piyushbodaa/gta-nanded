@@ -77,3 +77,33 @@ test('a snack stall just across a chunk border is still offered', async () => {
   assert.notEqual(jobs._nearStall(), null);
   assert.match(jobs.contextAction().label, /^Buy /);
 });
+
+test("a race checkpoint up on a flyover stands on its deck, where the GPS leads: Station to Airport's first", async () => {
+  const { world } = await import('./helpers.js');
+  const { net } = world();
+  const g = { ...fakeGame(), net };
+  let shown = [];
+  g.effects.markers.set = m => { shown = m; };
+  g.vehicles.spawn = (type, x, z) => ({ type, x, z, spec: { top: 30 } });
+  g.DynamicDriver = class { setPath() {} control() { return {}; } };
+  const jobs = new Jobs(g);
+  const race = jobs.races.find(r => r.id === 'race-airport');
+  Object.assign(g.player.vehicle, { x: race.start.x, z: race.start.z, heading: 0 });
+  jobs._startRace(race);
+  const ys = jobs.active.ys;
+  assert.ok(ys[0] > 5, `the first checkpoint is ${ys[0].toFixed(1)} m up, on the Hingoli Gate flyover`);
+  assert.deepEqual(ys.slice(1), [0, 0], 'the others are on the street');
+  jobs.update(4); // past the countdown
+  assert.equal(shown[0].y, ys[0]);
+});
+
+test('a race starts with the siren off: on a phone its button waits for STOP JOB to go, so it could not be stopped', () => {
+  const g = fakeGame();
+  Object.assign(g.player.vehicle, { type: 'police', heading: 0, sirenOn: true });
+  const jobs = new Jobs(g);
+  const race = jobs.races[0];
+  Object.assign(g.player.vehicle, { x: race.start.x, z: race.start.z });
+  jobs._startRace(race);
+  assert.equal(jobs.active.kind, 'race');
+  assert.equal(g.player.vehicle.sirenOn, false);
+});

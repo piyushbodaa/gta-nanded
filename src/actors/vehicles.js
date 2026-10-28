@@ -9,12 +9,20 @@ import { WATER_Y } from '../world/water.js';
 import { clamp, rng } from '../core/math.js';
 import { sendFirst } from '../core/buffers.js';
 
-const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 14, auto: 48, bike: 50, scooter: 40, bus: 16, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
+// Instance slots per type. Police: a 5-star hunt's 8 units, the jeeps officers left at the
+// roadside, a wreck or two and a stolen one (police.js spawns no unit past this).
+const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 20, auto: 48, bike: 50, scooter: 40, bus: 16, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
 const _m = new THREE.Matrix4(), _w = new THREE.Matrix4(), _t = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const WRECK = 0x2a2624;
 
 let nextId = 1;
+// In the river: how hard the water holds a body back (per second, once most of it is under); how
+// much of its height is "most"; how long that far under before its engine has drowned and it is a
+// write-off (rules.js reads the same clock to drown a player still at the wheel); and where the
+// clock is held while it is merely stuck in the shallows: past rules.js's splash (0.4 s), short of
+// drowning.
+const WATER_DRAG = 3, UNDER = 0.6, DROWNED = 1.5, STUCK = 1;
 
 export class Vehicles {
   constructor(scene, humans, colliders, city) {
@@ -178,8 +186,25 @@ export class Vehicles {
         const hit = collideStatic(v, this.colliders, this._contact);
         if (hit > 4) this._impact(v, hit, null);
         // Water: down the bank and into the channel, a body sinks. A bridge deck stands clear of it.
+        // It drowns only once the water is over most of it (drawn on the riverbed, it is then mostly
+        // under): a truck, or an SUV a few metres out in waist-deep water, is merely stuck, and can
+        // crawl back out or be left there. Nothing burns in the river (rules.js draws no fire there).
         const rd = this.city.riverDistance(v.x, v.z, this._rd || (this._rd = {}));
-        if (rd.d < -1.5 && v.y < WATER_Y) v.sinking = (v.sinking || 0) + h; else v.sinking = 0;
+        const depth = WATER_Y - v.y, under = depth / (UNDER * v.spec.H);
+        if (rd.d < -1.5 && depth > 0) {
+          v.sinking = (v.sinking || 0) + h;
+          if (under < 1) v.sinking = Math.min(v.sinking, STUCK);
+          v.onFire = 0;
+        } else v.sinking = 0;
+        // The water holds it back, the more of it under the harder: rolled in, it stops a few metres
+        // out instead of crossing the riverbed and climbing the far bank, a tall truck further out
+        // than a hatch.
+        if (depth > 0) {
+          const k = Math.exp(-WATER_DRAG * Math.min(1, under) * h);
+          v.vx *= k; v.vz *= k; v.w *= k;
+        }
+        // Under for good, its engine drowned: a write-off where it lies, and no blast goes off under the river.
+        if (v.sinking > DROWNED) { v.wrecked = true; v.explodeAt = 0; }
       }
       // Lane traffic was placed where it will be at the end of the frame: meet it where it is now.
       this._collidePairs(dt - (k + 1) * h);
@@ -331,8 +356,8 @@ export class Vehicles {
         _e.set(v.pitch - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
         _q.setFromEuler(_e);
         const bob = v.kinematic ? 0 : Math.sin(this.time * 18 + v.id) * 0.006 * Math.min(1, speedOf(v) / 8);
-        const sink = v.sinking ? Math.min(2.5, v.sinking * 0.8) : 0;
-        _p.set(v.x, v.y + bob - sink, v.z);
+        // Sunk, it lies on the riverbed (where v.y already is), not below it.
+        _p.set(v.x, v.y + bob, v.z);
         _s.set(1, 1, 1);
         _m.compose(_p, _q, _s);
         // Seat people even when the body is far (they're culled by their own distance check).

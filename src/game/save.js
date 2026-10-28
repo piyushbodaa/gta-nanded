@@ -32,6 +32,8 @@ export class Save {
   done(id) { return this.data.story.includes(id); }
   complete(id) { if (!this.done(id)) this.data.story.push(id); this.dirty(); this.flush(); }
   stat(k, d = 1) { this.data.stats[k] = (this.data.stats[k] || 0) + d; this.dirty(); }
+  /** Change a top-level field (a one-time tip seen, the garage unlocked): flush() writes only what is marked dirty. */
+  set(k, v) { this.data[k] = v; this.dirty(); }
   dirty() { this._dirty = true; }
   /** Write the progress out. The first time storage refuses, `onFail` lets the game tell the player. */
   flush() {

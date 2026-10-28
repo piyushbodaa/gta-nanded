@@ -424,6 +424,8 @@ test('walkers up on a flyover follow it down to the street', () => {
         n++;
         for (let t = 0; t < 900; t += 1 / 20) {
           g.time += 1 / 20; peds._update(p, 1 / 20);
+          // Down on a street: some flyovers come down to the ground between two ramps, and walkers
+          // follow them on up the next ramp rather than pacing that stretch.
           if (p.road != null && !net.raised[p.road] && p.h.y < 0.5) { down++; break; }
         }
         peds.remove(p);
@@ -455,4 +457,46 @@ test('people thrown at a compound wall on a phone\'s long frames stop at it', ()
   } finally { restore(); }
   assert.ok(thrown >= 30, `${thrown} throws`);
   assert.equal(through, 0, `${through} of ${thrown} went through the wall`);
+});
+
+test('people on a riverbank stand on its slope, and the fallen lie on it, not at street level', () => {
+  const { city, net } = world();
+  // Spots 6 m up the bank from the water, well away from any street.
+  const spots = [];
+  for (let i = 0; i < city.waterSegs.length && spots.length < 6; i += 23) {
+    const [ax, az, bx, bz, w] = city.waterSegs[i], l = Math.hypot(bx - ax, bz - az);
+    const x = (ax + bx) / 2 + (bz - az) / l * (w / 2 + 6), z = (az + bz) / 2 - (bx - ax) / l * (w / 2 + 6);
+    if (city.riverDistance(x, z, {}).d > 3 && city.groundHeight(x, z) < -0.8 && !net.nearest(x, z, 20, {})) spots.push([x, z]);
+  }
+  assert.ok(spots.length >= 4, `${spots.length} bank spots`);
+  const offStreet = (x, z) => !net.nearest(x, z, 14, {});
+  const { g, peds, restore } = crowd(-54.5, -849, 13);
+  let standing = 0, floating = 0, fallen = 0, aloft = 0;
+  try {
+    for (const [x, z] of spots) {
+      const rd = city.riverDistance(x, z, {});
+      // The player just up the bank: the scared run down it, toward the water.
+      g.player.x = x + rd.nx * 4; g.player.z = z + rd.nz * 4;
+      for (const state of ['idle', 'flee']) {
+        const p = person(g, peds, x, z, state);
+        p.t = 3;
+        run(peds, p, 1, 1 / 30, a => {
+          if (!offStreet(a.h.x, a.h.z)) return;
+          standing++;
+          if (Math.abs(a.h.y - city.groundHeight(a.h.x, a.h.z)) > 0.05) floating++;
+        });
+        peds.remove(p);
+      }
+      // Knocked down the slope toward the water: they land and lie on it.
+      const p = person(g, peds, x, z, 'idle');
+      peds.knock(p, -rd.nx * 5, -rd.nz * 5, 4, 'explosion');
+      run(peds, p, 2.5);
+      fallen++;
+      if (p.state !== 'down' || Math.abs(p.h.y - city.groundHeight(p.h.x, p.h.z)) > 0.05) aloft++;
+      peds.remove(p);
+    }
+  } finally { restore(); }
+  assert.ok(standing > 100, `${standing} person-frames on the bank`);
+  assert.equal(floating, 0, `${floating} of ${standing} person-frames off the bank's slope`);
+  assert.equal(aloft, 0, `${aloft} of ${fallen} knocked down not lying on the bank`);
 });
