@@ -136,11 +136,24 @@ async function boot() {
     if (starting || game.started) return;
     starting = true;
     onMenu = false;
-    fullscreen(); // while the tap still counts as a user gesture
-    if (st.sound !== false) { try { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
-    const play = () => startGame(game, mode);
-    if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
-    else play();
+    try {
+      fullscreen(); // while the tap still counts as a user gesture
+      if (st.sound !== false) {
+        let timeout;
+        try {
+          // An interrupted audio session can leave resume() pending indefinitely.
+          await Promise.race([game.audio.init(), new Promise(r => { timeout = setTimeout(r, 1000); })]);
+          game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true);
+        } catch { /* audio is optional */ }
+        finally { clearTimeout(timeout); }
+      }
+      const play = () => {
+        try { startGame(game, mode); }
+        finally { starting = false; onMenu = !game.started; }
+      };
+      if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
+      else play();
+    } catch (err) { starting = false; onMenu = !game.started; throw err; }
   };
   $('menu-continue').addEventListener('click', () => begin('continue'));
   // Over a save, NEW STORY asks first, in its big label: a phone player can't read the small one.

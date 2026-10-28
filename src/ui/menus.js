@@ -129,8 +129,8 @@ export class PauseMenu {
   }
 
   _drawMap() {
-    const g = this.game;
-    const blips = [...g.hud.collectBlips(), ...g.missions.blips(), ...(g.jobs?.staticBlips() || [])];
+    const g = this.game, pos = g.player.pos;
+    const blips = [...g.hud.collectBlips(), ...(g.staticBlips || []).filter(b => dist(b.x, b.z, pos.x, pos.z) >= 260)];
     this.map.draw(blips, g.hud.route);
   }
 

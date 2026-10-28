@@ -85,13 +85,15 @@ export function installRules(g) {
     // gets out (police._dismount).
     const seats = v.model?.passengers || [], c = Math.cos(v.heading), s = Math.sin(v.heading);
     const doorSide = Math.sign((door.x - v.x) * c - (door.z - v.z) * s) || -1; // local +x is the vehicle's left
-    v.passengers.splice(0).forEach((ph, i) => {
+    v.passengers = v.passengers.filter((ph, i) => {
       const [sx = 0, , sz = 0] = seats[i] || [];
       const lx = (Math.sign(sx) || doorSide) * (v.hw + 0.55), lz = sx ? sz : sz - 0.5;
-      ph.x = v.x + lx * c + lz * s; ph.z = v.z - lx * s + lz * c;
-      if (g.colliders?.blocked(ph.x, ph.z, 0.3, v.y || 0)) { const back = -(v.hd + 0.6); ph.x = v.x + back * s; ph.z = v.z + back * c; }
+      let x = v.x + lx * c + lz * s, z = v.z - lx * s + lz * c;
+      if (g.colliders?.blocked(x, z, 0.3, v.y || 0)) { const back = -(v.hd + 0.6); x = v.x + back * s; z = v.z + back * c; }
+      if (v.type === 'police' && g.police.level > 0) return !g.police.addFoot(ph, x, z);
+      ph.x = x; ph.z = z;
       const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6;
-      if (v.type === 'police' && g.police.level > 0) { Object.assign(pp, { state: 'fight', t: 30, keep: true, cop: true, grudge: 2 }); g.police.foot.push(pp); }
+      return false;
     });
   };
 
@@ -295,16 +297,39 @@ export function installRules(g) {
     if (msg) g.audio.sfx('checkpoint');
     return msg ?? null;
   };
-  let typed = '';
+  const codes = Object.keys(CHEATS);
+  let typed = '', typingTimer, pendingAction;
+  const resetTyping = () => { clearTimeout(typingTimer); typed = ''; pendingAction = null; };
+  addEventListener('blur', resetTyping);
   addEventListener('keydown', e => {
-    if (!g.started || g.paused || e.key.length !== 1) return;
-    typed = (typed + e.key.toUpperCase()).slice(-12);
-    for (const code in CHEATS) {
-      if (!typed.endsWith(code)) continue;
-      typed = '';
-      const msg = g.cheat(code);
-      if (msg) g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5);
+    const target = e.target;
+    if (!g.started || g.paused || e.ctrlKey || e.metaKey || e.altKey ||
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) { resetTyping(); return; }
+    if (e.key === 'Shift' || e.key === 'CapsLock') return;
+    if (!/^[a-z]$/i.test(e.key)) {
+      if (pendingAction && e.code !== 'Escape' && e.code !== 'Tab') g.input.trigger(pendingAction);
+      resetTyping(); return;
     }
+    if (e.repeat) return;
+    const before = typed;
+    typed += e.key.toUpperCase();
+    while (typed && !codes.some(code => code.startsWith(typed))) typed = typed.slice(1);
+    clearTimeout(typingTimer);
+    // Input has already queued M/P. Keep a matching prefix on the street; a lone P
+    // (also the start of two codes) still pauses after a short wait for another letter.
+    const action = e.code === 'KeyM' ? 'map' : e.code === 'KeyP' ? 'pause' : null;
+    if (pendingAction && !typed.startsWith(before) && !action) g.input.trigger(pendingAction);
+    pendingAction = null;
+    if (!typed) return;
+    if (action && g.input.pressed(action)) pendingAction = action;
+    if (CHEATS[typed]) {
+      const msg = g.cheat(typed);
+      resetTyping();
+      if (msg) g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5);
+    } else typingTimer = setTimeout(() => {
+      if (pendingAction && g.started && !g.paused) g.input.trigger(pendingAction);
+      resetTyping();
+    }, 1000);
   });
 
   // ---------------------------------------------------------------- death and arrest

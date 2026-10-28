@@ -280,15 +280,6 @@ export class Game {
     return best;
   }
 
-  carjack(v, player) {
-    const h = this.vehicles.ejectDriver(v);
-    if (!h) return;
-    const door = this.vehicles.doorWorld(v);
-    h.x = door.x; h.z = door.z; h.pose = 'lie';
-    this.peds?.adoptEjected(h, v, player);
-    this.onCarjack?.(v);
-  }
-
   pushOutOfVehicles(actor, r) {
     for (const v of this.vehicles.list) {
       if (Math.abs((actor.y ?? 0) - v.y) > 2) continue; // one of us is up on a flyover
