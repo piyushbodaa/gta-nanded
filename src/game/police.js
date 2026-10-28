@@ -227,17 +227,27 @@ export class Police {
     return true;
   }
 
+  /** Put an officer on foot only if there is room; otherwise leave their seat untouched. */
+  addFoot(h, x, z) {
+    if (this.foot.length >= FOOT_MAX) return null;
+    const p = this.game.peds._make(h, x, z, null);
+    p.state = 'fight'; p.t = 30; p.keep = true; p.cop = true; p.grudge = 2;
+    this.foot.push(p);
+    return p;
+  }
+
   _dismount(u) {
     const g = this.game, v = u.v;
-    const people = [v.driver, ...v.passengers].filter(Boolean);
-    v.driver = null; v.passengers = [];
+    // Passengers first: if only one place is free, the driver can keep the jeep on the job.
+    const people = [...v.passengers, v.driver].filter(Boolean);
     for (const h of people) {
       const door = g.vehicles.doorWorld(v);
-      h.x = door.x + (Math.random() - 0.5); h.z = door.z + (Math.random() - 0.5); h.pose = 'idle'; h.pitch = 0; h.roll = 0; h.y = 0;
-      const p = g.peds._make(h, h.x, h.z, null);
-      p.state = 'fight'; p.t = 30; p.keep = true; p.cop = true; p.grudge = 2;
-      this.foot.push(p);
+      if (!this.addFoot(h, door.x + (Math.random() - 0.5), door.z + (Math.random() - 0.5))) break;
+      h.pose = 'idle'; h.pitch = 0; h.roll = 0; h.y = 0;
+      if (h === v.driver) v.driver = null;
+      else v.passengers.splice(v.passengers.indexOf(h), 1);
     }
+    if (v.driver) return;
     // Left at the roadside, lights still flashing; free to be towed once the player takes it.
     v.role = 'police-parked'; v.keep = false;
     this.units = this.units.filter(x => x !== u);

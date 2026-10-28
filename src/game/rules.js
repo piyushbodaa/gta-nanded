@@ -85,13 +85,15 @@ export function installRules(g) {
     // gets out (police._dismount).
     const seats = v.model?.passengers || [], c = Math.cos(v.heading), s = Math.sin(v.heading);
     const doorSide = Math.sign((door.x - v.x) * c - (door.z - v.z) * s) || -1; // local +x is the vehicle's left
-    v.passengers.splice(0).forEach((ph, i) => {
+    v.passengers = v.passengers.filter((ph, i) => {
       const [sx = 0, , sz = 0] = seats[i] || [];
       const lx = (Math.sign(sx) || doorSide) * (v.hw + 0.55), lz = sx ? sz : sz - 0.5;
-      ph.x = v.x + lx * c + lz * s; ph.z = v.z - lx * s + lz * c;
-      if (g.colliders?.blocked(ph.x, ph.z, 0.3, v.y || 0)) { const back = -(v.hd + 0.6); ph.x = v.x + back * s; ph.z = v.z + back * c; }
+      let x = v.x + lx * c + lz * s, z = v.z - lx * s + lz * c;
+      if (g.colliders?.blocked(x, z, 0.3, v.y || 0)) { const back = -(v.hd + 0.6); x = v.x + back * s; z = v.z + back * c; }
+      if (v.type === 'police' && g.police.level > 0) return !g.police.addFoot(ph, x, z);
+      ph.x = x; ph.z = z;
       const pp = g.peds._make(ph, ph.x, ph.z, null); pp.state = 'flee'; pp.t = 6;
-      if (v.type === 'police' && g.police.level > 0) { Object.assign(pp, { state: 'fight', t: 30, keep: true, cop: true, grudge: 2 }); g.police.foot.push(pp); }
+      return false;
     });
   };
 
