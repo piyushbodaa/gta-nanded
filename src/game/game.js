@@ -332,7 +332,7 @@ export class Game {
       if (pf.t >= 0.5) { pf.fps = pf.n / pf.t; pf.ms = (pf.t / pf.n) * 1000; pf.worstMs = pf.worst * 1000; pf.n = pf.t = pf.worst = 0; }
     }
     const input = this.input;
-    input.update();
+    input.update(dt);
     // Menus: Esc pauses, M opens the map, and either closes the menu again.
     if (this.started && this.pause && !this.respawning) {
       if (input.pressed('pause')) this.pause.toggle(this.pause.tab);

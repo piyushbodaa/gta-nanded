@@ -138,8 +138,11 @@ export class Input {
     return false;
   }
 
-  /** Call once per frame before systems read the state. */
-  update() {
+  /** Call once per frame before systems read the state. dt is seconds, as in Game.frame. */
+  update(dt = 1 / 60) {
+    // Controller sticks describe a speed, unlike mouse and touch events' travelled deltas.
+    // Keep the old 60 fps feel, without a jump after a slow or interrupted frame.
+    const lookDt = clamp(dt, 0, 1 / 20);
     const h = this.held, s = this.state, t = this.touch;
     let mx = (h.has('right') ? 1 : 0) - (h.has('left') ? 1 : 0);
     let my = (h.has('up') ? 1 : 0) - (h.has('down') ? 1 : 0);
@@ -163,7 +166,7 @@ export class Input {
       if (lx || ly) { mx = lx; my = -ly; steer = lx; }
       throttle = Math.max(throttle, val(7));
       brake = Math.max(brake, val(6));
-      if (rx || ry) { this.look.x -= rx * 0.05 * this.lookScale; this.look.y -= ry * 0.04 * this.lookScale; this.lastLookAt = performance.now(); }
+      if (rx || ry) { this.look.x -= rx * 3 * lookDt * this.lookScale; this.look.y -= ry * 2.4 * lookDt * this.lookScale; this.lastLookAt = performance.now(); }
       handbrake ||= btn(0); horn ||= btn(10); lookBack ||= btn(11);
       // True on the frame a button goes down (and queues its action, if it has one). Kept per pad.
       const edge = (i, a) => { const k = `${pad.index}.${i}`; if (btn(i) && !this.padHeld.has(k)) { if (a) this.events.add(a); this.padHeld.add(k); return true; } if (!btn(i)) this.padHeld.delete(k); return false; };

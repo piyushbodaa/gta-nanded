@@ -28,7 +28,9 @@ export class Save {
   }
   get cash() { return this.data.cash; }
   set cash(v) { this.data.cash = Math.max(0, Math.round(v)); this.dirty(); }
-  get hasProgress() { return this.data.started && (this.data.story.length > 0 || this.data.cash !== 200); }
+  // Starting a session is enough: exploring, visiting landmarks and setting race times
+  // all count even before a story mission is finished or the starting cash changes.
+  get hasProgress() { return this.data.started; }
   done(id) { return this.data.story.includes(id); }
   complete(id) { if (!this.done(id)) this.data.story.push(id); this.dirty(); this.flush(); }
   stat(k, d = 1) { this.data.stats[k] = (this.data.stats[k] || 0) + d; this.dirty(); }
