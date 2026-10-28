@@ -295,16 +295,39 @@ export function installRules(g) {
     if (msg) g.audio.sfx('checkpoint');
     return msg ?? null;
   };
-  let typed = '';
+  const codes = Object.keys(CHEATS);
+  let typed = '', typingTimer, pendingAction;
+  const resetTyping = () => { clearTimeout(typingTimer); typed = ''; pendingAction = null; };
+  addEventListener('blur', resetTyping);
   addEventListener('keydown', e => {
-    if (!g.started || g.paused || e.key.length !== 1) return;
-    typed = (typed + e.key.toUpperCase()).slice(-12);
-    for (const code in CHEATS) {
-      if (!typed.endsWith(code)) continue;
-      typed = '';
-      const msg = g.cheat(code);
-      if (msg) g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5);
+    const target = e.target;
+    if (!g.started || g.paused || e.ctrlKey || e.metaKey || e.altKey ||
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) { resetTyping(); return; }
+    if (e.key === 'Shift' || e.key === 'CapsLock') return;
+    if (!/^[a-z]$/i.test(e.key)) {
+      if (pendingAction && e.code !== 'Escape' && e.code !== 'Tab') g.input.trigger(pendingAction);
+      resetTyping(); return;
     }
+    if (e.repeat) return;
+    const before = typed;
+    typed += e.key.toUpperCase();
+    while (typed && !codes.some(code => code.startsWith(typed))) typed = typed.slice(1);
+    clearTimeout(typingTimer);
+    // Input has already queued M/P. Keep a matching prefix on the street; a lone P
+    // (also the start of two codes) still pauses after a short wait for another letter.
+    const action = e.code === 'KeyM' ? 'map' : e.code === 'KeyP' ? 'pause' : null;
+    if (pendingAction && !typed.startsWith(before) && !action) g.input.trigger(pendingAction);
+    pendingAction = null;
+    if (!typed) return;
+    if (action && g.input.pressed(action)) pendingAction = action;
+    if (CHEATS[typed]) {
+      const msg = g.cheat(typed);
+      resetTyping();
+      if (msg) g.hud.big('CHEAT ACTIVATED', msg, 'title', 2.5);
+    } else typingTimer = setTimeout(() => {
+      if (pendingAction && g.started && !g.paused) g.input.trigger(pendingAction);
+      resetTyping();
+    }, 1000);
   });
 
   // ---------------------------------------------------------------- death and arrest
