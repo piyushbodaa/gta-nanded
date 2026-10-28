@@ -177,6 +177,61 @@ test('the wheel zooms over the street only, a notch at a time', () => {
   assert.ok(Math.abs(input.zoom - 1.96) < 1e-9, 'one event is never more than a notch');
 });
 
+test('controller look covers the same angle per second at 30, 60 and 120 fps', () => {
+  pads = [pad([], [0, 0, 0.8, -0.4])];
+  for (const fps of [30, 60, 120]) {
+    const { input } = fresh();
+    input.setSensitivity(1.25);
+    for (let i = 0; i < fps; i++) input.update(1 / fps);
+    assert.ok(Math.abs(input.look.x + 3) < 1e-9, `${fps} fps: same horizontal travel`);
+    assert.ok(Math.abs(input.look.y - 1.2) < 1e-9, `${fps} fps: same vertical travel`);
+  }
+  const { input } = fresh();
+  input.update(10);
+  assert.ok(Math.abs(input.look.x + 0.12) < 1e-9, 'a delayed frame adds at most 50 ms of stick travel');
+  pads = [];
+});
+
+test('frame time does not rescale mouse movement or touch drags', () => {
+  pads = [];
+  for (const dt of [1 / 30, 1 / 120]) {
+    const { input, canvas } = fresh();
+    input.pointerLocked = true;
+    fire(win, 'mousemove', { movementX: 10, movementY: -5 });
+    input.update(dt);
+    assert.ok(Math.abs(input.look.x + 0.024) < 1e-9);
+    assert.ok(Math.abs(input.look.y - 0.012) < 1e-9);
+    input.look.x = input.look.y = 0;
+    input.pointerLocked = false;
+    fire(canvas, 'pointerdown', { pointerType: 'touch', pointerId: 7, clientX: 100, clientY: 100 });
+    fire(win, 'pointermove', { pointerType: 'touch', pointerId: 7, clientX: 110, clientY: 95 });
+    input.update(dt);
+    assert.ok(Math.abs(input.look.x + 0.065) < 1e-9);
+    assert.ok(Math.abs(input.look.y - 0.0325) < 1e-9);
+  }
+});
+
+test('a paused frame polls with elapsed time and drops look input before the camera', async () => {
+  const { Game } = await import('../src/game/game.js');
+  pads = [pad([], [0, 0, 1, 1])];
+  const { input } = fresh();
+  let polledDt;
+  const poll = input.update.bind(input);
+  input.update = dt => { polledDt = dt; poll(dt); };
+  let cameraCalls = 0;
+  const g = {
+    input, paused: true, started: false, _pauseDrawn: true,
+    player: { human: {}, speed: 0, heading: 0 },
+    camera: { update(dt, polled) { cameraCalls++; assert.equal(dt, 0); assert.deepEqual(polled.look, { x: 0, y: 0 }); } },
+  };
+  document.body.classList = { toggle() {} };
+  Game.prototype.frame.call(g, 1 / 30);
+  assert.equal(polledDt, 1 / 30);
+  assert.equal(cameraCalls, 1);
+  assert.deepEqual(input.look, { x: 0, y: 0 });
+  pads = [];
+});
+
 test('drags during a scripted shot are dropped, so the camera settles behind the player after it', () => {
   const cam = new GameCamera(new THREE.PerspectiveCamera(62, 2, 0.3, 900), { raycast: () => 1 });
   const input = { look: { x: 0, y: 0 }, zoom: 0, state: {}, pointerLocked: false };
