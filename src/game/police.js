@@ -24,12 +24,10 @@ export class Police {
     this.losT = 0;
     this.seen = false;
     this.seed = 1;
-    this.lock = false; // missions can hold the wanted level
   }
 
   /** A crime at (x, z). If no officer sees it, a witness may call it in a moment later. */
   report(crime, x, z, { cop = false } = {}) {
-    if (this.game.cheats?.noWanted) return;
     const heat = CRIME_HEAT[crime] ?? 0.5;
     const seenBy = cop || this._copNear(x, z, 55);
     if (seenBy) this.addHeat(heat, x, z);
@@ -103,7 +101,7 @@ export class Police {
       // Out of sight: escape the search area and keep your head down.
       const inside = dist(pos.x, pos.z, this.lastSeen.x, this.lastSeen.z) < this.searchRadius;
       this.unseenT += dt * (inside ? 0.3 : 1);
-      if (this.unseenT > 5 + this.level * 1.6 && !this.lock) {
+      if (this.unseenT > 5 + this.level * 1.6) {
         this.setLevel(0);
         g.onEvaded?.();
         return;

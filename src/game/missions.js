@@ -189,7 +189,6 @@ export class Missions {
         this._leftovers.push(e);
       }
     }
-    if (m.def.policeLock) { g.police.lock = false; }
     g.camera.cinematic = null;
     g.cutscene = false;
     void passed;
