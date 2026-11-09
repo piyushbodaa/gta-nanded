@@ -350,7 +350,7 @@ export class Hud {
     }
     // The scope: a black surround with the lens, while a sniper rifle aims.
     const scoped = Boolean(def && w.scoped);
-    if (scoped !== sh.scope) { sh.scope = scoped; el.scope.hidden = !scoped; }
+    if (scoped !== sh.scope) { sh.scope = scoped; el.scope.hidden = !scoped; document.body?.classList?.toggle?.('scoped', scoped); } // MAP and pause step out of the lens
     if (scoped) { const z = `${def.scope}×`; if (z !== sh.zoom) { sh.zoom = z; el.scopeZoom.textContent = z; } }
     // Crosshair: for a gun or a grenade in hand; fists and the pan only while aiming. Not through a scope.
     const cross = Boolean(def) && !scoped && !w.wheelOpen && (w.aiming || (on && def.hold !== 'melee'));

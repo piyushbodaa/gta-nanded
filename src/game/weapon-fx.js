@@ -21,7 +21,7 @@ const TIER = { pan: 'common', p92: 'common', uzi: 'uncommon', ump45: 'uncommon',
 /** A muzzle flash's size by weapon (snipers and the shotgun bark loudest). */
 const FLASH = { p92: 0.8, uzi: 0.8, ump45: 0.9, akm: 1.1, m416: 1, s12k: 1.5, kar98k: 1.4, awm: 1.6 };
 
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _v = new THREE.Vector3();
 const _c = new THREE.Color(), _res = new THREE.Vector2(), _te = new Float32Array(16);
 const hash = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
 const rnd = () => Math.random() - 0.5;
@@ -113,7 +113,7 @@ export class WeaponFx {
     this.tracers.frustumCulled = false; this.tracers.renderOrder = 6; this.tracers.name = 'tracers';
     scene.add(this.tracers);
     this.tr = { a: new Float32Array(TRACERS * 3), b: new Float32Array(TRACERS * 3), age: new Float32Array(TRACERS), life: new Float32Array(TRACERS).fill(-1), w: new Float32Array(TRACERS), next: 0 };
-    this._flashT = -1;
+    this._flashT = -1; this._flashed = new Float32Array(8 * 3); this._flashN = 0; // muzzles flashed this frame
     // The player's gun this frame (for muzzle()), as a column-major 4x4.
     this.placed = false; this.pm = new Float32Array(16); this.pid = null;
     this._all = [...Object.values(this.guns), this.flying, this.crates, this.drops, this.chute, this.beams, this.glows];
@@ -240,10 +240,13 @@ export class WeaponFx {
           _s.set(1, 1, 1);
           nb++;
         }
-        // Close by, the weapon itself turns slowly over its crate.
+        // Close by, the weapon itself turns slowly over its crate, about its own middle (the model's
+        // origin is the grip, which swung a rifle's barrel out past the crate's edges).
         if (L.id && GRIPS[L.id] && d < SHOW_RANGE && shown < LOOT_GUNS && !drop) {
           _q.setFromEuler(_e.set(0.25, this.t * 1.3 + ph * 6, 0));
-          _m.compose(_p.set(L.x, y + 0.62 + 0.07 * Math.sin(this.t * 2 + ph * 9), L.z), _q, _ONE);
+          const c = this._centre(L.id);
+          _v.copy(c).negate().applyQuaternion(_q);
+          _m.compose(_p.set(L.x + _v.x, y + 0.62 + 0.07 * Math.sin(this.t * 2 + ph * 9) + _v.y, L.z + _v.z), _q, _ONE);
           this._put(L.id, _m.elements);
           shown++;
         }
@@ -299,6 +302,13 @@ export class WeaponFx {
     this.flying.count = n;
   }
 
+  /** The middle of a weapon's model (its bounding box), worked out once per weapon. */
+  _centre(id) {
+    const C = this._centres || (this._centres = {});
+    if (!C[id]) { const geo = this.guns[id].geometry; if (!geo.boundingBox) geo.computeBoundingBox(); C[id] = geo.boundingBox.getCenter(new THREE.Vector3()); }
+    return C[id];
+  }
+
   // ---------------------------------------------------------------- shots
   /** A bullet from the muzzle (a) to where it landed (b): a tracer streak, and a flash at the muzzle. */
   shot(ax, ay, az, bx, by, bz, id) {
@@ -308,10 +318,15 @@ export class WeaponFx {
     T.b[i * 3] = bx; T.b[i * 3 + 1] = by; T.b[i * 3 + 2] = bz;
     const len = Math.hypot(bx - ax, by - ay, bz - az);
     T.age[i] = 0; T.life[i] = 0.07 + Math.min(len, 400) / 1600; T.w[i] = id === 'awm' || id === 'kar98k' ? 1.4 : id === 's12k' ? 0.7 : 1;
-    // One flash a frame however many pellets.
-    const E = this.game.effects;
-    if (!E || this._flashT === this.t) return;
-    this._flashT = this.t;
+    // One flash a frame at each muzzle, however many pellets: an officer firing in the same frame as
+    // the player still gets his own. Not through a scope, half a metre from the eye.
+    const E = this.game.effects, F = this._flashed;
+    if (!E) return;
+    if (this._flashT !== this.t) { this._flashT = this.t; this._flashN = 0; }
+    for (let k = 0; k < this._flashN; k++) if (Math.abs(F[k * 3] - ax) + Math.abs(F[k * 3 + 1] - ay) + Math.abs(F[k * 3 + 2] - az) < 0.4) return;
+    if (this._flashN < 8) { F[this._flashN * 3] = ax; F[this._flashN * 3 + 1] = ay; F[this._flashN * 3 + 2] = az; this._flashN++; }
+    const cam = this.game.camera3?.position;
+    if (this.game.weapons?.scoped && cam && Math.abs(cam.x - ax) + Math.abs(cam.y - ay) + Math.abs(cam.z - az) < 2) return;
     const k = FLASH[id] ?? 1, ux = len > 0 ? (bx - ax) / len : 0, uy = len > 0 ? (by - ay) / len : 0, uz = len > 0 ? (bz - az) / len : 0;
     E.spawn(ax, ay, az, 0, 0, 0, 0.05, 0.38 * k, 1, 0.86, 0.45, 1, { grow: 0.5 });
     E.spawn(ax + ux * 0.12 * k, ay + uy * 0.12 * k, az + uz * 0.12 * k, ux * 2, uy * 2, uz * 2, 0.045, 0.26 * k, 1, 0.95, 0.7, 1, { grow: 0.3 });
