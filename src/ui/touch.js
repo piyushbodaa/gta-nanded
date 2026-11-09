@@ -1,6 +1,7 @@
 // Touch controls: a floating stick under the left thumb, contextual buttons
 // under the right, and the rest of the screen drags the camera.
 import { WEAPONS } from '../game/weapon-data.js';
+import { haptic } from './haptics.js';
 
 const $ = id => document.getElementById(id);
 
@@ -78,7 +79,7 @@ export class TouchControls {
         if (hold) t[hold] = hold === 'gas' || hold === 'brake' ? 1 : true;
         if (tap) this.input.trigger(tap);
         this.input.mode = 'touch';
-        navigator.vibrate?.(8);
+        haptic(this.game, 8);
       });
       const up = () => { b.classList.remove('down'); if (hold) t[hold] = hold === 'gas' || hold === 'brake' ? 0 : false; };
       for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);

@@ -42,6 +42,7 @@ export class PauseMenu {
       const s = g.save.data.settings; s.haptics = s.haptics === false; g.save.dirty(); this._settings();
       if (s.haptics) haptic({ save: g.save, input: g.input }, 30, true);
     });
+    $('set-awake')?.addEventListener('click', () => { const s = g.save.data.settings; s.awake = s.awake === false; g.save.dirty(); this._settings(); });
     $('set-install').addEventListener('click', async () => {
       if (installKind() === 'ios') { $('set-install-help').hidden = !$('set-install-help').hidden; return; }
       await promptInstall();
@@ -105,6 +106,7 @@ export class PauseMenu {
     this.root.querySelector(`[data-tab="${tab}"]`)?.focus({ preventScroll: true });
   }
   close() {
+    if (this.game.lifecycle?.blocking) return; // the GPU-lost card is up: it closes the menu itself
     const g = this.game;
     // Full screen coming back after an app switch: stay paused until the screen has settled, then
     // close, unless the player has gone again meanwhile.
@@ -217,6 +219,7 @@ export class PauseMenu {
     $('set-perf').textContent = s.perf ? 'On' : 'Off';
     $('set-haptics-row').hidden = !(typeof navigator !== 'undefined' && 'vibrate' in navigator); // Android only: hidden on iOS and desktop
     $('set-haptics').textContent = s.haptics === false ? 'Off' : 'On';
+    if ($('set-awake')) { $('set-awake').textContent = s.awake !== false ? 'On' : 'Off'; $('set-awake').closest('.row').hidden = !navigator.wakeLock; }
     const install = installKind();
     $('set-install-row').hidden = !install;
     $('set-install').textContent = install === 'ios' ? 'How?' : 'Install the game';

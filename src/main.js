@@ -25,6 +25,8 @@ import { STORY, dressWorld } from './game/story.js';
 import { startSpot } from './game/start-spot.js';
 import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
+import { Lifecycle } from './core/lifecycle.js';
+import { applyResume, shouldResume, resumeContext, resumeLabel } from './game/resume.js';
 import { track } from './core/analytics.js';
 import { press } from './ui/controls.js';
 import { installKind } from './ui/install.js';
@@ -70,6 +72,7 @@ function keepFullscreen(game) {
 async function boot() {
   const probe = document.createElement('canvas').getContext('webgl2');
   if (!probe) { fatal('GTA Nanded needs WebGL 2. Use a current Chrome, Edge, Firefox or Safari with hardware acceleration on, then reload.'); return; }
+  probe.getExtension('WEBGL_lose_context')?.loseContext(); // give the probe's context back at once
   const intro = createIntro();
   const canvas = $('game-canvas');
   const game = new Game(canvas);
@@ -111,6 +114,7 @@ async function boot() {
   game.touch = new TouchControls(game);
   game.weaponWheel = new WeaponWheel(game);
   game.pause = new PauseMenu(game);
+  game.lifecycle = new Lifecycle(game);
   keepFullscreen(game);
   installRules(game);
   game.hud.radioText = (name, tag, color = '#fff') => {
@@ -141,6 +145,10 @@ async function boot() {
   const has = game.save.hasProgress;
   const done = STORY.filter(m => game.save.done(m.id)).length;
   if (has) { $('menu-continue').hidden = false; $('menu-continue-meta').textContent = `${done}/${STORY.length} MISSIONS · ₹${game.save.cash.toLocaleString('en-IN')}`; }
+  // Back within minutes of the phone dropping the game (WhatsApp, a call): carry on where you were.
+  const resume = game.save.data.resume;
+  const canResume = shouldResume(resume, resumeContext());
+  if (canResume) { $('menu-continue').hidden = false; $('menu-continue').querySelector('strong').textContent = 'TAP TO CARRY ON'; $('menu-continue-meta').textContent = resumeLabel(resume); }
   for (const id of ['menu-continue', 'menu-new', 'menu-free']) $(id).disabled = false;
   // While the player reads the menu, get the start ready where they will likely begin: at home
   // to continue a game, at the station for a first one (Free Roam begins at home too).
@@ -161,7 +169,7 @@ async function boot() {
     if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
     else play();
   };
-  $('menu-continue').addEventListener('click', () => begin('continue'));
+  $('menu-continue').addEventListener('click', () => begin(canResume ? 'resume' : 'continue'));
   // Over a save, NEW STORY asks first, in its big label: a phone player can't read the small one.
   // The second tap must be a deliberate one: not the other half of a double tap, and not one
   // long after the question went away.
@@ -201,11 +209,13 @@ function startGame(game, mode) {
   // The story opens on the station forecourt late in the afternoon; anything else at home, by day.
   game.sky.hours = mode === 'new' ? 17.1 : 9.5 + Math.random() * 7;
   if (mode === 'free') game.freeRoam = true;
+  // Carrying on after the phone dropped the game: back where you were, before the streets fill there.
+  if (mode === 'resume') applyResume(game, game.save.data.resume);
   document.body.classList.add('playing');
   game.hud.show(true);
   game.touch.show(true);
   // Populate the streets before the first frame, unless the menu already did it here.
-  if (game.ready?.filled !== spot.key) for (const _ of game.fillStreets());
+  if (mode === 'resume' || game.ready?.filled !== spot.key) for (const _ of game.fillStreets());
   // Keys pressed on the cover or during the intro were not meant for the street.
   game.input.clear(); game.input.live = true;
   game.start();
@@ -224,7 +234,7 @@ function startGame(game, mode) {
   const finished = STORY.every(m => game.save.done(m.id));
   if (mode === 'new') { game.hud.big('गोदावरी गोल्ड', 'GODAVARI GOLD', 'title', 3.4); setTimeout(() => game.missions.start(STORY[0].id), 3600); }
   else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map${finished ? ': races and landmarks to photograph are marked on it.' : ', or find a contact marker to play the story.'}`, 7);
-  else game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. ${finished ? `Godavari Gold is done: the city is yours. ${press(game, 'map')} for races and landmarks.` : 'Your next contact is on the radar.'}`, 6);
+  else if (mode !== 'resume') game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. ${finished ? `Godavari Gold is done: the city is yours. ${press(game, 'map')} for races and landmarks.` : 'Your next contact is on the radar.'}`, 6);
   game.canvas.focus();
 }
 

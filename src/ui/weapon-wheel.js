@@ -4,6 +4,7 @@
 // The weapons themselves (what is owned, the slow motion) belong to game.weapons; this is only the picker.
 import { SLOTS, WEAPONS, ORDER, AMMO } from '../game/weapon-data.js';
 import { keyName } from './controls.js';
+import { haptic } from './haptics.js';
 
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2;
@@ -212,7 +213,7 @@ export class WeaponWheel {
     this.hl = i;
     this.dirty = true;
     if (this.game.input.mode === 'touch') return;
-    navigator.vibrate?.(4);
+    haptic(this.game, 4, true);
   }
 
   /** Write the slots and the middle, touching only what changed. */

@@ -131,6 +131,14 @@ export class Hud {
     this.el.objective.innerHTML = text; this.el.objective.hidden = !text;
     this._fitColumn();
   }
+  /** A hit: the health bar flashes for a moment and shows the new health straight away. */
+  flashHealth() {
+    const g = this.game, bar = this.el.health;
+    if (!bar || !g?.player) return;
+    bar.style.transform = `scaleX(${clamp(g.player.health / g.player.maxHealth, 0, 1)})`;
+    bar.parentElement.classList.add('hit');
+    clearTimeout(this._hitT); this._hitT = setTimeout(() => bar.parentElement.classList.remove('hit'), 250);
+  }
   bark(text) { this.el.bark.textContent = text; this.el.bark.hidden = false; this.timers.bark = 2.6; this.el.bark.classList.remove('pop'); void this.el.bark.offsetWidth; this.el.bark.classList.add('pop'); }
   toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; this._fitColumn(); }
   big(title, sub = '', kind = 'passed', seconds = 4.5) {

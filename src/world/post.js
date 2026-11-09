@@ -54,6 +54,7 @@ const FINAL = /* glsl */`
   uniform vec3 uCamPos;
   uniform float uBloom, uExposure, uFogDensity, uFogFalloff, uViewDist, uFogOn, uWet, uSSR;
   uniform float uSaturation, uContrast, uVignette, uGrain, uTime, uAA, uSharpen, uNear, uFar;
+  uniform vec3 uHurt, uHurtDir; // hit feedback (ui/hit-fx.js): edge red, colour drain; the attacker's side and its weight
   uniform vec3 uShadowTint, uHighTint;
   uniform vec2 uResolution, uTexel;
   ${ATMOSPHERE_GLSL}
@@ -176,7 +177,7 @@ const FINAL = /* glsl */`
     col = aces(col * uExposure);
     // Grade: saturation, split toning (cool shadows, warm light) and contrast.
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = max(mix(vec3(l), col, uSaturation), 0.0);
+    col = max(mix(vec3(l), col, uSaturation * (1.0 - uHurt.y)), 0.0);
     col *= mix(uShadowTint, vec3(1.0), smoothstep(0.0, 0.45, l));
     col *= mix(vec3(1.0), uHighTint, smoothstep(0.3, 1.0, l));
     vec3 p = sqrt(col);
@@ -186,6 +187,10 @@ const FINAL = /* glsl */`
     vec2 q = vUv - 0.5;
     q.x *= uResolution.x / uResolution.y;
     col *= 1.0 - uVignette * smoothstep(0.35, 1.05, length(q));
+    // Hurt: the edges go red, more on the side the hit came from (towards red, never black).
+    float he = smoothstep(0.42, 1.0, length(q));
+    float hd = uHurtDir.z * max(0.0, dot(normalize(q + 1e-5), uHurtDir.xy));
+    col = mix(col, vec3(0.78, 0.05, 0.04), clamp(uHurt.x * he * (0.55 + 0.6 * hd), 0.0, 0.6));
     float n = hash(vUv * uResolution + fract(uTime * 7.31) * 517.0);
     col += (n - 0.5) * uGrain * (0.5 + 0.5 * l);
     gl_FragColor = vec4(col, 1.0);
@@ -231,6 +236,7 @@ export class Post {
       uSaturation: { value: 1.1 }, uContrast: { value: 1.06 }, uVignette: { value: 0.28 }, uGrain: { value: 0.012 }, uTime: { value: 0 },
       uShadowTint: { value: new THREE.Color(1, 1, 1) }, uHighTint: { value: new THREE.Color(1, 1, 1) }, uResolution: { value: new THREE.Vector2(1, 1) },
       uTexel: { value: new THREE.Vector2(1, 1) }, uAA: { value: 0 }, uSharpen: { value: 0 }, uNear: { value: 0.3 }, uFar: { value: 900 },
+      uHurt: { value: new THREE.Vector3() }, uHurtDir: { value: new THREE.Vector3() },
       uSunDir: su.uSunDir, uZenith: su.uZenith, uHorizon: su.uHorizon, uSunColor: su.uSunColor, uNight: su.uNight, uGrey: su.uGrey, uCityGlow: su.uCityGlow,
     });
     this.rt = null;
@@ -252,6 +258,12 @@ export class Post {
     this.final.uniforms.uAA.value = aa || (msaa && this.msaaRefused) ? 1 : 0;
     this.final.uniforms.uSharpen.value = sharpen;
   }
+
+  /** Hit feedback (ui/hit-fx.js): edge red `e`, colour drain `s`, and the attacker's screen direction (x, y) with weight `w`. */
+  setHurt(e, s, x, y, w) { this.final.uniforms.uHurt.value.set(e, s, 0); this.final.uniforms.uHurtDir.value.set(x, y, w); }
+
+  /** After the GPU came back (core/lifecycle.js): the render targets are rebuilt at the next frame. */
+  restore() { this._dispose(); }
 
   /** The city's detail texture: wet reflections follow the same puddles. */
   setDetail(texture) { this.final.uniforms.tDetail.value = texture; }

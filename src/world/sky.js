@@ -207,6 +207,9 @@ export class Sky {
     this.scene.environment = rt.texture;
   }
 
+  /** After the GPU came back (core/lifecycle.js): capture the sky light again at the next frame. */
+  refreshEnv() { if (this.env) { this.env.t = Infinity; this.env.hours = undefined; } }
+
   /** Re-capture the sky light every couple of seconds (it changes slowly), or at once after a jump. */
   _updateEnv(dt) {
     const e = this.env;

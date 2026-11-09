@@ -19,6 +19,7 @@ const PICKUP = 1.3; // walk this close to a crate to take it
 const RESPAWN = 300; // a taken crate is back after five minutes of play
 const AIRDROP_EVERY = 420; // an air drop every seven minutes out of missions
 const DROP_SPEED = 5.5; // m/s under the parachute
+const BLAST_AT = { x: 0, z: 0 }; // where the last grenade went off: the hurt marker points there
 const SLOT_EVENTS = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7'];
 // Where the crates lie: thick around the station (where a new story opens) and home (where play
 // resumes), then across the city. Coordinates of main.js's station start and story.js's HOME.
@@ -807,7 +808,8 @@ export class Weapons {
     const level = oy => Math.abs((oy || 0) - y) < 3;
     if (!P.vehicle && dP < R && level(P.y) && (P.state === 'foot' || P.state === 'down')) {
       const k = (3 + 6 * (1 - dP / R)) / Math.max(dP, 0.5);
-      P.damage?.((R - dP) * 12, 'explosion');
+      BLAST_AT.x = x; BLAST_AT.z = z;
+      P.damage?.((R - dP) * 12, 'explosion', BLAST_AT);
       P.knockDown?.((pos.x - x) * k, (pos.z - z) * k, 1.5);
     }
     let kills = 0;

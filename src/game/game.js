@@ -371,7 +371,7 @@ export class Game {
       actor.x += nx * d; actor.z += nz * d;
       const spd = speedOf(v);
       if (spd > 4 && actor.knockDown && actor === this.player) {
-        actor.damage(spd * 2.2, 'vehicle');
+        actor.damage(spd * 2.2, 'vehicle', v);
         actor.knockDown(v.vx * 0.6 + nx * 3, v.vz * 0.6 + nz * 3, 1.4);
       }
     }
@@ -431,6 +431,7 @@ export class Game {
       this.animals?.update(dt);
     }
     this.touch?.update();
+    this.lifecycle?.update();
     this.weaponWheel?.update(real);
     // The mouse wheel picks weapons on foot (the camera zoom is V): input reads this when it turns.
     input.weaponScroll = this.player.state === 'foot';

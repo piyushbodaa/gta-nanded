@@ -497,12 +497,14 @@ export function installRules(g) {
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   });
   document.getElementById('photo-share').addEventListener('click', async () => {
+    g.lifecycle?.leaving?.(); // the share sheet takes the screen: save and pause first
     const text = `${g._photoName || 'Nanded'} in GTA Nanded! Play free in your browser: https://gta.nanded.fun`;
     const file = g._photoFile;
     try {
       if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], text });
       else if (navigator.share) await navigator.share({ text });
       else open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+      g.hud.toast('Shared ✓'); clearTimeout(g._photoT); photo.hidden = true;
     } catch { /* closed the share sheet */ }
   });
 }

@@ -11,7 +11,7 @@ const DEFAULT = () => ({
   stats: { distance: 0, fares: 0, deliveries: 0, jacked: 0, busted: 0, wasted: 0, punches: 0, crashes: 0, playTime: 0, shots: 0, kills: 0, headshots: 0 },
   // What the player carries (Weapons.toSave): everyone starts with a P92, loaded, and two magazines more.
   inventory: { weapons: ['p92'], mags: { p92: 15 }, ammo: { '9mm': 30 }, equipped: 'fist' },
-  settings: { lang: 'en', music: 0.6, sfx: 0.8, radio: 0, sound: true, sensitivity: 1, invertY: false, assist: true, perf: false, awake: true },
+  settings: { lang: 'en', music: 0.6, sfx: 0.8, radio: 0, sound: true, sensitivity: 1, invertY: false, assist: true, perf: false, awake: true, haptics: true },
   // Where the player was when the page went to the background (resume.js): TAP TO CARRY ON after
   // Android drops the tab or the game reloads itself. Never part of the story; NEW STORY clears it.
   resume: null,
