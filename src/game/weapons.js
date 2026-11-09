@@ -3,14 +3,18 @@
 // guns, tracers and crates, the WeaponWheel picks, the HUD reads. No three.js and no DOM here, so
 // the tests drive it with a fake game.
 import { WEAPONS, AMMO, SLOTS, ORDER, LOOT_TABLE, AIRDROP_TABLE, HEADSHOT, NO_FIRE, interval, falloff } from './weapon-data.js';
-import { rng, hash2, clamp, dist } from '../core/math.js';
+import { rng, hash2, clamp, dist, wrapAngle } from '../core/math.js';
 
 const WATER_Y = -2.7; // world/water.js (not imported: it brings three.js along)
 const SEG = 24; // a long shot is marched in pieces this long (Colliders.raycastSolid walks a box)
 const MAX_RATE = 1 / 12; // never more than 12 shots a second, whatever the table says (sound nodes, phones)
-const ASSIST = 0.055; // touch and gamepad: a bullet bends toward someone this close to the crosshair (~3°)
+const ASSIST = 0.055; // touch and gamepad: a bullet bends toward someone this close to the crosshair (~3° at the base view, less zoomed in)
 const HEAR = 120; // gunfire carries this far to a police officer
 const GROUND_TOP = 1.3; // nothing the ground does is higher than the station's platforms
+const DECK_TOP = 7; // a flyover's deck (roadnet DECK_H 6.4) and a little over it
+const DECK_SLAB = 0.9; // how thick a deck is to a bullet from below
+const MUZZLE_CHECK = 6; // the line from the muzzle is checked this far (round a corner the camera sees past)
+const TURN_OK = 0.4; // a hip shot waits (a moment at most) until the body faces within this of the aim
 const PICKUP = 1.3; // walk this close to a crate to take it
 const RESPAWN = 300; // a taken crate is back after five minutes of play
 const AIRDROP_EVERY = 420; // an air drop every seven minutes out of missions
@@ -76,7 +80,12 @@ export class Weapons {
     this.hitMarker = null; this._hm = { t: 0, kill: false, head: false };
     this.lastShotT = -99;
     this.aimPitch = 0; this.aimYaw = 0;
-    this.cool = 0; this._boltT = 0; this._queued = 0; this._swallow = 0; this._clickT = 0;
+    this.cool = 0; this._boltT = 0; this._queued = 0; this._swallow = 0; this._clickT = 0; this._dt = 0;
+    // A trigger already held as the player comes on foot (RT was the throttle) fires nothing until let go.
+    this._wasActive = undefined; this._needRelease = false;
+    this._faceT = -99; this._turnT = -99; // a hip shot waiting for the body to turn to the aim
+    this._tg = []; this._tgN = 0; // what one shot's pellets hit, added up per person and per vehicle
+    this._deckT = -1; this._decks = false; this._nq = {}; this._raised = r => this.game.net.raised[r];
     this.grenades = [];
     this.airdrop = null; this.airdropT = AIRDROP_EVERY;
     this._slotPick = {};
@@ -112,7 +121,8 @@ export class Weapons {
   /** Firing a gun or throwing: the player faces where the camera looks (aiming, or just after a shot). */
   get facing() {
     const h = this.def.hold;
-    return h !== 'none' && h !== 'melee' && this.armed && (this.aiming || this.game.time - this.lastShotT < 1.2);
+    const t = this.game.time;
+    return h !== 'none' && h !== 'melee' && this.armed && (this.aiming || t - this.lastShotT < 1.2 || t - this._faceT < 0.4);
   }
 
   /** The weapon the wheel shows for a slot: the one in hand, else the last picked there, else the first owned. */
@@ -167,9 +177,9 @@ export class Weapons {
     this.wheelOpen = false;
     this.game.timeScale = 1;
     if (id) this.equip(id);
-    // The tap or click that chose was not a shot.
+    // The tap or click that chose was not a shot, nor is a trigger still held from before.
     this.game.input?.events?.delete?.('attack');
-    this._swallow = 0.2;
+    this._swallow = 0.2; this._needRelease = true;
   }
 
   /** A weapon (and its ammo: a found gun comes loaded, with `start` rounds more). Returns the rounds of reserve added. */
@@ -230,8 +240,12 @@ export class Weapons {
   // ---------------------------------------------------------------- every frame
   update(dt, input) {
     const g = this.game, P = g.player;
-    this.cool -= dt; this._clickT -= dt;
+    this.cool -= dt; this._clickT -= dt; this._dt = dt;
     const def = this.def, onFoot = P.state === 'foot', active = onFoot && !g.cutscene && !g.respawning;
+    // Just on foot (out of a vehicle, a scene, a respawn): a trigger held from before (RT is the
+    // throttle at the wheel) waits to be let go before it fires anything.
+    if (active && this._wasActive === false) this._needRelease = true;
+    this._wasActive = active;
     if (!active && this.wheelOpen) this.closeWheel();
     if (!this.wheelOpen && g.timeScale !== undefined && g.timeScale !== 1) g.timeScale = 1;
     if (!onFoot) { this.aimToggle = false; if (this._reloadT > 0) { this._reloadT = 0; this.reloading = 0; } }
@@ -265,17 +279,25 @@ export class Weapons {
     const base = (this.aiming ? w.spreadAim : w.spreadHip) || 0, move = !P.onGround && onFoot ? 2.2 : P.speed > 0.6 ? (P.sprinting ? 1.8 : 1.35) : 1;
     this.spread = base * move + this.bloom;
     // The trigger.
-    const edge = input.pressed('attack'), held = Boolean(input.state.attackHeld);
+    const edge = input.pressed('attack'), down = Boolean(input.state.attackHeld);
+    if (!down) this._needRelease = false;
+    const held = down && !this._needRelease;
     if (this._swallow > 0 || this.wheelOpen) { this._swallow -= dt; this._queued = 0; }
     else if (active && gun) {
       if (edge) this._queued = 0.18; // a tap just before the gun is ready still fires
       // Held: automatic weapons keep firing; on a phone a semi-automatic repeats a little slower.
       const auto = w.auto || (held && input.mode === 'touch' && !w.bolt && this.game.time - this.lastShotT > interval(w) * 1.6);
       if ((this._queued > 0 || (held && auto)) && this.cool <= 0 && this._reloadT <= 0) {
-        this._queued = 0;
-        if (this.blocked) this._refuse();
-        else if (this.mag <= 0) { if (!this.reload()) this._click(); }
-        else this._fire(input);
+        if (!this.blocked && this.mag > 0 && this._mustTurn()) {
+          // From the hip with the body turned away (walking toward the camera): turn first, so the
+          // shot leaves the gun's muzzle toward the aim, not back through the body.
+          this._faceT = g.time; this._queued = Math.max(this._queued, dt * 1.5);
+        } else {
+          this._queued = 0;
+          if (this.blocked) this._refuse();
+          else if (this.mag <= 0) { if (!this.reload()) this._click(); }
+          else this._fire(input);
+        }
       }
       this._queued -= dt;
     } else if (active && thrower && edge && this.cool <= 0) {
@@ -291,9 +313,25 @@ export class Weapons {
 
   _holy() {
     const p = this.game.player?.pos;
-    if (!p) return false;
-    for (const s of this.zones) if ((s.x - p.x) ** 2 + (s.z - p.z) ** 2 < s.r2) return true;
+    return p ? this.inHoly(p.x, p.z) : false;
+  }
+
+  /** Inside a place of worship (NO_FIRE): no gun goes off there, nobody's, and no bullet or blast lands there. */
+  inHoly(x, z) {
+    for (const s of this.zones) if ((s.x - x) ** 2 + (s.z - z) ** 2 < s.r2) return true;
     return false;
+  }
+
+  /**
+   * A hip shot with the body facing well away from the aim waits for the turn (player.js turns
+   * them while `facing`), a third of a second at most.
+   */
+  _mustTurn() {
+    const g = this.game, P = g.player, face = g.camera?.facing;
+    if (this.aiming || face === undefined || !Number.isFinite(P?.heading)) return false;
+    if (Math.abs(wrapAngle(face - P.heading)) <= TURN_OK) return false;
+    if (g.time - this._faceT > 0.1) this._turnT = g.time; // a fresh wait
+    return g.time - this._turnT < 0.3;
   }
 
   /** A trigger pulled where guns are not fired: a dry click, and the HUD says why. */
@@ -345,32 +383,45 @@ export class Weapons {
   /** Bullets the story never lets you hurt: its actors that are not a fight's targets. */
   _protected(p) { return p.mission && !p.needHits; }
 
-  /** How tall someone is to a bullet, from the feet: standing, crouched, or lying (a fight target on the ground). */
+  /** How tall someone is to a bullet, from the feet: standing, crouched, or lying. */
   _height(p) { return p.state === 'down' || p.state === 'dive' ? 0.45 : p.state === 'cower' || p.state === 'getup' ? 1.15 : 1.78 * (p.h.outfit?.scale || 1); }
 
-  /** Someone a bullet can hit: alive, not the story's own, and up, unless a story fight wants every hit. */
-  _target(p) {
-    if (p.state === 'dead' || this._protected(p) || !p.h || p.h.visible === false) return false;
-    return (p.state !== 'down' && p.state !== 'getup') || (p.mission && p.needHits);
-  }
+  /** Someone a bullet can hit: alive and not the story's own (on the ground too: a shot there knocks them out, as in GTA). */
+  _target(p) { return !(p.state === 'dead' || this._protected(p) || !p.h || p.h.visible === false); }
+
+  /** Someone aim assist bends toward: up on their feet (never a body on the ground), unless a story fight wants every hit. */
+  _assistable(p) { return this._target(p) && ((p.state !== 'down' && p.state !== 'getup') || (p.mission && p.needHits)); }
 
   /**
    * Bend the aim toward the nearest valid person within ~3° of it (touch and gamepad players), if
-   * nothing solid is in between. Writes the new direction into d; true when it bent.
+   * nothing solid is in between. Not when the crosshair is already on someone (a head stays a
+   * head), and the reach narrows with a zoomed view (in an 8x scope 3° is most of the lens). The
+   * bend goes to the nearest point of them to the crosshair, not a fixed chest point. Writes the
+   * new direction into d; true when it bent.
    */
   _assist(o, d, range, t0) {
     const g = this.game, peds = g.peds?.list;
     if (!peds) return false;
-    let best = null, bestA = ASSIST, bx = 0, by = 0, bz = 0;
+    const raw = this.trace(o.x, o.y, o.z, d.x, d.y, d.z, range, this._hit, t0);
+    if (raw.kind === 'ped') return false;
+    // On a car: only someone in front of it is the better guess.
+    const far = raw.kind === 'vehicle' ? raw.t : range;
+    const base = g.camera?.fovBase || 62, fov = g.camera3?.fov || base, reach = ASSIST * clamp(fov / base, 0.12, 1);
+    const hl2 = d.x * d.x + d.z * d.z;
+    let best = null, bestA = reach, bx = 0, by = 0, bz = 0;
     for (const p of peds) {
-      if (!this._target(p)) continue;
-      const h = p.h, tx = h.x - o.x, ty = (h.y || 0) + this._height(p) * 0.7 - o.y, tz = h.z - o.z;
+      if (!this._assistable(p)) continue;
+      const h = p.h, tx = h.x - o.x, tz = h.z - o.z;
+      if (Math.abs(tx) > far || Math.abs(tz) > far) continue;
+      // The crosshair's height where it passes them, kept on their body.
+      const s = hl2 > 1e-9 ? (tx * d.x + tz * d.z) / hl2 : 0, foot = h.y || 0;
+      const ty = clamp(o.y + d.y * s, foot + 0.25, foot + this._height(p) - 0.08) - o.y;
       const l = Math.hypot(tx, ty, tz);
-      if (l > range || l < t0) continue;
+      if (l > far || l < t0) continue;
       const a = Math.acos(clamp((tx * d.x + ty * d.y + tz * d.z) / l, -1, 1));
       // Someone already fighting (or an officer) wins a near tie.
       const score = a * (p.state === 'fight' || p.cop ? 0.75 : 1);
-      if (score >= bestA) continue;
+      if (score >= bestA || this.inHoly(h.x, h.z)) continue;
       best = p; bestA = score; bx = tx / l; by = ty / l; bz = tz / l;
     }
     if (!best) return false;
@@ -382,11 +433,24 @@ export class Weapons {
     return false;
   }
 
+  /** Where a ray from o along unit d enters vehicle v's box (from the road up to its roof) between t0 and t1; Infinity if it misses. */
+  _boxHit(v, ox, oy, oz, dx, dy, dz, t0, t1) {
+    const c = Math.cos(v.heading || 0), s = Math.sin(v.heading || 0), ex = ox - v.x, ez = oz - v.z;
+    const lax = ex * c - ez * s, laz = ex * s + ez * c, ldx = dx * c - dz * s, ldz = dx * s + dz * c;
+    const y0 = v.y || 0, H = v.spec?.H || 1.6;
+    let ta = t0, tb = t1;
+    if (Math.abs(ldx) < 1e-9) { if (Math.abs(lax) > v.hw) return Infinity; } else { let a = (-v.hw - lax) / ldx, b = (v.hw - lax) / ldx; if (a > b) { const k = a; a = b; b = k; } ta = Math.max(ta, a); tb = Math.min(tb, b); if (ta > tb) return Infinity; }
+    if (Math.abs(ldz) < 1e-9) { if (Math.abs(laz) > v.hd) return Infinity; } else { let a = (-v.hd - laz) / ldz, b = (v.hd - laz) / ldz; if (a > b) { const k = a; a = b; b = k; } ta = Math.max(ta, a); tb = Math.min(tb, b); if (ta > tb) return Infinity; }
+    if (Math.abs(dy) < 1e-9) { if (oy < y0 || oy > y0 + H) return Infinity; } else { let a = (y0 - oy) / dy, b = (y0 + H - oy) / dy; if (a > b) { const k = a; a = b; b = k; } ta = Math.max(ta, a); tb = Math.min(tb, b); if (ta > tb) return Infinity; }
+    return ta;
+  }
+
   /**
    * The first thing a ray from o along unit d meets between t0 and maxT: a wall, post or tree (the
-   * colliders, in 24 m pieces), the ground or the river, a person (an upright cylinder, the top
-   * 28 cm the head), or a vehicle (its box). Never the player, nor the vehicle they are in or a
-   * mission's vital one. Fills `out` and returns it; out.kind is null when nothing was hit.
+   * colliders, in 24 m pieces), the ground, a flyover's deck or the river, a person (an upright
+   * cylinder, the top 28 cm the head; lying, a low wide one), or a vehicle (its box). Never the
+   * player, nor the vehicle they are in or a mission's vital one. Fills `out` and returns it;
+   * out.kind is null when nothing was hit.
    */
   trace(ox, oy, oz, dx, dy, dz, maxT, out, t0 = 0) {
     const g = this.game, col = g.colliders;
@@ -405,7 +469,7 @@ export class Weapons {
     const A = dx * dx + dz * dz;
     for (const p of g.peds?.list || []) {
       if (!this._target(p) || A < 1e-9) continue;
-      const h = p.h, lying = p.state === 'down' || p.state === 'getup', r = lying ? 0.55 : 0.35, base = h.y || 0, top = base + this._height(p);
+      const h = p.h, lying = p.state === 'down', r = lying ? 0.55 : 0.35, base = h.y || 0, top = base + this._height(p);
       const px = ox - h.x, pz = oz - h.z, B = px * dx + pz * dz, C = px * px + pz * pz - r * r, disc = B * B - A * C;
       if (disc < 0) continue;
       const sq = Math.sqrt(disc);
@@ -418,19 +482,13 @@ export class Weapons {
       const t = ye > top ? te + (tx - te) * (ye - top) / (ye - yx) : ye < base ? te + (tx - te) * (base - ye) / (yx - ye) : te;
       if (t >= best) continue;
       best = t; kind = 'ped'; out.ped = p; out.vehicle = null;
-      out.head = !lying && p.state !== 'cower' && oy + dy * t > top - 0.28;
+      out.head = !lying && p.state !== 'getup' && p.state !== 'cower' && oy + dy * t > top - 0.28;
     }
-    // Vehicles: a box from the road up to the roof.
+    // Vehicles.
     const P = g.player;
     for (const v of g.vehicles?.list || []) {
       if (v === P?.vehicle || v.vital || v.removed || !(v.hw > 0)) continue;
-      const c = Math.cos(v.heading || 0), s = Math.sin(v.heading || 0), ex = ox - v.x, ez = oz - v.z;
-      const lax = ex * c - ez * s, laz = ex * s + ez * c, ldx = dx * c - dz * s, ldz = dx * s + dz * c;
-      const y0 = v.y || 0, H = v.spec?.H || 1.6;
-      let ta = t0, tb = best;
-      if (Math.abs(ldx) < 1e-9) { if (Math.abs(lax) > v.hw) continue; } else { let a = (-v.hw - lax) / ldx, b = (v.hw - lax) / ldx; if (a > b) { const k = a; a = b; b = k; } ta = Math.max(ta, a); tb = Math.min(tb, b); if (ta > tb) continue; }
-      if (Math.abs(ldz) < 1e-9) { if (Math.abs(laz) > v.hd) continue; } else { let a = (-v.hd - laz) / ldz, b = (v.hd - laz) / ldz; if (a > b) { const k = a; a = b; b = k; } ta = Math.max(ta, a); tb = Math.min(tb, b); if (ta > tb) continue; }
-      if (Math.abs(dy) < 1e-9) { if (oy < y0 || oy > y0 + H) continue; } else { let a = (y0 - oy) / dy, b = (y0 + H - oy) / dy; if (a > b) { const k = a; a = b; b = k; } ta = Math.max(ta, a); tb = Math.min(tb, b); if (ta > tb) continue; }
+      const ta = this._boxHit(v, ox, oy, oz, dx, dy, dz, t0, best);
       if (ta >= best) continue;
       best = ta; kind = 'vehicle'; out.vehicle = v; out.ped = null; out.head = false;
     }
@@ -440,28 +498,70 @@ export class Weapons {
   }
 
   /**
-   * Where the ray meets the ground or the river's surface, sampled only over the stretch low enough
-   * to meet it (below the station platforms, the highest ground there is), then refined. Infinity if
-   * it doesn't. Sets this._water.
+   * Is the straight line from a to b clear for a bullet: no wall, post, trunk or low wall (as the
+   * player's own bullets meet them) and no vehicle but `skip`? For an officer's sight and shots.
+   */
+  clearLine(ax, ay, az, bx, by, bz, skip = null) {
+    const g = this.game, col = g.colliders, ex = bx - ax, ey = by - ay, ez = bz - az, L = Math.hypot(ex, ey, ez);
+    if (L < 1e-6) return true;
+    const ux = ex / L, uy = ey / L, uz = ez / L;
+    if (col?.raycastSolid) {
+      for (let a = 0; a < L; a += SEG) {
+        const b = Math.min(L, a + SEG);
+        if (col.raycastSolid(ax + ux * a, ay + uy * a, az + uz * a, ax + ux * b, ay + uy * b, az + uz * b) < 1) return false;
+      }
+    } else if (col?.raycast && col.raycast(ax, ay, az, bx, by, bz, 0.05) < 0.999) return false;
+    const P = g.player;
+    for (const v of g.vehicles?.list || []) {
+      if (v === skip || v === P?.vehicle || v.removed || !(v.hw > 0)) continue;
+      if (Math.abs(v.x - ax) > L + 6 && Math.abs(v.x - bx) > L + 6) continue;
+      if (this._boxHit(v, ax, ay, az, ux, uy, uz, 0.3, L - 0.3) < Infinity) return false;
+    }
+    return true;
+  }
+
+  /** Is there a flyover near (x, z)? Looked up once a frame at most: bullets then look for its deck. */
+  _decksNear(x, z) {
+    const g = this.game, net = g.net;
+    if (!net?.nearest || !net.raised?.length) return false;
+    if (this._deckT !== g.time) { this._deckT = g.time; this._decks = Boolean(net.nearest(x, z, 120, this._nq, this._raised)); }
+    return this._decks;
+  }
+
+  /**
+   * Where the ray meets the ground, a flyover's deck or the river's surface, sampled only over the
+   * stretch low enough to meet them (below the station platforms, or near a flyover below its deck),
+   * then refined. A river bridge is the street (net.surfaceAt); a deck is a slab, met from above or
+   * from below. Infinity if it meets nothing. Sets this._water.
    */
   _groundHit(ox, oy, oz, dx, dy, dz, t0, t1) {
-    const city = this.game.city;
+    const g = this.game, city = g.city, net = g.net, decks = this._decksNear(ox, oz);
     this._water = false;
+    const cap = decks ? DECK_TOP : GROUND_TOP;
     let a = t0, b = t1;
-    if (dy < 0) a = Math.max(a, (GROUND_TOP - oy) / dy);
-    else if (oy + dy * a > GROUND_TOP) return Infinity;
-    if (dy > 0) b = Math.min(b, (GROUND_TOP - oy) / dy);
+    if (dy < 0) a = Math.max(a, (cap - oy) / dy);
+    else if (oy + dy * a > cap) return Infinity;
+    if (dy > 0) b = Math.min(b, (cap - oy) / dy);
     if (!(a < b)) return Infinity;
-    const floor = (x, z) => { const gy = city ? city.groundHeight(x, z) : 0; return gy < WATER_Y ? WATER_Y : gy; };
-    const n = Math.min(120, Math.max(1, Math.ceil((b - a) / 0.75))), step = (b - a) / n;
+    const surf = net?.surfaceAt;
+    const solid = (x, y, z) => {
+      let gy = surf ? net.surfaceAt(x, z, Math.min(y, 0.3)) : city ? city.groundHeight(x, z) : 0;
+      if (gy < WATER_Y) gy = WATER_Y;
+      if (y <= gy) return true;
+      if (!decks) return false;
+      const D = net.deckOver(x, z);
+      return D > 0.5 && y <= D + 0.02 && y >= D - DECK_SLAB;
+    };
+    const n = Math.min(160, Math.max(1, Math.ceil((b - a) / 0.75))), step = (b - a) / n;
     let prev = a;
     for (let i = 0; i <= n; i++) {
-      const t = a + step * i, x = ox + dx * t, z = oz + dz * t;
-      if (oy + dy * t > floor(x, z)) { prev = t; continue; }
-      // Between the last sample above the ground and this one below it.
+      const t = a + step * i;
+      if (!solid(ox + dx * t, oy + dy * t, oz + dz * t)) { prev = t; continue; }
+      // Between the last sample in the open and this one in the ground (or the deck).
       let lo = prev, hi = t;
-      for (let k = 0; k < 5; k++) { const m = (lo + hi) / 2; if (oy + dy * m > floor(ox + dx * m, oz + dz * m)) lo = m; else hi = m; }
-      this._water = city ? city.groundHeight(ox + dx * hi, oz + dz * hi) < WATER_Y : false;
+      for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; if (!solid(ox + dx * m, oy + dy * m, oz + dz * m)) lo = m; else hi = m; }
+      const x = ox + dx * hi, z = oz + dz * hi;
+      this._water = city ? oy + dy * hi < WATER_Y + 0.05 && city.groundHeight(x, z) < WATER_Y : false;
       return hi;
     }
     return Infinity;
@@ -472,7 +572,9 @@ export class Weapons {
     const g = this.game, P = g.player, w = this.def, id = this.current;
     this.mags[id]--;
     this._dirty = true;
-    this.cool = Math.max(interval(w), MAX_RATE);
+    // The next shot is due one interval after this one was (not after the frame it fell in): at
+    // 30 or 60 frames a second each gun keeps its own rate. Never banked from idle time.
+    this.cool = Math.max(this.cool, -this._dt) + Math.max(interval(w), MAX_RATE);
     if (w.bolt) this._boltT = 0.55;
     this.lastShotT = g.time;
     g.save?.stat?.('shots');
@@ -483,24 +585,37 @@ export class Weapons {
     const range = w.range * 1.5;
     const assisted = (input?.mode === 'touch' || input?.mode === 'gamepad') && this._assist(o, d, range, t0);
     const pellets = Math.min(8, w.pellets || 1), spread = this.spread * (assisted ? 0.5 : 1);
-    let crime = null, kills = 0, heads = 0, marked = false, kill = false, head = false;
+    // Every pellet is traced before any lands: the first one's knock-down must not let the rest
+    // pass over the body (or on into someone behind). What each person and vehicle took is added up.
+    this._tgN = 0;
     for (let k = 0; k < pellets; k++) {
       this._cone(d, spread, dir);
       this.trace(o.x, o.y, o.z, dir.x, dir.y, dir.z, range, hit, t0);
-      const r = this._apply(hit, w, m, dir);
-      if (r) {
-        marked = true;
-        if (r.dead) { kills++; kill = true; }
-        if (r.head) { heads++; head = true; }
-        crime = worse(crime, r.crime);
-      }
+      this._fromMuzzle(m, hit);
+      this._pellet(hit, w, m, dir);
       // A tracer for the first pellet and every other one after it.
       if (k % 2 === 0) g.weaponFx?.shot?.(m.x, m.y, m.z, hit.x, hit.y, hit.z, id);
+    }
+    let kills = 0, heads = 0, kill = false, head = false, marked = false;
+    for (let i = 0; i < this._tgN; i++) {
+      const e = this._tg[i], l = Math.hypot(e.dx, e.dz) || 1;
+      if (e.ped) {
+        const p = e.ped, res = g.peds.shot(p, e.dmg, (e.dx / l) * 3, (e.dz / l) * 3, 'shot'), dead = res === 'dead';
+        marked = true;
+        if (dead) { kills++; kill = true; }
+        if (e.head) { heads++; head = true; }
+        // The story's own fights are no crime (as for punches).
+        if (!p.mission) this._crime(p, dead ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', p.h.x, p.h.z, 80);
+      } else {
+        const v = e.vehicle;
+        g.damageVehicle?.(v, e.dmg * (w.vehicle ?? 1), true);
+        if (v.type === 'police' && v.driver && v.driver !== P.human) this._crime(v, 'shotCop', v.x, v.z, 80, true);
+      }
+      e.ped = null; e.vehicle = null;
     }
     if (marked) { const hm = this._hm; hm.t = g.time; hm.kill = kill; hm.head = head; this.hitMarker = hm; }
     if (kills) g.save?.stat?.('kills', kills);
     if (heads) g.save?.stat?.('headshots', heads);
-    if (crime && !g.missions?.active?.def?.policeLock) g.police?.report(crime.kind, P.x, P.z, { cop: crime.cop, r: 80 });
     // Kick: the view climbs, the cone blooms, the arms jolt.
     g.camera?.kick?.(w.recoil || 0);
     g.camera?.addShake?.(w.pellets ? 0.12 : w.bolt ? 0.1 : 0.02);
@@ -510,31 +625,57 @@ export class Weapons {
     this._noise(P.x, P.z);
   }
 
-  /** What one bullet does to what it hit. Returns { dead, head, crime } for a person or a manned police jeep, else null. */
-  _apply(hit, w, m, dir) {
-    const g = this.game, P = g.player, fx = g.weaponFx;
-    if (!hit.kind) return null;
-    const d = dist(m.x, m.z, hit.x, hit.z);
-    let dmg = falloff(w, d);
-    if (hit.kind === 'ped') {
-      const p = hit.ped;
-      if (hit.head) dmg *= HEADSHOT;
-      const l = Math.hypot(dir.x, dir.z) || 1, res = g.peds.shot(p, dmg, (dir.x / l) * 3, (dir.z / l) * 3, 'shot');
-      fx?.impact?.(hit.x, hit.y, hit.z, 'body');
-      const dead = res === 'dead';
-      // The story's own fights are no crime (as for punches).
-      const crime = p.mission ? null : { kind: dead ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', cop: Boolean(p.cop) };
-      return { dead, head: hit.head, crime };
+  /**
+   * The camera sees past a corner the gun is behind (it sits to the right of the shoulder): the
+   * first few metres of the line from the muzzle are checked too, and a wall there takes the shot.
+   * Not the first 25 cm, so a gun poking into a wall the player hugs still fires.
+   */
+  _fromMuzzle(m, hit) {
+    const col = this.game.colliders;
+    if (!col?.raycastSolid) return;
+    const ex = hit.x - m.x, ey = hit.y - m.y, ez = hit.z - m.z, L = Math.hypot(ex, ey, ez);
+    if (L < 0.3) return;
+    const k = Math.min(L, MUZZLE_CHECK) / L, t = col.raycastSolid(m.x, m.y, m.z, m.x + ex * k, m.y + ey * k, m.z + ez * k);
+    const s = t * L * k;
+    if (t >= 1 || s < 0.25 || s > L - 0.05) return;
+    hit.kind = 'wall'; hit.ped = null; hit.vehicle = null; hit.head = false;
+    hit.x = m.x + ex * k * t; hit.y = m.y + ey * k * t; hit.z = m.z + ez * k * t; hit.t = s;
+  }
+
+  /** One pellet's hit: its puff, and its damage added to what that person or vehicle takes from this shot (none inside a holy place). */
+  _pellet(hit, w, m, dir) {
+    const fx = this.game.weaponFx;
+    if (!hit.kind) return;
+    const p = hit.ped, v = hit.vehicle;
+    if ((p || v) && this.inHoly(p ? p.h.x : v.x, p ? p.h.z : v.z)) { fx?.impact?.(hit.x, hit.y, hit.z, 'ground'); return; }
+    if (!p && !v) { fx?.impact?.(hit.x, hit.y, hit.z, hit.kind); return; }
+    fx?.impact?.(hit.x, hit.y, hit.z, p ? 'body' : 'metal');
+    const dmg = falloff(w, dist(m.x, m.z, hit.x, hit.z)) * (p && hit.head ? HEADSHOT : 1);
+    let e = null;
+    for (let i = 0; i < this._tgN; i++) if ((p && this._tg[i].ped === p) || (v && this._tg[i].vehicle === v)) { e = this._tg[i]; break; }
+    if (!e) {
+      e = this._tg[this._tgN] || (this._tg[this._tgN] = { ped: null, vehicle: null, dmg: 0, head: false, dx: 0, dz: 0 });
+      this._tgN++;
+      e.ped = p; e.vehicle = v; e.dmg = 0; e.head = false; e.dx = 0; e.dz = 0;
     }
-    if (hit.kind === 'vehicle') {
-      const v = hit.vehicle;
-      g.damageVehicle?.(v, dmg * (w.vehicle ?? 1), true);
-      fx?.impact?.(hit.x, hit.y, hit.z, 'metal');
-      if (v.type === 'police' && v.driver && v.driver !== P.human) return { dead: false, head: false, crime: { kind: 'shotCop', cop: true } };
-      return null;
-    }
-    fx?.impact?.(hit.x, hit.y, hit.z, hit.kind);
-    return null;
+    e.dmg += dmg; e.head ||= hit.head; e.dx += dir.x; e.dz += dir.z;
+  }
+
+  /**
+   * A crime against victim o (a person or a manned police jeep): reported once, and again only
+   * when it gets worse (shot, then knocked out: the difference) or a few seconds on. Every bullet
+   * filing its own report made two pistol hits on one man three stars.
+   */
+  _crime(o, kind, x, z, r, cop = Boolean(o.cop)) {
+    const g = this.game, police = g.police;
+    if (!police) return;
+    const rank = RANK[kind] || 0, since = g.time - (o.crimeT ?? -1e9);
+    let heat;
+    if (rank > (o.crimeRank || 0) && since < 30) heat = Math.max(0.3, (police.heatOf?.(kind) ?? 1) - (police.heatOf?.(o.crimeKind) ?? 0));
+    else if (since > 3) heat = police.heatOf?.(kind);
+    else return;
+    o.crimeRank = since > 3 ? rank : Math.max(rank, o.crimeRank || 0); o.crimeKind = kind; o.crimeT = g.time;
+    police.report(kind, x, z, { cop, r, heat });
   }
 
   /** A shot rings out at (x, z): people near it run, and a police officer within earshot (or a witness) reports it. */
@@ -569,7 +710,7 @@ export class Weapons {
     if (this._protected(best)) { peds.knock(best, fx * 4, fz * 4, 1.8, 'punch'); return best; }
     const res = peds.shot(best, WEAPONS.pan.damage * (player.combo === 2 ? 1.25 : 1), fx * 4.5, fz * 4.5, 'punch');
     if (res === 'dead') { const hm = this._hm; hm.t = g.time; hm.kill = true; hm.head = false; this.hitMarker = hm; g.save?.stat?.('kills'); }
-    if (!best.mission) g.police?.report(res === 'dead' ? (best.cop ? 'killCop' : 'killPed') : best.cop ? 'hitCop' : 'punch', player.x, player.z, { cop: best.cop });
+    if (!best.mission) this._crime(best, res === 'dead' ? (best.cop ? 'killCop' : 'killPed') : best.cop ? 'hitCop' : 'punch', player.x, player.z, 55);
     return best;
   }
 
@@ -598,10 +739,12 @@ export class Weapons {
     return true;
   }
 
+  /** What a grenade lands on at (x, z) from height y; this._wet says when it is the river's surface. */
   _floorAt(x, z, y) {
     const g = this.game;
     const gy = g.net?.surfaceAt ? g.net.surfaceAt(x, z, y) : g.city?.groundHeight(x, z) ?? 0;
-    return gy < WATER_Y ? WATER_Y : gy;
+    this._wet = gy < WATER_Y;
+    return this._wet ? WATER_Y : gy;
   }
 
   _grenades(dt) {
@@ -609,6 +752,14 @@ export class Weapons {
     for (let i = L.length - 1; i >= 0; i--) {
       const gr = L[i];
       gr.t -= dt;
+      if (gr.wet) {
+        // In the river: it sinks, drifting to a stop, and goes off down there.
+        const f = Math.exp(-3 * dt);
+        gr.vx *= f; gr.vz *= f; gr.vy = -0.9;
+        gr.y = Math.max(WATER_Y - 1.6, gr.y + gr.vy * dt); gr.x += gr.vx * dt; gr.z += gr.vz * dt;
+        if (gr.t <= 0) { L.splice(i, 1); this.blast(gr.x, gr.y, gr.z, true); }
+        continue;
+      }
       const steps = clamp(Math.ceil(Math.hypot(gr.vx, gr.vy, gr.vz) * dt / 0.3), 1, 6), h = dt / steps;
       for (let s = 0; s < steps; s++) {
         gr.vy -= 15 * h;
@@ -618,13 +769,19 @@ export class Weapons {
         if (t < 1) { gr.x += (nx - gr.x) * t * 0.9; gr.z += (nz - gr.z) * t * 0.9; gr.y += (ny - gr.y) * t; gr.vx *= -0.35; gr.vz *= -0.35; gr.vy *= 0.6; continue; }
         gr.x = nx; gr.y = ny; gr.z = nz;
         const floor = this._floorAt(gr.x, gr.z, gr.y);
+        if (this._wet && gr.y < floor + 0.07) {
+          // Into the Godavari: a splash, no bounce off the water as off a road.
+          gr.wet = true; gr.y = floor - 0.05; gr.vx *= 0.3; gr.vz *= 0.3;
+          this.game.effects?.splash?.(gr.x, gr.z);
+          break;
+        }
         if (gr.y < floor + 0.07) {
           gr.y = floor + 0.07;
           if (gr.vy < -2) { gr.vy = -gr.vy * 0.35; gr.vx *= 0.6; gr.vz *= 0.6; gr.bounced++; }
           else { gr.vy = 0; const f = Math.exp(-4 * h); gr.vx *= f; gr.vz *= f; }
         }
       }
-      if (gr.t <= 0) { L.splice(i, 1); this.blast(gr.x, gr.y, gr.z); }
+      if (!gr.wet && gr.t <= 0) { L.splice(i, 1); this.blast(gr.x, gr.y, gr.z); }
     }
   }
 
@@ -632,10 +789,19 @@ export class Weapons {
    * A grenade goes off at (x, y, z): the explosion, people thrown and hurt (knocked out close in),
    * cars damaged and shoved, the player hurt if near, all on its own level, and a crime.
    */
-  blast(x, y, z) {
+  blast(x, y, z, underwater = false) {
     const g = this.game, P = g.player, pos = P.pos || P, w = WEAPONS.grenade, R = w.blast;
-    g.effects?.explosion?.(x, y + 0.3, z);
     const dP = dist(pos.x, pos.z, x, z);
+    if (underwater) {
+      // Under the river it only throws up the water: a dull thud, people on the bank startled, nobody hurt.
+      g.effects?.splash?.(x, z); g.effects?.splash?.(x + 0.6, z - 0.4);
+      g.audio?.sfx('explosion', 0.3 / (1 + dP / 30));
+      g.camera?.addShake?.(clamp(0.4 - dP / 60, 0, 0.4));
+      g.peds?.gunfire?.(x, z, 30);
+      return;
+    }
+    // The fireball sits on whatever the grenade lies on (its glow on the road, not under it).
+    g.effects?.explosion?.(x, y + 0.43, z, y - 0.07);
     g.audio?.sfx('explosion', 1 / (1 + dP / 30));
     g.camera?.addShake?.(clamp(1.2 - dP / 40, 0, 1.2));
     const level = oy => Math.abs((oy || 0) - y) < 3;
@@ -644,19 +810,21 @@ export class Weapons {
       P.damage?.((R - dP) * 12, 'explosion');
       P.knockDown?.((pos.x - x) * k, (pos.z - z) * k, 1.5);
     }
-    let crime = null, kills = 0;
+    let kills = 0;
+    // Nobody inside a holy place is hurt by a grenade thrown in from outside it.
     for (const p of g.peds?.list || []) {
-      if (p.state === 'dead' || !level(p.h.y)) continue;
+      if (p.state === 'dead' || !level(p.h.y) || this.inHoly(p.h.x, p.h.z)) continue;
       const dx = p.h.x - x, dz = p.h.z - z, pd = Math.max(0.5, Math.hypot(dx, dz));
       if (pd > R + 1) continue;
       const k = (3 + 9 * (1 - pd / (R + 1))) / pd;
       if (this._protected(p)) { g.peds.knock(p, dx * k, dz * k, 3, 'explosion'); continue; }
       const res = g.peds.shot(p, w.damage * (1 - pd / (R + 1)), dx * k, dz * k, 'explosion');
       if (res === 'dead') kills++;
-      if (!p.mission) crime = worse(crime, { kind: res === 'dead' ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', cop: Boolean(p.cop) });
+      // Hurting people is a crime in a mission too (as a bullet's or a pan's is); the story's own are not.
+      if (!p.mission && res) this._crime(p, res === 'dead' ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', x, z, HEAR);
     }
     for (const v of g.vehicles?.list || []) {
-      if (v === P.vehicle || v.vital || v.removed || !level(v.y)) continue;
+      if (v === P.vehicle || v.vital || v.removed || !level(v.y) || this.inHoly(v.x, v.z)) continue;
       const od = dist(v.x, v.z, x, z);
       if (od > 9) continue;
       const k = (9 - od) * 1.2;
@@ -664,10 +832,8 @@ export class Weapons {
       if (v.vx !== undefined) { v.vx += (v.x - x) / Math.max(od, 0.5) * k; v.vz += (v.z - z) / Math.max(od, 0.5) * k; }
     }
     if (kills) { g.save?.stat?.('kills', kills); const hm = this._hm; hm.t = g.time; hm.kill = true; hm.head = false; this.hitMarker = hm; }
-    if (!g.missions?.active) {
-      if (crime) g.police?.report(crime.kind, x, z, { cop: crime.cop, r: HEAR });
-      g.police?.report('blast', x, z, { r: HEAR * 1.5 });
-    }
+    // The bang itself: the story decides when the police come.
+    if (!g.missions?.active) g.police?.report('blast', x, z, { r: HEAR * 1.5 });
     g.peds?.gunfire?.(x, z, 60);
   }
 
@@ -797,6 +963,5 @@ export class Weapons {
   }
 }
 
-const RANK = { shotPed: 1, shotCop: 2, killPed: 3, killCop: 4 };
-/** The more serious of two crimes (one report per shot, however many pellets hit). */
-function worse(a, b) { return !b ? a : !a || (RANK[b.kind] || 0) > (RANK[a.kind] || 0) ? b : a; }
+// How bad a crime against one person is: a worse one reports the difference.
+const RANK = { punch: 1, shotPed: 2, hitCop: 3, shotCop: 4, killPed: 5, killCop: 6 };

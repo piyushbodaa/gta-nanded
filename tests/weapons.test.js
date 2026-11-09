@@ -10,6 +10,7 @@ import { Player } from '../src/actors/player.js';
 import { WEAPONS, AMMO, interval, falloff, NO_FIRE } from '../src/game/weapon-data.js';
 import { world } from './helpers.js';
 import { Colliders } from '../src/world/colliders.js';
+import { wrapAngle as wrap } from '../src/core/math.js';
 
 class FakeInput {
   constructor() { this.events = new Set(); this.state = { attackHeld: false, aim: false, moveX: 0, moveY: 0, sprint: false }; this.mode = 'keyboard'; this.look = { x: 0, y: 0 }; }
@@ -455,7 +456,8 @@ test('bullets hit cars (not the one the player sits in) and an officer\'s pistol
   // An armed officer at range stops and shoots, when he can see the player.
   let shots = 0;
   g.pedShoots = () => { shots++; };
-  const cop = person(g, 20, 0, { kind: 'police', p: { cop: true, keep: true, state: 'fight', t: 30 } });
+  // (Off to the side: the shot-up car between them would be cover.)
+  const cop = person(g, 0, 20, { kind: 'police', p: { cop: true, keep: true, state: 'fight', t: 30 } });
   g.police.level = 3;
   g.police._footCop(cop);
   assert.equal(cop.armed, 'p92');
@@ -464,8 +466,8 @@ test('bullets hit cars (not the one the player sits in) and an officer\'s pistol
   assert.ok(Math.hypot(cop.h.x, cop.h.z) > 15, 'stayed at range');
   assert.equal(cop.h.gun, 'p92');
   assert.equal(cop.h.aim, 1);
-  // Out of sight he runs in instead.
-  g.colliders.raycast = () => 0.5;
+  // Out of sight (behind a post: cover from bullets, though the camera looks past it) he runs in instead.
+  g.colliders.raycastSolid = () => 0.5;
   run(g, input, 0.45); // he looks again every 0.4 s (and the real pedShoots checks the line itself)
   shots = 0;
   const at = Math.hypot(cop.h.x, cop.h.z);
@@ -495,9 +497,13 @@ test('with a gun out the attack button fires instead of punching, and the player
   assert.equal(punches, 2, 'and so does a gamepad\'s B, with empty hands');
   w.equip('p92');
   for (let i = 0; i < 30; i++) step();
+  // Facing away from the aim, the body turns first (a fraction of a second), then the shot goes.
   input.trigger('attack'); step();
+  assert.equal(w.mag, 15, 'not out of the back of the body');
+  for (let i = 0; i < 12; i++) step();
   assert.equal(punches, 2);
   assert.equal(w.mag, 14);
+  assert.ok(Math.abs(wrap(P.heading - 1.2)) < 0.45, `turned first: heading ${P.heading.toFixed(2)}`);
   for (let i = 0; i < 30; i++) step();
   assert.ok(Math.abs(P.heading - 1.2) < 0.05, `heading ${P.heading.toFixed(2)}`);
   assert.equal(P.human.gun, 'p92');
@@ -578,17 +584,38 @@ test('rules: a shot car\'s driver gets out and runs, officers hit back only in s
   const chased = { type: 'sedan', role: 'mission', x: 0, z: 0, y: 0, health: 300, driver: {}, passengers: [] };
   g.damageVehicle(chased, 400, true);
   assert.ok(chased.driver && chased.wrecked);
+  assert.equal(chased.rammedT, undefined, 'its fireball is no crime: the police stay out of the story\'s fight');
   // An officer shoots at the player only with a clear line.
   const cop = { armed: 'p92', h: { x: 8, z: 0, y: 0, yaw: -Math.PI / 2 } };
   let hits = 0, tries = 0;
   g.player.damage = () => hits++;
   for (; tries < 200; tries++) g.pedShoots(cop);
   assert.ok(hits > 40 && hits < 160, `${hits} of ${tries} hit from 8 m`);
-  g.colliders.raycast = () => 0.4; hits = 0;
+  g.colliders.raycastSolid = () => 0.4; hits = 0;
   for (let i = 0; i < 50; i++) g.pedShoots(cop);
   assert.equal(hits, 0, 'not through a wall');
   assert.ok(g.cheat('hathiyaar'));
   assert.equal(w.owned.length, 11);
+});
+
+test('typing JUGAAD mid-play does not throw a grenade with its G', async () => {
+  const listeners = [];
+  const el = () => ({ addEventListener() {}, hidden: true });
+  globalThis.document ??= { getElementById: el, body: { classList: { add() {}, remove() {} } } };
+  const before = globalThis.addEventListener;
+  globalThis.addEventListener = (type, f) => { if (type === 'keydown') listeners.push(f); };
+  const { installRules } = await import('../src/game/rules.js');
+  const { g } = gunGame();
+  Object.assign(g, { started: true, paused: false, city: { ...g.city, places: [] }, jobs: { update() {}, stop() {} }, missions: { active: null }, input: { events: new Set(), pressed: () => false } });
+  g.hud.cashChange = () => {};
+  installRules(g);
+  globalThis.addEventListener = before;
+  const type = (k, a) => { if (a) g.input.events.add(a); for (const f of listeners) f({ key: k }); };
+  type('j', 'attack');
+  assert.ok(g.input.events.has('attack'), 'a lone J is the trigger, as ever');
+  g.input.events.clear();
+  type('u'); type('g', 'grenade');
+  assert.equal(g.input.events.has('grenade'), false, 'JUG: spelling a code');
 });
 
 test('with the wheel up the game runs slow, next and previous are the wheel\'s, and nothing fires', () => {
@@ -625,4 +652,228 @@ test('the first gun out brings up how to shoot, once, and not in a mission', () 
   assert.equal(shown, 1);
   w.equip('fist'); run(g, input, 0.1); w.equip('p92'); run(g, input, 0.1);
   assert.equal(shown, 1, 'only the once');
+});
+
+test('a shotgun blast lands all its pellets at once: point-blank it knocks a man out, and a fight target counts one hit a shot', () => {
+  const { g, w, input } = gunGame();
+  w.give('s12k'); input.state.aim = true;
+  look(g, 0, 1.2, 0);
+  // Random 0: every pellet down the middle, and any knock-down roll would come up.
+  const p = person(g, 3, 0);
+  steady(() => shoot(g, input));
+  assert.equal(p.state, 'dead', 'eight pellets of 22, not one pellet and a knock-down');
+  // Nor do the pellets go on into the man behind.
+  const front = person(g, 3, 6), back = person(g, 6, 6);
+  look(g, 0, 1.2, 6);
+  steady(() => shoot(g, input));
+  assert.equal(front.state, 'dead');
+  assert.equal(back.health, undefined, 'the one behind him untouched');
+  const goon = person(g, 3, 12, { p: { mission: true, needHits: 3, hits: 0, state: 'fight', grudge: 3 } });
+  look(g, 0, 1.2, 12);
+  steady(() => shoot(g, input));
+  assert.equal(goon.hits, 1, 'one blast, one hit toward beating him');
+});
+
+test('a man already down is knocked out for good by the next bullet; aim assist never bends toward a body on the ground', () => {
+  const { g, w, input } = gunGame();
+  w.give('akm'); input.state.aim = true;
+  const p = person(g, 6, 0);
+  look(g, 0, 1.0, 0);
+  steady(() => shoot(g, input));
+  assert.equal(p.state, 'down', 'an AKM round knocks him over');
+  run(g, input, 0.5);
+  look(g, 0, 0.3, 0, Math.atan2(p.h.x, p.h.z)); // low, at him on the road
+  steady(() => shoot(g, input), 0.99);
+  assert.equal(p.state, 'dead');
+  assert.ok(w.hitMarker.kill);
+  // A body on the ground is no target for the assist.
+  const q = person(g, 10, 4);
+  g.peds.knock(q, 0, 0, 30);
+  look(g, 0, 1.4, 4);
+  input.mode = 'touch';
+  const d = { x: 1, y: 0, z: 0 };
+  assert.equal(w._assist({ x: 0, y: 1.4, z: 4 }, d, 100, 0), false);
+});
+
+test('an officer flinches at a rifle round and fights on: he is not knocked out of reach of the next one', () => {
+  const { g, w, input } = gunGame();
+  w.give('akm'); input.state.aim = true;
+  const cop = person(g, 8, 0, { kind: 'police', p: { cop: true, keep: true, state: 'fight', t: 30 } });
+  look(g, 0, 1.3, 0);
+  steady(() => shoot(g, input), 0.5);
+  assert.equal(cop.state, 'fight');
+  assert.equal(cop.health, 130 - 47);
+  steady(() => shoot(g, input, 2), 0.5);
+  assert.equal(cop.state, 'dead', 'three rounds of 47 against 130');
+});
+
+test('one victim is one crime: two pistol hits on a bystander in sight of an officer are not three stars', () => {
+  const { g, w, input } = gunGame();
+  g.vehicles.list.push({ type: 'police', driver: {}, role: 'police-idle', x: 0, z: 60, y: 0 });
+  w.equip('p92'); input.state.aim = true;
+  const p = person(g, 8, 0);
+  look(g, 0, 1.3, 0);
+  const again = () => { p.state = 'idle'; p.h.x = 8; p.h.z = 0; }; // he ran: back in the sights
+  steady(() => shoot(g, input), 0.99); again();
+  steady(() => shoot(g, input), 0.99); again();
+  assert.ok(p.health <= 40 && p.state !== 'dead', `health ${p.health} ${p.state} at ${p.h.x.toFixed(1)}`);
+  assert.ok(g.police.level <= 2, `level ${g.police.level}`);
+  // Knocking him out is worse: the difference, not the whole of it again.
+  steady(() => shoot(g, input), 0.99); again();
+  steady(() => shoot(g, input), 0.99);
+  assert.equal(p.state, 'dead');
+  assert.ok(g.police.level >= 2 && g.police.level <= 3, `level ${g.police.level}`);
+  // Witness calls about the same street are one call.
+  const { g: g2 } = gunGame();
+  steady(() => { g2.police.report('shotPed', 10, 10); g2.police.report('killPed', 12, 10); }, 0.1);
+  assert.equal(g2.police.pending.length, 1);
+  assert.equal(g2.police.pending[0].heat, 2);
+});
+
+test('aim assist leaves a crosshair already on someone alone (a head stays a head), and reaches less through a scope', () => {
+  const { g, w, input } = gunGame();
+  w.give('akm'); input.state.aim = true; input.mode = 'touch';
+  const p = person(g, 20, 0);
+  look(g, 0, 1.64, 0); // dead on his head at 20 m
+  steady(() => shoot(g, input));
+  assert.ok(w.hitMarker?.head, 'still a headshot');
+  assert.equal(p.state, 'dead');
+  // A shot just past someone bends to them at the base view...
+  const q = person(g, 20, 0.6);
+  const o = { x: 0, y: 1.3, z: 0 }, d = { x: Math.cos(0.05), y: 0, z: Math.sin(0.05) };
+  assert.equal(w._assist(o, { ...d }, 100, 0), true);
+  // ...but not through an 8x scope, where 3° is most of the lens.
+  g.camera3.fov = 62 / 8; g.camera.fovBase = 62;
+  assert.equal(w._assist(o, { ...d }, 100, 0), false);
+  void q;
+});
+
+test('a trigger held while getting out of a car fires nothing until it is let go', () => {
+  const { g, w, input } = gunGame();
+  w.give('m416'); w.giveAmmo('556', 300); w.equip('m416');
+  g.player.state = 'driving';
+  input.state.attackHeld = true; // RT, the throttle
+  run(g, input, 0.5);
+  g.player.state = 'foot';
+  run(g, input, 1);
+  assert.equal(g.save.data.stats.shots || 0, 0, 'still the throttle');
+  input.state.attackHeld = false; run(g, input, 0.1);
+  input.state.attackHeld = true; run(g, input, 0.3);
+  assert.ok(g.save.data.stats.shots >= 2, 'a fresh pull fires');
+});
+
+test('each automatic gun keeps its own rate at 30 frames a second', () => {
+  for (const id of ['akm', 'uzi', 'm416']) {
+    const { g, w, input } = gunGame();
+    w.give(id); w.giveAll(); w.equip(id);
+    for (let t = 0; t < 0.5; t += 1 / 30) { g.time += 1 / 30; w.update(1 / 30, input); }
+    input.state.attackHeld = true;
+    g.save.data.stats.shots = 0;
+    w.mags[id] = 1000;
+    for (let t = 0; t < 2 - 1e-9; t += 1 / 30) { g.time += 1 / 30; w.update(1 / 30, input); }
+    const rpm = g.save.data.stats.shots * 30, want = Math.min(WEAPONS[id].rpm, 720);
+    assert.ok(Math.abs(rpm - want) <= 60, `${id}: ${rpm} rpm, the table says ${WEAPONS[id].rpm}`);
+  }
+});
+
+test('a flyover deck stops bullets from above and from below; the river under a bridge is not where a shot at the bridge lands', () => {
+  const { g, w } = gunGame();
+  // A deck 6.4 m up over x in [10, 20].
+  g.net.raised = [1]; g.net.nearest = () => ({ road: 0 });
+  g.net.deckOver = x => (x >= 10 && x <= 20 ? 6.4 : 0);
+  const down = w.trace(15, 8.2, 0, 0, -1, 0, 30, {});
+  assert.equal(down.kind, 'ground');
+  assert.ok(Math.abs(down.y - 6.4) < 0.1, `on the deck, ${down.y.toFixed(2)}`);
+  const up = w.trace(15, 1.4, 0, 0, 1, 0, 30, {});
+  assert.ok(up.kind === 'ground' && up.y > 5.3 && up.y < 5.6, `under the deck, ${up.y.toFixed(2)}`);
+  const across = w.trace(0, 1.4, 0, 1, 0, 0, 40, {});
+  assert.equal(across.kind, null, 'level under it, nothing');
+});
+
+test('the line from the muzzle counts: a post in front of the gun takes the shot the camera sees past', () => {
+  // A post at x = 1.5 reaching from the left as far as z = 0.3.
+  const post = (ax, ay, az, bx, by, bz) => { if (!(ax < 1.5 && bx > 1.5)) return 1; const t = (1.5 - ax) / (bx - ax); return az + (bz - az) * t < 0.3 ? t : 1; };
+  const { g, w, input } = gunGame({ wall: post });
+  w.equip('p92'); input.state.aim = true;
+  const p = person(g, 10, 0.6);
+  look(g, 0, 1.3, 0.6); // the camera off to the right, clear of the post
+  g.weaponFx = { muzzle(m) { m.x = 0.5; m.y = 1.3; m.z = 0; return true; }, shot() {}, impact() {} };
+  steady(() => shoot(g, input));
+  assert.equal(p.health, undefined, 'the post in front of the muzzle took it');
+});
+
+test('a grenade in the river sinks and only throws up water', () => {
+  const { g, w, input } = gunGame();
+  g.city.groundHeight = x => (x > 5 ? -6 : 0);
+  g.net.surfaceAt = x => (x > 5 ? -6 : 0);
+  let splashes = 0;
+  g.effects.splash = () => splashes++;
+  const bank = person(g, 9, 3);
+  bank.h.y = 0;
+  w.give('grenade', 1); w.equip('grenade');
+  run(g, input, 0.3);
+  input.trigger('attack');
+  run(g, input, 4);
+  assert.equal(w.grenades.length, 0);
+  assert.equal(g.booms.length, 0, 'no fireball on the water');
+  assert.ok(splashes >= 2);
+  assert.equal(bank.health, undefined, 'nobody on the bank hurt');
+});
+
+test('at a holy place nobody fires: officers go for the arrest, and bullets and grenades from outside hurt nobody inside', () => {
+  const { g, w, input } = gunGame({ places: [{ id: 'hazur-sahib', x: 100, z: 0 }] });
+  const R = NO_FIRE['hazur-sahib'];
+  let shots = 0;
+  g.pedShoots = () => { shots++; };
+  const cop = person(g, 100 + R - 30, 0, { kind: 'police', p: { cop: true, keep: true, state: 'fight', t: 30, armed: 'p92' } });
+  g.player.x = 100 + R - 50; g.player.z = 0;
+  run(g, input, 2);
+  assert.equal(shots, 0, 'no gun drawn on the player inside');
+  // From just outside, at someone inside.
+  g.player.x = 100 + R + 5;
+  w.equip('p92'); input.state.aim = true;
+  const pilgrim = person(g, 100 + R - 4, 0);
+  look(g, 100 + R + 5, 1.3, 0, -Math.PI / 2);
+  cop.h.x = 500;
+  run(g, input, 0.3);
+  steady(() => shoot(g, input));
+  assert.equal(pilgrim.health, undefined);
+  w.blast(100 + R - 3, 0, 0);
+  assert.equal(pilgrim.health, undefined);
+});
+
+test('officers put their guns away when a story brings the wanted level down', () => {
+  const { g } = gunGame();
+  const cop = person(g, 8, 0, { kind: 'police', p: { cop: true, keep: true, state: 'fight', t: 30 } });
+  g.police.level = 5; cop.id = 3;
+  g.police._footCop(cop);
+  assert.equal(cop.armed, 'm416');
+  g.police.level = 4; g.police._footCop(cop);
+  assert.equal(cop.armed, 'p92');
+  g.police.level = 1; g.police._footCop(cop);
+  assert.equal(cop.armed, null);
+});
+
+test('no punch or pan swing while the weapon wheel is up, and at a holy place the pan is a bare hand', () => {
+  const { g, w, input } = gunGame();
+  let punches = 0, swings = 0;
+  Object.assign(g, {
+    city: { ...g.city, riverDistance: (x, z, o) => { o.d = 99; return o; } },
+    camera: { facing: 0, reset() {}, kick() {}, addShake() {} },
+    pushOutOfVehicles() {}, playerPunch() { punches++; },
+  });
+  const P = new Player(g, 0, 0, 0);
+  g.player = P;
+  w.give('pan'); w.equip('pan');
+  w.swing = () => { swings++; };
+  const step = () => { g.time += 1 / 60; P.update(1 / 60, input); w.update(1 / 60, input); };
+  for (let i = 0; i < 30; i++) step();
+  w.openWheel();
+  input.trigger('attack'); step();
+  assert.equal(swings + punches, 0);
+  w.closeWheel();
+  for (let i = 0; i < 30; i++) step();
+  w.blocked = 'holy'; w._holyT = 99;
+  input.trigger('attack'); step();
+  assert.deepEqual([swings, punches], [0, 1]);
 });

@@ -7,9 +7,11 @@ import { speedOf, forwardSpeed } from '../actors/vehicle-physics.js';
 const UNITS = [0, 2, 3, 4, 6, 8];
 const FOOT_MAX = 6; // officers on foot at once; later units stay in their jeeps
 // Guns: shots fired in public (heard, not seen: `r` 120 m), a person or an officer hit, knocked out for good, a grenade.
-const CRIME_HEAT = {
+// Weapons reports a crime against one person once (and the difference when it gets worse), so a
+// civilian shot in front of an officer is one or two stars, as in GTA, not one star a bullet.
+export const CRIME_HEAT = {
   carjack: 1, hitPed: 1, punch: 0.45, hitCop: 2, ramPolice: 1, wreck: 1, assault: 1, mission: 0,
-  shoot: 0.6, shotPed: 1.5, shotCop: 2.5, killPed: 2, killCop: 3, blast: 1,
+  shoot: 0.6, shotPed: 1, shotCop: 2.5, killPed: 2, killCop: 3, blast: 1,
 };
 
 export class Police {
@@ -35,13 +37,18 @@ export class Police {
    * A crime at (x, z). An officer within `r` (55 m: in sight; gunfire is heard further) knows at
    * once; otherwise a witness may call it in a moment later, if there is anyone about (`witness`).
    */
-  report(crime, x, z, { cop = false, r = 55, witness = true } = {}) {
+  report(crime, x, z, { cop = false, r = 55, witness = true, heat = CRIME_HEAT[crime] ?? 0.5 } = {}) {
     if (this.game.cheats?.noWanted) return;
-    const heat = CRIME_HEAT[crime] ?? 0.5;
     const seenBy = cop || this._copNear(x, z, r);
-    if (seenBy) this.addHeat(heat, x, z);
-    else if (witness && Math.random() < (crime === 'punch' ? 0.25 : 0.6)) this.pending.push({ t: 3 + Math.random() * 3, heat, x, z });
+    if (seenBy) { this.addHeat(heat, x, z); return; }
+    if (!witness || Math.random() >= (crime === 'punch' ? 0.25 : 0.6)) return;
+    // A call already on its way about the same street is that call (the worse of the two), not another.
+    for (const c of this.pending) if (Math.abs(c.x - x) < 40 && Math.abs(c.z - z) < 40) { c.heat = Math.max(c.heat, heat); return; }
+    this.pending.push({ t: 3 + Math.random() * 3, heat, x, z });
   }
+
+  /** The heat a crime adds, by name (Weapons works out the difference when one gets worse). */
+  heatOf(crime) { return CRIME_HEAT[crime] ?? 0.5; }
 
   /**
    * Heat for a crime at (x, z). Seen by an officer, the police know where the player is. `heard`
@@ -267,9 +274,10 @@ export class Police {
     if (c.state === 'dead') return;
     // Cops chase on foot and keep at it longer than angry bystanders do.
     if (c.state === 'flee' || c.state === 'walk' || c.state === 'cower') { c.state = 'fight'; c.t = 30; }
-    // From three stars officers draw their pistols (they shoot back: peds.js, rules.js); at five some carry rifles.
-    if (this.level >= 3 && !c.armed) c.armed = this.level >= 5 && c.id % 3 === 0 ? 'm416' : 'p92';
-    else if (c.armed === 'p92' && this.level >= 5 && c.id % 3 === 0) c.armed = 'm416';
+    // From three stars officers draw their pistols (they shoot back: peds.js, rules.js); at five some
+    // carry rifles. A story lowering the level puts them away again (a pistol below three, a rifle below five).
+    const want = this.level < 3 ? null : this.level >= 5 && c.id % 3 === 0 ? 'm416' : 'p92';
+    if (c.armed !== want) { c.armed = want; if (!want) { c.h.gun = null; c.h.aim = 0; c.h.hold = 'none'; } }
   }
 
   _standDown() {

@@ -94,9 +94,13 @@ export class Peds {
       if (p.gone || (dist(p.h.x, p.h.z, focus.x, focus.z) > 150 && !p.keep)) { g.humans.remove(p.h); this.list.splice(i, 1); }
     }
     this.spawnT -= dt;
-    let budget = this.list.length < target * 0.5 ? 8 : 2;
-    while (this.list.length < target && budget-- > 0 && this.spawnT <= 0) {
-      if (!this._spawn(focus, this.list.length < target * 0.5 ? 20 : 60, 115)) { this.spawnT = 0.15; break; }
+    // The knocked out lying about don't count toward the crowd: after a shoot-out people still come by.
+    let alive = 0;
+    for (const p of this.list) if (p.state !== 'dead') alive++;
+    let budget = alive < target * 0.5 ? 8 : 2;
+    while (alive < target && budget-- > 0 && this.spawnT <= 0) {
+      if (!this._spawn(focus, alive < target * 0.5 ? 20 : 60, 115)) { this.spawnT = 0.15; break; }
+      alive++;
     }
     this.panic = Math.max(0, this.panic - dt * 0.1);
     for (const p of this.list) this._update(p, dt);
@@ -267,8 +271,9 @@ export class Peds {
 
   /**
    * Hit by a bullet, a pan or a blast for `dmg` against their health (100, police 130), shoved at
-   * (vx, vz). At nothing they are knocked out for good. A story fight's target counts every hit
-   * toward beating them (on the ground too) and is never knocked out. Returns 'dead', 'hit' or null.
+   * (vx, vz). At nothing they are knocked out for good, and so is anyone shot again while down, as
+   * in GTA. A story fight's target counts every hit toward beating them (on the ground too) and is
+   * never knocked out. Returns 'dead', 'hit' or null.
    */
   shot(p, dmg, vx, vz, cause = 'shot') {
     if (p.state === 'dead') return null;
@@ -278,10 +283,20 @@ export class Peds {
     }
     p.health ??= p.cop || p.h.outfit?.kind === 'police' ? COP_HEALTH : PED_HEALTH;
     p.health -= dmg;
-    if (p.health <= 0) { this.kill(p, vx, vz, cause); return 'dead'; }
-    if (p.state === 'down' || p.state === 'getup') return 'hit';
-    // A hard hit puts them down; a lighter one sends them running (an officer, or someone already
-    // fighting, fights on).
+    const down = p.state === 'down' || p.state === 'getup';
+    if (p.health <= 0 || (down && cause === 'shot')) { this.kill(p, vx * (down ? 0.2 : 1), vz * (down ? 0.2 : 1), cause); return 'dead'; }
+    if (down) return 'hit';
+    // An officer, or anyone squaring up to the player, flinches at a bullet and fights on (knocked
+    // down by every rifle round, they lay out of reach of the next for seconds at a time).
+    if (cause === 'shot' && (p.cop || p.state === 'fight')) {
+      this._keepRole(p);
+      p.hits++; p.cool = Math.max(p.cool, 0.35); p.h.recoil = 1;
+      p.h.x += vx * 0.04; p.h.z += vz * 0.04;
+      this.bark(p, 'hit');
+      this.game.onPedHurt?.(p, cause);
+      return 'hit';
+    }
+    // A hard hit puts them down; a lighter one sends them running.
     if (cause === 'explosion' || dmg >= 40 || Math.random() < dmg / 70) this.knock(p, vx, vz, 1.4 + Math.random() * 0.8, cause);
     else {
       this._keepRole(p);
@@ -433,8 +448,10 @@ export class Peds {
         // (pressed against it as it pulls away, a cop would be run over). An armed officer (three
         // stars and up) who can see the player stops at range and shoots instead; close in, they
         // still go for the arrest.
-        const car = player.vehicle;
-        if (p.armed && !apart && dPlayer > 4 && dPlayer < 40 && this._sees(p, pp, dt)) {
+        const car = player.vehicle, W = g.weapons;
+        // Never a gun at a holy place: there they go for the arrest (the player's gun is put away there too).
+        const holy = W?.inHoly?.(pp.x, pp.z) || W?.inHoly?.(h.x, h.z);
+        if (p.armed && !apart && !holy && dPlayer > 4 && dPlayer < 40 && this._sees(p, pp, dt)) {
           const sp = dPlayer > 20 ? 3.2 : 0;
           if (sp) { h.x += Math.sin(h.yaw) * sp * dt; h.z += Math.cos(h.yaw) * sp * dt; }
           h.pose = sp ? 'walk' : 'idle'; h.speed = sp;
@@ -505,12 +522,17 @@ export class Peds {
     if (p.state !== 'down' && p.state !== 'dead') h.y = this._floor(p);
   }
 
-  /** Does officer p have a clear line to the player (at pos)? Looked at again every 0.4 s. */
+  /**
+   * Does officer p have a clear line to the player (at pos), as a bullet would (posts, trunks, a
+   * flyover's piers and parked cars are cover, as they are from the player's bullets)? Looked at
+   * again every 0.4 s.
+   */
   _sees(p, pos, dt) {
     if ((p.losT = (p.losT || 0) - dt) > 0) return p.los;
     p.losT = 0.4;
-    const h = p.h, col = this.game.colliders;
-    p.los = !col?.raycast || col.raycast(h.x, (h.y || 0) + 1.5, h.z, pos.x, (pos.y || 0) + 1.3, pos.z, 0.05) >= 0.999;
+    const g = this.game, h = p.h, col = g.colliders, W = g.weapons;
+    const ax = h.x, ay = (h.y || 0) + 1.5, az = h.z, bx = pos.x, by = (pos.y || 0) + 1.3, bz = pos.z;
+    p.los = W?.clearLine ? W.clearLine(ax, ay, az, bx, by, bz, g.player.vehicle) : !col?.raycast || col.raycast(ax, ay, az, bx, by, bz, 0.05) >= 0.999;
     return p.los;
   }
 
