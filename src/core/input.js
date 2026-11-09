@@ -125,7 +125,7 @@ export class Input {
       if (!this.weaponScroll) { this.zoom = (this.zoom || 0) + step; this.scrollAcc = 0; return; }
       if (Math.sign(step) !== Math.sign(this.scrollAcc)) this.scrollAcc = 0; // turned back: start a fresh notch
       this.scrollAcc += step;
-      if (Math.abs(this.scrollAcc) < 1) return;
+      if (Math.abs(this.scrollAcc) < 0.999) return; // ten trackpad steps of 0.1 add up to 0.9999…
       const next = this.scrollAcc > 0, inWheel = this.held.has('wheelHold');
       this.events.add(inWheel ? (next ? 'wheelNext' : 'wheelPrev') : next ? 'weaponNext' : 'weaponPrev');
       this.scrollAcc = 0;

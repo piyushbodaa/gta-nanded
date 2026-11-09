@@ -10,11 +10,14 @@ Steal an auto-rickshaw outside Hazur Sahib Nanded station, weave through Shyam N
 | --- | --- | --- | --- |
 | Move / steer | `W A S D` / arrows | left stick | floating stick (left thumb) |
 | Look | mouse (click to lock) · drag | right stick | drag the right half |
-| Sprint · Jump · Punch | `Shift` · `Space` · click / `J` | L3 · A · B | RUN · JUMP · PUNCH |
+| Sprint · Jump · Punch | `Shift` · `Space` · click / `J` | L3 · A · B (or RT) | RUN · JUMP · PUNCH |
+| Fire · Aim (scope) · Reload | click / `J` · hold right-click · `R` | RT · LT · B | FIRE (hold; drag to turn) · AIM / SCOPE · RELOAD |
+| Weapon wheel | hold `Tab`, point with the mouse, let go | hold RB, point with the right stick | tap the weapon button under the stars, tap a weapon |
+| Next / previous weapon · Wheel slot | mouse wheel · `1`–`7` | D-pad → / ← | tap a slot again for the next in it |
 | Get in / jack / get out | `F` (or `E`) | Y | ENTER / EXIT |
 | Gas · Brake/reverse · Handbrake | `W` · `S` · `Space` | RT · LT · A | GAS · BRAKE · DRIFT |
-| Horn · Radio · Look back | `H` · `R` · `C` | L3 · RB · R3 | HORN · 📻 |
-| Camera distance | `V` | LB | 🎥 |
+| Horn · Radio · Look back | `H` · `R` (in a vehicle) · `C` | L3 · RB (in a vehicle) · R3 | HORN · 📻 |
+| Camera distance | `V` (and the mouse wheel in a vehicle) | LB | 🎥 |
 | Buy / talk / photograph | `Q` | X | contextual button |
 | Siren (police jeep, ambulance) | `Q` | X | SIREN |
 | Start a job (in an auto or on a two-wheeler) | `N` | D-pad ↑ | START JOB |
@@ -30,6 +33,7 @@ Steal an auto-rickshaw outside Hazur Sahib Nanded station, weave through Shyam N
 - **Photos** — 📷 (or `X`) takes a photo anywhere, captioned with the place. **Share** hands it to WhatsApp, Instagram or anything else on the phone, with the game's link; **Save** keeps it.
 - **Roadside snacks** — chai, vada pav, misal at stalls and handcarts heal you and give you a burst of energy.
 - **Anna's Rang Garage** — drive in while wanted: new colour, repairs, stars cleared (₹250).
+- **Weapons** — fists and a P92 to start; the Micro UZI, UMP45, AKM, M416, S12K, Kar98k, the frying pan and frag grenades are in about 70 glowing loot crates on footpaths across the city (walk over one to take it; they come back after a while), and in free roam an **air drop** parachutes in every few minutes under red smoke and a radar blip, often with the AWM. Calibres are shared, so a box of 7.62 feeds the AKM and the Kar98k. Choose from a GTA-style weapon wheel; the game slows while it is open. Snipers aim through a scope. Gunfire draws the police, and from three stars officers shoot back. Holy places (Hazur Sahib, the gurdwaras, temples and ghats) are no-fire zones. People who are shot fall and lie still; there is no blood.
 - **Wanted level** — crimes the police see (or a witness reports) earn stars. Jeeps path-find to you and ram; officers get out with lathis. Break line of sight and leave the flashing search area on the radar to lose them, or end up **BUSTED** at Vazirabad Police Station. Get hurt too badly and it's **WASTED** — you wake up at SGGS Civil Hospital.
 - **Radio** — three stations composed live: *Radio Godavari 92.7* (dhol-tasha), *Lavani Express 98.3* (dholki and harmonium), *Katta Lo-Fi 101.1*. Every song is new.
 - **Neighbourhoods** — 53 of them; each first visit pays ₹50. A full day passes in about 20 real minutes, and the weather can be clear, hazy or monsoon.
