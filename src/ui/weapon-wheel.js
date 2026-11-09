@@ -7,6 +7,7 @@ import { keyName } from './controls.js';
 
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2;
+const SLOT_KEYS = SLOTS.map((s, i) => `slot${i + 1}`); // the number keys' events
 
 /**
  * The slot a direction points at, as an index into SLOTS: slots run clockwise from the top, and x and y are
@@ -129,8 +130,14 @@ export class WeaponWheel {
     // The right stick points like the mouse; pushed only a little, it keeps what was highlighted.
     const sx = input.state.stickX || 0, sy = input.state.stickY || 0;
     if (sx * sx + sy * sy > 0.36) this._highlight(slotAt(sx, sy));
-    if (input.pressed('wheelNext') || (this.mode === 'tap' && input.pressed('weaponNext'))) this.cycle(1);
-    if (input.pressed('wheelPrev') || (this.mode === 'tap' && input.pressed('weaponPrev'))) this.cycle(-1);
+    // Next and previous move within the highlighted slot (the weapons leave them to the wheel while it is up),
+    // and a number key points at its slot: held, letting go takes it; opened by a tap, it is a tap.
+    if (input.pressed('wheelNext') || input.pressed('weaponNext')) this.cycle(1);
+    if (input.pressed('wheelPrev') || input.pressed('weaponPrev')) this.cycle(-1);
+    for (let k = 0; k < SLOT_KEYS.length; k++) {
+      if (!input.pressed(SLOT_KEYS[k])) continue;
+      if (this.mode === 'tap') { this.tapSlot(k); if (!this.open) return; } else this._highlight(k);
+    }
     // Ammo can change while it is up (a pickup in slow motion): look again a few times a second.
     if ((this.refreshT -= dt) <= 0) { this.refreshT = 0.25; this.dirty = true; }
     if (this.dirty) this._render();

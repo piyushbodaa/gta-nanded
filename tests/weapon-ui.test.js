@@ -299,6 +299,18 @@ test('letting go on an empty slot keeps the weapon in hand; next and previous mo
   assert.equal(w.current, 'm416');
 });
 
+test('a number key held in the wheel points at its slot, and letting go takes it', () => {
+  const w = fakeWeapons(['fist', 'p92', 's12k'], 'p92');
+  const g = wheelGame(w), input = g.input;
+  const wheel = new WeaponWheel(g);
+  input.held.add('wheelHold'); input.update(); wheel.update(0);
+  input.trigger('slot5'); wheel.update(0);
+  assert.equal(SLOTS[wheel.hl].id, 'shotgun');
+  assert.equal(w.wheelOpen, true, 'still up while Tab is held');
+  input.held.delete('wheelHold'); input.update(); wheel.update(0);
+  assert.equal(w.current, 's12k');
+});
+
 test('on a touch screen the weapon button opens the wheel, a tap chooses, a tap outside closes', () => {
   const w = fakeWeapons(['fist', 'p92', 'akm', 'm416'], 'akm');
   const g = wheelGame(w), input = g.input;
