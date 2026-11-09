@@ -11,7 +11,7 @@ const FOOT_MAX = 6; // officers on foot at once; later units stay in their jeeps
 // civilian shot in front of an officer is one or two stars, as in GTA, not one star a bullet.
 export const CRIME_HEAT = {
   carjack: 1, hitPed: 1, punch: 0.45, hitCop: 2, ramPolice: 1, wreck: 1, assault: 1, mission: 0,
-  shoot: 0.6, shotPed: 1, shotCop: 2.5, killPed: 2, killCop: 3, blast: 1,
+  shoot: 0.6, shotPed: 1, shotCop: 2.5, killPed: 2, killCop: 3, blast: 1, drone: 1,
 };
 
 export class Police {
@@ -73,11 +73,13 @@ export class Police {
     if (n === 0) this._standDown();
   }
 
-  clear() { this.setLevel(0); this.pending.length = 0; }
+  /** Everything off at once (retry, respawn, respray): the level, calls on their way, any roadblock and the drone. */
+  clear() { this.setLevel(0); this.pending.length = 0; this.game.nakabandi?.clear(); }
 
   _copNear(x, z, r) {
     for (const u of this.units) if (dist(u.v.x, u.v.z, x, z) < r) return true;
     for (const c of this.foot) if (c.state !== 'dead' && dist(c.h.x, c.h.z, x, z) < r) return true;
+    if (this.game.nakabandi?.copNear(x, z, r)) return true; // constables at a roadblock
     // Only a jeep with an officer in it sees anything: not an empty, abandoned or burnt-out one.
     for (const v of this.game.vehicles.list) if (v.type === 'police' && v.driver && v.role !== 'player' && !v.wrecked && dist(v.x, v.z, x, z) < r * 0.8) return true;
     return false;
@@ -110,6 +112,8 @@ export class Police {
         if (d > 75) continue;
         if (d < 12 || g.colliders.raycast(e.x, 1.6, e.z, pos.x, 1.6, pos.z, 0.05) >= 0.999) { this.seen = true; break; }
       }
+      // Constables at a roadblock, and the drone overhead unless the player is under cover.
+      if (!this.seen && g.nakabandi?.sees(pos)) this.seen = true;
     }
     if (this.seen) {
       this.lastSeen.x = pos.x; this.lastSeen.z = pos.z; this.unseenT = 0;
@@ -149,8 +153,8 @@ export class Police {
     });
     this._cleanup(dt);
     // Busted? Not while a cutscene holds the player still: they couldn't get away if they tried.
-    const near = this.foot.some(c => c.state !== 'down' && c.state !== 'dead' && dist(c.h.x, c.h.z, P.x, P.z) < 1.5);
-    const boxed = P.vehicle && speedOf(P.vehicle) < 1.5 && this.units.some(u => dist(u.v.x, u.v.z, P.vehicle.x, P.vehicle.z) < 6.5);
+    const near = this.foot.some(c => c.state !== 'down' && c.state !== 'dead' && dist(c.h.x, c.h.z, P.x, P.z) < 1.5) || Boolean(g.nakabandi?.copWithin(P.x, P.z, 1.5));
+    const boxed = P.vehicle && speedOf(P.vehicle) < 1.5 && (this.units.some(u => dist(u.v.x, u.v.z, P.vehicle.x, P.vehicle.z) < 6.5) || Boolean(g.nakabandi?.jeepWithin(P.vehicle.x, P.vehicle.z, 6.5)));
     if (!g.cutscene && ((P.state === 'foot' && near && P.speed < 2.5) || boxed)) this.bustT += dt; else this.bustT = Math.max(0, this.bustT - dt * 2);
     if (this.bustT > (P.vehicle ? 3.2 : 1.6)) { this.bustT = 0; g.busted?.(); }
   }
@@ -289,6 +293,7 @@ export class Police {
     for (const c of this.foot) this._offDuty(c);
     this.foot = [];
     this.bustT = 0;
+    this.game.nakabandi?.standDown();
   }
 
   _cleanup(dt) {

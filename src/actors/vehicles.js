@@ -134,6 +134,26 @@ export class Vehicles {
     out.x = v.x + s.x * c + s.z * sn; out.z = v.z - s.x * sn + s.z * c;
     return out;
   }
+  /** Centre of wheel i (an index into v.model.wheels) in world space, out = {x, y, z}; a flat one sits lower. */
+  wheelWorld(v, i, out = {}) {
+    const w = v.model.wheels[i];
+    if (!w) return null;
+    local(v, w[0], w[1], out);
+    out.y = v.y + (v.flat & (1 << i) ? w[2] * 0.78 : w[2]);
+    return out;
+  }
+  /** The wheel whose tyre (x, y, z) is within r of, the nearest of them, or -1. */
+  wheelNear(v, x, y, z, r) {
+    const W = v.model.wheels, p = this._wn || (this._wn = {});
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < W.length; i++) {
+      this.wheelWorld(v, i, p);
+      const d = Math.hypot(p.x - x, p.y - y, p.z - z) - W[i][2];
+      if (d < r && d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
   /**
    * Door position where people get in and out: the driver's side (right-hand drive), and the left of
    * a two-wheeler, the side its stand and the rider's foot are on (local +x is the vehicle's left).
@@ -257,7 +277,8 @@ export class Vehicles {
       b.x = x - b.vx * back; b.z = z - b.vz * back;
       // Traffic and parked vehicles meet a crash with their real mass: as walls, a scooter would throw
       // a hatch back the way it came. A brush leaves them to their drivers.
-      const wakes = b.kinematic && b.role !== 'parked-static' && closingSpeed(a, b) > 1.5;
+      // A nakabandi's jeep is a wall to a car nosing into it; rammed hard (over 6 m/s) it is shoved aside.
+      const wakes = b.kinematic && b.role !== 'parked-static' && closingSpeed(a, b) > (b.role === 'roadblock' ? 6 : 1.5);
       if (wakes) b.kinematic = false;
       const imp = collidePair(a, b);
       if (imp > 1.5) {
@@ -316,7 +337,7 @@ export class Vehicles {
   }
 
   _impact(v, speed, other) {
-    const dmg = Math.max(0, speed - 3) * (v.spec.mass > 5000 ? 2 : 9) * (other && other.mass > v.mass * 3 ? 1.6 : 1);
+    const dmg = Math.max(0, speed - 3) * (v.spec.mass > 5000 ? 2 : 9) * (other && other.mass > v.mass * 3 ? 1.6 : 1) * (v.dmgK ?? 1);
     v.health = Math.max(0, v.health - dmg);
     v.lastHit = this.time;
     v.lastImpact = Math.max(v.lastImpact || 0, speed);
@@ -376,12 +397,15 @@ export class Vehicles {
         M.lights.setColorAt(i, _c.setRGB(lamp, lamp + (lit && v.braking ? 0.5 : 0), flash));
         // Wheels.
         const model = v.model;
-        for (const [wx, wz, r, front, width] of model.wheels) {
+        for (let k = 0; k < model.wheels.length; k++) {
+          const [wx, wz, r, front, width] = model.wheels[k];
           if (wn >= this.wheels.instanceMatrix.count) break;
           _e.set(v.wheelSpin || 0, front ? v.steer : 0, 0, 'YXZ');
           _q.setFromEuler(_e);
-          _p.set(wx, r, wz);
-          _s.set(width, r, r);
+          // A burst tyre is squashed flat, the rim nearly on the road.
+          const fr = v.flat & (1 << k) ? r * 0.78 : r;
+          _p.set(wx, fr, wz);
+          _s.set(width, fr, fr);
           _t.compose(_p, _q, _s);
           _w.multiplyMatrices(_m, _t);
           this.wheels.setMatrixAt(wn++, _w);
