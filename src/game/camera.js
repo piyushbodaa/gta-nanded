@@ -6,6 +6,9 @@ import { clamp, damp, dampAngle, wrapAngle } from '../core/math.js';
 import { WATER_Y } from '../world/water.js';
 
 const DIST = { hatch: 6.4, sedan: 6.8, suv: 7.4, police: 7.4, auto: 5.6, bike: 4.6, scooter: 4.4, bus: 13, truck: 11.5, tractor: 7, tempo: 7.6, ambulance: 8 };
+// The aim view: how far back, how far above the 1.55 m orbit centre, and how far out to the right
+// the camera turns about (walls pull it in on both counts).
+export const AIM = { dist: 1.75, up: 0.24, right: 0.7 };
 const HEIGHT = { hatch: 1.6, sedan: 1.6, suv: 2.0, police: 2.0, auto: 1.8, bike: 1.5, scooter: 1.5, bus: 3.2, truck: 3.2, tractor: 2.2, tempo: 2.0, ambulance: 2.2 };
 
 export class GameCamera {
@@ -113,10 +116,10 @@ export class GameCamera {
     } else {
       this.mode = aimK > 0.5 ? (this.scopeK > 0.5 ? 'scope' : 'aim') : 'foot';
       const h = subject.human;
-      // Aiming: in close over the shoulder and a little above the gun, so the barrel shows its length
-      // under the crosshair instead of pointing straight away from a camera level with it.
-      dist = 4.3 * this.zoom + (1.75 - 4.3 * this.zoom) * aimK;
-      tx = h.x; tz = h.z; ty = h.y + 1.55 + 0.11 * aimK;
+      // Aiming: in over the shoulder, out to the right of the gun and above it, so the rifle is seen
+      // from the side along its length (not end-on, tucked behind the right arm) under the crosshair.
+      dist = 4.3 * this.zoom + (AIM.dist - 4.3 * this.zoom) * aimK;
+      tx = h.x; tz = h.z; ty = h.y + 1.55 + AIM.up * aimK;
       // Keyboard and touch players get a gentle follow when they run; mouse-look players steer it
       // themselves, and so does anyone aiming.
       if (!input.pointerLocked && aimK < 0.05 && subject.speed > 2.5 && this.time - this.lastManual > 1.5) {
@@ -138,7 +141,7 @@ export class GameCamera {
     // short of any wall there.
     let cx = this.target.x, cy = this.target.y, cz = this.target.z;
     if (aimK > 0 || this.shoulder > 0 || this.drawnK > 0) {
-      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), want = 0.58 * aimK + 0.42 * this.drawnK * (1 - aimK);
+      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), want = AIM.right * aimK + 0.42 * this.drawnK * (1 - aimK);
       const t = want > 0 ? this.colliders.raycast(cx, cy, cz, cx + rx * (want + 0.2), cy, cz + rz * (want + 0.2), 0.05) : 1;
       const s = Math.max(0, Math.min(want, (want + 0.2) * t - 0.2));
       this.shoulder = s < this.shoulder ? s : damp(this.shoulder, s, 10, dt);
