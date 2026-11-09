@@ -877,3 +877,56 @@ test('no punch or pan swing while the weapon wheel is up, and at a holy place th
   input.trigger('attack'); step();
   assert.deepEqual([swings, punches], [0, 1]);
 });
+
+test('a bullet into a tyre bursts it through the game\'s wrapper; a grenade bursts the tyres within 4 m', () => {
+  const { g, w, input } = gunGame();
+  w.give('akm'); input.state.aim = true;
+  look(g, 0, 1.0, 0);
+  const car = { x: 10, z: 0, y: 0, heading: 0, hw: 0.85, hd: 2.1, health: 1000, spec: { H: 1.5 }, model: { wheels: [[0.8, 1.3, 0.3, 1], [-0.8, 1.3, 0.3, 1], [0.8, -1.3, 0.3, 0], [-0.8, -1.3, 0.3, 0]] } };
+  g.vehicles.list.push(car);
+  const bursts = [], asked = [];
+  g.burstTyre = (v, i) => { bursts.push([v, i]); return true; };
+  g.vehicles.wheelNear = (v, x, y, z, r) => { asked.push(r); return 2; };
+  g.vehicles.wheelWorld = (v, i, out) => { const wh = v.model.wheels[i]; out.x = v.x + wh[0]; out.y = wh[2]; out.z = v.z + wh[1]; return out; };
+  steady(() => shoot(g, input));
+  assert.deepEqual(bursts, [[car, 2]]);
+  assert.equal(asked[0], 0.15, 'within 15 cm of the tyre');
+  bursts.length = 0;
+  w.blast(10.8, 0, 3.5); // 2.2 m from the front-left wheel, 2.6 from the front-right, further from the back
+  assert.deepEqual(bursts.map(b => b[1]).sort(), [0, 1]);
+});
+
+test('the police drone takes bullets: hurt, brought down, and shooting it is a crime', async () => {
+  const { raySphere } = await import('../src/game/nakabandi.js');
+  const { g, w, input } = gunGame();
+  w.give('akm'); input.state.aim = true;
+  look(g, 0, 1.0, 0);
+  const drone = { x: 30, y: 1.0, z: 0, state: 'fly', health: 60 };
+  let taken = 0;
+  g.nakabandi = {
+    drone, copNear: () => false, sees: () => false, copWithin: () => false, jeepWithin: () => false,
+    droneHit: (ox, oy, oz, dx, dy, dz, len) => drone.state === 'fly' ? raySphere(ox, oy, oz, dx, dy, dz, len, drone.x, drone.y, drone.z, 0.7) : -1,
+    hitDrone(d) { taken += d; drone.health -= d; if (drone.health <= 0) { drone.state = 'fall'; return true; } return false; },
+  };
+  const reports = [];
+  const report = g.police.report.bind(g.police);
+  g.police.report = (kind, x, z, o) => { reports.push(kind); return report(kind, x, z, o); };
+  steady(() => shoot(g, input));
+  assert.ok(taken > 0, 'hit');
+  assert.ok(reports.includes('drone'), 'reported');
+  assert.equal(w.hitMarker?.t, g.weapons.lastShotT, 'the hit marker shows');
+  steady(() => shoot(g, input, 4));
+  assert.equal(drone.state, 'fall');
+  assert.equal(w.trace(0, 1, 0, 1, 0, 0, 100, {}).kind, null, 'a falling drone is no target');
+});
+
+test('a retry tops ammo up to the checkpoint, never takes any away, and caps it', () => {
+  const { w } = gunGame();
+  w.give('akm');
+  const inv = { weapons: ['p92', 'akm'], mags: { p92: 15, akm: 30 }, ammo: { '9mm': 30, '762': WEAPONS.akm.start } };
+  w.mags.akm = 3; w.ammo['762'] = 0; w.ammo['9mm'] = 200;
+  w.topUp(inv);
+  assert.deepEqual([w.mags.akm, w.ammo['762'], w.ammo['9mm']], [30, WEAPONS.akm.start, 200]);
+  w.topUp({ weapons: [], mags: { akm: 999 }, ammo: { '762': 1e6 } });
+  assert.deepEqual([w.mags.akm, w.ammo['762']], [30, AMMO['762'].max]);
+});

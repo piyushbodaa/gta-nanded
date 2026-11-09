@@ -303,3 +303,16 @@ test('the retry card holds the game until a choice; it takes a tap, Enter or a g
   assert.deepEqual([retried, quit], [2, 1]);
   card.close();
 });
+
+test('the key that answers the card does nothing else: Esc on QUIT never opens the pause menu next frame', () => {
+  const events = new Set(), g = { input: { events, pressed: a => events.delete(a) } }, card = new RetryCard(g, fakeDoc());
+  let quit = 0;
+  card.offer({ onRetry() {}, onQuit: () => { quit++; g.respawning = false; } });
+  card._reveal();
+  events.add('pause'); // the game's own key handler saw the same Esc
+  card._onKey({ code: 'Escape', preventDefault() {} });
+  assert.equal(quit, 1);
+  card.update(); // game.js runs this before it reads the pause key
+  assert.equal(g.input.pressed('pause'), false, 'eaten');
+  card.close();
+});

@@ -28,6 +28,12 @@ export class PauseMenu {
     const g = this.game;
     for (const b of this.root.querySelectorAll('[data-tab]')) b.addEventListener('click', () => this.show(b.dataset.tab));
     $('pause-resume').addEventListener('click', () => this.close());
+    // Back to the last checkpoint of this mission, or to the grid of this race.
+    $('pause-retry').addEventListener('click', () => {
+      this.close();
+      if (g.missions.canRetry) g.missions.retryActive();
+      else if (g.jobs.active?.kind === 'race') { g.jobs.stop(true); g.jobs.retryRace(); }
+    });
     $('map-zoom-in').addEventListener('click', () => this.map.zoomBy(1.4));
     $('map-zoom-out').addEventListener('click', () => this.map.zoomBy(0.7));
     $('map-me').addEventListener('click', () => { const p = g.player.pos; this.map.focus(p.x, p.z, 0.8); });
@@ -122,6 +128,7 @@ export class PauseMenu {
   show(tab) {
     this.tab = tab;
     $('pause-resume').querySelector('kbd').textContent = keyName(this.game, 'pause'); // Esc, or Start on a gamepad
+    $('pause-retry').hidden = !(this.game.missions?.canRetry || this.game.jobs?.active?.kind === 'race');
     for (const b of this.root.querySelectorAll('[data-tab]')) {
       const on = b.dataset.tab === tab;
       b.setAttribute('aria-selected', String(on));

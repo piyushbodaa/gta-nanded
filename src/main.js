@@ -18,6 +18,9 @@ import { Police } from './game/police.js';
 import { Weapons } from './game/weapons.js';
 import { WeaponFx } from './game/weapon-fx.js';
 import { WeaponWheel } from './ui/weapon-wheel.js';
+import { Nakabandi } from './game/nakabandi.js';
+import { NakabandiFx } from './game/nakabandi-fx.js';
+import { RetryCard } from './ui/retry.js';
 import { Missions } from './game/missions.js';
 import { Jobs } from './game/jobs.js';
 import { Save } from './game/save.js';
@@ -93,9 +96,11 @@ async function boot() {
   game.peds = new Peds(game);
   game.animals = new Animals(game);
   game.police = new Police(game);
+  game.nakabandi = new Nakabandi(game); // roadblocks from three stars, the drone at five
   // Guns and their loot. WeaponFx adds its meshes now, before the menu gets the start ready (getReady compiles their shaders).
   game.weapons = new Weapons(game);
   game.weaponFx = new WeaponFx(game);
+  game.nakabandiFx = new NakabandiFx(game); // its meshes too, so the warm-up compiles them
   game.camera.weapons = game.weapons;
   game.missions = new Missions(game, STORY);
   dressWorld(game);
@@ -113,6 +118,7 @@ async function boot() {
   });
   game.touch = new TouchControls(game);
   game.weaponWheel = new WeaponWheel(game);
+  game.retryCard = new RetryCard(game);
   game.pause = new PauseMenu(game);
   game.lifecycle = new Lifecycle(game);
   keepFullscreen(game);

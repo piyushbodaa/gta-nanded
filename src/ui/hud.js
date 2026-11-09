@@ -405,6 +405,8 @@ export class Hud {
     if (g.missions) for (const b of g.missions.blips()) out.push(b);
     if (g.waypoint) out.push({ x: g.waypoint.x, z: g.waypoint.z, color: '#c77dff' });
     if (g.police?.level) for (const u of g.police.units) out.push({ x: u.v.x, z: u.v.z, kind: 'police', clamp: false });
+    // Roadblocks ahead (pinned to the rim) and the police drone.
+    for (const b of g.nakabandi?.blips() ?? []) out.push(b);
     // An air drop's crate, red like its smoke, until it is opened.
     const drop = g.weapons?.airdrop;
     if (drop && !drop.taken) { const b = (this.dropBlip ??= { x: 0, z: 0, color: '#ff4d3d', kind: 'icon', label: '▼' }); b.x = drop.x; b.z = drop.z; out.push(b); }

@@ -189,6 +189,8 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
 .tabs button[aria-selected="true"] { color: #fff; border-bottom-color: var(--orange); }
 .resume { margin-left: auto; border: 2px solid #fff; background: #fff; color: #000; padding: 9px 18px; font: 800 16px/1 var(--cond); letter-spacing: 1px; }
 .resume kbd { margin: 0 0 0 9px; color: #000; background: #0000000f; border-color: #0005; }
+.resume.retry { background: #0000; color: #fff; }
+.resume.retry:not([hidden]) + .resume { margin-left: 8px; }
 .pause-body { flex: 1; min-height: 0; padding: 16px calc(26px + var(--safe-r)) calc(16px + var(--safe-b)) calc(26px + var(--safe-l)); overflow: auto; }
 .tab { display: none; height: 100%; } .tab.on { display: block; }
 .tab[data-pane="map"].on { display: grid; grid-template-columns: 1fr 330px; gap: 14px; }

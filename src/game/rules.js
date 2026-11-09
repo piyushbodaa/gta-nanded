@@ -1,7 +1,7 @@
 // The rules of the city: crimes and consequences, money, damage, wrecks,
 // WASTED and BUSTED, discoveries and photos. Wires the systems together.
 import { dist, clamp } from '../core/math.js';
-import { speedOf, forwardSpeed } from '../actors/vehicle-physics.js';
+import { speedOf, forwardSpeed, burstTyre, repairTyres } from '../actors/vehicle-physics.js';
 import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 import { HOSPITAL, POLICE_STATION } from './story.js';
 import { DynamicDriver } from '../actors/traffic.js';
@@ -210,6 +210,13 @@ export function installRules(g) {
    * and on someone standing still. ~8 a hit; a car takes it on the bodywork instead.
    */
   const muzzle = { x: 0, y: 0, z: 0 };
+  /** Every tyre that bursts goes through here: the bang, and for the player's own car a jolt and the stat. */
+  g.burstTyre = (v, i) => {
+    if (!burstTyre(v, i)) return false;
+    g.audio.sfxAt?.('burst', v.x, v.z);
+    if (v === g.player.vehicle) { g.camera.addShake(0.25); g.save.stat('flats'); }
+    return true;
+  };
   g.pedShoots = p => {
     const P = g.player, pos = P.pos, h = p.h, gun = WEAPONS[p.armed] ? p.armed : 'p92', W = g.weapons;
     if (g.cutscene || g.respawning || P.state === 'dead') return false;
@@ -221,7 +228,12 @@ export function installRules(g) {
     const chance = clamp(0.7 - d / 45, 0.12, 0.65) * (P.speed > 4 ? 0.6 : 1) * (gun === 'm416' ? 0.75 : 1) * (P.state === 'down' ? 0.5 : 1);
     const hit = Math.random() < chance;
     if (hit) {
-      if (P.vehicle) { g.damageVehicle(P.vehicle, 18, false); g.hitFx?.incoming(h.x, h.z); }
+      if (P.vehicle) {
+        g.damageVehicle(P.vehicle, 18, false); g.hitFx?.incoming(h.x, h.z);
+        // From three stars one hit in five goes into a tyre.
+        const W2 = P.vehicle.model?.wheels;
+        if ((g.police?.level || 0) >= 3 && W2?.length && Math.random() < 0.2) g.burstTyre(P.vehicle, Math.floor(Math.random() * W2.length));
+      }
       else { P.damage(gun === 'm416' ? 7 : 8, 'police', h); g.camera.addShake(0.08); }
     }
     // The tracer from the officer's gun (or hands); a miss goes past, a step or two wide.
@@ -328,7 +340,7 @@ export function installRules(g) {
   const CHEATS = {
     BHAUMONEY: () => { g.addCash(5000); return '₹5,000. Paisa hi paisa!'; },
     KADAMCHUTTI: () => { g.police.clear(); return 'Inspector Kadam is on leave.'; },
-    JUGAAD: () => { const v = g.player.vehicle; if (v) { v.health = 1000; v.onFire = 0; v.wrecked = false; v.explodeAt = 0; } g.player.health = g.player.maxHealth; return 'Jugaad: everything fixed.'; },
+    JUGAAD: () => { const v = g.player.vehicle; if (v) { v.health = 1000; v.onFire = 0; v.wrecked = false; v.explodeAt = 0; repairTyres(v); } g.player.health = g.player.maxHealth; return 'Jugaad: everything fixed.'; },
     LALPARI: () => spawnNear('bus', 'Lal Pari at your service.'),
     RICKSHAW: () => spawnNear('auto', 'Auto aala!'),
     POLICEWALA: () => spawnNear('police', 'A jeep, no questions asked.'),
@@ -397,8 +409,12 @@ export function installRules(g) {
     g.audio.sfx('wasted');
     g.hitFx?.wasted();
     g.save.stat('wasted');
+    const wasRace = g.jobs.active?.kind === 'race';
     g.jobs.stop(true);
-    setTimeout(() => respawn(HOSPITAL, fee => fee ? `SGGS Civil Hospital: ₹${fee} for the stitches.` : 'SGGS Civil Hospital patched you up for free.', 200, failed), 4200);
+    setTimeout(() => {
+      const quit = () => respawn(HOSPITAL, fee => fee ? `SGGS Civil Hospital: ₹${fee} for the stitches.` : 'SGGS Civil Hospital patched you up for free.', 200, failed);
+      offerOr(failed, wasRace, quit);
+    }, 4200);
   };
   g.busted = () => {
     if (g.respawning) return;
@@ -409,9 +425,21 @@ export function installRules(g) {
     g.hud.big('BUSTED', 'Inspector Kadam sends his regards', 'busted', 4);
     g.audio.sfx('busted');
     g.save.stat('busted');
+    const wasRace = g.jobs.active?.kind === 'race';
     g.jobs.stop(true);
-    setTimeout(() => respawn(POLICE_STATION, fee => fee ? `Released from Vazirabad Police Station. Fine: ₹${fee}.` : 'Released from Vazirabad Police Station with a warning.', 300, failed), 4000);
+    setTimeout(() => {
+      const quit = () => respawn(POLICE_STATION, fee => fee ? `Released from Vazirabad Police Station. Fine: ₹${fee}.` : 'Released from Vazirabad Police Station with a warning.', 300, failed);
+      offerOr(failed, wasRace, quit);
+    }, 4000);
   };
+  /**
+   * After WASTED or BUSTED in a story mission or a race: the RETRY / QUIT card (QUIT is the usual
+   * respawn, with its fee and the MISSION FAILED card). Anything else respawns at once.
+   */
+  function offerOr(failed, wasRace, quit) {
+    if ((failed && g.missions.offerRetry?.(quit)) || (wasRace && g.jobs.offerRaceRetry?.(quit))) return;
+    quit();
+  }
   /** Back on your feet at `at`; msg(fee charged) says where. A mission that failed shows its card now. */
   function respawn(at, msg, fee, failed) {
     const P = g.player;

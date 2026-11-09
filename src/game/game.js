@@ -399,14 +399,16 @@ export class Game {
     }
     const input = this.input;
     input.update();
+    // The RETRY / QUIT card reads its keys first: Esc or Start there quits the card, never pauses.
+    this.retryCard?.update(real);
     // Menus: Esc pauses, M opens the map, and either closes the menu again.
     if (this.started && this.pause && !this.respawning) {
       if (input.pressed('pause')) this.pause.toggle(this.pause.tab);
       if (input.pressed('map')) this.pause.open ? this.pause.close() : this.pause.openMenu('map');
     }
     document.body.classList.toggle('cutscene', Boolean(this.cutscene));
-    if (this.cutscene) {
-      // Scripted moments: the player stands still and the camera tells the story.
+    if (this.cutscene || this.retryCard?.open) {
+      // Scripted moments (and the retry card): the player stands still and the camera tells the story.
       const s = input.state;
       s.moveX = s.moveY = s.throttle = s.steer = 0; s.brake = this.player.vehicle ? 1 : 0; s.handbrake = false;
       for (const a of CUTSCENE_DROPS) input.events.delete(a);
@@ -423,6 +425,7 @@ export class Game {
       this.stands?.update(dt);
       this.markets?.update(dt);
       this.police?.update(dt);
+      this.nakabandi?.update(dt);
       this.missions?.update(dt);
       this.hooks?.forEach(f => f(dt));
       this.vehicles.step(dt, this.controls);
@@ -471,6 +474,7 @@ export class Game {
     this.vehicles.render(dt, cam.position, casters);
     this.humans.update(dt, cam.position, casters, cam);
     this.weaponFx?.update(dt);
+    this.nakabandiFx?.update(dt);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     if (q.shadows > 0) {

@@ -172,8 +172,9 @@ export class Traffic {
       speed = Math.min(speed, stopFor(toLine));
     }
     const p = net.lanePoint(road, dir, s, net.laneOffset(road, lane, dir > 0 ? s : len - s), this._p);
-    // Keep clear of everything else.
+    // Keep clear of everything else, and of a police nakabandi.
     for (const o of g.vehicles.list) if (dist(o.x, o.z, p.x, p.z) < 9) return false;
+    for (const b of g.nakabandi?.blocks || []) if (b.state === 'up' && dist(b.x, b.z, p.x, p.z) < 25) return false;
     if (dist(p.x, p.z, focus.x, focus.z) < minD * 0.8) return false;
     const v = g.vehicles.spawn(type, p.x, p.z, p.heading, { role: 'traffic', seed: hash2(this.seed, 3) });
     v.ai = { road, dir, s, lane, speed, cruise, turn: null, wait: 0, blocked: 0, honk: r.range(4, 20), weave: type === 'bike' || type === 'scooter' ? r.range(-0.6, 0.6) : 0, dodge: 0, dodgeWant: 0 };
@@ -245,6 +246,11 @@ export class Traffic {
       consider(o.x, o.z, o.hd, o.role === 'player', facing < -0.3, across);
     }
     if (g.player.state !== 'driving' && Math.abs(g.player.y - v.y) < 2) consider(g.player.x, g.player.z, 0.6, true);
+    // A police nakabandi across the road (and its other carriageway): everyone stops short of it.
+    if (g.nakabandi?.blocks.length) g.nakabandi.forEachBlock(b => {
+      consider(b.x, b.z, 0.5, false, false, b.hw);
+      if (b.twin) consider(b.twin.x, b.twin.z, 0.5, false, false, net.width[b.twin.road] / 2);
+    });
     if (v.y < 1) {
       // Not for the knocked out: a car can't steer round a body, and it would stand there till it went (two minutes in view).
       g.peds?.forEachNear(v.x, v.z, 20, ped => { if (!ped.onRoadOk && ped.state !== 'dead') consider(ped.h.x, ped.h.z, 0.5, false); });
@@ -352,9 +358,12 @@ export class Traffic {
     const inHeading = p.heading;
     let best = null, bestScore = -Infinity, hairpin = null, hairpinTurn = Infinity;
     const r = rng(hash2(v.id, Math.floor(this.game.time * 3)));
+    // A road the police have blocked is turned away from while another way is open.
+    const nb = this.game.nakabandi, shut = nb?.blocks.length ? o => nb.blocksRoad(o) : null;
     for (const road of roads) {
       if (road === a.road && roads.length > 1) continue;
       if (net.bridge[road] && net.width[road] < 5) continue;
+      if (shut?.(road) && roads.some(o => o !== road && o !== a.road && !shut(o))) continue;
       const dir = net.ra[road] === j ? 1 : -1;
       if (!net.canTravel(road, dir)) continue; // no entry: one-way the other way
       if (MAJOR_ONLY.has(v.type) && net.type[road] > 3 && roads.length > 1) continue;

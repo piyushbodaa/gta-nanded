@@ -19,6 +19,9 @@ body.retry-fade::after { content: ''; position: fixed; inset: 0; background: #00
 @media (pointer: coarse) { #retry kbd { display: none; } }
 `;
 
+// What a key or button that answered the card also means to the game: dropped the frame after.
+const EATEN = ['pause', 'confirm', 'jump', 'enter', 'reload'];
+
 export class RetryCard {
   constructor(game, doc = typeof document !== 'undefined' ? document : null) {
     this.game = game;
@@ -104,6 +107,7 @@ export class RetryCard {
     const cb = this._cb;
     this._cb = null;
     this.close();
+    this._eat = true; // the key that chose (Esc, Enter, F) must not pause, or leave the car, next frame
     (which === 'retry' ? cb?.onRetry : cb?.onQuit)?.();
   }
 
@@ -120,8 +124,9 @@ export class RetryCard {
 
   /** Gamepad (and any key the game's input maps): A / Y retry, B / Start quit. Called every frame. */
   update() {
-    if (!this.shown) return;
     const inp = this.game.input;
+    if (this._eat) { this._eat = false; for (const a of EATEN) inp?.events?.delete?.(a); }
+    if (!this.shown) return;
     if (!inp?.pressed) return;
     if (inp.pressed('confirm') || inp.pressed('jump') || inp.pressed('enter')) this.choose('retry');
     else if (inp.pressed('pause') || inp.pressed('reload')) this.choose('quit');

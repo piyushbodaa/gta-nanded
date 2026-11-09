@@ -85,6 +85,7 @@
       <div id="hud-bark" class="bark" hidden></div>
       <div id="hud-prompt" class="prompt" hidden></div>
       <div id="hud-big" class="big-message" hidden></div>
+      <div id="retry" hidden></div>
       <div id="hud-crosshair" class="crosshair" hidden><i></i><i></i><i></i><i></i></div>
       <div id="hud-hitmark" class="hitmark" hidden><i></i><i></i></div>
       <div id="hud-dmg" class="dmg"><i></i><i></i><i></i><i></i></div>
@@ -141,6 +142,7 @@
           <button type="button" data-tab="settings" role="tab">Settings</button>
           <button type="button" data-tab="help" role="tab">Controls</button>
         </nav>
+        <button id="pause-retry" type="button" class="resume retry" hidden>↻ Retry</button>
         <button id="pause-resume" type="button" class="resume">Resume<kbd class="for-desk">Esc</kbd></button>
       </header>
       <div class="pause-body">
@@ -187,7 +189,8 @@
             <section class="for-desk"><h3>Weapons</h3><p><kbd>Click</kbd> fire · hold <kbd>Right-click</kbd> aim (a sniper rifle's scope) · <kbd>R</kbd> reload<br />Hold <kbd>Tab</kbd> for the weapon wheel: point with the mouse, let go to choose<br /><kbd>Scroll</kbd> next / previous weapon · <kbd>1</kbd>–<kbd>7</kbd> a wheel slot · <kbd>G</kbd> throw a grenade<br />Gamepad: <kbd>RT</kbd> fire, <kbd>LT</kbd> aim, <kbd>B</kbd> reload, hold <kbd>RB</kbd> for the wheel, <kbd>D-pad ← →</kbd> switch<br />Red marks round the middle point to whoever is shooting you</p></section>
             <section class="for-desk"><h3>Driving</h3><p><kbd>W</kbd> gas · <kbd>S</kbd> brake / reverse · <kbd>A D</kbd> steer<br /><kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio · <kbd>V</kbd> camera<br /><kbd>C</kbd> look back · <kbd>N</kbd> start a job · <kbd>Q</kbd> siren · <kbd>F</kbd> get out</p></section>
             <section class="for-desk"><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepad: sticks to move and look, <kbd>RT</kbd>/<kbd>LT</kbd> gas and brake, <kbd>A</kbd> jump/handbrake, <kbd>B</kbd> punch (with empty hands), <kbd>L3</kbd> sprint, <kbd>X</kbd> buy, <kbd>Y</kbd> get in/out, <kbd>D-pad ↑</kbd> job, <kbd>Back</kbd> map, <kbd>Start</kbd> pause.</p></section>
-            <section><h3>Wanted</h3><p>Crimes the police see raise your stars, and gunfire carries: from three stars officers shoot back. Guns stay holstered at holy places. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.</p></section>
+            <section><h3>Wanted</h3><p>Crimes the police see raise your stars, and gunfire carries: from three stars officers shoot back. Guns stay holstered at holy places. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.<br />From three stars a <b>nakabandi</b> blocks the road ahead: turn off, ram a jeep aside, or slip through on a bike. Four stars bring a tyre-killer strip, five a police drone: hide under a flyover or trees, or shoot it down.</p></section>
+            <section><h3>Retry</h3><p>Mission failed? <b>RETRY</b> puts you back at the last checkpoint (<kbd class="for-desk">Enter</kbd><span class="for-desk"> / </span><kbd class="for-desk">A</kbd><span class="for-touch">tap it</span>). A lost street race starts again on the grid. Retry is in the pause menu too, during a mission or a race.</p></section>
           </div>
         </div>
       </div>
