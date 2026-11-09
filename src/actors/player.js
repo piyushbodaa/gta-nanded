@@ -147,8 +147,9 @@ export class Player {
     this.speed = Math.hypot(this.vx, this.vz);
     // Punch, or swing the pan (a gun or a grenade in hand: Weapons has the trigger).
     if (this.punchT > 0) this.punchT -= dt;
+    // A gamepad's B is the reload, and with empty hands (or the pan) the punch it always was.
     const melee = !W || W.def.slot === 'melee';
-    if (melee && input.pressed('attack') && this.punchCooldown <= 0) {
+    if (melee && (input.pressed('attack') | (input.mode === 'gamepad' && input.pressed('reload'))) && this.punchCooldown <= 0) {
       const pan = W?.current === 'pan';
       this.punchT = 0.32; this.punchCooldown = pan ? interval(WEAPONS.pan) : 0.38; this.combo = (this.combo + 1) % 3;
       if (pan) W.swing(this); else g.playerPunch?.(this);

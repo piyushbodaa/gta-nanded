@@ -235,7 +235,8 @@ export class Weapons {
     if (!active && this.wheelOpen) this.closeWheel();
     if (!this.wheelOpen && g.timeScale !== undefined && g.timeScale !== 1) g.timeScale = 1;
     if (!onFoot) { this.aimToggle = false; if (this._reloadT > 0) { this._reloadT = 0; this.reloading = 0; } }
-    if (active) {
+    // While the wheel is up, next and previous move its highlight (the wheel reads them), and nothing fires.
+    if (active && !this.wheelOpen) {
       if (input.pressed('weaponNext')) this.cycle(1);
       if (input.pressed('weaponPrev')) this.cycle(-1);
       for (let k = 0; k < SLOT_EVENTS.length; k++) if (input.pressed(SLOT_EVENTS[k])) this.selectSlot(SLOTS[k].id);
@@ -263,7 +264,7 @@ export class Weapons {
     this.spread = base * move + this.bloom;
     // The trigger.
     const edge = input.pressed('attack'), held = Boolean(input.state.attackHeld);
-    if (this._swallow > 0) { this._swallow -= dt; this._queued = 0; }
+    if (this._swallow > 0 || this.wheelOpen) { this._swallow -= dt; this._queued = 0; }
     else if (active && gun) {
       if (edge) this._queued = 0.18; // a tap just before the gun is ready still fires
       // Held: automatic weapons keep firing; on a phone a semi-automatic repeats a little slower.
@@ -278,7 +279,7 @@ export class Weapons {
     } else if (active && thrower && edge && this.cool <= 0) {
       if (this.blocked) this._refuse(); else this.throwGrenade();
     }
-    if (active && input.pressed('grenade') && this.cool <= 0 && (this.ammo.frag || 0) > 0 && !this.blocked) this.throwGrenade();
+    if (active && !this.wheelOpen && input.pressed('grenade') && this.cool <= 0 && (this.ammo.frag || 0) > 0 && !this.blocked) this.throwGrenade();
     this._grenades(dt);
     this._lootUpdate(dt, onFoot);
     this._airdropUpdate(dt);

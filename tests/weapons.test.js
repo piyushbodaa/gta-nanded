@@ -487,10 +487,13 @@ test('with a gun out the attack button fires instead of punching, and the player
   const step = () => { g.time += 1 / 60; P.update(1 / 60, input); w.update(1 / 60, input); };
   input.trigger('attack'); step();
   assert.equal(punches, 1, 'fists punch');
+  for (let i = 0; i < 30; i++) step();
+  input.mode = 'gamepad'; input.trigger('reload'); step(); input.mode = 'keyboard';
+  assert.equal(punches, 2, 'and so does a gamepad\'s B, with empty hands');
   w.equip('p92');
   for (let i = 0; i < 30; i++) step();
   input.trigger('attack'); step();
-  assert.equal(punches, 1);
+  assert.equal(punches, 2);
   assert.equal(w.mag, 14);
   for (let i = 0; i < 30; i++) step();
   assert.ok(Math.abs(P.heading - 1.2) < 0.05, `heading ${P.heading.toFixed(2)}`);
@@ -577,4 +580,24 @@ test('rules: a shot car\'s driver gets out and runs, officers hit back only in s
   assert.equal(hits, 0, 'not through a wall');
   assert.ok(g.cheat('hathiyaar'));
   assert.equal(w.owned.length, 11);
+});
+
+test('with the wheel up the game runs slow, next and previous are the wheel\'s, and nothing fires', () => {
+  const { g, w, input } = gunGame();
+  w.give('uzi'); w.equip('p92');
+  run(g, input, 0.3);
+  w.openWheel();
+  assert.equal(g.timeScale, 0.25);
+  input.trigger('weaponNext'); input.trigger('attack');
+  run(g, input, 0.3);
+  assert.equal(w.current, 'p92');
+  assert.equal(w.mag, 15);
+  assert.ok(input.events.has('weaponNext'), 'left for the wheel to read');
+  input.events.clear();
+  w.closeWheel('uzi');
+  assert.deepEqual([g.timeScale, w.current], [1, 'uzi']);
+  // In a car the wheel shuts.
+  w.openWheel(); g.player.state = 'driving';
+  run(g, input, 1 / 60);
+  assert.deepEqual([w.wheelOpen, g.timeScale], [false, 1]);
 });
