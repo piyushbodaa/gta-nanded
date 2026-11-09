@@ -247,7 +247,7 @@ export class Weapons {
     }
     const w = this.def, gun = Boolean(w.ammo) && w.slot !== 'throw', thrower = w.slot === 'throw';
     // The first gun out (outside the story's scenes): rules.js says once how to shoot and pick.
-    if (active && gun && !g.missions?.active && !g.save?.data?.seenGunHelp) g.onGunOut?.();
+    if (active && gun && !this.blocked && !g.missions?.active && !g.save?.data?.seenGunHelp) g.onGunOut?.();
     this.aiming = active && (gun || thrower) && !this.blocked && Boolean(input.state.aim || this.aimToggle);
     this.scoped = this.aiming && (w.scope || 0) > 0;
     if ((this._holyT -= dt) <= 0) { this._holyT = 0.25; this.blocked = this._holy() ? 'holy' : null; }
