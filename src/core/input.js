@@ -19,6 +19,9 @@ export class Input {
     this.keys = new Set(); // physical keys down (codes), so W and ArrowUp can share 'up'
     this.padHeld = new Set(); // gamepad buttons down, for one-shot presses on the way down
     this.padRun = new Set(); // gamepads whose L3 click started a run (their index)
+    // RT, LT and RB let go of (or not down) since the player got out on foot: only then do they hold
+    // fire, aim and the wheel. Held through getting out of a vehicle they are still the pedals and the radio.
+    this.padFoot = new Set();
     this.events = new Set();
     this.state = { moveX: 0, moveY: 0, throttle: 0, brake: 0, steer: 0, handbrake: false, sprint: false, horn: false, lookBack: false, attackHeld: false, aim: false, wheelHeld: false, stickX: 0, stickY: 0 };
     this.look = { x: 0, y: 0 }; // accumulated look delta (radians), consumed by the camera
@@ -120,7 +123,8 @@ export class Input {
     // On foot the wheel changes weapon instead (V still steps the camera distance): a notch is one weapon, and
     // with the weapon wheel held it moves within the highlighted slot.
     addEventListener('wheel', e => {
-      if (e.target !== c || !this.enabled) return;
+      // Over the street, or over the weapon wheel's overlay (it covers the street while held up with a free cursor).
+      if ((e.target !== c && !e.target?.closest?.('#weapon-wheel')) || !this.enabled) return;
       const step = clamp(e.deltaY / (e.deltaMode ? 3 : 100), -1, 1);
       if (!this.weaponScroll) { this.zoom = (this.zoom || 0) + step; this.scrollAcc = 0; return; }
       if (Math.sign(step) !== Math.sign(this.scrollAcc)) this.scrollAcc = 0; // turned back: start a fresh notch
@@ -194,11 +198,23 @@ export class Input {
       // RB opens the weapon wheel and the D-pad's left and right change weapon; behind the wheel RT and LT are the
       // pedals (above) and RB the radio. RB on foot must not send 'radio', which the game reads as reload there.
       const padWheel = foot && btn(5);
+      // On foot, a trigger or RB pressed afresh (or found up) holds fire, aim or the wheel from now on.
+      for (const i of [5, 6, 7]) {
+        const k = `${pad.index}.${i}`;
+        if (!foot) this.padFoot.delete(k);
+        else if (!down(i) || !this.padHeld.has(k)) this.padFoot.add(k);
+      }
+      edge(6, null); // LT has no press of its own; its state is kept so a brake held out of the car isn't a fresh one
       edge(0, 'jump'); edge(3, 'enter'); edge(1, 'reload'); edge(9, 'pause'); edge(8, 'map'); edge(2, 'action'); edge(5, foot ? null : 'radio'); edge(4, 'camera');
       edge(12, 'job'); edge(13, 'photo');
       edge(7, foot ? 'attack' : null);
       edge(14, padWheel || wheelHeld ? 'wheelPrev' : 'weaponPrev'); edge(15, padWheel || wheelHeld ? 'wheelNext' : 'weaponNext');
-      if (foot) { attackHeld ||= val(7) > 0.3; aim ||= val(6) > 0.3; wheelHeld ||= padWheel; }
+      if (foot) {
+        const armed = i => this.padFoot.has(`${pad.index}.${i}`);
+        if (armed(7)) attackHeld ||= val(7) > 0.3;
+        if (armed(6)) aim ||= val(6) > 0.3;
+        if (armed(5)) wheelHeld ||= padWheel;
+      }
       // L3 runs on foot (X is the action: snacks, photos, the siren, so a run buys nothing). A click
       // starts the run and another ends it, as does letting the stick come back to the middle: held
       // in, a stick pushed to its edge slips out of the click. At the wheel L3 is the horn, held.

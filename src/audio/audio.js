@@ -182,7 +182,7 @@ export class GameAudio {
     s.connect(f).connect(g).connect(bus); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
   }
 
-  sfx(name, k = 1) {
+  sfx(name, k = 1, src = 'p') {
     if (!this.enabled || !this.ctx) return;
     switch (name) {
       case 'punch': this._burst(0.12, { freq: 300, q: 0.7, gain: 0.5 * k, type: 'lowpass' }); this._tone(90, 0.15, { gain: 0.35 * k, glide: 50 }); break;
@@ -215,7 +215,7 @@ export class GameAudio {
       case 'wanted': this._tone(988, 0.15, { type: 'square', gain: 0.07 }); this._tone(740, 0.15, { type: 'square', gain: 0.07, at: 0.16 }); break;
       // Guns: a sharp crack (filtered white noise), a body (low brown noise) and a thump (a falling
       // tone), each kept under 0.5 so the master compressor doesn't pump on full auto.
-      case 'pistol': case 'smg': case 'rifle': case 'shotgun': case 'sniper': this._gun(name, k); break;
+      case 'pistol': case 'smg': case 'rifle': case 'shotgun': case 'sniper': this._gun(name, k, src); break;
       case 'pan': // a flat clang: two inharmonic partials over a thud
         this._tone(560, 0.4, { type: 'triangle', gain: 0.13 * k, glide: 540 }); this._tone(1490, 0.3, { type: 'triangle', gain: 0.07 * k });
         this._burst(0.05, { freq: 3200, q: 1.2, gain: 0.2 * k }); this._tone(120, 0.12, { gain: 0.3 * k, glide: 60 });
@@ -235,10 +235,10 @@ export class GameAudio {
   }
 
   /** A shot: crack, body and thump in the gun's own proportions, and a long tail for the rifles. */
-  _gun(name, k) {
-    const now = this.ctx.currentTime;
-    if (now - (this.gunAt[name] ?? -1) < 0.055) return; // no more than ~18 a second of one kind
-    this.gunAt[name] = now;
+  _gun(name, k, src = 'p') {
+    const now = this.ctx.currentTime, slot = src + name; // the player's gun and the officers' each have their own limit
+    if (now - (this.gunAt[slot] ?? -1) < 0.055) return; // no more than ~18 a second of one kind
+    this.gunAt[slot] = now;
     const v = 0.92 + Math.random() * 0.16; // no two shots quite alike
     switch (name) {
       case 'pistol':
@@ -274,7 +274,7 @@ export class GameAudio {
   sfxAt(name, x, z, k = 1, R = 40) {
     if (!this.enabled || !this.ctx) return;
     const d = this.listener ? dist(x, z, this.listener.x, this.listener.z) : 0, kk = k / (1 + d / R);
-    if (kk >= 0.02) this.sfx(name, kk);
+    if (kk >= 0.02) this.sfx(name, kk, 'n'); // someone else's: a gun of theirs never silences the player's
   }
   moo() {
     if (!this.enabled || !this.ctx) return;

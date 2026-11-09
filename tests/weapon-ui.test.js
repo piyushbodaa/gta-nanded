@@ -198,11 +198,27 @@ test('behind the wheel RT and LT stay the pedals and RB the radio', () => {
   assert.equal(input.state.attackHeld, false);
   assert.equal(input.state.wheelHeld, false);
   assert.equal(input.pressed('radio'), true);
-  // Getting out with RT still down does not fire.
-  input.weaponScroll = true;
+  // Getting out with RT (the throttle), LT and RB still down neither fires, aims nor opens the wheel...
+  pads = [pad([5, 6, 7], [0, 0, 0, 0], { 6: 1, 7: 1 })];
   input.update();
+  input.weaponScroll = true;
+  input.update(); input.update();
   assert.equal(input.pressed('attack'), false);
+  assert.deepEqual([input.state.attackHeld, input.state.aim, input.state.wheelHeld], [false, false, false]);
+  // ...until each is let go and pulled again on foot.
+  pads = [pad([])]; input.update();
+  pads = [pad([5, 6, 7], [0, 0, 0, 0], { 6: 1, 7: 1 })]; input.update();
+  assert.deepEqual([input.state.attackHeld, input.state.aim, input.state.wheelHeld], [true, true, true]);
   pads = [];
+});
+
+test('with a free cursor the mouse wheel still moves within the weapon wheel over its overlay', () => {
+  const { input, canvas } = freshInput();
+  input.weaponScroll = true;
+  const overlay = Object.assign(new El(), { closest: sel => (sel === '#weapon-wheel' ? overlay : null) });
+  key('keydown', 'Tab', canvas);
+  fire(overlay, 'wheel', { deltaY: 100, deltaMode: 0 });
+  assert.equal(input.pressed('wheelNext'), true);
 });
 
 test('the touch FIRE buttons hold the trigger, and a menu opening lets go of them', () => {

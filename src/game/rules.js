@@ -177,7 +177,8 @@ export function installRules(g) {
     if (!v || v.removed || v.exploded || !(dmg > 0)) return;
     if (v.kinematic) g.vehicles.wake(v);
     v.health = Math.max(0, v.health - dmg);
-    if (byPlayer && v.role !== 'player') v.rammedT = g.time;
+    // A story's car blowing up is the story's (as for a ram: its wreck must not bring the police into the fight that follows).
+    if (byPlayer && v.role !== 'player' && !storyCar(v)) v.rammedT = g.time;
     damaged(v);
     if (byPlayer) driverFlees(v);
   };
@@ -202,15 +203,18 @@ export function installRules(g) {
   };
 
   /**
-   * An armed officer (peds.js fight) fires at the player: only with a clear line, more often a
-   * hit close in and on someone standing still. ~8 a hit; a car takes it on the bodywork instead.
+   * An armed officer (peds.js fight) fires at the player: only with a clear line (as a bullet's:
+   * a post, a trunk or a parked car is cover), never at a holy place, more often a hit close in
+   * and on someone standing still. ~8 a hit; a car takes it on the bodywork instead.
    */
   const muzzle = { x: 0, y: 0, z: 0 };
   g.pedShoots = p => {
-    const P = g.player, pos = P.pos, h = p.h, gun = WEAPONS[p.armed] ? p.armed : 'p92';
+    const P = g.player, pos = P.pos, h = p.h, gun = WEAPONS[p.armed] ? p.armed : 'p92', W = g.weapons;
     if (g.cutscene || g.respawning || P.state === 'dead') return false;
+    if (W?.inHoly?.(pos.x, pos.z) || W?.inHoly?.(h.x, h.z)) return false;
     const ey = (h.y || 0) + 1.45, ty = P.vehicle ? P.vehicle.y + 1 : (P.y || 0) + 1.2;
-    if (g.colliders?.raycast && g.colliders.raycast(h.x, ey, h.z, pos.x, ty, pos.z, 0.05) < 0.999) return false;
+    const clear = W?.clearLine ? W.clearLine(h.x, ey, h.z, pos.x, ty, pos.z, P.vehicle) : !g.colliders?.raycast || g.colliders.raycast(h.x, ey, h.z, pos.x, ty, pos.z, 0.05) >= 0.999;
+    if (!clear) return false;
     const d = dist(h.x, h.z, pos.x, pos.z);
     const chance = clamp(0.7 - d / 45, 0.12, 0.65) * (P.speed > 4 ? 0.6 : 1) * (gun === 'm416' ? 0.75 : 1) * (P.state === 'down' ? 0.5 : 1);
     const hit = Math.random() < chance;
@@ -223,7 +227,7 @@ export function installRules(g) {
     if (!g.weaponFx?.muzzleOf?.(h, m)) { const s = Math.sin(h.yaw), c = Math.cos(h.yaw); m.x = h.x + s * 0.5 - c * 0.15; m.y = ey - 0.1; m.z = h.z + c * 0.5 + s * 0.15; }
     const mx = hit ? 0 : (Math.random() - 0.5) * 3, mz = hit ? 0 : (Math.random() - 0.5) * 3;
     g.weaponFx?.shot?.(m.x, m.y, m.z, pos.x + mx, ty + (hit ? 0 : Math.random() - 0.6), pos.z + mz, gun);
-    g.audio.sfxAt?.(WEAPONS[gun].sound, h.x, h.z, 0.8);
+    g.audio.sfxAt?.(WEAPONS[gun].sound, h.x, h.z, 0.8); // its own voice: it never silences the player's gun (audio.js)
     h.recoil = 1;
     return hit;
   };
@@ -360,9 +364,14 @@ export function installRules(g) {
     return msg ?? null;
   };
   let typed = '';
+  // Typing a code mid-play is not playing it: once two or more letters spell the start of a code, the
+  // letters' own game keys (J fires, G throws a grenade, R reloads, a digit picks a gun) are dropped.
+  const CODES = Object.keys(CHEATS), DROP = ['attack', 'grenade', 'radio', 'slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7'];
+  const spelling = () => { for (let n = Math.min(typed.length, 12); n >= 2; n--) { const tail = typed.slice(-n); if (CODES.some(c => c.startsWith(tail))) return true; } return false; };
   addEventListener('keydown', e => {
     if (!g.started || g.paused || e.key.length !== 1) return;
     typed = (typed + e.key.toUpperCase()).slice(-12);
+    if (spelling()) for (const a of DROP) g.input?.events?.delete?.(a);
     for (const code in CHEATS) {
       if (!typed.endsWith(code)) continue;
       typed = '';

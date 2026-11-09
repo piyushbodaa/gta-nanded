@@ -117,7 +117,7 @@ export class Player {
     if (aimFace) this.heading = dampAngle(this.heading, face, 18, dt);
     else if (mag > 0.05 && this.punchT <= 0) this.heading = dampAngle(this.heading, Math.atan2(dirX, dirZ), 14, dt);
     // Jump.
-    if (input.pressed('jump') && this.onGround) { this.vy = 4.6; this.onGround = false; g.audio?.sfx('jump'); }
+    if (!W?.wheelOpen && input.pressed('jump') && this.onGround) { this.vy = 4.6; this.onGround = false; g.audio?.sfx('jump'); }
     this.vy -= 15 * dt;
     this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
     let gy = this._groundAt(g);
@@ -147,15 +147,17 @@ export class Player {
     this.speed = Math.hypot(this.vx, this.vz);
     // Punch, or swing the pan (a gun or a grenade in hand: Weapons has the trigger).
     if (this.punchT > 0) this.punchT -= dt;
-    // A gamepad's B is the reload, and with empty hands (or the pan) the punch it always was.
-    const melee = !W || W.def.slot === 'melee';
+    // A gamepad's B is the reload, and with empty hands (or the pan) the punch it always was. Not
+    // while the weapon wheel is up (choosing is not fighting); at a holy place the pan is put away
+    // (player.js below), so it is a bare hand there.
+    const melee = (!W || W.def.slot === 'melee') && !W?.wheelOpen;
     if (melee && (input.pressed('attack') | (input.mode === 'gamepad' && input.pressed('reload'))) && this.punchCooldown <= 0) {
-      const pan = W?.current === 'pan';
+      const pan = W?.current === 'pan' && !W.blocked;
       this.punchT = 0.32; this.punchCooldown = pan ? interval(WEAPONS.pan) : 0.38; this.combo = (this.combo + 1) % 3;
       if (pan) W.swing(this); else g.playerPunch?.(this);
     }
-    // Enter / carjack.
-    if (input.pressed('enter')) {
+    // Enter / carjack (not while choosing a weapon).
+    if (!W?.wheelOpen && input.pressed('enter')) {
       const v = g.nearestEnterable(this.x, this.z, 4.2, this.y);
       if (v) this._beginEnter(v);
     }
