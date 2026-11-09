@@ -105,16 +105,16 @@ export class Effects {
    */
   explosion(x, y, z, floor = y - 0.5) {
     const R = Math.random;
-    for (let k = 0; k < 3; k++) this.spawn(x + (R() - 0.5) * 0.6, y + 0.3 + R() * 0.4, z + (R() - 0.5) * 0.6, 0, 0, 0, 0.09 + R() * 0.05, 2.2 + R() * 1.2, 1, 0.97, 0.85, 1, { grow: 0.6 });
+    for (let k = 0; k < 3; k++) this.spawn(x + (R() - 0.5) * 0.6, y + 0.3 + R() * 0.4, z + (R() - 0.5) * 0.6, 0, 0, 0, 0.08 + R() * 0.05, 1.5 + R() * 1, 1, 0.88, 0.55, 1, { grow: 0.7 });
     for (let k = 0; k < 26; k++) {
       const a = R() * 6.28, s = 1.5 + R() * 5.5, hot = R();
       this.spawn(x + (R() - 0.5) * 0.8, y + 0.2 + R() * 0.6, z + (R() - 0.5) * 0.8, Math.cos(a) * s, 1.5 + R() * 5, Math.sin(a) * s, 0.45 + R() * 0.45, 0.35 + R() * 0.65,
-        1, 0.72 + 0.2 * hot, 0.3 + 0.25 * hot, 0.9, { grow: 1.6, drag: 3, buoy: 1.2, to: [0.42, 0.36, 0.32] });
+        1, 0.4 + 0.22 * hot, 0.06 + 0.1 * hot, 0.95, { grow: 1.4, drag: 3, buoy: 1.2, to: [0.33, 0.29, 0.27] });
     }
     for (let k = 0; k < 16; k++) {
       const a = R() * 6.28, s = 0.6 + R() * 2, d = 0.3 + R() * 0.25;
       this.spawn(x + Math.cos(a) * 0.8, y + 0.5 + R() * 1.4, z + Math.sin(a) * 0.8, Math.cos(a) * s, 1 + R() * 1.6, Math.sin(a) * s, 1.6 + R() * 1.4, 0.7 + R() * 0.7,
-        0.62, 0.42, 0.26, 0.5, { grow: 2.6, drag: 1.2, buoy: 0.35, to: [d, d, d * 1.04] });
+        0.55, 0.3, 0.14, 0.55, { grow: 2.6, drag: 1.2, buoy: 0.35, to: [d * 0.8, d * 0.8, d * 0.84] });
     }
     for (let k = 0; k < 8; k++) { const a = R() * 6.28; this.spawn(x, floor + 0.25, z, Math.cos(a) * 5, 0.3, Math.sin(a) * 5, 1, 0.6, 0.68, 0.6, 0.5, 0.35, { grow: 3, drag: 2.2 }); }
     this.sparks(x, y + 0.6, z, 24);
@@ -151,7 +151,7 @@ export class Effects {
       if (i >= hi) hi = i + 1;
       this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
       this.size[i] = p.size * (1 + t * p.grow);
-      const u = Math.min(1, t * 1.6); // a colour change is done by two thirds of the way
+      const u = Math.min(1, t * t * 1.8); // a colour change starts slowly (a fireball stays hot a moment), done three quarters of the way
       this.col[i * 4] = p.r + (p.tr - p.r) * u; this.col[i * 4 + 1] = p.g + (p.tg - p.g) * u; this.col[i * 4 + 2] = p.b + (p.tb - p.b) * u; this.col[i * 4 + 3] = p.a * (1 - t * t);
     }
     // Slots are handed out lowest first, so the live ones sit at the front: draw and send only

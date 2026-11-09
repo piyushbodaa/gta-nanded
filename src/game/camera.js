@@ -28,7 +28,7 @@ export class GameCamera {
     // Weapons (main.js sets this to game.weapons; without it none of this happens): how far into
     // the shoulder aim and the scope the view is, the shoulder offset now, and recoil still to recover.
     this.weapons = undefined;
-    this.aimK = 0; this.scopeK = 0; this.shoulder = 0; this.kickBack = 0;
+    this.aimK = 0; this.scopeK = 0; this.shoulder = 0; this.kickBack = 0; this.drawnK = 0;
     this._fov = null;
   }
 
@@ -78,6 +78,11 @@ export class GameCamera {
     this.scopeK = damp(this.scopeK, scoped ? 1 : 0, scoped ? 26 : 16, dt);
     if (this.aimK < 1e-3) this.aimK = 0;
     if (this.scopeK < 1e-3) this.scopeK = 0;
+    // A gun (or a grenade) out, not aiming: the view still sits a little off the right shoulder, so the
+    // crosshair at the screen's centre is not on the back of the player's own head.
+    const hold = W?.def?.hold, drawn = !subject.vehicle && Boolean(W?.armed) && hold !== 'none' && hold !== 'melee';
+    this.drawnK = damp(this.drawnK, drawn ? 1 : 0, 6, dt);
+    if (this.drawnK < 1e-3) this.drawnK = 0;
     const aimK = this.aimK;
     if (input.zoom) { this.zoom = clamp(this.zoom + input.zoom * 0.08, 0.7, 1.6); input.zoom = 0; }
 
@@ -108,8 +113,10 @@ export class GameCamera {
     } else {
       this.mode = aimK > 0.5 ? (this.scopeK > 0.5 ? 'scope' : 'aim') : 'foot';
       const h = subject.human;
-      dist = 4.3 * this.zoom + (1.9 - 4.3 * this.zoom) * aimK;
-      tx = h.x; tz = h.z; ty = h.y + 1.55 - 0.12 * aimK;
+      // Aiming: in close over the shoulder and a little above the gun, so the barrel shows its length
+      // under the crosshair instead of pointing straight away from a camera level with it.
+      dist = 4.3 * this.zoom + (1.75 - 4.3 * this.zoom) * aimK;
+      tx = h.x; tz = h.z; ty = h.y + 1.55 + 0.11 * aimK;
       // Keyboard and touch players get a gentle follow when they run; mouse-look players steer it
       // themselves, and so does anyone aiming.
       if (!input.pointerLocked && aimK < 0.05 && subject.speed > 2.5 && this.time - this.lastManual > 1.5) {
@@ -130,8 +137,8 @@ export class GameCamera {
     // Over the right shoulder while aiming: the target the view turns about moves out to the right,
     // short of any wall there.
     let cx = this.target.x, cy = this.target.y, cz = this.target.z;
-    if (aimK > 0 || this.shoulder > 0) {
-      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), want = 0.62 * aimK;
+    if (aimK > 0 || this.shoulder > 0 || this.drawnK > 0) {
+      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), want = 0.58 * aimK + 0.42 * this.drawnK * (1 - aimK);
       const t = want > 0 ? this.colliders.raycast(cx, cy, cz, cx + rx * (want + 0.2), cy, cz + rz * (want + 0.2), 0.05) : 1;
       const s = Math.max(0, Math.min(want, (want + 0.2) * t - 0.2));
       this.shoulder = s < this.shoulder ? s : damp(this.shoulder, s, 10, dt);

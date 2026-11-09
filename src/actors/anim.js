@@ -145,15 +145,42 @@ function reachLeg(P, s, x, y, z) {
   ik2(_ik, TH, SH, _v[0] - side * HIP_X, _v[1] - HIP_Y, _v[2], 1);
   P[C.HF + s] = -_ik.a; P[C.HA + s] = side * _ik.c; P[C.KN + s] = _ik.k; P[C.HT + s] = 0;
 }
-/** Put arm s's hand at (x, y, z) in the body's frame. Needs _pm and _tm. */
-function reachArm(P, s, x, y, z) {
+/**
+ * Put arm s's hand at (x, y, z) in the body's frame. Needs _pm and _tm. With a pole (a direction in
+ * the torso's frame) the elbow swings round the shoulder-to-hand line toward it, the upper arm
+ * twisting to suit: a rifleman's right elbow out and down, not folded into the chest.
+ */
+function reachArm(P, s, x, y, z, pole = null) {
   const side = s === 0 ? 1 : -1;
   _v[0] = x - P[C.PX]; _v[1] = y; _v[2] = z - P[C.PZ];
   into(_pm, _v);
   _v[1] -= BODY.torsoY;
   into(_tm, _v);
-  ik2(_ik, BODY.upperArm, BODY.forearm, _v[0] - side * BODY.shoulderX, _v[1] - BODY.shoulderY, _v[2], -1);
-  P[C.SF + s] = -_ik.a; P[C.SA + s] = side * _ik.c; P[C.EL + s] = _ik.k; P[C.ST + s] = 0;
+  const hx = _v[0] - side * BODY.shoulderX, hy = _v[1] - BODY.shoulderY, hz = _v[2];
+  if (!pole) {
+    ik2(_ik, BODY.upperArm, BODY.forearm, hx, hy, hz, -1);
+    P[C.SF + s] = -_ik.a; P[C.SA + s] = side * _ik.c; P[C.EL + s] = _ik.k; P[C.ST + s] = 0;
+    return;
+  }
+  const L1 = BODY.upperArm, L2 = BODY.forearm, d = Math.hypot(hx, hy, hz) || 1e-6;
+  const dc = clamp(d, Math.abs(L1 - L2) + 0.02, L1 + L2 - 1e-4), nx = hx / d, ny = hy / d, nz = hz / d;
+  // The elbow is on a circle round the shoulder-to-hand line: the point of it nearest the pole.
+  const d1 = (L1 * L1 - L2 * L2 + dc * dc) / (2 * dc), r = Math.sqrt(Math.max(0, L1 * L1 - d1 * d1));
+  let px = pole[0], py = pole[1], pz = pole[2];
+  let k = px * nx + py * ny + pz * nz;
+  px -= k * nx; py -= k * ny; pz -= k * nz;
+  let pl = Math.hypot(px, py, pz);
+  if (pl < 1e-4) { px = 0; py = -1; pz = 0; k = -ny; px -= k * nx; py -= k * ny; pz -= k * nz; pl = Math.hypot(px, py, pz) || 1; }
+  const ex = nx * d1 + (px / pl) * r, ey = ny * d1 + (py / pl) * r, ez = nz * d1 + (pz / pl) * r;
+  // The upper arm along the elbow (Rx(a) Rz(c) of the hanging arm), the forearm on to the hand.
+  const ux = ex / L1, uy = ey / L1, uz = ez / L1, c = Math.asin(clamp(ux, -1, 1)), a = Math.atan2(-uz, -uy);
+  let fx = nx * dc - ex, fy = ny * dc - ey, fz = nz * dc - ez;
+  const fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
+  const fu = fx * ux + fy * uy + fz * uz, bend = Math.acos(clamp(fu, -1, 1));
+  // The twist that turns the elbow's hinge toward the hand: the forearm's way across the upper arm.
+  const qx = fx - fu * ux, qy = fy - fu * uy, qz = fz - fu * uz, ca = Math.cos(a), sa = Math.sin(a), cc = Math.cos(c), sc = Math.sin(c);
+  const t = Math.atan2(qx * cc + qy * sc * ca + qz * sc * sa, -qy * sa + qz * ca);
+  P[C.SF + s] = -a; P[C.SA + s] = side * c; P[C.EL + s] = bend; P[C.ST + s] = -side * t;
 }
 /** The foot flat (or pitched to th) whatever the leg's angles. */
 function footAt(P, s, th) { P[C.AN + s] = th - P[C.PP] + P[C.HF + s] - P[C.KN + s]; }
@@ -580,15 +607,25 @@ function air(a, h, P) {
 export const THROW_TIME = 0.5;
 const norm3 = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
 const upOf = d => norm3(-d[0] * d[1], 1 - d[1] * d[1], -d[2] * d[1]); // straight up, square to d
-// Carried (in the body's frame, from the pelvis: + left, + up, + forward): where the right fist is and the way the muzzle points.
+// Carried (in the body's frame, from the pelvis: + left, + up, + forward): the way the muzzle points;
+// a rifle at the low ready, its butt at the right shoulder (`butt`) and the barrel down across the
+// body past the left hip (seen from behind, not hidden by the back); a pistol in the right fist
+// (`hand`) down at the side.
 const CARRY = {
-  rifle: { hand: [-0.12, 0.25, 0.25], dir: norm3(0.5, -0.35, 0.79), tw: -0.25 },
+  rifle: { butt: [-0.17, 0.46, 0.13], dir: norm3(0.74, -0.52, 0.43), tw: -0.2 },
   pistol: { hand: [-0.2, -0.1, 0.1], dir: norm3(0, -0.8, 0.6), tw: 0 },
 };
 for (const k in CARRY) CARRY[k].up = upOf(CARRY[k].dir);
-// Aimed: the shoulder pocket the butt goes in (torso frame), how far side-on a rifle turns the body;
-// a pistol out from the chest at arm's length.
-const POCKET = [-0.13, 0.46, 0.07], RIFLE_TW = -0.55, CHEST = [-0.04, 0.36, 0.1], REACH = 0.4;
+// Aimed (torso frame): a rifle's butt in the pocket inside the right shoulder, high enough that the
+// barrel runs at cheek height under the eye, the body turned side-on behind it (left shoulder
+// forward) so the left hand reaches the handguard with its elbow bent under the gun; a pistol in
+// both hands at arm's length at the eye line, a little right of the middle, the shoulders turned
+// a little so it clears the right shoulder seen from behind it.
+const POCKET = [-0.12, 0.5, 0.1], RIFLE_TW = -0.8, RIFLE_TP = 0.06, CHEST = [-0.08, 0.5, 0.12], REACH = 0.42, PISTOL_TW = -0.25;
+const SUPPORT_BACK = 0.04; // the left hand a little back along the handguard from GRIPS' point
+// Where the elbows go (torso frame, from each shoulder): the right out and down behind a long gun,
+// the left down under its handguard; a pistol's both down.
+const POLE = { rifleR: [-0.75, -0.6, -0.15], rifleL: [0.25, -1, 0.05], pistolR: [-0.4, -1, 0], pistolL: [0.4, -1, 0] };
 // A throw: the right fist (torso frame) from the wind-up behind the head, over the top, through
 // and down; the left arm points at the target, then pulls down.
 const THROW_KEYS = [[0, [-0.3, 0.68, -0.12]], [0.3, [-0.22, 0.78, 0.16]], [0.55, [-0.08, 0.48, 0.46]], [1, [0.08, 0.18, 0.36]]];
@@ -614,11 +651,11 @@ function setGun(g, dx, dy, dz, ux, uy, uz) {
   l = Math.hypot(ux, uy, uz) || 1;
   g.dx = dx; g.dy = dy; g.dz = dz; g.ux = ux / l; g.uy = uy / l; g.uz = uz / l;
 }
-/** Both hands to _R and _L (body frame, unscaled), blended over the arms as they were by wr and wl. */
-function reachBoth(P, wr, wl) {
+/** Both hands to _R and _L (body frame, unscaled), blended over the arms as they were by wr and wl; elbows toward poles pr and pl. */
+function reachBoth(P, wr, wl, pr = null, pl = null) {
   for (let i = 0; i < 8; i++) _arms[i] = P[C.SF + i];
-  if (wr > 0) reachArm(P, 1, _R[0], _R[1], _R[2]);
-  if (wl > 0) reachArm(P, 0, _L[0], _L[1], _L[2]);
+  if (wr > 0) reachArm(P, 1, _R[0], _R[1], _R[2], pr);
+  if (wl > 0) reachArm(P, 0, _L[0], _L[1], _L[2], pl);
   for (let i = 0; i < 8; i++) P[C.SF + i] = lerp(_arms[i], P[C.SF + i], i % 2 ? wr : wl);
 }
 
@@ -631,8 +668,8 @@ function gunBody(a, h, P) {
     if (CARRY[hold].tw) mixTo(P, C.TW, CARRY[hold].tw, wh * (1 - aw));
     if (w > 0.001) {
       // The shoulders square to the aim whichever way the hips go (the walk turns them).
-      mixTo(P, C.TW, ay + (hold === 'rifle' ? RIFLE_TW : -0.05) - P[C.PW], w);
-      P[C.TP] += -ap * 0.35 * w;
+      mixTo(P, C.TW, ay + (hold === 'rifle' ? RIFLE_TW : PISTOL_TW) - P[C.PW], w);
+      P[C.TP] += (-ap * 0.35 + (hold === 'rifle' ? RIFLE_TP : 0)) * w;
     }
     P[C.TP] -= 0.05 * (h.recoil || 0) * wh; // a shot rocks the shoulders back
   } else if (hold === 'throw') {
@@ -654,7 +691,8 @@ function fixedArms() {
     const sets = [];
     for (const aim of [0, 1]) {
       P.set(STANDING); P[C.PP] = 0.02;
-      P[C.TW] = hold === 'rifle' ? (aim ? RIFLE_TW : CARRY.rifle.tw) : hold === 'throw' ? -0.5 : aim ? -0.05 : 0;
+      P[C.TW] = hold === 'rifle' ? (aim ? RIFLE_TW : CARRY.rifle.tw) : hold === 'throw' ? -0.5 : aim ? PISTOL_TW : 0;
+      if (hold === 'rifle' && aim) P[C.TP] += RIFLE_TP;
       const a = { hold, gunId: DEFAULT_GUN[hold], wHold: 1, wAim: aim, throwT: 0, ph: 0, spd: 0, gun: g };
       gunPose(a, { aimYaw: 0, aimPitch: 0, recoil: 0, reload: 0, outfit: { scale: 1 } }, P, 0);
       sets.push(P.slice(C.SF, C.SF + 8));
@@ -690,13 +728,16 @@ function gunPose(a, h, P, lod) {
       toBody(_t, POCKET[0], POCKET[1], POCKET[2]);
       const bz = G.butt[2] / sc - 0.035 * kick, by = G.butt[1] / sc;
       _R[0] = _t[0] - dx * bz - ux * by; _R[1] = _t[1] - dy * bz - uy * by; _R[2] = _t[2] - dz * bz - uz * by;
+      // Carried, the hand that puts the butt at the shoulder with the barrel across the body.
+      const B = K.butt, cz = G.butt[2] / sc, cy = G.butt[1] / sc;
+      for (let i = 0; i < 3; i++) _R[i] = lerp(B[i] - K.dir[i] * cz - K.up[i] * cy, _R[i], w);
     } else {
       toBody(_t, CHEST[0], CHEST[1], CHEST[2]);
       const r = REACH - 0.03 * kick;
       _R[0] = _t[0] + dx * r; _R[1] = _t[1] + dy * r + 0.02 * kick; _R[2] = _t[2] + dz * r;
+      const swing = 0.06 * Math.sin(a.ph) * smooth(0.2, 1.6, a.spd);
+      for (let i = 0; i < 3; i++) _R[i] = lerp(K.hand[i] + (i === 2 ? swing : 0), _R[i], w);
     }
-    const swing = hold === 'pistol' ? 0.06 * Math.sin(a.ph) * smooth(0.2, 1.6, a.spd) : 0;
-    for (let i = 0; i < 3; i++) _R[i] = lerp(K.hand[i] + (i === 2 ? swing : 0), _R[i], w);
     // A reload lowers the weapon and cants it over to the magazine.
     const r = clamp(h.reload || 0, 0, 1), re = r > 0 ? Math.sin(Math.PI * r) : 0;
     if (re > 0) {
@@ -707,8 +748,8 @@ function gunPose(a, h, P, lod) {
     }
     // The left hand: on the handguard, or round the right fist; to the magazine and back in a reload.
     const lx = g.uy * g.dz - g.uz * g.dy, ly = g.uz * g.dx - g.ux * g.dz, lz = g.ux * g.dy - g.uy * g.dx; // the gun's left
-    const S = G.support || WRAP;
-    for (let i = 0; i < 3; i++) _L[i] = _R[i] + ((i === 0 ? g.dx : i === 1 ? g.dy : g.dz) * S[2] + (i === 0 ? g.ux : i === 1 ? g.uy : g.uz) * S[1] + (i === 0 ? lx : i === 1 ? ly : lz) * S[0]) / sc;
+    const S = G.support || WRAP, back = G.support ? SUPPORT_BACK : 0;
+    for (let i = 0; i < 3; i++) _L[i] = _R[i] + ((i === 0 ? g.dx : i === 1 ? g.dy : g.dz) * (S[2] - back) + (i === 0 ? g.ux : i === 1 ? g.uy : g.uz) * S[1] + (i === 0 ? lx : i === 1 ? ly : lz) * S[0]) / sc;
     if (re > 0) {
       const M = G.mag || WRAP, go = smooth(0, 0.2, r) * (1 - smooth(0.8, 1, r)), dip = Math.sin(Math.PI * smooth(0.2, 0.7, r)) * 0.14;
       for (let i = 0; i < 3; i++) {
@@ -721,13 +762,19 @@ function gunPose(a, h, P, lod) {
       if (!FIXED) fixedArms();
       const F = FIXED[hold];
       for (let i = 0; i < 8; i++) mixTo(P, C.SF + i, lerp(F[0][i], F[1][i], w), i % 2 ? wh : wl);
-    } else reachBoth(P, wh, wl);
+    } else {
+      const rifle = hold === 'rifle';
+      reachBoth(P, wh, wl, rifle ? POLE.rifleR : POLE.pistolR, rifle ? POLE.rifleL : POLE.pistolL);
+    }
   }
-  // Aiming, the head looks down the sights (along the aim, a rifle's cheek on its stock).
+  // Aiming, the head looks down the sights: along the aim, and behind a rifle tipped down and over
+  // onto the stock (the cheek on its comb, the eye over the barrel).
   const wa = w * wh;
   if (wa > 0.01) {
-    mixTo(P, C.HW, ay - (P[C.PW] + P[C.TW]), wa);
-    mixTo(P, C.HP, -ap - (P[C.TP] + P[C.PP]) + (hold === 'rifle' ? 0.12 : 0.04), wa);
+    const rifle = hold === 'rifle';
+    mixTo(P, C.HW, ay - (P[C.PW] + P[C.TW]) + (rifle ? -0.12 : 0), wa);
+    mixTo(P, C.HP, -ap - (P[C.TP] + P[C.PP]) + (rifle ? 0.3 : 0.06), wa);
+    mixTo(P, C.HR, rifle ? 0.3 : 0, wa);
   }
 }
 
