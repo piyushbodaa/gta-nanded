@@ -114,6 +114,17 @@ test('every pose is a finite set of joint angles', () => {
     assert.equal(h.anim.out.length, N);
     for (let c = 0; c < N; c++) assert.ok(Number.isFinite(h.anim.out[c]), `${pose}: channel ${c} is ${h.anim.out[c]}`);
   }
+  // With every weapon, carried and aimed (up, down, to the side), firing, reloading, on the move and in the air.
+  const holds = { pan: 'melee', p92: 'pistol', uzi: 'pistol', ump45: 'rifle', akm: 'rifle', m416: 'rifle', s12k: 'rifle', kar98k: 'rifle', awm: 'rifle', grenade: 'throw' };
+  for (const gun in holds) {
+    for (const [pose, aim] of [['idle', 0], ['walk', 1], ['run', 0], ['idle', 1]]) {
+      h.pose = pose; h.speed = pose === 'run' ? 5 : pose === 'walk' ? 1.4 : 0; h.punch = 0; h.air = pose === 'run'; h.vy = 2;
+      h.gun = gun; h.hold = holds[gun]; h.aim = aim; h.aimPitch = aim ? 0.9 : 0; h.aimYaw = aim ? -0.6 : 0; h.reload = pose === 'walk' ? 0.5 : 0;
+      for (let i = 0; i < 30; i++) { h.x += h.speed * dt; if (i % 10 === 0) h.recoil = 1; step(); }
+      for (let c = 0; c < N; c++) assert.ok(Number.isFinite(h.anim.out[c]), `${gun} ${pose} aim ${aim}: channel ${c} is ${h.anim.out[c]}`);
+    }
+  }
+  h.gun = null; h.hold = 'none'; h.aim = 0; h.reload = 0;
 });
 
 test('the leg and arm solver reaches what it can, and points at what it cannot', () => {

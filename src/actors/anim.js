@@ -493,8 +493,8 @@ function overlayWeights(a, h, dt) {
   a.wAir = toward(a.wAir, a.air ? 1 : 0, a.air ? 18 : 12, dt);
   // A weapon comes up, and up to the eye; with a gun in both hands there are no fists to put up.
   const held = a.holding !== 'none';
-  a.wHold = toward(a.wHold, held ? 1 : 0, 9, dt);
-  a.wAim = toward(a.wAim, held && a.holding !== 'melee' && h.aim > 0 ? 1 : 0, 12, dt);
+  a.wHold = toward(a.wHold, held ? 1 : 0, 8, dt);
+  a.wAim = toward(a.wAim, held && a.holding !== 'melee' && h.aim > 0 ? 1 : 0, 11, dt);
   if (held && a.holding !== 'melee') a.guardT = 0;
   if (a.throwT > 0) a.throwT = Math.max(0, a.throwT - dt);
   // Which way the stride runs against the facing: straight back is a backpedal, not a stride
@@ -594,6 +594,7 @@ const POCKET = [-0.13, 0.46, 0.07], RIFLE_TW = -0.55, CHEST = [-0.04, 0.36, 0.1]
 const THROW_KEYS = [[0, [-0.3, 0.68, -0.12]], [0.3, [-0.22, 0.78, 0.16]], [0.55, [-0.08, 0.48, 0.46]], [1, [0.08, 0.18, 0.36]]];
 const THROW_LEFT = [[0.2, 0.45, 0.42], [0.22, 0.12, 0.12]];
 const DEFAULT_GUN = { rifle: 'akm', pistol: 'p92', melee: 'pan', throw: 'grenade' };
+const sm = w => w * w * (3 - 2 * w); // weights ease in and out, so the arms neither jump off nor slam in
 const throwEnv = u => smooth(0, 0.12, u) * (1 - smooth(0.82, 1, u));
 const _R = [0, 0, 0], _L = [0, 0, 0], _t = [0, 0, 0], _arms = new Float32Array(8), _po = [0, 0];
 
@@ -622,11 +623,11 @@ function reachBoth(P, wr, wl) {
 
 /** The torso with a weapon up: side-on behind a rifle, square behind a pistol, wound up to throw. */
 function gunBody(a, h, P) {
-  const wh = a.wHold;
+  const wh = sm(a.wHold);
   if (wh < 0.01) return;
-  const hold = a.hold, w = a.wAim * wh, ay = clamp(h.aimYaw || 0, -1.2, 1.2), ap = clamp(h.aimPitch || 0, -1.3, 1.3);
+  const hold = a.hold, aw = sm(a.wAim), w = aw * wh, ay = clamp(h.aimYaw || 0, -1.2, 1.2), ap = clamp(h.aimPitch || 0, -1.3, 1.3);
   if (hold === 'rifle' || hold === 'pistol') {
-    if (CARRY[hold].tw) mixTo(P, C.TW, CARRY[hold].tw, wh * (1 - a.wAim));
+    if (CARRY[hold].tw) mixTo(P, C.TW, CARRY[hold].tw, wh * (1 - aw));
     if (w > 0.001) {
       // The shoulders square to the aim whichever way the hips go (the walk turns them).
       mixTo(P, C.TW, ay + (hold === 'rifle' ? RIFLE_TW : -0.05) - P[C.PW], w);
@@ -669,7 +670,7 @@ function gunArms(a, h, P, lod) {
 }
 
 function gunPose(a, h, P, lod) {
-  const g = a.gun, wh = a.wHold, w = a.wAim, hold = a.hold, sc = h.outfit.scale || 1;
+  const g = a.gun, wh = sm(a.wHold), w = sm(a.wAim), hold = a.hold, sc = h.outfit.scale || 1;
   const G = GRIPS[a.gunId] || GRIPS[DEFAULT_GUN[hold]], kick = h.recoil || 0;
   yxz(_pm, P[C.PP], P[C.PW], P[C.PR]);
   yxz(_tm, P[C.TP], P[C.TW], P[C.TR]);
@@ -731,7 +732,7 @@ function gunPose(a, h, P, lod) {
 
 /** A pan or a grenade in the right fist: carried, swung (the punch), wound up and thrown. */
 function oneHand(a, h, P, lod, G, sc) {
-  const g = a.gun, wh = a.wHold, w = a.wAim, hold = a.hold;
+  const g = a.gun, wh = sm(a.wHold), w = sm(a.wAim), hold = a.hold;
   g.arm = true; // in the forearm's own frame (weapon-fx.js)
   // Carried: the forearm forward a little, the head of the pan or the grenade in front.
   const busy = hold === 'melee' ? Math.max(a.wPunch, a.wGuard) : 0, cw = wh * (1 - busy);
