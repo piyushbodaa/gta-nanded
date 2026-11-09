@@ -1,5 +1,7 @@
 // Touch controls: a floating stick under the left thumb, contextual buttons
 // under the right, and the rest of the screen drags the camera.
+import { WEAPONS } from '../game/weapon-data.js';
+
 const $ = id => document.getElementById(id);
 
 export class TouchControls {
@@ -81,6 +83,22 @@ export class TouchControls {
       const up = () => { b.classList.remove('down'); if (hold) t[hold] = hold === 'gas' || hold === 'brake' ? 0 : false; };
       for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
     }
+    // FIRE turns the camera too, as in phone shooters: the thumb that holds the trigger drags it round to aim,
+    // at the speed the right half of the screen drags (input.js). The button keeps the finger (pointer capture).
+    const fire = $('tb-fire');
+    if (fire) {
+      let last = null;
+      fire.addEventListener('pointerdown', e => { last = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+      fire.addEventListener('pointermove', e => {
+        if (!last || e.pointerId !== last.id || !this.input.enabled) return;
+        const k = 0.0065 * this.input.lookScale;
+        this.input.look.x -= (e.clientX - last.x) * k;
+        this.input.look.y -= (e.clientY - last.y) * k;
+        last.x = e.clientX; last.y = e.clientY;
+        this.input.lastLookAt = performance.now();
+      });
+      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fire.addEventListener(ev, () => { last = null; });
+    }
     // Everything here acts on pointerdown, so the click a tap makes afterwards is a ghost: MAP and ❚❚ open the
     // pause menu under the finger, and the click would land on whatever tab is there. Cancelling
     // the touchend stops that click; touch events stay with the button the finger went down on. (A touchend
@@ -105,6 +123,31 @@ export class TouchControls {
     // jeep or ambulance at a race start, or racing, the siren waits for START RACE / STOP JOB to go (a race
     // turns it off as it starts, jobs.js, so it can't be left wailing with no button).
     setButton('tb-siren', driving && !job && v && (v.type === 'police' || v.type === 'ambulance') && (v.sirenOn ? 'SIREN OFF' : 'SIREN'));
+    this._weapons(driving);
+  }
+
+  /**
+   * On foot the PUNCH button is the trigger of whatever is in hand (FIRE, SWING, THROW), with AIM, RELOAD and a
+   * left-hand FIRE beside it for a gun, and the weapon button shows what is in hand and its ammo. Behind the
+   * wheel guns are holstered and these all go (the foot-only set hides with the rest).
+   */
+  _weapons(driving) {
+    const w = this.game.weapons;
+    if (!w) { setButton('tb-fire', 'PUNCH'); return; }
+    const def = WEAPONS[w.current] || WEAPONS.fist;
+    const armed = !driving && Boolean(w.armed);
+    const gun = armed && Boolean(def.ammo) && def.hold !== 'throw';
+    setButton('tb-fire', !armed ? 'PUNCH' : def.hold === 'melee' ? 'SWING' : def.hold === 'throw' ? 'THROW' : 'FIRE');
+    setButton('tb-fire2', gun && 'FIRE');
+    setButton('tb-aim', armed && Boolean(def.ammo) && (def.scope > 0 ? 'SCOPE' : 'AIM'));
+    setButton('tb-reload', gun && 'RELOAD');
+    $('tb-aim').classList.toggle('on', armed && Boolean(w.aiming));
+    // The weapon button: name over ammo (one line on the shortest phones, game.css). Fists too: it is the way to the wheel.
+    const ammo = def.ammo ? (def.hold === 'throw' ? `×${w.mag}` : `${w.mag}/${w.reserve}`) : '';
+    setButton('tb-weapon', !driving && (ammo ? `${def.short}\n${ammo}` : def.short));
+    const btn = $('tb-weapon');
+    btn.classList.toggle('reloading', Boolean(w.reloading));
+    btn.classList.toggle('empty', gun && w.mag === 0);
   }
 }
 

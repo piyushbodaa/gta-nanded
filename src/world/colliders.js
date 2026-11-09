@@ -381,6 +381,60 @@ export class Colliders {
     return tmin;
   }
 
+  /**
+   * First solid thing along a 3D segment, for bullets and grenades: unlike the camera's `raycast`,
+   * tree trunks, poles, posts, kerbs and low walls (30 cm up) stop it too, and nothing is padded.
+   * Returns t in [0,1], or 1. It walks every grid cell of the segment's box, so callers march long
+   * shots in short pieces (~24 m); each collider is tested once per call (the query-number marks
+   * resolveCircle uses), with no closure, set or allocation.
+   */
+  raycastSolid(ax, ay, az, bx, by, bz) {
+    let tmin = 1;
+    const mark = this._mark || (this._mark = new Uint32Array(this.type.length));
+    let q = (this._q + 1) >>> 0;
+    if (q === 0) { mark.fill(0); q = 1; }
+    this._q = q;
+    const G = this.grid, C = G.cell, ex = bx - ax, ey = by - ay, ez = bz - az;
+    const x0 = Math.floor(Math.min(ax, bx) / C), x1 = Math.floor(Math.max(ax, bx) / C), z0 = Math.floor(Math.min(az, bz) / C), z1 = Math.floor(Math.max(az, bz) / C);
+    for (let gx = x0; gx <= x1; gx++) {
+      for (let gz = z0; gz <= z1; gz++) {
+        const list = G.map.get(G.key(gx, gz));
+        if (!list) continue;
+        for (let k = 0; k < list.length; k++) {
+          const i = list[k];
+          if (mark[i] === q) continue;
+          mark[i] = q;
+          if (this.h[i] < 0.3) continue;
+          let t0 = 0, t1 = tmin;
+          const ox = ax - this.x[i], oz = az - this.z[i];
+          if (this.type[i] === SOLID.CIRCLE) {
+            const r = this.hw[i], A = ex * ex + ez * ez, B = ox * ex + oz * ez, c0 = ox * ox + oz * oz - r * r;
+            if (c0 > 0) {
+              const disc = B * B - A * c0;
+              if (A < 1e-12 || disc < 0) continue;
+              const sq = Math.sqrt(disc);
+              t0 = Math.max(t0, (-B - sq) / A); t1 = Math.min(t1, (-B + sq) / A);
+            } else if (A > 1e-12) t1 = Math.min(t1, (-B + Math.sqrt(B * B - A * c0)) / A);
+            if (t0 > t1) continue;
+          } else {
+            const hw = this.hw[i], hd = this.hd[i], c = this.c[i], s = this.s[i];
+            const lax = ox * c - oz * s, laz = ox * s + oz * c, ldx = ex * c - ez * s, ldz = ex * s + ez * c;
+            if (Math.abs(ldx) < 1e-9) { if (Math.abs(lax) > hw) continue; }
+            else { let ta = (-hw - lax) / ldx, tb = (hw - lax) / ldx; if (ta > tb) { const t = ta; ta = tb; tb = t; } t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) continue; }
+            if (Math.abs(ldz) < 1e-9) { if (Math.abs(laz) > hd) continue; }
+            else { let ta = (-hd - laz) / ldz, tb = (hd - laz) / ldz; if (ta > tb) { const t = ta; ta = tb; tb = t; } t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) continue; }
+          }
+          // Between its base and its top somewhere inside: in through the side, or down through the top.
+          const base = this.y0[i], top = base + this.h[i], ya = ay + ey * t0, yb = ay + ey * t1;
+          if ((ya > top && yb > top) || (ya < base && yb < base)) continue;
+          const t = ya > top ? t0 + (t1 - t0) * (ya - top) / (ya - yb) : ya < base ? t0 + (t1 - t0) * (base - ya) / (yb - ya) : t0;
+          if (t < tmin) tmin = t;
+        }
+      }
+    }
+    return tmin;
+  }
+
   /** True when a circle at (x, z) overlaps anything solid (at height `level`). */
   blocked(x, z, r, level = 0) {
     const p = this._bp || (this._bp = { x: 0, z: 0 });

@@ -11,6 +11,10 @@ import { clamp, dist, rng, hash2 } from '../core/math.js';
 import { Quality, ORDER, MIN_SCALE } from '../core/quality.js';
 import { Post } from '../world/post.js';
 
+// One-shot presses a cutscene throws away: the player stands and watches, weapons holstered.
+const CUTSCENE_DROPS = ['enter', 'attack', 'jump', 'action', 'job', 'reload', 'aimToggle', 'weaponNext', 'weaponPrev', 'grenade', 'wheel',
+  'slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7'];
+
 export class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -45,6 +49,7 @@ export class Game {
     this.perf = { n: 0, t: 0, worst: 0, fps: 0, ms: 0, worstMs: 0 };
     this._fails = 0; // frames in a row that threw
     this.energy = 0;
+    this.timeScale = 1; // slow motion (the weapon wheel): scales the simulation's step, not the HUD's or the governor's
     addEventListener('resize', () => this.resize());
     addEventListener('blur', () => { if (this.started && !this.paused && !this.respawning) this.pause?.openMenu(this.pause.tab); });
     // A hidden page may never come back (Android discards background tabs): keep what was
@@ -315,7 +320,7 @@ export class Game {
   frame(fixedDt, skipRender = false) {
     this._frameStart = performance.now();
     const raw = fixedDt ?? this.clock.getDelta();
-    const dt = Math.min(raw, 1 / 20);
+    const real = Math.min(raw, 1 / 20), dt = real * (this.timeScale ?? 1);
     if (fixedDt === undefined) {
       this.quality.sample(raw, this);
       const pf = this.perf;
@@ -334,12 +339,13 @@ export class Game {
       // Scripted moments: the player stands still and the camera tells the story.
       const s = input.state;
       s.moveX = s.moveY = s.throttle = s.steer = 0; s.brake = this.player.vehicle ? 1 : 0; s.handbrake = false;
-      for (const a of ['enter', 'attack', 'jump', 'action', 'job']) input.events.delete(a);
+      for (const a of CUTSCENE_DROPS) input.events.delete(a);
     }
     if (!this.paused) {
       this.time += dt;
       this.energy = Math.max(0, this.energy - dt);
       this.player.update(dt, input);
+      this.weapons?.update(dt, input);
       if (this.player.vehicle) this.controls.set(this.player.vehicle, this.player.controls);
       // Everything that drives a vehicle writes its controls before physics reads them.
       this.traffic?.update(dt);
@@ -355,8 +361,12 @@ export class Game {
       this.animals?.update(dt);
     }
     this.touch?.update();
+    this.weaponWheel?.update(real);
+    // The mouse wheel picks weapons on foot (the camera zoom is V): input reads this when it turns.
+    input.weaponScroll = this.player.state === 'foot';
     const subject = this.player.vehicle ? { vehicle: this.player.vehicle, groundY: this.player.vehicle.y } : { human: this.player.human, speed: this.player.speed, heading: this.player.heading, sprinting: this.player.sprinting, groundY: this.player.groundY };
-    if (this.paused) input.look.x = input.look.y = 0;
+    // Paused, or picking on the weapon wheel: the drag or the stick picks, it doesn't turn the camera.
+    if (this.paused || this.weapons?.wheelOpen) input.look.x = input.look.y = 0;
     this.camera.update(this.paused ? 0 : dt, input, subject);
     this.audio?.update(dt, this);
     input.endFrame();
@@ -389,6 +399,7 @@ export class Game {
     this.humans.nearRadius = q.nearRadius; this.humans.nearMax = q.nearPeople;
     this.vehicles.render(dt, cam.position, casters);
     this.humans.update(dt, cam.position, casters, cam);
+    this.weaponFx?.update(dt);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     if (q.shadows > 0) {
@@ -398,7 +409,8 @@ export class Game {
         this.renderer.shadowMap.needsUpdate = true; this.shadowAt.copy(cam.position); this._sunTick = 0;
       }
     }
-    this.hud?.update(dt);
+    // The HUD's timers keep real time through slow motion.
+    this.hud?.update(dt && this.timeScale > 0 ? dt / this.timeScale : dt);
     this.post.render(this.scene, cam, dt);
     // How long a frame takes besides streaming (smoothed), for the streaming budget.
     if (this._frameStart) {

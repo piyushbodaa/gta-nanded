@@ -9,6 +9,7 @@ const MAX = 2400;
 // marker shows: new ones each time were garbage for a cheap phone's collector.
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _ONE = new THREE.Vector3(1, 1, 1);
 const _UP = new THREE.Vector3(0, 1, 0);
+const TAN31 = Math.tan(31 * Math.PI / 180); // the sizes were tuned at the 62° view
 
 export class Effects {
   constructor(scene) {
@@ -76,10 +77,11 @@ export class Effects {
     scene.add(this.glow);
   }
 
-  spawn(x, y, z, vx, vy, vz, life, size, r, g, b, a, { grow = 1, drag = 1, buoy = 0, fade = 1 } = {}) {
+  /** A particle; `to` is the colour it turns to over its life (a fireball going to smoke), else it keeps its own. */
+  spawn(x, y, z, vx, vy, vz, life, size, r, g, b, a, { grow = 1, drag = 1, buoy = 0, fade = 1, to = null } = {}) {
     if (!this.free.length) return;
     const i = this.free.pop();
-    this.p.push({ i, x, y, z, vx, vy, vz, life, max: life, size, r, g, b, a, grow, drag, buoy, fade });
+    this.p.push({ i, x, y, z, vx, vy, vz, life, max: life, size, r, g, b, a, grow, drag, buoy, fade, tr: to ? to[0] : r, tg: to ? to[1] : g, tb: to ? to[2] : b });
   }
 
   smoke(x, y, z, dark = 0.3, n = 1) {
@@ -96,14 +98,27 @@ export class Effects {
   fire(x, y, z) {
     this.spawn(x + (Math.random() - 0.5) * 0.6, y, z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.4, 1.8 + Math.random(), (Math.random() - 0.5) * 0.4, 0.6, 0.9, 1, 0.55 + Math.random() * 0.2, 0.15, 0.8, { grow: 0.6, drag: 0.5 });
   }
-  explosion(x, y, z) {
-    for (let k = 0; k < 40; k++) {
-      const a = Math.random() * 6.28, s = 2 + Math.random() * 7;
-      this.spawn(x, y + 0.5, z, Math.cos(a) * s, 2 + Math.random() * 6, Math.sin(a) * s, 0.7 + Math.random() * 0.5, 1.6, 1, 0.5 + Math.random() * 0.3, 0.1, 0.95, { grow: 2.2, drag: 2.5 });
+  /**
+   * A blast at (x, y, z), `floor` the road under it: a white flash for a moment, a fireball of many
+   * small, uneven puffs going orange to grey smoke (big flat yellow blobs filled a close camera's
+   * view), sparks and grit thrown out, dust along the ground, and a glow on the road.
+   */
+  explosion(x, y, z, floor = y - 0.5) {
+    const R = Math.random;
+    for (let k = 0; k < 3; k++) this.spawn(x + (R() - 0.5) * 0.6, y + 0.3 + R() * 0.4, z + (R() - 0.5) * 0.6, 0, 0, 0, 0.08 + R() * 0.05, 1.5 + R() * 1, 1, 0.88, 0.55, 1, { grow: 0.7 });
+    for (let k = 0; k < 26; k++) {
+      const a = R() * 6.28, s = 1.5 + R() * 5.5, hot = R();
+      this.spawn(x + (R() - 0.5) * 0.8, y + 0.2 + R() * 0.6, z + (R() - 0.5) * 0.8, Math.cos(a) * s, 1.5 + R() * 5, Math.sin(a) * s, 0.45 + R() * 0.45, 0.35 + R() * 0.65,
+        1, 0.4 + 0.22 * hot, 0.06 + 0.1 * hot, 0.95, { grow: 1.4, drag: 3, buoy: 1.2, to: [0.33, 0.29, 0.27] });
     }
-    for (let k = 0; k < 24; k++) this.smoke(x + (Math.random() - 0.5) * 3, y + 1, z + (Math.random() - 0.5) * 3, 0.15, 1);
-    this.sparks(x, y + 1, z, 30);
-    this.flashes.push({ x, y: y - 0.4, z, t: 0.5 }); // the glow lies on the road under the blast
+    for (let k = 0; k < 16; k++) {
+      const a = R() * 6.28, s = 0.6 + R() * 2, d = 0.3 + R() * 0.25;
+      this.spawn(x + Math.cos(a) * 0.8, y + 0.5 + R() * 1.4, z + Math.sin(a) * 0.8, Math.cos(a) * s, 1 + R() * 1.6, Math.sin(a) * s, 1.6 + R() * 1.4, 0.7 + R() * 0.7,
+        0.55, 0.3, 0.14, 0.55, { grow: 2.6, drag: 1.2, buoy: 0.35, to: [d * 0.8, d * 0.8, d * 0.84] });
+    }
+    for (let k = 0; k < 8; k++) { const a = R() * 6.28; this.spawn(x, floor + 0.25, z, Math.cos(a) * 5, 0.3, Math.sin(a) * 5, 1, 0.6, 0.68, 0.6, 0.5, 0.35, { grow: 3, drag: 2.2 }); }
+    this.sparks(x, y + 0.6, z, 24);
+    this.flashes.push({ x, y: floor + 0.1, z, t: 0.5 }); // the glow lies on the road under the blast, just above it
   }
   splash(x, z) {
     for (let k = 0; k < 20; k++) this.spawn(x, -2.6, z, (Math.random() - 0.5) * 4, 3 + Math.random() * 3, (Math.random() - 0.5) * 4, 0.9, 0.5, 0.8, 0.9, 1, 0.7, { grow: 1.5, buoy: -9 });
@@ -136,7 +151,8 @@ export class Effects {
       if (i >= hi) hi = i + 1;
       this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
       this.size[i] = p.size * (1 + t * p.grow);
-      this.col[i * 4] = p.r; this.col[i * 4 + 1] = p.g; this.col[i * 4 + 2] = p.b; this.col[i * 4 + 3] = p.a * (1 - t * t);
+      const u = Math.min(1, t * t * 1.8); // a colour change starts slowly (a fireball stays hot a moment), done three quarters of the way
+      this.col[i * 4] = p.r + (p.tr - p.r) * u; this.col[i * 4 + 1] = p.g + (p.tg - p.g) * u; this.col[i * 4 + 2] = p.b + (p.tb - p.b) * u; this.col[i * 4 + 3] = p.a * (1 - t * t);
     }
     // Slots are handed out lowest first, so the live ones sit at the front: draw and send only
     // those (dead slots among them were zeroed above), not all 2400 every frame.
@@ -144,7 +160,9 @@ export class Effects {
     for (const k of ['position', 'pcolor', 'psize']) sendFirst(g.attributes[k], hi);
     g.setDrawRange(0, hi);
     this.points.visible = hi > 0;
-    this.mat.uniforms.scale.value = innerHeight * 0.9;
+    // Sizes in metres: the narrower the view (aiming, a scope's 4x or 8x), the bigger they draw, as everything else does.
+    const fov = camera?.fov || 62;
+    this.mat.uniforms.scale.value = innerHeight * 0.9 * TAN31 / Math.tan(fov * Math.PI / 360);
     // Explosion flashes light the street (the brightest one, fading over half a second).
     let li = 0;
     for (let k = this.flashes.length - 1; k >= 0; k--) {

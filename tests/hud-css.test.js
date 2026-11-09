@@ -92,3 +92,14 @@ test('the middle column clears the driving buttons at every landscape phone heig
       `${a.h} px tall: buttons ${a.buttons}, clearance ${a.clear}; ${b.h} px tall: buttons ${b.buttons}, clearance ${b.clear}`);
   }
 });
+
+test('held upright, the left FIRE sits under the middle column (objective, subtitles), just above the stick', () => {
+  const W = 360, H = 740, px = v => Function(`return ${v.replace(/calc\(/g, '(').replace(/var\(--safe-[a-z]\)/g, '0').replace(/(\d+(?:\.\d+)?)%/g, (m, n) => `${n * H / 100}`).replace(/px/g, '')}`)();
+  assert.equal(valueAt('body.touch-ui .tb.fire2', 'top', W, H), 'auto');
+  const top = H - px(valueAt('body.touch-ui .tb.fire2', 'bottom', W, H)) - 70;
+  const column = px(valueAt('body.touch-ui .hud-stack', 'margin-top', W, H));
+  assert.ok(top > column + 120, `FIRE from ${top}px, the column from ${column}px`);
+  assert.ok(top + 70 <= H * 0.7 - 62, 'clear of the stick\'s ring');
+  // Through a scope, MAP and pause step out of the lens.
+  assert.ok(rules.some(([sels, body]) => sels.includes('body.scoped .touch-top') && /opacity:\s*0/.test(body)));
+});

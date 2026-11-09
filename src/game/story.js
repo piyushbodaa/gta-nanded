@@ -199,7 +199,8 @@ function routeCheckpoints(g, pts, step = 300) {
   }
   return out;
 }
-const punch = g => pick(g, { keyboard: 'click or <kbd>J</kbd>', gamepad: key(g, 'attack'), touch: key(g, 'attack') });
+// With a gun out the attack button fires, and on a gamepad B reloads: the fight's hint names both.
+const punch = g => pick(g, { keyboard: 'click or <kbd>J</kbd> to punch, or shoot', gamepad: `${key(g, 'attack')} to punch, RT to shoot`, touch: 'PUNCH, or FIRE with a gun' });
 
 export const STORY = [
   {
@@ -260,7 +261,7 @@ export const STORY = [
         kerbSpawn(c, 'savkarSuv', 'suv', P.oldMondha, { dx: 22, label: "Savkar's SUV", color: 0xf2f2f2 });
       }),
       S.say([['GOON', 'Office is closed, hero. Come back with money.'], ['YOU', "I've come for my father's papers."], ['SAVKAR', "Patil's boy, from Pune. Show him how Nanded does business."]]),
-      S.fight(['g0', 'g1', 'g2'], `Fight off <b>Savkar's men</b>. <i>(${punch(g)} to punch)</i>`),
+      S.fight(['g0', 'g1', 'g2'], `Fight off <b>Savkar's men</b>. <i>(${punch(g)})</i>`),
       S.say([
         ['SAVKAR', 'Strong boy. Good. Strong boys can earn.'],
         ['SAVKAR', "Six lakh by Diwali, Patil, or the land is mine. And the interest starts tomorrow."],

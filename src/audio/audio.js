@@ -30,6 +30,7 @@ export class GameAudio {
     this.volume = { master: 0.9, sfx: 0.8, music: 0.6 };
     this.hornCool = new Map();
     this.radio = null;
+    this.gunAt = {}; // when each gun sound last played: full auto from several guns can't flood the graph
   }
 
   /** Must be called from a user gesture. */
@@ -181,7 +182,7 @@ export class GameAudio {
     s.connect(f).connect(g).connect(bus); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
   }
 
-  sfx(name, k = 1) {
+  sfx(name, k = 1, src = 'p') {
     if (!this.enabled || !this.ctx) return;
     switch (name) {
       case 'punch': this._burst(0.12, { freq: 300, q: 0.7, gain: 0.5 * k, type: 'lowpass' }); this._tone(90, 0.15, { gain: 0.35 * k, glide: 50 }); break;
@@ -212,7 +213,68 @@ export class GameAudio {
       case 'door': this._burst(0.08, { freq: 600, q: 1, gain: 0.25 }); this._tone(140, 0.1, { gain: 0.2 }); break;
       case 'bell': this._bell(0.12 * k); break;
       case 'wanted': this._tone(988, 0.15, { type: 'square', gain: 0.07 }); this._tone(740, 0.15, { type: 'square', gain: 0.07, at: 0.16 }); break;
+      // Guns: a sharp crack (filtered white noise), a body (low brown noise) and a thump (a falling
+      // tone), each kept under 0.5 so the master compressor doesn't pump on full auto.
+      case 'pistol': case 'smg': case 'rifle': case 'shotgun': case 'sniper': this._gun(name, k, src); break;
+      case 'pan': // a flat clang: two inharmonic partials over a thud
+        this._tone(560, 0.4, { type: 'triangle', gain: 0.13 * k, glide: 540 }); this._tone(1490, 0.3, { type: 'triangle', gain: 0.07 * k });
+        this._burst(0.05, { freq: 3200, q: 1.2, gain: 0.2 * k }); this._tone(120, 0.12, { gain: 0.3 * k, glide: 60 });
+        break;
+      case 'reload': // magazine out, magazine in, a slide
+        this._tone(1800, 0.03, { type: 'square', gain: 0.05 * k }); this._burst(0.06, { freq: 900, q: 1.5, gain: 0.12 * k, at: 0.03 });
+        this._tone(1200, 0.035, { type: 'square', gain: 0.06 * k, at: 0.3 }); this._burst(0.08, { freq: 2600, q: 2, gain: 0.1 * k, at: 0.42 });
+        break;
+      case 'empty': this._tone(3000, 0.03, { type: 'square', gain: 0.05 * k }); break;
+      case 'bolt': // a bolt worked: back, forward
+        this._burst(0.05, { freq: 1500, q: 2, gain: 0.13 * k }); this._tone(900, 0.03, { type: 'square', gain: 0.04 * k });
+        this._burst(0.05, { freq: 2200, q: 2, gain: 0.13 * k, at: 0.14 }); this._tone(1400, 0.03, { type: 'square', gain: 0.04 * k, at: 0.14 });
+        break;
+      case 'pickup': this._tone(660, 0.1, { type: 'triangle', gain: 0.12 * k }); this._tone(990, 0.16, { type: 'triangle', gain: 0.12 * k, at: 0.08 }); this._burst(0.05, { freq: 1800, q: 1, gain: 0.08 * k }); break;
+      case 'throw': this._tone(2400, 0.03, { type: 'square', gain: 0.04 * k }); this._burst(0.28, { freq: 900, q: 0.6, gain: 0.12 * k, at: 0.05 }); break;
     }
+  }
+
+  /** A shot: crack, body and thump in the gun's own proportions, and a long tail for the rifles. */
+  _gun(name, k, src = 'p') {
+    const now = this.ctx.currentTime, slot = src + name; // the player's gun and the officers' each have their own limit
+    if (now - (this.gunAt[slot] ?? -1) < 0.055) return; // no more than ~18 a second of one kind
+    this.gunAt[slot] = now;
+    const v = 0.92 + Math.random() * 0.16; // no two shots quite alike
+    switch (name) {
+      case 'pistol':
+        this._burst(0.06, { freq: 2200, q: 0.7, gain: 0.36 * k, type: 'highpass' });
+        this._burst(0.14, { freq: 750 * v, q: 0.6, gain: 0.38 * k, type: 'lowpass', buf: this.brown });
+        this._tone(170 * v, 0.1, { gain: 0.24 * k, glide: 70 });
+        break;
+      case 'smg':
+        this._burst(0.05, { freq: 1800 * v, q: 0.9, gain: 0.3 * k });
+        this._burst(0.08, { freq: 620, q: 0.6, gain: 0.3 * k, type: 'lowpass', buf: this.brown });
+        this._tone(135 * v, 0.06, { gain: 0.17 * k, glide: 70 });
+        break;
+      case 'rifle':
+        this._burst(0.08, { freq: 2500, q: 0.7, gain: 0.36 * k, type: 'highpass' });
+        this._burst(0.26, { freq: 460 * v, q: 0.5, gain: 0.44 * k, type: 'lowpass', buf: this.brown });
+        this._tone(120 * v, 0.18, { gain: 0.3 * k, glide: 55 });
+        break;
+      case 'shotgun':
+        this._burst(0.38, { freq: 650 * v, q: 0.5, gain: 0.48 * k, type: 'lowpass', buf: this.brown });
+        this._burst(0.12, { freq: 1300, q: 0.6, gain: 0.3 * k });
+        this._tone(85, 0.3, { gain: 0.38 * k, glide: 40 });
+        break;
+      case 'sniper':
+        this._burst(0.1, { freq: 3000, q: 0.7, gain: 0.4 * k, type: 'highpass' });
+        this._burst(0.9, { freq: 380 * v, q: 0.4, gain: 0.45 * k, type: 'lowpass', buf: this.brown });
+        this._tone(70, 0.6, { gain: 0.4 * k, glide: 30 });
+        this._burst(1.3, { freq: 520, q: 0.4, gain: 0.08 * k, at: 0.12 }); // off the buildings
+        break;
+    }
+  }
+
+  /** A sound at (x, z): quieter with distance from the listener (half as loud R metres off); too faint to hear, not made at all. */
+  sfxAt(name, x, z, k = 1, R = 40) {
+    if (!this.enabled || !this.ctx) return;
+    const d = this.listener ? dist(x, z, this.listener.x, this.listener.z) : 0, kk = k / (1 + d / R);
+    if (kk >= 0.02) this.sfx(name, kk, 'n'); // someone else's: a gun of theirs never silences the player's
   }
   moo() {
     if (!this.enabled || !this.ctx) return;

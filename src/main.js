@@ -15,6 +15,9 @@ import { Markets } from './actors/markets.js';
 import { Peds } from './actors/peds.js';
 import { Animals } from './actors/animals.js';
 import { Police } from './game/police.js';
+import { Weapons } from './game/weapons.js';
+import { WeaponFx } from './game/weapon-fx.js';
+import { WeaponWheel } from './ui/weapon-wheel.js';
 import { Missions } from './game/missions.js';
 import { Jobs } from './game/jobs.js';
 import { Save } from './game/save.js';
@@ -86,14 +89,26 @@ async function boot() {
   game.peds = new Peds(game);
   game.animals = new Animals(game);
   game.police = new Police(game);
+  // Guns and their loot. WeaponFx adds its meshes now, before the menu compiles the shaders (warmShaders).
+  game.weapons = new Weapons(game);
+  game.weaponFx = new WeaponFx(game);
+  game.camera.weapons = game.weapons;
   game.missions = new Missions(game, STORY);
   dressWorld(game);
   game.jobs = new Jobs(game);
   // The radar's activity icons follow the save: the garage opens in the story, stamped landmarks
   // drop off and NEW STORY starts over, so they are read fresh each time (a few dozen, 30 times a second).
+  // Loot crates nearby join them; the list is put together at most twice a second, not on every read.
   const pumps = game.city.pumps.map(p => ({ x: p.x, z: p.z, kind: 'icon', label: '⛽', color: '#f07c1e' }));
-  Object.defineProperty(game, 'staticBlips', { get: () => [...game.jobs.staticBlips(), ...pumps] });
+  let blips = [], blipsAt = -Infinity;
+  Object.defineProperty(game, 'staticBlips', {
+    get: () => {
+      if (Math.abs(game.time - blipsAt) >= 0.5) { blipsAt = game.time; blips = [...game.jobs.staticBlips(), ...pumps, ...game.weapons.blips()]; }
+      return blips;
+    },
+  });
   game.touch = new TouchControls(game);
+  game.weaponWheel = new WeaponWheel(game);
   game.pause = new PauseMenu(game);
   keepFullscreen(game);
   installRules(game);
@@ -189,6 +204,8 @@ function startGame(game, mode) {
   track('game_start', { mode });
   const P = game.player;
   game.save.data.started = true;
+  // What the save carries (a NEW STORY has just reset it to the starter pistol).
+  game.weapons.fromSave(game.save.data.inventory);
   if (mode === 'new') {
     // The story opens on the station forecourt, Hazur Sahib Nanded, late in the afternoon.
     P.teleport(5.3 - 4, 10.9 + 2, Math.PI * 0.75);

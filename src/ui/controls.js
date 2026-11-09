@@ -4,14 +4,17 @@ const NAMES = {
   keyboard: {
     gas: 'W', brake: 'S', handbrake: 'Space', horn: 'H', radio: 'R', camera: 'V', enter: 'F', exit: 'F', map: 'M', pause: 'Esc',
     job: 'N', action: 'Q', siren: 'Q', attack: 'J', photo: 'X', sprint: 'Shift', jump: 'Space',
+    fire: 'Click', aim: 'Right-click', reload: 'R', wheel: 'Tab', weaponNext: 'Scroll', weaponPrev: 'Scroll', grenade: 'G',
   },
   gamepad: {
     gas: 'RT', brake: 'LT', handbrake: 'A', horn: 'L3', radio: 'RB', camera: 'LB', enter: 'Y', exit: 'Y', map: 'Back', pause: 'Start',
     job: 'D-pad ↑', action: 'X', siren: 'X', attack: 'B', photo: 'D-pad ↓', sprint: 'L3', jump: 'A',
+    fire: 'RT', aim: 'LT', reload: 'B', wheel: 'RB', weaponNext: 'D-pad →', weaponPrev: 'D-pad ←',
   },
   touch: {
     gas: 'GAS', brake: 'BRAKE', handbrake: 'DRIFT', horn: 'HORN', radio: '📻', camera: '🎥', enter: 'ENTER', exit: 'EXIT', map: 'MAP', pause: '❚❚',
     job: 'START JOB', action: 'the action button', siren: 'SIREN', attack: 'PUNCH', photo: '📷', sprint: 'RUN', jump: 'JUMP',
+    fire: 'FIRE', aim: 'AIM', reload: 'RELOAD', wheel: 'the weapon button', weaponNext: 'the weapon button', weaponPrev: 'the weapon button',
   },
 };
 
@@ -42,6 +45,16 @@ export function drivingHelp(game) {
     keyboard: `Hold ${k('gas')} to drive, <kbd>A</kbd>/<kbd>D</kbd> to steer, ${k('brake')} to brake and reverse, ${k('handbrake')} for the handbrake.`,
     gamepad: `Hold ${k('gas')} to drive, steer with the left stick, ${k('brake')} to brake and reverse, ${k('handbrake')} for the handbrake.`,
     touch: `Hold ${k('gas')} to drive and steer with your left thumb. Hold ${k('brake')} to stop and reverse, ${k('handbrake')} to slide.`,
+  });
+}
+
+/** How to shoot, for the first gun picked up. */
+export function weaponHelp(game) {
+  const k = a => key(game, a);
+  return pick(game, {
+    keyboard: `${k('fire')} fire · hold ${k('aim')} to aim · ${k('reload')} reload · hold ${k('wheel')} for the weapon wheel, or ${k('weaponNext')} / <kbd>1</kbd>–<kbd>7</kbd> to switch.`,
+    gamepad: `${k('fire')} fire · ${k('aim')} aim · ${k('reload')} reload · hold ${k('wheel')} for the weapon wheel, ${k('weaponPrev')} ${k('weaponNext')} to switch.`,
+    touch: `${k('fire')} shoots (drag on it to turn) · ${k('aim')} aims · tap ${k('wheel')} to choose a weapon.`,
   });
 }
 

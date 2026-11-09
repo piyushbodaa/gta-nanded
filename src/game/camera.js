@@ -1,4 +1,6 @@
-// Third-person camera: orbit on foot, chase behind vehicles, pull in before walls.
+// Third-person camera: orbit on foot, chase behind vehicles, pull in before walls. With a weapon
+// up it comes in over the right shoulder (the crosshair at the screen's centre is where bullets
+// go), looks through a sniper's scope from the eye, and kicks up with each shot.
 import * as THREE from 'three';
 import { clamp, damp, dampAngle, wrapAngle } from '../core/math.js';
 import { WATER_Y } from '../world/water.js';
@@ -23,6 +25,18 @@ export class GameCamera {
     this.time = 0;
     this.mode = 'foot';
     this.zoom = 1;
+    // Weapons (main.js sets this to game.weapons; without it none of this happens): how far into
+    // the shoulder aim and the scope the view is, the shoulder offset now, and recoil still to recover.
+    this.weapons = undefined;
+    this.aimK = 0; this.scopeK = 0; this.shoulder = 0; this.kickBack = 0; this.drawnK = 0;
+    this._fov = null;
+  }
+
+  /** A shot's recoil: the view jumps up by rad and settles back most of the way over a quarter second. */
+  kick(rad) {
+    if (!(rad > 0)) return;
+    this.pitch = clamp(this.pitch - rad, -0.5 - 0.35 * this.aimK, 1.25);
+    this.kickBack += rad * 0.6;
   }
 
   /** Next camera distance: normal, far, close (the camera button). */
@@ -48,12 +62,28 @@ export class GameCamera {
       input.look.x = input.look.y = 0; input.zoom = 0;
       return this._cinematic(dt);
     }
-    const look = input.look;
+    const look = input.look, W = this.weapons;
+    const aiming = Boolean(W?.aiming) && !subject.vehicle, scoped = aiming && Boolean(W?.scoped);
     const manual = Math.abs(look.x) + Math.abs(look.y) > 1e-5;
     if (manual) this.lastManual = this.time;
-    this.yaw = wrapAngle(this.yaw + look.x);
-    this.pitch = clamp(this.pitch - look.y, -0.5, 1.25);
+    // Down the sights or through a scope a drag turns the view as much less as the view is narrower.
+    const sens = aiming ? cam.fov / this.fovBase : 1;
+    // Recoil settling back.
+    if (this.kickBack > 1e-5) { const r = this.kickBack * (1 - Math.exp(-14 * dt)); this.pitch += r; this.kickBack -= r; }
+    this.yaw = wrapAngle(this.yaw + look.x * sens);
+    // Aiming, the view goes further up (the camera is in at the shoulder, not out on its orbit).
+    this.pitch = clamp(this.pitch - look.y * sens, -0.5 - 0.35 * this.aimK, 1.25);
     look.x = 0; look.y = 0;
+    this.aimK = damp(this.aimK, aiming ? 1 : 0, aiming ? 12 : 8, dt);
+    this.scopeK = damp(this.scopeK, scoped ? 1 : 0, scoped ? 26 : 16, dt);
+    if (this.aimK < 1e-3) this.aimK = 0;
+    if (this.scopeK < 1e-3) this.scopeK = 0;
+    // A gun (or a grenade) out, not aiming: the view still sits a little off the right shoulder, so the
+    // crosshair at the screen's centre is not on the back of the player's own head.
+    const hold = W?.def?.hold, drawn = !subject.vehicle && Boolean(W?.armed) && hold !== 'none' && hold !== 'melee';
+    this.drawnK = damp(this.drawnK, drawn ? 1 : 0, 6, dt);
+    if (this.drawnK < 1e-3) this.drawnK = 0;
+    const aimK = this.aimK;
     if (input.zoom) { this.zoom = clamp(this.zoom + input.zoom * 0.08, 0.7, 1.6); input.zoom = 0; }
 
     const vehicle = subject.vehicle;
@@ -81,15 +111,18 @@ export class GameCamera {
       }
       fov += clamp((spd - 10) / 30, 0, 1) * 12;
     } else {
-      this.mode = 'foot';
+      this.mode = aimK > 0.5 ? (this.scopeK > 0.5 ? 'scope' : 'aim') : 'foot';
       const h = subject.human;
-      dist = 4.3 * this.zoom;
-      tx = h.x; tz = h.z; ty = h.y + 1.55;
-      // Keyboard and touch players get a gentle follow when they run; mouse-look players steer it themselves.
-      if (!input.pointerLocked && subject.speed > 2.5 && this.time - this.lastManual > 1.5) {
+      // Aiming: in close over the shoulder and a little above the gun, so the barrel shows its length
+      // under the crosshair instead of pointing straight away from a camera level with it.
+      dist = 4.3 * this.zoom + (1.75 - 4.3 * this.zoom) * aimK;
+      tx = h.x; tz = h.z; ty = h.y + 1.55 + 0.11 * aimK;
+      // Keyboard and touch players get a gentle follow when they run; mouse-look players steer it
+      // themselves, and so does anyone aiming.
+      if (!input.pointerLocked && aimK < 0.05 && subject.speed > 2.5 && this.time - this.lastManual > 1.5) {
         this.yaw = dampAngle(this.yaw, subject.heading + Math.PI, 1.2, dt);
       }
-      if (subject.sprinting) fov += 4;
+      if (subject.sprinting && aimK < 0.5) fov += 4;
     }
     if (this._snap) {
       this.target.set(tx, ty, tz);
@@ -101,16 +134,26 @@ export class GameCamera {
       this.target.z = damp(this.target.z, tz, 18, dt);
       this.target.y = damp(this.target.y, ty, 10, dt);
     }
+    // Over the right shoulder while aiming: the target the view turns about moves out to the right,
+    // short of any wall there.
+    let cx = this.target.x, cy = this.target.y, cz = this.target.z;
+    if (aimK > 0 || this.shoulder > 0 || this.drawnK > 0) {
+      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), want = 0.58 * aimK + 0.42 * this.drawnK * (1 - aimK);
+      const t = want > 0 ? this.colliders.raycast(cx, cy, cz, cx + rx * (want + 0.2), cy, cz + rz * (want + 0.2), 0.05) : 1;
+      const s = Math.max(0, Math.min(want, (want + 0.2) * t - 0.2));
+      this.shoulder = s < this.shoulder ? s : damp(this.shoulder, s, 10, dt);
+      cx += rx * this.shoulder; cz += rz * this.shoulder;
+    }
     // Collision: pull in before walls, ease back out.
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const ox = Math.sin(this.yaw) * cp, oy = sp, oz = Math.cos(this.yaw) * cp;
-    const t = this.colliders.raycast(this.target.x, this.target.y, this.target.z, this.target.x + ox * dist, this.target.y + oy * dist, this.target.z + oz * dist, 0.3);
-    const want = Math.max(0.8, dist * t - 0.25);
-    this.curDist = want < this.curDist ? want : damp(this.curDist, want, 3, dt);
-    let px = this.target.x + ox * this.curDist, py = this.target.y + oy * this.curDist, pz = this.target.z + oz * this.curDist;
+    const t = this.colliders.raycast(cx, cy, cz, cx + ox * dist, cy + oy * dist, cz + oz * dist, 0.3);
+    const want = Math.max(aimK > 0.5 ? 0.6 : 0.8, dist * t - 0.25);
+    this.curDist = want < this.curDist || aimK > 0 ? Math.min(want, damp(this.curDist, want, aimK > 0 ? 14 : 3, dt)) : damp(this.curDist, want, 3, dt);
+    let px = cx + ox * this.curDist, py = cy + oy * this.curDist, pz = cz + oz * this.curDist;
     // Squeezed by walls: rise up and look down over the shoulder instead of into the back of the head.
     const squeeze = clamp(1 - this.curDist / dist, 0, 1);
-    py += squeeze * (vehicle ? 1.6 : 1.1);
+    py += squeeze * (vehicle ? 1.6 : 1.1 * (1 - aimK)); // (aiming, it stays in at the shoulder)
     // Above the ground, and above the river (its surface is drawn from above only).
     py = Math.max(py, (subject.groundY ?? 0) + 0.4, WATER_Y + 0.3);
     // Shake.
@@ -121,10 +164,25 @@ export class GameCamera {
       pz += (Math.cos(this.time * 41) + Math.sin(this.time * 23)) * s;
       this.shake = damp(this.shake, 0, 6, dt);
     }
+    this.lookAt.set(cx, cy + (vehicle ? 0.2 : 0.05), cz);
+    // Through a scope: from just in front of the eye (the body falls behind the near plane, and
+    // weapon-fx.js hides the gun), straight along the view.
+    const sk = vehicle ? 0 : this.scopeK;
+    if (sk > 0) {
+      const h = subject.human, fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+      const ex = h.x + fx * 0.32, ey = h.y + 1.6 * (h.outfit?.scale || 1), ez = h.z + fz * 0.32;
+      const lx = ex + fx * cp * 10, ly = ey - sp * 10, lz = ez + fz * cp * 10;
+      px += (ex - px) * sk; py += (ey - py) * sk; pz += (ez - pz) * sk;
+      this.lookAt.set(this.lookAt.x + (lx - this.lookAt.x) * sk, this.lookAt.y + (ly - this.lookAt.y) * sk, this.lookAt.z + (lz - this.lookAt.z) * sk);
+    }
     cam.position.set(px, py, pz);
-    this.lookAt.set(this.target.x, this.target.y + (vehicle ? 0.2 : 0.05), this.target.z);
     cam.lookAt(this.lookAt);
-    const f = damp(cam.fov, fov, 4, dt);
+    // The view narrows down the sights (48°) and to the scope's zoom (62° at 1x); the plain view
+    // eases (4/s) as it always has, the aim and the scope ride their own quick blends.
+    this._fov = damp(this._fov ?? cam.fov, fov, 4, dt);
+    const zoomX = Math.max(1, W?.def?.scope || 1);
+    let f = this._fov + (48 - this._fov) * aimK;
+    if (sk > 0) f += (this.fovBase / zoomX - f) * sk;
     if (Math.abs(f - cam.fov) > 0.01) { cam.fov = f; cam.updateProjectionMatrix(); }
   }
 

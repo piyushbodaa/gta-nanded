@@ -94,7 +94,7 @@ export class PauseMenu {
     const p = g.player.pos;
     this.map.focus(p.x, p.z, this.map.zoom || 0.35);
     this.show(tab);
-    // Focus moves into the menu, so Tab steps through its buttons (on the street it is the map key).
+    // Focus moves into the menu, so Tab steps through its buttons (on the street, held, it is the weapon wheel).
     this.root.querySelector(`[data-tab="${tab}"]`)?.focus({ preventScroll: true });
   }
   close() {
@@ -196,6 +196,7 @@ export class PauseMenu {
       [st.fares, 'Rickshaw fares'], [st.deliveries, 'Deliveries'],
       [`${s.stamps.length}/17`, 'Passport stamps'], [`${s.districts.length}/53`, 'Neighbourhoods'],
       [st.jacked, 'Vehicles jacked'], [st.crashes, 'Crashes'], [st.punches, 'Punches thrown'],
+      [st.shots ?? 0, 'Shots fired'], [st.kills ?? 0, 'Knock-outs'], [st.headshots ?? 0, 'Headshots'],
       [st.busted, 'Times busted'], [st.wasted, 'Times wasted'],
       [`${Math.floor(st.playTime / 3600)}h ${Math.floor((st.playTime % 3600) / 60)}m`, 'Played'],
     ];

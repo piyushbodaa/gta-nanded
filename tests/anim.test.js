@@ -114,6 +114,17 @@ test('every pose is a finite set of joint angles', () => {
     assert.equal(h.anim.out.length, N);
     for (let c = 0; c < N; c++) assert.ok(Number.isFinite(h.anim.out[c]), `${pose}: channel ${c} is ${h.anim.out[c]}`);
   }
+  // With every weapon, carried and aimed (up, down, to the side), firing, reloading, on the move and in the air.
+  const holds = { pan: 'melee', p92: 'pistol', uzi: 'pistol', ump45: 'rifle', akm: 'rifle', m416: 'rifle', s12k: 'rifle', kar98k: 'rifle', awm: 'rifle', grenade: 'throw' };
+  for (const gun in holds) {
+    for (const [pose, aim] of [['idle', 0], ['walk', 1], ['run', 0], ['idle', 1]]) {
+      h.pose = pose; h.speed = pose === 'run' ? 5 : pose === 'walk' ? 1.4 : 0; h.punch = 0; h.air = pose === 'run'; h.vy = 2;
+      h.gun = gun; h.hold = holds[gun]; h.aim = aim; h.aimPitch = aim ? 0.9 : 0; h.aimYaw = aim ? -0.6 : 0; h.reload = pose === 'walk' ? 0.5 : 0;
+      for (let i = 0; i < 30; i++) { h.x += h.speed * dt; if (i % 10 === 0) h.recoil = 1; step(); }
+      for (let c = 0; c < N; c++) assert.ok(Number.isFinite(h.anim.out[c]), `${gun} ${pose} aim ${aim}: channel ${c} is ${h.anim.out[c]}`);
+    }
+  }
+  h.gun = null; h.hold = 'none'; h.aim = 0; h.reload = 0;
 });
 
 test('the leg and arm solver reaches what it can, and points at what it cannot', () => {
@@ -156,4 +167,26 @@ test('a punch reaches out from the shoulder, a jump tucks the feet up', () => {
   for (let i = 0; i < 20; i++) step();
   const feet = Math.min(at(FOOT[0], 0, -0.057, 0)[1], at(FOOT[1], 0, -0.057, 0)[1]) - h.y;
   assert.ok(feet > 0.2, `feet tucked ${feet.toFixed(2)} m above where they stand`);
+});
+
+test('a rifle is shouldered: the grip hand up under the eye, the right elbow out of the chest, the left arm bent under the handguard; a pistol out at the eye line', () => {
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], len = v => Math.hypot(...v);
+  for (const [gun, hold] of [['akm', 'rifle'], ['kar98k', 'rifle'], ['m416', 'rifle'], ['p92', 'pistol']]) {
+    const { h, at, step } = rig('man', 5);
+    Object.assign(h, { gun, hold, aim: 1, aimYaw: 0, aimPitch: 0 });
+    for (let i = 0; i < 120; i++) step();
+    const eye = at(2, -0.032, 0.105, 0.085), wristR = at(HAND[1], 0, -0.33, 0), wristL = at(HAND[0], 0, -0.33, 0);
+    const shL = at(SHOULDER[0], 0, 0, 0), elbowR = at(SHOULDER[1], 0, -0.29, 0);
+    // The grip hand a little under the eye, not down at the chest.
+    const below = eye[1] - wristR[1];
+    assert.ok(below > -0.02 && below < (hold === 'rifle' ? 0.2 : 0.17), `${gun}: the right hand ${below.toFixed(2)} m under the eye`);
+    // Out in front of the face: the pistol at arm's length, the rifle's grip a forearm ahead.
+    assert.ok(wristR[2] - eye[2] > (hold === 'rifle' ? 0.12 : 0.3), `${gun}: the hand ${(wristR[2] - eye[2]).toFixed(2)} m ahead of the eye`);
+    // The right elbow outside the torso (its spine line), not folded into the chest.
+    const o = at(1, 0, 0, 0), up = sub(at(1, 0, 1, 0), o), e = sub(elbowR, o), k = e[0] * up[0] + e[1] * up[1] + e[2] * up[2];
+    const off = len([e[0] - up[0] * k, e[1] - up[1] * k, e[2] - up[2] * k]);
+    assert.ok(off > 0.17, `${gun}: the right elbow ${off.toFixed(2)} m from the spine`);
+    // The left arm reaches its grip with the elbow bent, not locked straight.
+    if (hold === 'rifle') assert.ok(len(sub(wristL, shL)) < 0.58, `${gun}: the left arm ${len(sub(wristL, shL)).toFixed(2)} m long`);
+  }
 });

@@ -82,9 +82,9 @@ test('a lone P pauses after the prefix wait, and an invalid continuation pauses 
   assert.equal(g.paused, true);
 });
 
-test('M, Escape and Tab still open the menu immediately without a cheat prefix', t => {
+test('M and Escape still open the menu immediately without a cheat prefix (Tab is the weapon wheel)', t => {
   const { g, key } = setup(t);
-  for (const code of ['m', 'Escape', 'Tab']) {
+  for (const code of ['m', 'Escape']) {
     g.paused = false; key(code);
     assert.equal(g.paused, true, code);
   }

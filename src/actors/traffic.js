@@ -246,7 +246,8 @@ export class Traffic {
     }
     if (g.player.state !== 'driving' && Math.abs(g.player.y - v.y) < 2) consider(g.player.x, g.player.z, 0.6, true);
     if (v.y < 1) {
-      g.peds?.forEachNear(v.x, v.z, 20, ped => { if (!ped.onRoadOk) consider(ped.h.x, ped.h.z, 0.5, false); });
+      // Not for the knocked out: a car can't steer round a body, and it would stand there till it went (two minutes in view).
+      g.peds?.forEachNear(v.x, v.z, 20, ped => { if (!ped.onRoadOk && ped.state !== 'dead') consider(ped.h.x, ped.h.z, 0.5, false); });
       g.animals?.forEachNear(v.x, v.z, 22, an => {
         // Its half-extent across our path: a cow sitting across the street blocks with its length.
         const c = Math.abs(Math.cos(an.heading - v.heading)), s = Math.abs(Math.sin(an.heading - v.heading));

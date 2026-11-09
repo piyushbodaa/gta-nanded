@@ -6,8 +6,9 @@ import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 import { HOSPITAL, POLICE_STATION } from './story.js';
 import { DynamicDriver } from '../actors/traffic.js';
 import { driveHunters } from './missions.js';
-import { drivingHelp, vehicleKeys } from '../ui/controls.js';
+import { drivingHelp, vehicleKeys, weaponHelp } from '../ui/controls.js';
 import { tapButtons } from '../ui/tap.js';
+import { WEAPONS } from './weapon-data.js';
 
 const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
 
@@ -111,6 +112,9 @@ export function installRules(g) {
     }
   };
 
+  // A gun in hand for the first time: how to fire, aim and get at the wheel, once.
+  g.onGunOut = () => { g.save.set('seenGunHelp', true); g.hud.help(weaponHelp(g), 9); };
+
   g.onExitedVehicle = (v, spd) => { g.audio.sfx('door'); if (spd > 7) g.camera.addShake(0.3); };
 
   // Who ran into whom: each car's speed toward the other before this frame's physics (onImpact
@@ -165,6 +169,69 @@ export function installRules(g) {
     if (v.wrecked) return;
     if (v.health <= 0) { v.health = 0; v.wrecked = true; v.onFire = 0; g.vehicles.onWreck(v); }
     else if (v.health < 250 && !v.onFire) v.onFire = 0.01;
+  };
+
+  /**
+   * Damage that isn't a crash: bullets, a grenade. Burns and wrecks as a blast does; the player's
+   * doing makes its fireball a crime, and the frightened driver of a shot car gets out and runs.
+   */
+  g.damageVehicle = (v, dmg, byPlayer = false) => {
+    if (!v || v.removed || v.exploded || !(dmg > 0)) return;
+    if (v.kinematic) g.vehicles.wake(v);
+    v.health = Math.max(0, v.health - dmg);
+    // A story's car blowing up is the story's (as for a ram: its wreck must not bring the police into the fight that follows).
+    if (byPlayer && v.role !== 'player' && !storyCar(v)) v.rammedT = g.time;
+    damaged(v);
+    if (byPlayer) driverFlees(v);
+  };
+  // Not the player's own seat, a police unit on the job (its crew get out on their own), or the
+  // story's cars (a chase ends when the target car is shot up enough: missions.js).
+  const driverFlees = v => {
+    const P = g.player, h = v.driver;
+    if (!h || h === P.human || v.role === 'player' || v.role === 'police' || storyCar(v) || !g.peds?._make) return;
+    g.vehicles.ejectDriver(v);
+    const out = g.vehicles.exitWorld?.(v) ?? g.vehicles.doorWorld?.(v) ?? v;
+    const people = [h, ...(v.passengers || []).splice(0)];
+    people.forEach((ph, i) => {
+      ph.x = out.x + (i ? (Math.random() - 0.5) * 1.2 : 0); ph.z = out.z + (i ? (Math.random() - 0.5) * 1.2 : 0); ph.y = out.y ?? v.y ?? 0;
+      ph.pose = 'run'; ph.pitch = 0; ph.roll = 0;
+      const p = g.peds._make(ph, ph.x, ph.z, null);
+      p.state = 'flee'; p.t = 10;
+      if (!i) g.peds.bark?.(p, 'flee');
+    });
+    v.ai = null; v.role = 'abandoned'; v.sirenOn = false;
+    g.controls.delete(v);
+    if (g.traffic?.cars) g.traffic.cars = g.traffic.cars.filter(c => c !== v);
+  };
+
+  /**
+   * An armed officer (peds.js fight) fires at the player: only with a clear line (as a bullet's:
+   * a post, a trunk or a parked car is cover), never at a holy place, more often a hit close in
+   * and on someone standing still. ~8 a hit; a car takes it on the bodywork instead.
+   */
+  const muzzle = { x: 0, y: 0, z: 0 };
+  g.pedShoots = p => {
+    const P = g.player, pos = P.pos, h = p.h, gun = WEAPONS[p.armed] ? p.armed : 'p92', W = g.weapons;
+    if (g.cutscene || g.respawning || P.state === 'dead') return false;
+    if (W?.inHoly?.(pos.x, pos.z) || W?.inHoly?.(h.x, h.z)) return false;
+    const ey = (h.y || 0) + 1.45, ty = P.vehicle ? P.vehicle.y + 1 : (P.y || 0) + 1.2;
+    const clear = W?.clearLine ? W.clearLine(h.x, ey, h.z, pos.x, ty, pos.z, P.vehicle) : !g.colliders?.raycast || g.colliders.raycast(h.x, ey, h.z, pos.x, ty, pos.z, 0.05) >= 0.999;
+    if (!clear) return false;
+    const d = dist(h.x, h.z, pos.x, pos.z);
+    const chance = clamp(0.7 - d / 45, 0.12, 0.65) * (P.speed > 4 ? 0.6 : 1) * (gun === 'm416' ? 0.75 : 1) * (P.state === 'down' ? 0.5 : 1);
+    const hit = Math.random() < chance;
+    if (hit) {
+      if (P.vehicle) g.damageVehicle(P.vehicle, 18, false);
+      else { P.damage(gun === 'm416' ? 7 : 8, 'police'); g.camera.addShake(0.08); }
+    }
+    // The tracer from the officer's gun (or hands); a miss goes past, a step or two wide.
+    const m = muzzle;
+    if (!g.weaponFx?.muzzleOf?.(h, m)) { const s = Math.sin(h.yaw), c = Math.cos(h.yaw); m.x = h.x + s * 0.5 - c * 0.15; m.y = ey - 0.1; m.z = h.z + c * 0.5 + s * 0.15; }
+    const mx = hit ? 0 : (Math.random() - 0.5) * 3, mz = hit ? 0 : (Math.random() - 0.5) * 3;
+    g.weaponFx?.shot?.(m.x, m.y, m.z, pos.x + mx, ty + (hit ? 0 : Math.random() - 0.6), pos.z + mz, gun);
+    g.audio.sfxAt?.(WEAPONS[gun].sound, h.x, h.z, 0.8); // its own voice: it never silences the player's gun (audio.js)
+    h.recoil = 1;
+    return hit;
   };
 
   const explode = v => {
@@ -266,6 +333,7 @@ export function installRules(g) {
     POLICEWALA: () => spawnNear('police', 'A jeep, no questions asked.'),
     PAUSKALA: () => { g.sky.setWeather(g.sky.weather === 'rain' ? 'clear' : 'rain'); return 'Monsoon on demand.'; },
     RAATRANI: () => { g.sky.hours = (g.sky.hours + 12) % 24; return 'Day for night.'; },
+    HATHIYAAR: () => { if (!g.weapons) return null; g.weapons.giveAll(); return 'Pura hathiyaar-khana: every gun, full ammo.'; },
   };
   function spawnNear(type, msg) {
     const P = g.player, pos = P.pos, n = g.net.nearest(pos.x + Math.sin(P.heading) * 8, pos.z + Math.cos(P.heading) * 8, 40, {}, r => !g.net.raised[r]);
@@ -298,6 +366,9 @@ export function installRules(g) {
     return msg ?? null;
   };
   const codes = Object.keys(CHEATS);
+  // Typing a code mid-play is not playing it: once two or more letters spell the start of a code, the
+  // letters' own game keys (J fires, G throws a grenade, R reloads) are dropped.
+  const DROP = ['attack', 'grenade', 'radio'];
   let typed = '', typingTimer, pendingAction;
   const resetTyping = () => { clearTimeout(typingTimer); typed = ''; pendingAction = null; };
   addEventListener('blur', resetTyping);
@@ -307,7 +378,8 @@ export function installRules(g) {
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) { resetTyping(); return; }
     if (e.key === 'Shift' || e.key === 'CapsLock') return;
     if (!/^[a-z]$/i.test(e.key)) {
-      if (pendingAction && e.code !== 'Escape' && e.code !== 'Tab') g.input.trigger(pendingAction);
+      // Escape opens the menu itself; Tab is the weapon wheel now, so a pending pause still goes through.
+      if (pendingAction && e.code !== 'Escape') g.input.trigger(pendingAction);
       resetTyping(); return;
     }
     if (e.repeat) return;
@@ -321,6 +393,7 @@ export function installRules(g) {
     if (pendingAction && !typed.startsWith(before) && !action) g.input.trigger(pendingAction);
     pendingAction = null;
     if (!typed) return;
+    if (typed.length >= 2) for (const a of DROP) g.input?.events?.delete?.(a);
     if (action && g.input.pressed(action)) pendingAction = action;
     if (CHEATS[typed]) {
       const msg = g.cheat(typed);
@@ -338,7 +411,7 @@ export function installRules(g) {
   g.wasted = cause => {
     if (g.player.state === 'dead' || g.respawning) return;
     g.player.state = 'dead';
-    g.player.human.pose = 'lie';
+    Object.assign(g.player.human, { pose: 'lie', gun: null, hold: 'none', aim: 0, recoil: 0, reload: 0 });
     g.respawning = true;
     document.body.classList.add('wasted');
     const failed = endMission('You were wasted.');

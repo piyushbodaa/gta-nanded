@@ -3,6 +3,7 @@ import { Minimap } from './minimap.js';
 import { clamp, dist } from '../core/math.js';
 import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 import { key } from './controls.js';
+import { WEAPONS, AMMO } from '../game/weapon-data.js';
 
 const $ = id => document.getElementById(id);
 
@@ -36,6 +37,8 @@ export class Hud {
       help: $('hud-help'), area: $('hud-area'), vehicle: $('hud-vehicle'), speed: $('hud-speed'), speedNum: $('hud-speed-num'), gear: $('hud-gear'),
       objective: $('hud-objective'), subtitle: $('hud-subtitle'), bark: $('hud-bark'), timer: $('hud-timer'), big: $('hud-big'), toast: $('hud-toast'),
       cashDelta: $('hud-cash-delta'), prompt: $('hud-prompt'), perf: $('hud-perf'), hint: $('hud-hint'), radio: $('hud-radio'),
+      weapon: $('hud-weapon'), wname: $('hud-wname'), wammo: $('hud-wammo'), wbar: $('hud-wbar'), crosshair: $('hud-crosshair'),
+      hitmark: $('hud-hitmark'), scope: $('hud-scope'), scopeZoom: $('hud-scope-zoom'), notice: $('hud-notice'),
     };
     this.perfOn = false;
     this.perfT = 0;
@@ -52,6 +55,8 @@ export class Hud {
     this.objText = '';
     this.timerHtml = '';
     this.speedShown = { kmh: -1, gear: '', hp: -1 };
+    // The same for the weapon readouts: what is in hand and its ammo, the crosshair's gap, the hit marker's fade.
+    this.gunShown = { on: null, name: '', ammo: '', reload: -1, cross: null, gap: -1, blocked: null, hit: -1, kill: null, scope: null, zoom: '', notice: null };
     this.helpLater = null; // [html, seconds] waiting for a big card, or for room in the middle column
     this.radioUp = false; // the radio's station card (main.js shows it)
     this.radioSeen = ''; // the station card last checked against the vehicle's name card
@@ -309,6 +314,7 @@ export class Hud {
       const hp = clamp(v.health / 1000, 0, 1);
       if (hp !== shown.hp) { shown.hp = hp; this.el.speed.style.setProperty('--hp', hp); this.el.speed.classList.toggle('damaged', hp < 0.35); }
     }
+    this._weapon();
     // The waypoint's GPS line follows the player whenever no mission or job is drawing its own route.
     this.waypointT -= dt;
     if (this.waypointT <= 0) { this.waypointT = 1.2; this._waypointRoute(); }
@@ -316,6 +322,63 @@ export class Hud {
     this.radarT -= dt;
     if (this.radarT <= 0) { this.radarT = 1 / 30; this.radar.draw(this.collectBlips(), this.route); }
     if (this.perfOn && (this.perfT -= dt) <= 0) { this.perfT = 0.5; this._perf(); }
+  }
+
+  /**
+   * The weapon readouts, every frame and written only when they change (as the speedometer): the name and ammo
+   * under the stars (desktop; on a touch screen the weapon button shows them), the crosshair, whose ticks part
+   * as the shots spread, the hit marker, the sniper's scope and the holy-place notice.
+   */
+  _weapon() {
+    const g = this.game, w = g.weapons, sh = this.gunShown, el = this.el;
+    const foot = Boolean(w) && !g.player.vehicle && g.player.state === 'foot' && !g.cutscene;
+    const def = (foot && WEAPONS[w.current]) || null;
+    // Name and ammo, with a bar while reloading.
+    const on = Boolean(def && w.current !== 'fist');
+    if (on !== sh.on) { sh.on = on; el.weapon.hidden = !on; this.root.classList?.toggle('armed', on); }
+    if (on) {
+      const name = def.ammo && def.hold !== 'throw' ? `${def.name} <small>${AMMO[def.ammo]?.name || ''}</small>` : def.name;
+      if (name !== sh.name) { sh.name = name; el.wname.innerHTML = name; }
+      const ammo = !def.ammo ? '' : def.hold === 'throw' ? `×${w.mag}` : w.reloading ? 'Reloading' : `<b>${w.mag}</b> / ${w.reserve}`;
+      if (ammo !== sh.ammo) { sh.ammo = ammo; el.wammo.innerHTML = ammo; }
+      const reload = w.reloading ? Math.round(clamp(w.reloading, 0, 1) * 40) / 40 : 0;
+      if (reload !== sh.reload) {
+        sh.reload = reload;
+        el.weapon.classList.toggle('reloading', reload > 0);
+        el.wbar.style.transform = `scaleX(${reload})`;
+      }
+    }
+    // The scope: a black surround with the lens, while a sniper rifle aims.
+    const scoped = Boolean(def && w.scoped);
+    if (scoped !== sh.scope) { sh.scope = scoped; el.scope.hidden = !scoped; document.body?.classList?.toggle?.('scoped', scoped); } // MAP and pause step out of the lens
+    if (scoped) { const z = `${def.scope}×`; if (z !== sh.zoom) { sh.zoom = z; el.scopeZoom.textContent = z; } }
+    // Crosshair: for a gun or a grenade in hand; fists and the pan only while aiming. Not through a scope.
+    const cross = Boolean(def) && !scoped && !w.wheelOpen && (w.aiming || (on && def.hold !== 'melee'));
+    if (cross !== sh.cross) { sh.cross = cross; el.crosshair.hidden = !cross; }
+    if (cross) {
+      // The gap is the cone of fire as it looks on screen: tan(spread) over tan(half the field of view).
+      const fov = (g.camera3?.fov || 62) * Math.PI / 360, H = globalThis.innerHeight || 720;
+      const gap = Math.round(clamp(Math.tan(w.spread || 0) / Math.tan(fov) * H / 2, 3, 90));
+      if (gap !== sh.gap) { sh.gap = gap; el.crosshair.style.setProperty?.('--gap', `${gap}px`); }
+      const blocked = Boolean(w.blocked);
+      if (blocked !== sh.blocked) { sh.blocked = blocked; el.crosshair.classList.toggle('blocked', blocked); }
+    }
+    // Hit marker: a white cross, red for a knock-out, fading over a quarter of a second.
+    const hm = foot ? w.hitMarker : null, age = hm ? g.time - hm.t : 1;
+    const hit = age >= 0 && age < 0.25 ? Math.ceil((1 - age / 0.25) * 10) / 10 : 0;
+    if (hit !== sh.hit) {
+      sh.hit = hit;
+      el.hitmark.hidden = !hit;
+      if (hit) el.hitmark.style.opacity = String(hit);
+    }
+    if (hit && Boolean(hm.kill) !== sh.kill) { sh.kill = Boolean(hm.kill); el.hitmark.classList.toggle('kill', sh.kill); }
+    // Holy places: say why the trigger does nothing.
+    const notice = on && w.blocked === 'holy';
+    if (notice !== sh.notice) {
+      sh.notice = notice;
+      el.notice.hidden = !notice;
+      if (notice) el.notice.textContent = 'Guns stay holstered at holy places';
+    }
   }
 
   /** Route to the map waypoint from where the player is now; arriving clears it. */
@@ -334,6 +397,9 @@ export class Hud {
     if (g.missions) for (const b of g.missions.blips()) out.push(b);
     if (g.waypoint) out.push({ x: g.waypoint.x, z: g.waypoint.z, color: '#c77dff' });
     if (g.police?.level) for (const u of g.police.units) out.push({ x: u.v.x, z: u.v.z, kind: 'police', clamp: false });
+    // An air drop's crate, red like its smoke, until it is opened.
+    const drop = g.weapons?.airdrop;
+    if (drop && !drop.taken) { const b = (this.dropBlip ??= { x: 0, z: 0, color: '#ff4d3d', kind: 'icon', label: '▼' }); b.x = drop.x; b.z = drop.z; out.push(b); }
     for (const b of g.staticBlips || []) {
       const pos = g.player.pos;
       if (dist(b.x, b.z, pos.x, pos.z) < 260) out.push({ ...b, clamp: false });
