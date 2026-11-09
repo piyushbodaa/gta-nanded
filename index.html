@@ -57,10 +57,13 @@
     <section id="cinematic-intro" class="cinematic-intro" hidden></section>
 
     <div id="hud" class="hud" hidden>
+      <!-- First, so the stars, cash and radar print over the scope's black surround. -->
+      <div id="hud-scope" class="scope" hidden><div class="scope-lens"><i class="scope-h"></i><i class="scope-v"></i><b id="hud-scope-zoom"></b></div></div>
       <div class="hud-tr">
         <div id="hud-clock" class="hud-clock">17:00</div>
         <div class="hud-cash-wrap"><div id="hud-cash" class="hud-cash">₹0</div><div id="hud-cash-delta" class="cash-delta" hidden></div></div>
         <div id="hud-stars" class="hud-stars" aria-label="Wanted level"></div>
+        <div id="hud-weapon" class="hud-weapon" hidden><b id="hud-wname"></b><span id="hud-wammo"></span><i class="wbar"><i id="hud-wbar"></i></i></div>
       </div>
       <div class="hud-bl">
         <div class="radar"><canvas id="radar"></canvas></div>
@@ -81,6 +84,9 @@
       <div id="hud-bark" class="bark" hidden></div>
       <div id="hud-prompt" class="prompt" hidden></div>
       <div id="hud-big" class="big-message" hidden></div>
+      <div id="hud-crosshair" class="crosshair" hidden><i></i><i></i><i></i><i></i></div>
+      <div id="hud-hitmark" class="hitmark" hidden><i></i><i></i></div>
+      <div id="hud-notice" class="hud-notice" hidden></div>
       <div id="hud-hint" class="corner-hint"><kbd>Esc</kbd> Pause <kbd>M</kbd> Map</div>
       <div id="hud-perf" class="perf-readout" hidden></div>
     </div>
@@ -94,11 +100,16 @@
       <div class="touch-right foot-only">
         <button id="tb-action" type="button" class="tb wide" data-tap="action" hidden>ACT</button>
         <button id="tb-enter" type="button" class="tb wide accent" data-tap="enter" hidden>ENTER</button>
-        <button type="button" class="tb" data-tap="attack">PUNCH</button>
+        <button id="tb-fire" type="button" class="tb fire" data-tap="attack" data-hold="fire">PUNCH</button>
         <button type="button" class="tb" data-hold="sprint">RUN</button>
         <button type="button" class="tb big" data-tap="jump">JUMP</button>
         <button type="button" class="tb small" data-tap="photo" aria-label="Photo">📷</button>
+        <button id="tb-aim" type="button" class="tb small word" data-tap="aimToggle" hidden>AIM</button>
+        <button id="tb-reload" type="button" class="tb small word" data-tap="reload" hidden>RELOAD</button>
       </div>
+      <!-- On foot with a gun: the weapon in hand (tap for the wheel) under the stars, and a second FIRE for the left thumb. -->
+      <button id="tb-weapon" type="button" class="tb-weapon foot-only" data-tap="wheel" aria-label="Weapon wheel" hidden>FIST</button>
+      <button id="tb-fire2" type="button" class="tb fire fire2 foot-only" data-tap="attack" data-hold="fire2" hidden>FIRE</button>
       <div class="touch-right drive-only">
         <button id="tb-exit" type="button" class="tb wide accent" data-tap="enter">EXIT</button>
         <button id="tb-job" type="button" class="tb wide" data-tap="job" hidden>START JOB</button>
@@ -112,6 +123,9 @@
       </div>
       <div id="rotate" class="rotate">Turn your phone sideways for the full city ↻</div>
     </div>
+
+    <!-- The weapon wheel: over the touch buttons, under the photo card and the pause menu. -->
+    <div id="weapon-wheel" class="wwheel" hidden><div id="ww-ring" class="ww-ring"></div></div>
 
     <section id="pause" class="pause" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <header class="pause-head">
@@ -162,12 +176,14 @@
         <div class="tab" data-pane="help">
           <div class="help-grid">
             <section class="for-touch"><h3>On foot</h3><p>Left thumb: walk (push further to jog) · drag the right side to look<br /><kbd class="tap">RUN</kbd> sprint · <kbd class="tap">JUMP</kbd> · <kbd class="tap">PUNCH</kbd> · <kbd class="tap">📷</kbd> photo<br /><kbd class="tap">ENTER</kbd> or <kbd class="tap">JACK</kbd> shows up next to a vehicle; buy and photograph with the button that appears</p></section>
+            <section class="for-touch"><h3>Weapons</h3><p>Tap the weapon button under the stars for the weapon wheel, then tap a weapon (tap it again for the next one in that slot)<br />With a gun <kbd class="tap">PUNCH</kbd> becomes <kbd class="tap">FIRE</kbd>: hold it for automatic fire, drag on it to turn; a second <kbd class="tap">FIRE</kbd> sits on the left<br /><kbd class="tap">AIM</kbd> aims (<kbd class="tap">SCOPE</kbd> on a sniper rifle) · <kbd class="tap">RELOAD</kbd><br />Walk over a glowing crate to pick it up</p></section>
             <section class="for-touch"><h3>Driving</h3><p>Left thumb: steer · <kbd class="tap">GAS</kbd> · <kbd class="tap">BRAKE</kbd> (hold to reverse) · <kbd class="tap">DRIFT</kbd> handbrake<br /><kbd class="tap">HORN</kbd> · <kbd class="tap">📻</kbd> radio · <kbd class="tap">🎥</kbd> camera distance · <kbd class="tap">EXIT</kbd> get out<br /><kbd class="tap">START JOB</kbd> in an auto or on a two-wheeler · <kbd class="tap">SIREN</kbd> in a police jeep or ambulance</p></section>
             <section class="for-touch"><h3>Everywhere</h3><p><kbd class="tap">MAP</kbd> city map · <kbd class="tap">❚❚</kbd> pause<br />Hold your phone sideways for the full city.</p></section>
             <section class="for-desk"><h3>On foot</h3><p><kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump<br /><kbd>Click</kbd>/<kbd>J</kbd> punch · <kbd>F</kbd> get in / jack a vehicle<br /><kbd>Q</kbd> buy, photograph · <kbd>X</kbd> photo</p></section>
+            <section class="for-desk"><h3>Weapons</h3><p><kbd>Click</kbd> fire · hold <kbd>Right-click</kbd> aim (a sniper rifle's scope) · <kbd>R</kbd> reload<br />Hold <kbd>Tab</kbd> for the weapon wheel: point with the mouse, let go to choose<br /><kbd>Scroll</kbd> next / previous weapon · <kbd>1</kbd>–<kbd>7</kbd> a wheel slot · <kbd>G</kbd> throw a grenade<br />Gamepad: <kbd>RT</kbd> fire, <kbd>LT</kbd> aim, <kbd>B</kbd> reload, hold <kbd>RB</kbd> for the wheel, <kbd>D-pad ← →</kbd> switch</p></section>
             <section class="for-desk"><h3>Driving</h3><p><kbd>W</kbd> gas · <kbd>S</kbd> brake / reverse · <kbd>A D</kbd> steer<br /><kbd>Space</kbd> handbrake · <kbd>H</kbd> horn · <kbd>R</kbd> radio · <kbd>V</kbd> camera<br /><kbd>C</kbd> look back · <kbd>N</kbd> start a job · <kbd>Q</kbd> siren · <kbd>F</kbd> get out</p></section>
-            <section class="for-desk"><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepad: sticks to move and look, <kbd>RT</kbd>/<kbd>LT</kbd> gas and brake, <kbd>A</kbd> jump/handbrake, <kbd>B</kbd> punch, <kbd>L3</kbd> sprint, <kbd>X</kbd> buy, <kbd>Y</kbd> get in/out, <kbd>D-pad ↑</kbd> job, <kbd>Back</kbd> map, <kbd>Start</kbd> pause.</p></section>
-            <section><h3>Wanted</h3><p>Crimes the police see raise your stars. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.</p></section>
+            <section class="for-desk"><h3>Everywhere</h3><p><kbd>Mouse</kbd> look (click to lock) · <kbd>M</kbd> map · <kbd>Esc</kbd> pause<br />Gamepad: sticks to move and look, <kbd>RT</kbd>/<kbd>LT</kbd> gas and brake, <kbd>A</kbd> jump/handbrake, <kbd>B</kbd> punch (with empty hands), <kbd>L3</kbd> sprint, <kbd>X</kbd> buy, <kbd>Y</kbd> get in/out, <kbd>D-pad ↑</kbd> job, <kbd>Back</kbd> map, <kbd>Start</kbd> pause.</p></section>
+            <section><h3>Wanted</h3><p>Crimes the police see raise your stars, and gunfire carries: from three stars officers shoot back. Guns stay holstered at holy places. Break line of sight and leave the flashing search area to lose them — or drive into Anna's Rang Garage for a respray.</p></section>
           </div>
         </div>
       </div>

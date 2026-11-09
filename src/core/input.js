@@ -6,7 +6,10 @@ const KEYMAP = {
   KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyF: 'enter', KeyE: 'enter', KeyQ: 'action', KeyH: 'horn',
   KeyM: 'map', Escape: 'pause', KeyP: 'pause', KeyV: 'camera', KeyR: 'radio', KeyC: 'lookBack', KeyN: 'job', KeyJ: 'attack',
-  KeyX: 'photo', Tab: 'map', KeyB: 'phone', Enter: 'confirm',
+  KeyX: 'photo', KeyB: 'phone', Enter: 'confirm', KeyG: 'grenade',
+  // Held Tab is the weapon wheel, as in GTA (M stays the map); 1-7 pick a wheel slot straight away.
+  Tab: 'wheelHold', Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6', Digit7: 'slot7',
+  Numpad1: 'slot1', Numpad2: 'slot2', Numpad3: 'slot3', Numpad4: 'slot4', Numpad5: 'slot5', Numpad6: 'slot6', Numpad7: 'slot7',
 }; // No Ctrl: held for a punch, Ctrl+W would close the tab, and no page can stop that.
 
 export class Input {
@@ -17,10 +20,14 @@ export class Input {
     this.padHeld = new Set(); // gamepad buttons down, for one-shot presses on the way down
     this.padRun = new Set(); // gamepads whose L3 click started a run (their index)
     this.events = new Set();
-    this.state = { moveX: 0, moveY: 0, throttle: 0, brake: 0, steer: 0, handbrake: false, sprint: false, horn: false, lookBack: false, attackHeld: false };
+    this.state = { moveX: 0, moveY: 0, throttle: 0, brake: 0, steer: 0, handbrake: false, sprint: false, horn: false, lookBack: false, attackHeld: false, aim: false, wheelHeld: false, stickX: 0, stickY: 0 };
     this.look = { x: 0, y: 0 }; // accumulated look delta (radians), consumed by the camera
     this.lastLookAt = 0; // time of the last deliberate look input
-    this.touch = { moveX: 0, moveY: 0, gas: 0, brake: 0, handbrake: false, sprint: false, horn: false, active: false };
+    this.touch = { moveX: 0, moveY: 0, gas: 0, brake: 0, handbrake: false, sprint: false, horn: false, fire: false, fire2: false, aim: false, active: false };
+    // Set by the game each frame while the player is on foot: the mouse wheel then changes weapon instead of
+    // zooming, and the gamepad's triggers and RB mean fire, aim and the weapon wheel instead of gas, brake and radio.
+    this.weaponScroll = false;
+    this.scrollAcc = 0; // a trackpad's small wheel steps, adding up to a notch
     this.mode = 'keyboard'; // keyboard | touch | gamepad
     this.keyboardUsed = false;
     this.enabled = true;
@@ -46,8 +53,8 @@ export class Input {
       this.mode = 'keyboard'; this.keyboardUsed = true;
       // Keys pressed on the cover or during the intro would otherwise act on the first frame of play.
       if (!this.live) return;
-      if (['up', 'down', 'left', 'right', 'jump', 'map'].includes(a)) e.preventDefault();
-      if (!e.repeat) this.events.add(a);
+      if (['up', 'down', 'left', 'right', 'jump', 'map', 'wheelHold'].includes(a)) e.preventDefault();
+      if (!e.repeat && a !== 'wheelHold') this.events.add(a); // the wheel is held, not pressed
       this.keys.add(e.code);
       this.held.add(a);
     });
@@ -110,9 +117,18 @@ export class Input {
     addEventListener('pointercancel', end);
     // Zoom only over the street itself: wheeling the pause menu's city map must not move the camera.
     // One notch is a step; a trackpad's stream of small deltas adds up to the same.
+    // On foot the wheel changes weapon instead (V still steps the camera distance): a notch is one weapon, and
+    // with the weapon wheel held it moves within the highlighted slot.
     addEventListener('wheel', e => {
       if (e.target !== c || !this.enabled) return;
-      this.zoom = (this.zoom || 0) + clamp(e.deltaY / (e.deltaMode ? 3 : 100), -1, 1);
+      const step = clamp(e.deltaY / (e.deltaMode ? 3 : 100), -1, 1);
+      if (!this.weaponScroll) { this.zoom = (this.zoom || 0) + step; this.scrollAcc = 0; return; }
+      if (Math.sign(step) !== Math.sign(this.scrollAcc)) this.scrollAcc = 0; // turned back: start a fresh notch
+      this.scrollAcc += step;
+      if (Math.abs(this.scrollAcc) < 1) return;
+      const next = this.scrollAcc > 0, inWheel = this.held.has('wheelHold');
+      this.events.add(inWheel ? (next ? 'wheelNext' : 'wheelPrev') : next ? 'weaponNext' : 'weaponPrev');
+      this.scrollAcc = 0;
     }, { passive: true });
   }
 
@@ -126,7 +142,8 @@ export class Input {
     this.keys.clear();
     this.padRun.clear();
     this.events.clear();
-    Object.assign(this.touch, { moveX: 0, moveY: 0, gas: 0, brake: 0, handbrake: false, sprint: false, horn: false });
+    Object.assign(this.touch, { moveX: 0, moveY: 0, gas: 0, brake: 0, handbrake: false, sprint: false, horn: false, fire: false, fire2: false, aim: false });
+    this.scrollAcc = 0;
   }
 
   /** Touch/gamepad UI sends one-shot actions through here. */
@@ -145,12 +162,15 @@ export class Input {
     let my = (h.has('up') ? 1 : 0) - (h.has('down') ? 1 : 0);
     let throttle = h.has('up') ? 1 : 0, brake = h.has('down') ? 1 : 0, steer = mx;
     let handbrake = h.has('jump'), sprint = h.has('sprint'), horn = h.has('horn'), lookBack = h.has('lookBack');
+    let attackHeld = h.has('attack') || h.has('attackMouse'), aim = h.has('aim'), wheelHeld = h.has('wheelHold'), stickX = 0, stickY = 0;
+    const foot = this.weaponScroll;
     // Touch controls.
     if (t.active) {
       if (Math.abs(t.moveX) > 0.02 || Math.abs(t.moveY) > 0.02) { mx = t.moveX; my = t.moveY; steer = t.moveX; }
       throttle = Math.max(throttle, t.gas);
       brake = Math.max(brake, t.brake);
       handbrake ||= t.handbrake; sprint ||= t.sprint; horn ||= t.horn;
+      attackHeld ||= t.fire || t.fire2; aim ||= t.aim; // the two FIRE buttons (right and left thumb)
     }
     // Gamepad.
     const pads = navigator.getGamepads?.() || [];
@@ -164,11 +184,21 @@ export class Input {
       throttle = Math.max(throttle, val(7));
       brake = Math.max(brake, val(6));
       if (rx || ry) { this.look.x -= rx * 0.05 * this.lookScale; this.look.y -= ry * 0.04 * this.lookScale; this.lastLookAt = performance.now(); }
+      if (Math.abs(rx) > Math.abs(stickX) || Math.abs(ry) > Math.abs(stickY)) { stickX = rx; stickY = ry; } // the wheel picks with it
       handbrake ||= btn(0); horn ||= btn(10); lookBack ||= btn(11);
-      // True on the frame a button goes down (and queues its action, if it has one). Kept per pad.
-      const edge = (i, a) => { const k = `${pad.index}.${i}`; if (btn(i) && !this.padHeld.has(k)) { if (a) this.events.add(a); this.padHeld.add(k); return true; } if (!btn(i)) this.padHeld.delete(k); return false; };
-      edge(0, 'jump'); edge(3, 'enter'); edge(1, 'attack'); edge(9, 'pause'); edge(8, 'map'); edge(2, 'action'); edge(5, 'radio'); edge(4, 'camera');
+      // True on the frame a button goes down (and queues its action, if it has one). Kept per pad. The analog
+      // triggers count as down past a third of their travel.
+      const down = i => (i === 6 || i === 7 ? val(i) > 0.3 : btn(i));
+      const edge = (i, a) => { const k = `${pad.index}.${i}`; if (down(i) && !this.padHeld.has(k)) { if (a) this.events.add(a); this.padHeld.add(k); return true; } if (!down(i)) this.padHeld.delete(k); return false; };
+      // B reloads (with empty hands the game makes it the punch it always was). On foot RT fires, LT aims, a held
+      // RB opens the weapon wheel and the D-pad's left and right change weapon; behind the wheel RT and LT are the
+      // pedals (above) and RB the radio. RB on foot must not send 'radio', which the game reads as reload there.
+      const padWheel = foot && btn(5);
+      edge(0, 'jump'); edge(3, 'enter'); edge(1, 'reload'); edge(9, 'pause'); edge(8, 'map'); edge(2, 'action'); edge(5, foot ? null : 'radio'); edge(4, 'camera');
       edge(12, 'job'); edge(13, 'photo');
+      edge(7, foot ? 'attack' : null);
+      edge(14, padWheel || wheelHeld ? 'wheelPrev' : 'weaponPrev'); edge(15, padWheel || wheelHeld ? 'wheelNext' : 'weaponNext');
+      if (foot) { attackHeld ||= val(7) > 0.3; aim ||= val(6) > 0.3; wheelHeld ||= padWheel; }
       // L3 runs on foot (X is the action: snacks, photos, the siren, so a run buys nothing). A click
       // starts the run and another ends it, as does letting the stick come back to the middle: held
       // in, a stick pushed to its edge slips out of the click. At the wheel L3 is the horn, held.
@@ -181,8 +211,8 @@ export class Input {
     s.moveX = mx; s.moveY = my; s.throttle = throttle; s.brake = brake; s.steer = Math.max(-1, Math.min(1, steer));
     s.handbrake = handbrake; s.sprint = sprint; s.horn = horn;
     s.lookBack = lookBack;
-    s.attackHeld = h.has('attack') || h.has('attackMouse');
-    s.aim = h.has('aim');
+    s.attackHeld = attackHeld; s.aim = aim; s.wheelHeld = wheelHeld;
+    s.stickX = stickX; s.stickY = stickY;
   }
 
   /** Clear one-shot presses that nobody consumed this frame. */

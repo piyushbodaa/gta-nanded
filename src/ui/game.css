@@ -106,7 +106,8 @@ body.touch-ui .radio-card { top: calc(58px + var(--safe-t)); }
 body.wasted #game-canvas { filter: grayscale(1) contrast(1.1) brightness(.85); transition: filter 1.2s; }
 body.busted #game-canvas { filter: saturate(.3) hue-rotate(190deg) brightness(.85); transition: filter 1s; }
 body.cutscene .hud-bl, body.cutscene .hud-tr, body.cutscene .prompt { opacity: 0; transition: opacity .4s; }
-body.cutscene .touch-right, body.cutscene .stick-zone { opacity: 0; pointer-events: none; transition: opacity .4s; }
+body.cutscene .touch-right, body.cutscene .stick-zone, body.cutscene .tb-weapon, body.cutscene .fire2 { opacity: 0; pointer-events: none; transition: opacity .4s; }
+body.cutscene .crosshair, body.cutscene .hitmark, body.cutscene .hud-weapon, body.cutscene .hud-notice { opacity: 0; }
 body.cutscene::before, body.cutscene::after { content: ''; position: fixed; left: 0; right: 0; height: 9vh; background: #000; z-index: 9; animation: bars .5s ease; }
 body.cutscene::before { top: 0; } body.cutscene::after { bottom: 0; }
 @keyframes bars { from { height: 0; } }
@@ -137,9 +138,10 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
      radar, and a mission timer goes under them; the area name rises above the buttons; the middle column
      starts below the radar and the timer. */
   body.touch-ui .touch-top { left: auto; right: calc(12px + var(--safe-r)); transform: none; top: calc(84px + var(--safe-t)); }
-  body.touch-ui .timer { top: calc(130px + var(--safe-t)); }
+  body.touch-ui .timer { top: calc(180px + var(--safe-t)); }
   body.touch-ui .area-name { bottom: calc(40% + var(--safe-b)); }
-  body.touch-ui .hud-stack { width: calc(100vw - 32px); margin-top: calc(178px + var(--safe-t)); }
+  body.touch-ui .hud-stack { width: calc(100vw - 32px); margin-top: calc(228px + var(--safe-t)); }
+  body.touch-ui .tb-weapon { top: calc(132px + var(--safe-t)); height: 40px; white-space: pre-line; }
 }
 
 /* Small screens: shrink the HUD */
@@ -310,4 +312,107 @@ body.touch-ui #photo-close { margin-left: auto; }
      a title card's line drops its wide letter-spacing: a card that wraps is too tall for its place here. */
   body.touch-ui .big-message strong { white-space: nowrap; }
   body.touch-ui .big-message.title span { font-size: 22px; letter-spacing: 2px; }
+}
+
+/* ---------------------------------------------------------------- weapons */
+/* Desktop: what is in hand and its ammo under the stars (a touch screen has it on the weapon button). */
+.hud-weapon { margin-top: 4px; text-align: right; text-shadow: var(--outline); color: #fff; }
+#hud-wname { display: block; font: 400 22px/1 var(--display); letter-spacing: 1px; }
+#hud-wname small { margin-left: 5px; font: 700 12px/1 var(--cond); letter-spacing: 1px; color: #ffd27a; }
+#hud-wammo { display: block; margin-top: 1px; font: 700 17px/1.1 var(--cond); color: #e8e8e8; }
+#hud-wammo b { font: 400 26px/1 var(--display); color: #fff; font-weight: 400; }
+.hud-weapon .wbar { display: block; width: 110px; height: 3px; margin: 3px 0 0 auto; background: #000a; visibility: hidden; }
+.hud-weapon .wbar i { display: block; height: 100%; background: #ffd23f; transform-origin: left; transform: scaleX(0); }
+.hud-weapon.reloading .wbar { visibility: visible; }
+.hud-weapon.reloading #hud-wname, .hud-weapon.reloading #hud-wammo { opacity: .55; }
+body.touch-ui .hud-weapon { display: none; }
+/* A mission timer moves down under the readout. */
+body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
+
+/* Crosshair: four ticks round the middle of the screen, as far apart as the shots spread (hud.js sets --gap). */
+.crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 10px; }
+.crosshair i { position: absolute; background: #fff; box-shadow: 0 0 0 1px #000a; }
+.crosshair i:nth-child(1) { left: -1px; top: calc(-1 * var(--gap) - 8px); width: 2px; height: 8px; }
+.crosshair i:nth-child(2) { left: -1px; top: var(--gap); width: 2px; height: 8px; }
+.crosshair i:nth-child(3) { top: -1px; left: calc(-1 * var(--gap) - 8px); width: 8px; height: 2px; }
+.crosshair i:nth-child(4) { top: -1px; left: var(--gap); width: 8px; height: 2px; }
+.crosshair::after { content: ''; position: absolute; left: -1px; top: -1px; width: 2px; height: 2px; background: #fff; box-shadow: 0 0 0 1px #000a; }
+.crosshair.blocked i, .crosshair.blocked::after { background: #ff9a8f; opacity: .55; }
+/* Hit marker: a cross with an open middle, white for a hit and red for a knock-out (hud.js fades it). */
+.hitmark { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.hitmark i { position: absolute; left: -13px; top: -1px; width: 26px; height: 2px; background: linear-gradient(90deg, #fff 0 36%, #0000 36% 64%, #fff 64%); filter: drop-shadow(0 0 1px #000); }
+.hitmark i:first-child { transform: rotate(45deg); } .hitmark i:last-child { transform: rotate(-45deg); }
+.hitmark.kill i { background: linear-gradient(90deg, #ff3b30 0 36%, #0000 36% 64%, #ff3b30 64%); }
+/* A sniper's scope: a round lens in black, thick posts that thin to a fine cross with range marks, a red dot. */
+.scope { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center; }
+.scope-lens { position: relative; width: min(94vh, 94vw); aspect-ratio: 1; border-radius: 50%; box-shadow: 0 0 0 100vmax #000, inset 0 0 0 3px #000, inset 0 0 50px 14px #000d; }
+.scope-lens::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #ff2a2a; box-shadow: 0 0 3px #ff2a2a; }
+.scope-h, .scope-v { position: absolute; background: #111; }
+.scope-h { left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px; background: linear-gradient(90deg, #111 0 32%, #0000 32% 68%, #111 68%); }
+.scope-v { top: 0; bottom: 0; left: 50%; width: 5px; margin-left: -2.5px; background: linear-gradient(180deg, #111 0 32%, #0000 32% 50%, #111 50%); }
+.scope-h::before { content: ''; position: absolute; left: 32%; right: 32%; top: 2px; height: 1px; background: #111; }
+.scope-h::after { content: ''; position: absolute; left: 34%; right: 34%; top: -2px; height: 9px; background: radial-gradient(circle, #111 1.4px, #0000 1.9px) center / calc(100% / 8) 100% repeat-x; }
+.scope-v::before { content: ''; position: absolute; top: 32%; bottom: 50%; left: 2px; width: 1px; background: #111; }
+#hud-scope-zoom { position: absolute; left: 0; right: 0; bottom: 9%; text-align: center; font: 700 14px/1 var(--cond); letter-spacing: 1px; color: #111c; }
+/* Why the trigger does nothing (holy places), under the crosshair. */
+.hud-notice { position: absolute; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 32px); top: calc(50% + 44px); padding: 6px 12px; background: #000000c4; border-left: 3px solid #ffd23f; font: 600 15px/1.3 var(--body); color: #f4f1e8; text-align: center; }
+
+/* Touch: AIM and RELOAD sit in the button grid's bottom row beside 📷 (the grid keeps its width), the weapon
+   button at the right edge under the stars, and a second FIRE for the left thumb above the stick's ring. */
+.tb.word { font: 800 13px/1 var(--cond); letter-spacing: .3px; }
+.tb.on { background: #ffd23fdd; border-color: #fff; color: #111; }
+.tb.fire2 { position: absolute; left: calc(16px + var(--safe-l)); top: max(35%, calc(122px + var(--safe-t))); pointer-events: auto; background: #b71c1c88; }
+.tb.fire2.down { background: #ffffffcc; }
+.tb-weapon { position: absolute; right: calc(12px + var(--safe-r)); top: calc(124px + var(--safe-t)); min-width: 80px; height: 44px; padding: 0 12px; border: 2px solid #ffffff66; border-radius: 12px; background: #000a; color: #ffd27a; font: 700 13px/1.1 var(--cond); letter-spacing: .5px; white-space: pre-line; text-align: center; pointer-events: auto; touch-action: none; }
+.tb-weapon::first-line { font: 400 17px/1.05 var(--display); letter-spacing: 1px; color: #fff; }
+.tb-weapon.down { background: #ffffffcc; color: #000; transform: scale(.96); }
+.tb-weapon.reloading { opacity: .55; } .tb-weapon.empty { border-color: #ff6b5b; }
+
+/* The weapon wheel: seven round slots on a ring (rotated into place by --a), the highlighted sector lit. */
+.wwheel { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; pointer-events: auto; touch-action: none; background: radial-gradient(circle at 50% 50%, #000a 0, #0006 45%, #0003 80%); font-family: var(--cond); animation: fadein .12s; }
+.ww-ring { --r: 175px; --s: 104px; --hl: 0deg; position: relative; width: calc(2 * var(--r) + var(--s) + 24px); height: calc(2 * var(--r) + var(--s) + 24px); border-radius: 50%; flex: none; }
+.ww-ring::before, .ww-ring::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  -webkit-mask: radial-gradient(circle closest-side, #0000 calc(var(--r) - var(--s) / 2 - 12px), #000 calc(var(--r) - var(--s) / 2 - 11px));
+  mask: radial-gradient(circle closest-side, #0000 calc(var(--r) - var(--s) / 2 - 12px), #000 calc(var(--r) - var(--s) / 2 - 11px)); }
+.ww-ring::before { background: #000000b0; box-shadow: inset 0 0 0 1px #ffffff22; }
+.ww-ring::after { background: conic-gradient(from calc(var(--hl) - 25.714deg), #ffd23f50 0deg 51.43deg, #0000 51.43deg); }
+.ww-ring.none::after { display: none; }
+.ww-slot { position: absolute; left: 50%; top: 50%; width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2); padding: 0; transform: rotate(var(--a)) translateY(calc(-1 * var(--r))) rotate(calc(-1 * var(--a))); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 2px solid #ffffff3a; border-radius: 50%; background: #121416e8; color: #fff; touch-action: none; transition: transform .08s, border-color .08s; }
+.ww-slot .ww-icon { width: 64%; height: auto; fill: currentColor; }
+.ww-slot b { font: 400 18px/1 var(--display); letter-spacing: .5px; }
+.ww-slot small { font: 700 13px/1 var(--cond); color: #ffd27a; white-space: nowrap; }
+.ww-slot.empty { opacity: .36; } .ww-slot.empty b { font: 700 12px/1.1 var(--cond); letter-spacing: 1px; text-align: center; padding: 0 6px; }
+.ww-slot.hl { border-color: #ffd23f; background: #2b2611f0; box-shadow: 0 0 0 3px #ffd23f40, 0 0 20px #ffd23f55; transform: rotate(var(--a)) translateY(calc(-1 * var(--r))) rotate(calc(-1 * var(--a))) scale(1.08); }
+.ww-slot.cur::after { content: ''; position: absolute; top: 7%; width: 6px; height: 6px; border-radius: 50%; background: var(--cash); box-shadow: 0 0 4px var(--cash); }
+.ww-more { position: absolute; right: 13%; top: 13%; font: 700 10px/1 var(--cond); font-style: normal; color: #ffffffaa; }
+.ww-centre { position: absolute; left: 50%; top: 50%; width: calc(2 * var(--r) - var(--s) - 26px); transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; text-shadow: var(--outline); pointer-events: none; }
+#ww-name { font: 400 26px/1.05 var(--display); letter-spacing: 1px; color: #fff; }
+#ww-ammo { font: 700 22px/1 var(--cond); color: #fff; }
+#ww-cal { font: 700 12px/1 var(--cond); letter-spacing: 1.5px; color: #ffd27a; text-transform: uppercase; }
+#ww-hint { margin-top: 5px; font: 600 11px/1.25 var(--body); font-style: normal; color: #ffffffaa; }
+body.cutscene .wwheel { display: none; }
+
+@media (max-width: 900px), (max-height: 500px) {
+  #hud-wname { font-size: 17px; } #hud-wammo { font-size: 14px; } #hud-wammo b { font-size: 20px; }
+  .hud-weapon .wbar { width: 84px; }
+  body:not(.touch-ui) .hud.armed .timer { top: calc(132px + var(--safe-t)); }
+  .tb-weapon { top: calc(84px + var(--safe-t)); }
+  .ww-ring { --r: 106px; --s: 76px; }
+  .ww-slot b { font-size: 15px; } .ww-slot small { font-size: 11px; } .ww-slot.empty b { font-size: 10px; }
+  #ww-name { font-size: 19px; } #ww-ammo { font-size: 17px; } #ww-cal { font-size: 10px; } #ww-hint { font-size: 10px; margin-top: 3px; }
+  .hud-notice { font-size: 13px; }
+}
+@media (max-height: 420px) {
+  body:not(.touch-ui) .hud.armed .timer { top: auto; } /* it sits at the bottom here (above) */
+  .tb.word { font-size: 11px; }
+  .tb-weapon { top: calc(82px + var(--safe-t)); height: 38px; min-width: 72px; padding: 0 9px; font-size: 12px; }
+  .tb-weapon::first-line { font-size: 15px; }
+}
+/* The shortest phones: under the stars there is room for one line (name and ammo side by side) above the
+   grid's two wide rows (ACT and ENTER both up), and the wheel is a little smaller to fit 320 px. */
+@media (max-height: 340px) {
+  .tb-weapon { top: calc(79px + var(--safe-t)); height: 28px; border-radius: 9px; white-space: normal; }
+  .tb-weapon::first-line { font-size: 14px; }
+  .ww-ring { --r: 99px; --s: 70px; }
+  .ww-slot b { font-size: 14px; }
 }

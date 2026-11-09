@@ -64,9 +64,13 @@ test('keys pressed on the cover or in the intro wait for play, and Tab moves foc
   assert.equal(input.events.size, 0, 'nothing queued for the first frame of play');
   input.live = true;
   const tab = key('keydown', 'Tab', canvas);
-  assert.ok(tab.defaultPrevented && input.pressed('map'), 'in play, Tab on the street opens the map');
+  input.update();
+  assert.ok(tab.defaultPrevented && input.state.wheelHeld, 'in play, Tab held on the street is the weapon wheel');
+  assert.ok(!input.pressed('map'), 'M is the map now, not Tab');
+  key('keyup', 'Tab');
   const onButton = key('keydown', 'Tab', new HTMLButtonElement());
-  assert.ok(!onButton.defaultPrevented && !input.pressed('map'), 'Tab on a menu button moves focus');
+  input.update();
+  assert.ok(!onButton.defaultPrevented && !input.state.wheelHeld, 'Tab on a menu button moves focus');
 });
 
 test('Space and Enter on a focused button click it instead of jumping', () => {
