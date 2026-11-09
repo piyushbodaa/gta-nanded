@@ -7,11 +7,16 @@ game:
 
 1. a first launch, including the automatic tuning, with the time each loading
    stage began
-2. four seconds on the menu, as a player would spend, then Free Roam with the
+2. the menu until the game has the start ready (at least four seconds, as a
+   player would spend, at most twelve), timed; then the tap, the wait until
+   play starts and each of its first frames; then Free Roam with the
    performance readout on
-3. Hazur Sahib Nanded station, Hazur Sahib, Old Mondha and Shivaji Putla
-4. a fast drive down the longest wide road
-5. the 30 fps battery saver
+3. every gun brought up and fired three times, and a grenade thrown, logged as
+   the `weapons` stage: the shader programs before and after (they should not
+   change, the menu compiled them) and the worst frame
+4. Hazur Sahib Nanded station, Hazur Sahib, Old Mondha and Shivaji Putla
+5. a fast drive down the longest wide road
+6. the 30 fps battery saver
 
 It logs `BENCH {json}` lines to logcat and to Test Lab's game-loop results
 file, then exits.

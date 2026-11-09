@@ -211,6 +211,8 @@ export class Markers {
     this.t = 0;
     this._c = new THREE.Color();
     this._parts = [this.column, this.ring, this.arrow];
+    // Coloured per instance from the start, so the shaders compiled ahead of play are the ones used.
+    for (const o of this._parts) o.setColorAt(0, this._c.set(0xffffff));
   }
   /** kind: 'column' (go here), 'arrow' (target above x/y/z). color hex. */
   set(list) { this.list = list; }

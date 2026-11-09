@@ -21,7 +21,8 @@ import { WeaponWheel } from './ui/weapon-wheel.js';
 import { Missions } from './game/missions.js';
 import { Jobs } from './game/jobs.js';
 import { Save } from './game/save.js';
-import { STORY, HOME, dressWorld } from './game/story.js';
+import { STORY, dressWorld } from './game/story.js';
+import { startSpot } from './game/start-spot.js';
 import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
 import { track } from './core/analytics.js';
@@ -89,7 +90,7 @@ async function boot() {
   game.peds = new Peds(game);
   game.animals = new Animals(game);
   game.police = new Police(game);
-  // Guns and their loot. WeaponFx adds its meshes now, before the menu compiles the shaders (warmShaders).
+  // Guns and their loot. WeaponFx adds its meshes now, before the menu gets the start ready (getReady compiles their shaders).
   game.weapons = new Weapons(game);
   game.weaponFx = new WeaponFx(game);
   game.camera.weapons = game.weapons;
@@ -134,25 +135,28 @@ async function boot() {
     status('Tuning the graphics for this device');
     await new Promise(r => setTimeout(r, 30)); // let the status paint before the GPU is busy
     // Timed on the station forecourt, where a new story opens: the busiest place play begins.
-    game.calibrate({ x: 5.3 - 4, z: 10.9 + 2, heading: Math.PI * 0.75 });
+    game.calibrate(startSpot(game.net, 'new'));
   }
   status('The city is yours', 1);
   const has = game.save.hasProgress;
   const done = STORY.filter(m => game.save.done(m.id)).length;
   if (has) { $('menu-continue').hidden = false; $('menu-continue-meta').textContent = `${done}/${STORY.length} MISSIONS · ₹${game.save.cash.toLocaleString('en-IN')}`; }
   for (const id of ['menu-continue', 'menu-new', 'menu-free']) $(id).disabled = false;
-  // While the player reads the menu, compile the shaders that play would otherwise stop for.
+  // While the player reads the menu, get the start ready where they will likely begin: at home
+  // to continue a game, at the station for a first one (Free Roam begins at home too).
   let onMenu = true;
-  game.warmShaders(() => onMenu && !game.started);
+  const spots = has ? [startSpot(game.net, 'continue'), startSpot(game.net, 'new')] : [startSpot(game.net, 'new'), startSpot(game.net, 'free')];
+  game.getReady(spots, () => onMenu && !game.started);
 
   // Set at the first tap: a second one while the sound starts up (a double tap) must not start the game twice.
   let starting = false;
-  const begin = async mode => {
+  const begin = mode => {
     if (starting || game.started) return;
     starting = true;
     onMenu = false;
     fullscreen(); // while the tap still counts as a user gesture
-    if (st.sound !== false) { try { await game.audio.init(); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
+    // Sound starts with the tap, but the game doesn't wait for the phone's audio to open.
+    if (st.sound !== false) { try { game.audio.init().catch(() => {}); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
     const play = () => startGame(game, mode);
     if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
     else play();
@@ -189,26 +193,19 @@ async function boot() {
 
 function startGame(game, mode) {
   track('game_start', { mode });
-  const P = game.player;
+  const P = game.player, spot = startSpot(game.net, mode);
   game.save.data.started = true;
   // What the save carries (a NEW STORY has just reset it to the starter pistol).
   game.weapons.fromSave(game.save.data.inventory);
-  if (mode === 'new') {
-    // The story opens on the station forecourt, Hazur Sahib Nanded, late in the afternoon.
-    P.teleport(5.3 - 4, 10.9 + 2, Math.PI * 0.75);
-    game.sky.hours = 17.1;
-  } else {
-    const n = game.net.nearest(HOME.x, HOME.z, 30, {});
-    P.teleport(HOME.x + (n ? n.dz * 4 : 0), HOME.z - (n ? n.dx * 4 : 0), n ? Math.atan2(n.dx, n.dz) : 0);
-    game.sky.hours = 9.5 + Math.random() * 7;
-  }
+  P.teleport(spot.x, spot.z, spot.heading);
+  // The story opens on the station forecourt late in the afternoon; anything else at home, by day.
+  game.sky.hours = mode === 'new' ? 17.1 : 9.5 + Math.random() * 7;
   if (mode === 'free') game.freeRoam = true;
   document.body.classList.add('playing');
   game.hud.show(true);
   game.touch.show(true);
-  // Populate the streets before the first frame.
-  for (let i = 0; i < 40; i++) { game.traffic.update(0.05); game.peds.update(0.05); }
-  game.parked.t = 0; game.parked.update(1);
+  // Populate the streets before the first frame, unless the menu already did it here.
+  if (game.ready?.filled !== spot.key) for (const _ of game.fillStreets());
   // Keys pressed on the cover or during the intro were not meant for the street.
   game.input.clear(); game.input.live = true;
   game.start();
