@@ -701,7 +701,7 @@ export class Weapons {
     c.taken = true; c.respawnAt = g.time + RESPAWN;
     g.hud?.toast?.(`<b>${msg}</b>`, 2.5);
     g.audio?.sfx('pickup');
-    if (c.kind === 'airdrop' && this.airdrop?.crate === c) { this.airdrop.taken = true; this.airdrop.smoke = Math.min(this.airdrop.smoke, 4); }
+    if (c.kind === 'airdrop' && this.airdrop?.crate === c) { this.airdrop.taken = true; this.airdrop.smoke = Math.min(this.airdrop.smoke || 0, 4); }
     this._blipT = 0; this._saveT = 0;
     return true;
   }
@@ -726,8 +726,11 @@ export class Weapons {
         this.loot.push(a.crate);
         this._blipT = 0;
       }
-    } else if ((a.smoke -= dt) <= 0 && a.crate.taken) this.airdrop = null;
-    else if (a.smoke <= 0) a.smoke = 0;
+    } else {
+      // Red smoke (WeaponFx draws it) for a minute and a half, or a few seconds once opened; then false.
+      if (a.smoke !== false && (a.smoke -= dt) <= 0) a.smoke = false;
+      if (a.taken && a.smoke === false) this.airdrop = null;
+    }
   }
 
   /** A care package comes down by parachute 150-350 m away, on a street. False if there was nowhere to put it. */

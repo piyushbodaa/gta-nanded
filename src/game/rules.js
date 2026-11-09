@@ -202,6 +202,7 @@ export function installRules(g) {
    * An armed officer (peds.js fight) fires at the player: only with a clear line, more often a
    * hit close in and on someone standing still. ~8 a hit; a car takes it on the bodywork instead.
    */
+  const muzzle = { x: 0, y: 0, z: 0 };
   g.pedShoots = p => {
     const P = g.player, pos = P.pos, h = p.h, gun = WEAPONS[p.armed] ? p.armed : 'p92';
     if (g.cutscene || g.respawning || P.state === 'dead') return false;
@@ -214,10 +215,11 @@ export function installRules(g) {
       if (P.vehicle) g.damageVehicle(P.vehicle, 18, false);
       else { P.damage(gun === 'm416' ? 7 : 8, 'police'); g.camera.addShake(0.08); }
     }
-    // The tracer from the officer's hands; a miss goes past, a step or two wide.
-    const s = Math.sin(h.yaw), c = Math.cos(h.yaw), ax = h.x + s * 0.5 - c * 0.15, az = h.z + c * 0.5 + s * 0.15;
+    // The tracer from the officer's gun (or hands); a miss goes past, a step or two wide.
+    const m = muzzle;
+    if (!g.weaponFx?.muzzleOf?.(h, m)) { const s = Math.sin(h.yaw), c = Math.cos(h.yaw); m.x = h.x + s * 0.5 - c * 0.15; m.y = ey - 0.1; m.z = h.z + c * 0.5 + s * 0.15; }
     const mx = hit ? 0 : (Math.random() - 0.5) * 3, mz = hit ? 0 : (Math.random() - 0.5) * 3;
-    g.weaponFx?.shot?.(ax, ey - 0.1, az, pos.x + mx, ty + (hit ? 0 : Math.random() - 0.6), pos.z + mz, gun);
+    g.weaponFx?.shot?.(m.x, m.y, m.z, pos.x + mx, ty + (hit ? 0 : Math.random() - 0.6), pos.z + mz, gun);
     g.audio.sfxAt?.(WEAPONS[gun].sound, h.x, h.z, 0.8);
     h.recoil = 1;
     return hit;

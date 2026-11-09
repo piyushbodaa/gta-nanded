@@ -462,7 +462,9 @@ test('bullets hit cars (not the one the player sits in) and an officer\'s pistol
   assert.equal(cop.h.gun, 'p92');
   assert.equal(cop.h.aim, 1);
   // Out of sight he runs in instead.
-  g.colliders.raycast = () => 0.5; shots = 0;
+  g.colliders.raycast = () => 0.5;
+  run(g, input, 0.45); // he looks again every 0.4 s (and the real pedShoots checks the line itself)
+  shots = 0;
   const at = Math.hypot(cop.h.x, cop.h.z);
   run(g, input, 1.5);
   assert.equal(shots, 0);
