@@ -43,3 +43,9 @@ body.garage-open .touch { display: none !important; }
   .gm-opt { min-height: 46px; }
   .gm-done, .gm-sell { min-height: 46px; }
 }
+/* The panel shows the cash itself; the HUD's cash and stars, and on a phone its middle column (help, toasts),
+   move out from under it: the column goes between the radar and the panel. */
+body.garage-open .hud-tr { visibility: hidden; }
+@media (max-width: 900px), (max-height: 500px) {
+  body.garage-open #hud .hud-stack { margin-left: calc(170px + var(--safe-l, 0px)) !important; margin-right: auto !important; width: calc(100vw - max(min(46vw, 460px), 300px) - 182px) !important; }
+}

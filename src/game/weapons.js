@@ -4,6 +4,7 @@
 // the tests drive it with a fake game.
 import { WEAPONS, AMMO, SLOTS, ORDER, LOOT_TABLE, AIRDROP_TABLE, HEADSHOT, NO_FIRE, interval, falloff } from './weapon-data.js';
 import { rng, hash2, clamp, dist, wrapAngle } from '../core/math.js';
+import { inStory } from './mission-state.js';
 
 const WATER_Y = -2.7; // world/water.js (not imported: it brings three.js along)
 const SEG = 24; // a long shot is marched in pieces this long (Colliders.raycastSolid walks a box)
@@ -633,7 +634,7 @@ export class Weapons {
         if (dead) { kills++; kill = true; }
         if (e.head) { heads++; head = true; }
         // The story's own fights are no crime (as for punches).
-        if (!p.mission) this._crime(p, dead ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', p.h.x, p.h.z, 80);
+        if (!p.mission || p.eventTarget) this._crime(p, dead ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', p.h.x, p.h.z, 80);
       } else {
         const v = e.vehicle;
         g.damageVehicle?.(v, e.dmg * (w.vehicle ?? 1), true);
@@ -721,7 +722,7 @@ export class Weapons {
     const g = this.game;
     if (g.time - this._panicT > 0.5) { this._panicT = g.time; g.peds?.gunfire?.(x, z, 40); }
     // Inside a mission the story decides when the police come.
-    if (g.missions?.active || g.time - this._shotReportT < 2) return;
+    if (inStory(g) || g.time - this._shotReportT < 2) return; // a street event's gunfire still draws the police
     this._shotReportT = g.time;
     const someone = (g.peds?.list || []).some(p => p.state !== 'dead' && Math.abs(p.h.x - x) < 50 && Math.abs(p.h.z - z) < 50);
     g.police?.report('shoot', x, z, { r: HEAR, witness: someone });
@@ -860,7 +861,7 @@ export class Weapons {
       const res = g.peds.shot(p, w.damage * (1 - pd / (R + 1)), dx * k, dz * k, 'explosion');
       if (res === 'dead') kills++;
       // Hurting people is a crime in a mission too (as a bullet's or a pan's is); the story's own are not.
-      if (!p.mission && res) this._crime(p, res === 'dead' ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', x, z, HEAR);
+      if ((!p.mission || p.eventTarget) && res) this._crime(p, res === 'dead' ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', x, z, HEAR);
     }
     for (const v of g.vehicles?.list || []) {
       if (v === P.vehicle || v.vital || v.removed || !level(v.y) || this.inHoly(v.x, v.z)) continue;
@@ -875,7 +876,7 @@ export class Weapons {
     }
     if (kills) { g.save?.stat?.('kills', kills); const hm = this._hm; hm.t = g.time; hm.kill = true; hm.head = false; this.hitMarker = hm; }
     // The bang itself: the story decides when the police come.
-    if (!g.missions?.active) g.police?.report('blast', x, z, { r: HEAR * 1.5 });
+    if (!inStory(g)) g.police?.report('blast', x, z, { r: HEAR * 1.5 });
     g.peds?.gunfire?.(x, z, 60);
   }
 

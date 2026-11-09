@@ -23,6 +23,11 @@ import { NakabandiFx } from './game/nakabandi-fx.js';
 import { RetryCard } from './ui/retry.js';
 import { Missions } from './game/missions.js';
 import { Jobs } from './game/jobs.js';
+import { SIDE } from './game/side.js';
+import { Garage } from './game/garage.js';
+import { GarageMenu } from './ui/garage-menu.js';
+import { VehicleExtras } from './actors/vehicle-extras.js';
+import { StreetEvents } from './game/street-events.js';
 import { Save } from './game/save.js';
 import { STORY, dressWorld } from './game/story.js';
 import { startSpot } from './game/start-spot.js';
@@ -101,10 +106,13 @@ async function boot() {
   game.weapons = new Weapons(game);
   game.weaponFx = new WeaponFx(game);
   game.nakabandiFx = new NakabandiFx(game); // its meshes too, so the warm-up compiles them
+  game.vehicles.extras = new VehicleExtras(game.scene, game); // owned cars' underglow and stickers (also before getReady)
   game.camera.weapons = game.weapons;
-  game.missions = new Missions(game, STORY);
+  game.missions = new Missions(game, [...STORY, ...SIDE]); // the story, and the side jobs it opens
   dressWorld(game);
   game.jobs = new Jobs(game);
+  game.garage = new Garage(game); // Society Parking and the Jugaad Garage (after Missions: its bays keep clear of every start)
+  game.events = new StreetEvents(game); // something happening nearby in free roam
   // The radar's activity icons follow the save: the garage opens in the story, stamped landmarks
   // drop off and NEW STORY starts over, so they are read fresh each time (a few dozen, 30 times a second).
   // Loot crates nearby join them; the list is put together at most twice a second, not on every read.
@@ -112,13 +120,14 @@ async function boot() {
   let blips = [], blipsAt = -Infinity;
   Object.defineProperty(game, 'staticBlips', {
     get: () => {
-      if (Math.abs(game.time - blipsAt) >= 0.5) { blipsAt = game.time; blips = [...game.jobs.staticBlips(), ...pumps, ...game.weapons.blips()]; }
+      if (Math.abs(game.time - blipsAt) >= 0.5) { blipsAt = game.time; blips = [...game.jobs.staticBlips(), ...game.garage.staticBlips(), ...pumps, ...game.weapons.blips()]; }
       return blips;
     },
   });
   game.touch = new TouchControls(game);
   game.weaponWheel = new WeaponWheel(game);
   game.retryCard = new RetryCard(game);
+  game.garageMenu = new GarageMenu(game);
   game.pause = new PauseMenu(game);
   game.lifecycle = new Lifecycle(game);
   keepFullscreen(game);
@@ -217,6 +226,9 @@ function startGame(game, mode) {
   // What the save carries (a NEW STORY has just reset it to the starter pistol).
   game.weapons.fromSave(game.save.data.inventory);
   P.teleport(spot.x, spot.z, spot.heading);
+  // The player's own cars wait in their bays (before a resume, which may put the player in one).
+  game.garage?.fromSave(game.save.data.fleet);
+  game.garage?.spawnAll();
   // The story opens on the station forecourt late in the afternoon; anything else at home, by day.
   game.sky.hours = mode === 'new' ? 17.1 : 9.5 + Math.random() * 7;
   if (mode === 'free') game.freeRoam = true;

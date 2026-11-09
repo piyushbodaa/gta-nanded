@@ -140,6 +140,23 @@ export class Hud {
     clearTimeout(this._hitT); this._hitT = setTimeout(() => bar.parentElement.classList.remove('hit'), 250);
   }
   bark(text) { this.el.bark.textContent = text; this.el.bark.hidden = false; this.timers.bark = 2.6; this.el.bark.classList.remove('pop'); void this.el.bark.offsetWidth; this.el.bark.classList.add('pop'); }
+  /**
+   * A bar under the objective (side jobs: SUSPICION, the convoy's or the cart's health). v from 0 to 1,
+   * or null to hide it. Written only when it changes, in 50 steps.
+   */
+  meter(v, label = '', urgent = false) {
+    const el = this._meterEl ??= (typeof document !== 'undefined' ? document.getElementById('hud-meter') : null);
+    if (!el) return;
+    const k = v == null ? null : Math.round(Math.min(1, Math.max(0, v)) * 50);
+    const key = k === null ? '' : `${k}|${label}|${urgent ? 1 : 0}`;
+    if (key === this._meterKey) return;
+    this._meterKey = key;
+    el.hidden = k === null;
+    if (k === null) return;
+    el.querySelector('b').textContent = label;
+    el.querySelector('i').style.transform = `scaleX(${k / 50})`;
+    el.classList.toggle('urgent', urgent);
+  }
   toast(text, seconds = 3) { this.el.toast.innerHTML = text; this.el.toast.hidden = false; this.timers.toast = seconds; this._fitColumn(); }
   big(title, sub = '', kind = 'passed', seconds = 4.5) {
     const el = this.el.big;
@@ -407,6 +424,9 @@ export class Hud {
     if (g.police?.level) for (const u of g.police.units) out.push({ x: u.v.x, z: u.v.z, kind: 'police', clamp: false });
     // Roadblocks ahead (pinned to the rim) and the police drone.
     for (const b of g.nakabandi?.blips() ?? []) out.push(b);
+    // Owned cars (blue diamonds), and a street event on offer (a blue !).
+    if (g.garage) for (const b of g.garage.blips()) out.push(b);
+    for (const b of g.events?.blips?.() ?? []) out.push(b);
     // An air drop's crate, red like its smoke, until it is opened.
     const drop = g.weapons?.airdrop;
     if (drop && !drop.taken) { const b = (this.dropBlip ??= { x: 0, z: 0, color: '#ff4d3d', kind: 'icon', label: '▼' }); b.x = drop.x; b.z = drop.z; out.push(b); }

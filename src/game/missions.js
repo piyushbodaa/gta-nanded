@@ -70,7 +70,7 @@ export class Missions {
         const pos = g.player.pos;
         if (ready && dist(pos.x, pos.z, p.x, p.z) < 2.6 && (!g.player.vehicle || speedOf(g.player.vehicle) < 3)) this.start(d.id);
       }
-      g.effects?.markers.set([...markers, ...(g.jobs?.markers?.() || [])]);
+      g.effects?.markers.set([...markers, ...(g.jobs?.markers?.() || []), ...(g.garage?.markers?.() || [])]);
       return;
     }
     const m = this.active;
@@ -143,6 +143,53 @@ export class Missions {
     this._next();
   }
 
+  /**
+   * Street events (street-events.js): build a mission and its context without making it active, so
+   * the offer's people and vehicles go through m.ctx. adopt() then runs it as start() would, with a
+   * toast and a chime instead of the title card; discard() takes away what the offer spawned.
+   */
+  draft(def) {
+    const m = { def, i: -1, time: 0, timer: null, timerLabel: '', vars: {}, ent: {}, target: null, steps: def.steps(this.game) };
+    m.ctx = this._ctx(m);
+    m.cpTotal = 0;
+    m.cp0 = m.cp = { k: -1, n: 0, label: 'the start' };
+    return m;
+  }
+
+  adopt(m) {
+    const g = this.game;
+    if (this.active || !m) return false;
+    this._clearLeftovers();
+    g.jobs?.stop?.(true);
+    this.retryOffer = null;
+    this.active = m;
+    g.hud.toast?.(m.def.title || 'Street event', 3);
+    g.audio?.sfx('checkpoint');
+    m.def.onStart?.(m.ctx);
+    this._next();
+    return true;
+  }
+
+  discard(m) {
+    const g = this.game, P = g.player;
+    if (!m) return;
+    for (const e of Object.values(m.ent)) {
+      if (!e) continue;
+      if (e.h) g.peds.remove(e);
+      else if (e !== P.vehicle && e !== P.enterTarget && !e.owned && !this._driven.has(e)) { g.vehicles.remove(e); g.controls?.delete(e); }
+    }
+  }
+
+  /** An event ended (passed or failed): its HUD goes quietly, no card, no save, no retry. */
+  _endEvent() {
+    const g = this.game;
+    g.hud.objective('');
+    g.hud.setTimer(null);
+    g.hud.route = null;
+    g.cutscene = false;
+    this.cooldown = 2;
+  }
+
   /** What a checkpoint remembers besides its place: time of day, weather, what the player carried. */
   _snap() {
     const g = this.game, sky = g.sky || g.world?.sky;
@@ -174,10 +221,12 @@ export class Missions {
     const def = m.def;
     this._cleanup(m, true);
     this.active = null;
+    if (def.event) { this._endEvent(); g.events?.passed?.(def, m); return; }
+    const before = new Set(this.available().map(d => d.id));
     g.save.complete(def.id);
     track('mission_complete');
     if (def.reward) g.addCash(def.reward);
-    g.hud.big('MISSION PASSED', def.reward ? `₹${def.reward.toLocaleString('en-IN')}` : def.passText || 'RESPECT +', 'passed', 5);
+    g.hud.big('MISSION PASSED', def.reward ? `₹${def.reward.toLocaleString('en-IN')}${def.weapon && WEAPONS[def.weapon.id] ? ` · ${WEAPONS[def.weapon.id].name}` : ''}` : def.passText || 'RESPECT +', 'passed', 5);
     g.audio?.sfx('passed');
     g.hud.objective('');
     g.hud.setTimer(null);
@@ -185,6 +234,9 @@ export class Missions {
     def.onPass?.(g);
     this.cooldown = 4;
     g.save.flush();
+    // A side job that this pass opened: say who has work, once.
+    const fresh = this.available().find(d => d.side && !before.has(d.id));
+    if (fresh) { const ch = CHARACTERS[fresh.giver]; g.hud.help?.(`New side job: <b>${ch?.name || fresh.giver}</b> (${ch?.initial || '!'}) has work for you. Look for the letter on the map.`, 8); }
   }
 
   fail(reason) {
@@ -192,6 +244,7 @@ export class Missions {
     if (!m) return;
     this._cleanup(m, false);
     this.active = null;
+    if (m.def.event) { this._endEvent(); g.events?.failed?.(m.def, reason); return; }
     g.hud.big('MISSION FAILED', reason || '', 'failed', 5);
     g.audio?.sfx('failed');
     g.hud.objective('');

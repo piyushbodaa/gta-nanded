@@ -203,6 +203,7 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
 .map-tip { margin: 0; font-size: 12px; color: #ffffff88; }
 .map-actions { display: flex; gap: 6px; flex-wrap: wrap; } .map-actions button { border: 1px solid #ffffff33; background: #000; padding: 8px 11px; border-radius: 4px; font-weight: 700; }
 .card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.card-list > .list-head { grid-column: 1 / -1; margin: 10px 0 0; font: 800 14px var(--body); letter-spacing: .12em; color: #ffd23f; }
 .card { padding: 14px 16px; background: #ffffff0b; border: 1px solid #ffffff18; border-radius: 6px; }
 .card h3 { margin: 0 0 4px; font: 400 26px/1.05 var(--display); letter-spacing: .5px; }
 .card .sub { font: 700 13px/1 var(--cond); letter-spacing: 2px; color: #ffd27a; }
@@ -445,3 +446,16 @@ body.cutscene .wwheel { display: none; }
   .ww-ring { --r: 99px; --s: 70px; }
   .ww-slot b { font-size: 14px; }
 }
+
+/* Side jobs: a bar under the objective (SUSPICION, the convoy's or the cart's health). */
+#hud .meter { width: min(240px, 46vw); margin: 4px auto 0; text-align: center; pointer-events: none; }
+#hud .meter[hidden] { display: none; }
+#hud .meter b { display: block; font: 800 12px/1.2 system-ui, sans-serif; letter-spacing: .08em; color: #fff; text-shadow: 0 0 2px #000, 0 1px 3px #000; }
+#hud .meter span { display: block; height: 8px; border-radius: 4px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.75); overflow: hidden; }
+#hud .meter i { display: block; height: 100%; transform-origin: left; background: linear-gradient(90deg, #ffe14d, #ff8a1f 60%, #ff3b30); }
+#hud .meter.urgent span { border-color: #ff3b30; }
+body.touch-ui #hud .meter span { height: 10px; }
+/* A baraat's dhol beat: the DANCE button pulses on each beat. */
+#tb-action.beat { transform: scale(1.12); box-shadow: 0 0 0 4px rgba(79,163,255,.7); transition: transform .06s; }
+/* Big screens place the middle text one by one: the bar sits just above the objective. */
+@media (min-width: 901px) and (min-height: 501px) { #hud .meter { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(158px + var(--safe-b)); margin: 0; } }

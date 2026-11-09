@@ -358,6 +358,7 @@ export class Vehicles {
     let wn = 0, bn = 0, hn = 0;
     const night = this.night;
     const maxD2 = this.drawDistance * this.drawDistance;
+    this.extras?.begin(); // owned cars' underglow and stickers (garage)
     // Vehicles inside the sun's shadow map first: the shadow pass draws only those.
     for (let pass = 0; pass < 2; pass++) {
       if (pass === 1) { for (const t of TYPE_KEYS) this.meshes[t].nShadow = this.meshes[t].n; this.wheelsShadow = wn; }
@@ -392,7 +393,9 @@ export class Vehicles {
         // night, only with someone at the wheel (off, they darken with the night like the paint);
         // tail lamps brighter braking; the light bar flashing red (1) and blue (2) with the siren.
         const lit = Boolean(v.driver) && !v.wrecked;
-        const lamp = v.wrecked ? 0.15 : lit ? 0.55 + night * 0.9 : 0.55 - night * 0.4;
+        // An owned car's lock chirp and alarm blink its lamps (garage: v.flashT).
+        const blink = v.flashT > this.time && Math.floor(this.time * 8) % 2;
+        const lamp = (v.wrecked ? 0.15 : lit ? 0.55 + night * 0.9 : 0.55 - night * 0.4) + (blink ? 0.8 : 0);
         const flash = v.sirenOn && !v.wrecked ? 1 + (Math.floor(this.time * 7 + v.id) % 2) : 0;
         M.lights.setColorAt(i, _c.setRGB(lamp, lamp + (lit && v.braking ? 0.5 : 0), flash));
         // Wheels.
@@ -410,6 +413,7 @@ export class Vehicles {
           _w.multiplyMatrices(_m, _t);
           this.wheels.setMatrixAt(wn++, _w);
         }
+        if (v.mods && (v.mods.neon || v.mods.sticker != null)) this.extras?.add(v, _m);
         // Contact shadow.
         if (bn < this.blobs.instanceMatrix.count) {
           _e.set(0, v.heading, 0); _q.setFromEuler(_e);
@@ -445,6 +449,7 @@ export class Vehicles {
     this.wheels.visible = wn > 0; this.blobs.visible = bn > 0; this.beams.visible = hn > 0;
     this.beams.material.opacity = clamp(night * 0.55, 0, 0.55);
     this.beams.visible = hn > 0 && night > 0.05;
+    this.extras?.end(night);
   }
 
   _seat(v, M) {

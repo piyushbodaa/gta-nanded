@@ -392,6 +392,14 @@ export class Game {
     input.update();
     // The RETRY / QUIT card reads its keys first: Esc or Start there quits the card, never pauses.
     this.retryCard?.update(real);
+    // The Jugaad Garage menu reads Esc / A / B before they are dropped; a pause press closes it instead of pausing.
+    if (this.garageMenu?.open) {
+      this.garageMenu.update(real);
+      const s = input.state;
+      s.moveX = s.moveY = s.throttle = s.steer = 0; s.brake = this.player.vehicle ? 1 : 0; s.handbrake = false;
+      for (const a of CUTSCENE_DROPS) input.events.delete(a);
+      input.events.delete('pause'); input.events.delete('map');
+    }
     // Menus: Esc pauses, M opens the map, and either closes the menu again.
     if (this.started && this.pause && !this.respawning) {
       if (input.pressed('pause')) this.pause.toggle(this.pause.tab);

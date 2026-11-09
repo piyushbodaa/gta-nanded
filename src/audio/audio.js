@@ -23,6 +23,17 @@ const HORN = {
   default: { f: [415, 520], wave: 'square', pulses: 1, len: 0.32 },
 };
 
+/**
+ * Pressure horns from the Jugaad Garage (garage.js: v.hornTune), each { notes: [[freq, at, len]...], wave, gain }.
+ * Original note patterns, not film tunes.
+ */
+export const HORN_TUNES = {
+  pom: { notes: [[466, 0, 0.16], [370, 0.2, 0.26]], wave: 'square', gain: 1 },
+  jingle: { notes: [[784, 0, 0.1], [988, 0.12, 0.1], [1175, 0.24, 0.1], [988, 0.36, 0.1], [784, 0.48, 0.18]], wave: 'triangle', gain: 1.2 },
+  truck: { notes: [[147, 0, 1.0], [185, 0, 1.0], [220, 0, 1.0]], wave: 'sawtooth', gain: 0.9 },
+  tutari: { notes: [[392, 0, 0.22], [523, 0.24, 0.22], [659, 0.48, 0.22], [784, 0.72, 0.5]], wave: 'sawtooth', gain: 0.9 },
+};
+
 export class GameAudio {
   constructor() {
     this.ctx = null;
@@ -261,6 +272,15 @@ export class GameAudio {
       case 'rim': // a bare rim striking the road
         this._tone(2100, 0.12, { type: 'triangle', gain: 0.06 * k, glide: 1700 }); this._burst(0.08, { freq: 3000, q: 1.2, gain: 0.12 * k });
         break;
+      case 'chirp': // a key fob: the car locks or unlocks
+        this._tone(2200, 0.06, { type: 'square', gain: 0.07 * k }); this._tone(2200, 0.06, { type: 'square', gain: 0.07 * k, at: 0.1 });
+        break;
+      case 'alarm': // one whoop of a car alarm (garage.js repeats it)
+        this._tone(700, 0.42, { type: 'square', gain: 0.07 * k, glide: 1300 });
+        break;
+      case 'dhol': // a baraat's dhol: a deep thump with a skin slap
+        this._tone(92, 0.22, { gain: 0.4 * k, glide: 60 }); this._burst(0.09, { freq: 260, q: 0.8, gain: 0.25 * k, type: 'lowpass', buf: this.brown });
+        break;
       case 'throw': this._tone(2400, 0.03, { type: 'square', gain: 0.04 * k }); this._burst(0.28, { freq: 900, q: 0.6, gain: 0.12 * k, at: 0.05 }); break;
     }
   }
@@ -325,10 +345,23 @@ export class GameAudio {
     if (!this.enabled || !this.ctx || !v) return;
     const now = this.ctx.currentTime;
     if ((this.hornCool.get(v.id) || 0) > now) return;
+    const tune = HORN_TUNES[v.hornTune];
     const h = HORN[v.type] || HORN.default;
     const d = this.listener ? dist(v.x, v.z, this.listener.x, this.listener.z) : 0;
     const g = clamp(1 / (1 + d / 18), 0, 1) * 0.14 * vol;
     if (g < 0.004) return;
+    if (tune) { // a pressure horn: its notes at 1.6x, and no second press until the last note ends
+      const end = Math.max(...tune.notes.map(([, at, len]) => at + len));
+      this.hornCool.set(v.id, now + end + 0.15);
+      for (const [f, at, len] of tune.notes) {
+        const o = this.ctx.createOscillator(), gn = this.ctx.createGain(), flt = this.ctx.createBiquadFilter(), t = now + at, gg = g * 1.6 * tune.gain;
+        o.type = tune.wave; o.frequency.value = f;
+        flt.type = 'lowpass'; flt.frequency.value = 2600;
+        gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(gg, t + 0.015); gn.gain.setValueAtTime(gg, t + len - 0.03); gn.gain.linearRampToValueAtTime(0, t + len);
+        o.connect(flt).connect(gn).connect(this.sfxBus); o.start(t); o.stop(t + len + 0.05);
+      }
+      return;
+    }
     this.hornCool.set(v.id, now + h.len * h.pulses + 0.15);
     // Forget the cooldowns that are over: traffic keeps spawning cars with new ids.
     if (this.hornCool.size > 64) for (const [id, until] of this.hornCool) if (until <= now) this.hornCool.delete(id);

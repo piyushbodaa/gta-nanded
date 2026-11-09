@@ -7,6 +7,7 @@ import * as Missions from './missions.js';
 import { dist, clamp } from '../core/math.js';
 import { speedOf } from '../actors/vehicle-physics.js';
 import { HOSPITAL, GARAGE } from './story.js';
+import { busy } from './mission-state.js';
 
 const S = Missions.Steps;
 
@@ -66,9 +67,8 @@ export function beatScore(taps, t0, period = BEAT, beats = BEATS, window = BEAT_
   return hit.size;
 }
 
-/** C3's busy(g), kept local until mission-state.js lands (same body). */
-export const busy = g => Boolean(g.missions?.active || g.jobs?.active || g.cutscene || g.respawning
-  || g.retryCard?.open || g.garageMenu?.open);
+/** C3 busy(g), from mission-state.js. */
+export { busy };
 
 /** Why no event may start or stay offered now (a short reason), or null when one may. */
 export function blockedWhy(g) {
