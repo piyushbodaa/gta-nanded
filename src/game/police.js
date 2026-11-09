@@ -6,7 +6,11 @@ import { speedOf, forwardSpeed } from '../actors/vehicle-physics.js';
 
 const UNITS = [0, 2, 3, 4, 6, 8];
 const FOOT_MAX = 6; // officers on foot at once; later units stay in their jeeps
-const CRIME_HEAT = { carjack: 1, hitPed: 1, punch: 0.45, hitCop: 2, ramPolice: 1, wreck: 1, assault: 1, mission: 0 };
+// Guns: shots fired in public (heard, not seen: `r` 120 m), a person or an officer hit, knocked out for good, a grenade.
+const CRIME_HEAT = {
+  carjack: 1, hitPed: 1, punch: 0.45, hitCop: 2, ramPolice: 1, wreck: 1, assault: 1, mission: 0,
+  shoot: 0.6, shotPed: 1.5, shotCop: 2.5, killPed: 2, killCop: 3, blast: 1,
+};
 
 export class Police {
   constructor(game) {
@@ -27,13 +31,16 @@ export class Police {
     this.lock = false; // missions can hold the wanted level
   }
 
-  /** A crime at (x, z). If no officer sees it, a witness may call it in a moment later. */
-  report(crime, x, z, { cop = false } = {}) {
+  /**
+   * A crime at (x, z). An officer within `r` (55 m: in sight; gunfire is heard further) knows at
+   * once; otherwise a witness may call it in a moment later, if there is anyone about (`witness`).
+   */
+  report(crime, x, z, { cop = false, r = 55, witness = true } = {}) {
     if (this.game.cheats?.noWanted) return;
     const heat = CRIME_HEAT[crime] ?? 0.5;
-    const seenBy = cop || this._copNear(x, z, 55);
+    const seenBy = cop || this._copNear(x, z, r);
     if (seenBy) this.addHeat(heat, x, z);
-    else if (Math.random() < (crime === 'punch' ? 0.25 : 0.6)) this.pending.push({ t: 3 + Math.random() * 3, heat, x, z });
+    else if (witness && Math.random() < (crime === 'punch' ? 0.25 : 0.6)) this.pending.push({ t: 3 + Math.random() * 3, heat, x, z });
   }
 
   /**
@@ -63,7 +70,7 @@ export class Police {
 
   _copNear(x, z, r) {
     for (const u of this.units) if (dist(u.v.x, u.v.z, x, z) < r) return true;
-    for (const c of this.foot) if (dist(c.h.x, c.h.z, x, z) < r) return true;
+    for (const c of this.foot) if (c.state !== 'dead' && dist(c.h.x, c.h.z, x, z) < r) return true;
     // Only a jeep with an officer in it sees anything: not an empty, abandoned or burnt-out one.
     for (const v of this.game.vehicles.list) if (v.type === 'police' && v.driver && v.role !== 'player' && !v.wrecked && dist(v.x, v.z, x, z) < r * 0.8) return true;
     return false;
@@ -90,7 +97,7 @@ export class Police {
     if (this.losT <= 0) {
       this.losT = 0.25;
       this.seen = false;
-      const eyes = [...this.units.map(u => u.v), ...this.foot.map(c => c.h)];
+      const eyes = [...this.units.map(u => u.v), ...this.foot.filter(c => c.state !== 'dead').map(c => c.h)];
       for (const e of eyes) {
         const d = dist(e.x, e.z, pos.x, pos.z);
         if (d > 75) continue;
@@ -126,15 +133,16 @@ export class Police {
     for (const c of this.foot) this._footCop(c, dt);
     // Officers left far behind go back to their beat, which makes room for fresh ones closer in;
     // the jeeps they left are towed away like any others (a long chase on foot would pile them up).
+    // Knocked out for good, an officer is off the job too: no eyes, no arrest, no place in the count.
     this.foot = this.foot.filter(c => {
-      if (!g.peds.list.includes(c)) return false;
+      if (!g.peds.list.includes(c) || c.state === 'dead') return false;
       if (dist(c.h.x, c.h.z, pos.x, pos.z) < 150) return true;
       this._offDuty(c);
       return false;
     });
     this._cleanup(dt);
     // Busted? Not while a cutscene holds the player still: they couldn't get away if they tried.
-    const near = this.foot.some(c => c.state !== 'down' && dist(c.h.x, c.h.z, P.x, P.z) < 1.5);
+    const near = this.foot.some(c => c.state !== 'down' && c.state !== 'dead' && dist(c.h.x, c.h.z, P.x, P.z) < 1.5);
     const boxed = P.vehicle && speedOf(P.vehicle) < 1.5 && this.units.some(u => dist(u.v.x, u.v.z, P.vehicle.x, P.vehicle.z) < 6.5);
     if (!g.cutscene && ((P.state === 'foot' && near && P.speed < 2.5) || boxed)) this.bustT += dt; else this.bustT = Math.max(0, this.bustT - dt * 2);
     if (this.bustT > (P.vehicle ? 3.2 : 1.6)) { this.bustT = 0; g.busted?.(); }
@@ -253,11 +261,15 @@ export class Police {
     if (v.role === 'police') v.role = 'abandoned'; // a wreck: it burns, blows up and is towed like any other
   }
 
-  _offDuty(c) { c.state = 'walk'; c.keep = false; c.road = null; }
+  _offDuty(c) { c.state = 'walk'; c.keep = false; c.road = null; c.armed = null; c.h.gun = null; c.h.aim = 0; }
 
   _footCop(c, dt) {
+    if (c.state === 'dead') return;
     // Cops chase on foot and keep at it longer than angry bystanders do.
     if (c.state === 'flee' || c.state === 'walk' || c.state === 'cower') { c.state = 'fight'; c.t = 30; }
+    // From three stars officers draw their pistols (they shoot back: peds.js, rules.js); at five some carry rifles.
+    if (this.level >= 3 && !c.armed) c.armed = this.level >= 5 && c.id % 3 === 0 ? 'm416' : 'p92';
+    else if (c.armed === 'p92' && this.level >= 5 && c.id % 3 === 0) c.armed = 'm416';
   }
 
   _standDown() {

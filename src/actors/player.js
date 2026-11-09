@@ -5,8 +5,12 @@ import { makeOutfit } from './humans.js';
 import { GETUP_TIME } from './anim.js';
 import { speedOf, forwardSpeed } from './vehicle-physics.js';
 import { WATER_Y } from '../world/water.js';
+import { WEAPONS, interval } from '../game/weapon-data.js';
 
-const WALK = 1.9, JOG = 4.4, SPRINT = 7.4;
+const WALK = 1.9, JOG = 4.4, SPRINT = 7.4, AIM_WALK = 2.6;
+
+/** Hands empty: no gun out, no aim (in a vehicle, down, WASTED, teleported). */
+function holster(h) { h.gun = null; h.hold = 'none'; h.aim = 0; h.aimYaw = 0; h.aimPitch = 0; h.recoil = 0; h.reload = 0; }
 
 export class Player {
   constructor(game, x, z, heading) {
@@ -34,6 +38,7 @@ export class Player {
     this.y = this.groundY = this.game.city.groundHeight(x, z);
     this.state = 'foot';
     this.human.visible = true; this.human.pose = 'idle'; this.human.pitch = 0; this.human.roll = 0;
+    holster(this.human);
     this.game.camera.reset(heading);
   }
 
@@ -90,7 +95,9 @@ export class Player {
 
   // ---------------------------------------------------------------- on foot
   _foot(dt, input) {
-    const g = this.game, s = input.state, h = this.human;
+    const g = this.game, s = input.state, h = this.human, W = g.weapons;
+    // A gun up (aiming, or just fired): turn to where the camera looks and walk, don't run.
+    const aimFace = Boolean(W?.facing);
     // Movement relative to the camera.
     const face = g.camera.facing;
     const fx = Math.sin(face), fz = Math.cos(face), rx = -Math.cos(face), rz = Math.sin(face);
@@ -99,14 +106,16 @@ export class Player {
     let dirX = fx * my + rx * mx, dirZ = fz * my + rz * mx;
     const dl = Math.hypot(dirX, dirZ);
     if (dl > 1e-4) { dirX /= dl; dirZ /= dl; }
-    this.sprinting = s.sprint && mag > 0.3 && this.stamina > 0.05;
-    const target = mag < 0.05 ? 0 : (this.sprinting ? SPRINT : mag < 0.55 && input.mode !== 'keyboard' ? WALK : JOG) * (g.energy > 0 ? 1.15 : 1);
+    this.sprinting = s.sprint && mag > 0.3 && this.stamina > 0.05 && !W?.aiming;
+    let target = mag < 0.05 ? 0 : (this.sprinting ? SPRINT : mag < 0.55 && input.mode !== 'keyboard' ? WALK : JOG) * (g.energy > 0 ? 1.15 : 1);
+    if (W?.aiming) target = Math.min(target, AIM_WALK);
     this.stamina = clamp(this.stamina + (this.sprinting ? -0.16 : 0.12) * dt, 0, 1);
     const accel = this.onGround ? 14 : 3;
     const tvx = dirX * target, tvz = dirZ * target;
     this.vx += clamp(tvx - this.vx, -accel * dt, accel * dt);
     this.vz += clamp(tvz - this.vz, -accel * dt, accel * dt);
-    if (mag > 0.05 && this.punchT <= 0) this.heading = dampAngle(this.heading, Math.atan2(dirX, dirZ), 14, dt);
+    if (aimFace) this.heading = dampAngle(this.heading, face, 18, dt);
+    else if (mag > 0.05 && this.punchT <= 0) this.heading = dampAngle(this.heading, Math.atan2(dirX, dirZ), 14, dt);
     // Jump.
     if (input.pressed('jump') && this.onGround) { this.vy = 4.6; this.onGround = false; g.audio?.sfx('jump'); }
     this.vy -= 15 * dt;
@@ -136,11 +145,13 @@ export class Player {
       if (back > this.y) this._land((gy = back));
     }
     this.speed = Math.hypot(this.vx, this.vz);
-    // Punch.
+    // Punch, or swing the pan (a gun or a grenade in hand: Weapons has the trigger).
     if (this.punchT > 0) this.punchT -= dt;
-    if (input.pressed('attack') && this.punchCooldown <= 0) {
-      this.punchT = 0.32; this.punchCooldown = 0.38; this.combo = (this.combo + 1) % 3;
-      g.playerPunch?.(this);
+    const melee = !W || W.def.slot === 'melee';
+    if (melee && input.pressed('attack') && this.punchCooldown <= 0) {
+      const pan = W?.current === 'pan';
+      this.punchT = 0.32; this.punchCooldown = pan ? interval(WEAPONS.pan) : 0.38; this.combo = (this.combo + 1) % 3;
+      if (pan) W.swing(this); else g.playerPunch?.(this);
     }
     // Enter / carjack.
     if (input.pressed('enter')) {
@@ -155,7 +166,14 @@ export class Player {
     h.punch = this.punchT > 0 ? 1 - this.punchT / 0.32 : 0; h.combo = this.combo;
     // Standing about, the head turns to look the way the camera does.
     const look = wrapAngle(g.camera.facing - this.heading);
-    h.lookYaw = this.speed < 0.5 && Math.abs(look) < 1.7 ? clamp(look, -1.1, 1.1) * 0.8 : 0;
+    h.lookYaw = this.speed < 0.5 && Math.abs(look) < 1.7 && !aimFace ? clamp(look, -1.1, 1.1) * 0.8 : 0;
+    // The weapon in hand, and where it points (anim.js raises the arms; WeaponFx puts the gun in them).
+    const gun = W && W.current !== 'fist' ? W.current : null;
+    h.gun = gun; h.hold = gun ? W.def.hold : 'none';
+    h.aim = aimFace ? 1 : 0;
+    h.aimYaw = aimFace ? clamp(wrapAngle(face - this.heading), -1.2, 1.2) : 0;
+    h.aimPitch = aimFace ? W.aimPitch : 0;
+    h.reload = W?.reloading || 0;
     h.t += dt;
   }
 
@@ -187,6 +205,7 @@ export class Player {
       if (g.colliders.resolveCircle(p, 0.34, o, Infinity, this.groundY)) { this.x = p.x; this.z = p.z; }
       this.heading = Math.atan2(ux, uz);
       h.x = this.x; h.z = this.z; h.yaw = this.heading; h.speed = sp; h.pose = 'run'; h.air = false; h.lookYaw = 0;
+      holster(h);
       return;
     }
     // Still well short of the door when time is up: it drove off, or something is in the way.
@@ -209,6 +228,7 @@ export class Player {
     this.human.pose = v.model.seat.pose;
     this.human.seatY = v.model.seat.y;
     this.human.punch = 0; this.human.air = false; this.human.lookYaw = 0;
+    holster(this.human);
     g.onEnteredVehicle?.(v);
   }
 
@@ -226,6 +246,7 @@ export class Player {
     this.heading = v.heading;
     h.x = this.x; h.y = this.y; h.z = this.z; h.floor = this.y; h.pitch = 0; h.roll = 0;
     // Pulled out of the car while WASTED or BUSTED (it burnt, it sank, the respawn): still dead till then.
+    holster(h);
     if (this.state === 'dead') { h.pose = 'lie'; g.onExitedVehicle?.(v, spd); return; }
     h.pose = 'idle';
     this.state = 'foot';
@@ -257,12 +278,14 @@ export class Player {
     h.x = this.x; h.z = this.z; h.y = this.y; h.floor = gy;
     // Down, then back up over the last moments (anim.js plays the fall and the get-up).
     h.pose = this.downT > GETUP_TIME * 0.85 ? 'lie' : 'getup'; h.speed = 0; h.air = false; h.punch = 0;
+    holster(h);
     if (this.downT <= 0) this.state = 'foot';
   }
 
   /** WASTED or BUSTED at the wheel: hands off, the car brought to a stop, the body left in its seat. */
   _dead() {
     const v = this.vehicle;
+    holster(this.human);
     if (!v) return;
     // Brake whichever way it rolls, and let go at a stop (held there, the brake pedal reverses).
     const f = forwardSpeed(v);

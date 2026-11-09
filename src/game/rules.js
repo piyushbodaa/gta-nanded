@@ -8,6 +8,7 @@ import { DynamicDriver } from '../actors/traffic.js';
 import { driveHunters } from './missions.js';
 import { drivingHelp, vehicleKeys } from '../ui/controls.js';
 import { tapButtons } from '../ui/tap.js';
+import { WEAPONS } from './weapon-data.js';
 
 const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
 
@@ -165,6 +166,63 @@ export function installRules(g) {
     else if (v.health < 250 && !v.onFire) v.onFire = 0.01;
   };
 
+  /**
+   * Damage that isn't a crash: bullets, a grenade. Burns and wrecks as a blast does; the player's
+   * doing makes its fireball a crime, and the frightened driver of a shot car gets out and runs.
+   */
+  g.damageVehicle = (v, dmg, byPlayer = false) => {
+    if (!v || v.removed || v.exploded || !(dmg > 0)) return;
+    if (v.kinematic) g.vehicles.wake(v);
+    v.health = Math.max(0, v.health - dmg);
+    if (byPlayer && v.role !== 'player') v.rammedT = g.time;
+    damaged(v);
+    if (byPlayer) driverFlees(v);
+  };
+  // Not the player's own seat, a police unit on the job (its crew get out on their own), or the
+  // story's cars (a chase ends when the target car is shot up enough: missions.js).
+  const driverFlees = v => {
+    const P = g.player, h = v.driver;
+    if (!h || h === P.human || v.role === 'player' || v.role === 'police' || storyCar(v) || !g.peds?._make) return;
+    g.vehicles.ejectDriver(v);
+    const out = g.vehicles.exitWorld?.(v) ?? g.vehicles.doorWorld?.(v) ?? v;
+    const people = [h, ...(v.passengers || []).splice(0)];
+    people.forEach((ph, i) => {
+      ph.x = out.x + (i ? (Math.random() - 0.5) * 1.2 : 0); ph.z = out.z + (i ? (Math.random() - 0.5) * 1.2 : 0); ph.y = out.y ?? v.y ?? 0;
+      ph.pose = 'run'; ph.pitch = 0; ph.roll = 0;
+      const p = g.peds._make(ph, ph.x, ph.z, null);
+      p.state = 'flee'; p.t = 10;
+      if (!i) g.peds.bark?.(p, 'flee');
+    });
+    v.ai = null; v.role = 'abandoned'; v.sirenOn = false;
+    g.controls.delete(v);
+    if (g.traffic?.cars) g.traffic.cars = g.traffic.cars.filter(c => c !== v);
+  };
+
+  /**
+   * An armed officer (peds.js fight) fires at the player: only with a clear line, more often a
+   * hit close in and on someone standing still. ~8 a hit; a car takes it on the bodywork instead.
+   */
+  g.pedShoots = p => {
+    const P = g.player, pos = P.pos, h = p.h, gun = WEAPONS[p.armed] ? p.armed : 'p92';
+    if (g.cutscene || g.respawning || P.state === 'dead') return false;
+    const ey = (h.y || 0) + 1.45, ty = P.vehicle ? P.vehicle.y + 1 : (P.y || 0) + 1.2;
+    if (g.colliders?.raycast && g.colliders.raycast(h.x, ey, h.z, pos.x, ty, pos.z, 0.05) < 0.999) return false;
+    const d = dist(h.x, h.z, pos.x, pos.z);
+    const chance = clamp(0.7 - d / 45, 0.12, 0.65) * (P.speed > 4 ? 0.6 : 1) * (gun === 'm416' ? 0.75 : 1) * (P.state === 'down' ? 0.5 : 1);
+    const hit = Math.random() < chance;
+    if (hit) {
+      if (P.vehicle) g.damageVehicle(P.vehicle, 18, false);
+      else { P.damage(gun === 'm416' ? 7 : 8, 'police'); g.camera.addShake(0.08); }
+    }
+    // The tracer from the officer's hands; a miss goes past, a step or two wide.
+    const s = Math.sin(h.yaw), c = Math.cos(h.yaw), ax = h.x + s * 0.5 - c * 0.15, az = h.z + c * 0.5 + s * 0.15;
+    const mx = hit ? 0 : (Math.random() - 0.5) * 3, mz = hit ? 0 : (Math.random() - 0.5) * 3;
+    g.weaponFx?.shot?.(ax, ey - 0.1, az, pos.x + mx, ty + (hit ? 0 : Math.random() - 0.6), pos.z + mz, gun);
+    g.audio.sfxAt?.(WEAPONS[gun].sound, h.x, h.z, 0.8);
+    h.recoil = 1;
+    return hit;
+  };
+
   const explode = v => {
     v.exploded = true;
     v.onFire = 0;
@@ -264,6 +322,7 @@ export function installRules(g) {
     POLICEWALA: () => spawnNear('police', 'A jeep, no questions asked.'),
     PAUSKALA: () => { g.sky.setWeather(g.sky.weather === 'rain' ? 'clear' : 'rain'); return 'Monsoon on demand.'; },
     RAATRANI: () => { g.sky.hours = (g.sky.hours + 12) % 24; return 'Day for night.'; },
+    HATHIYAAR: () => { if (!g.weapons) return null; g.weapons.giveAll(); return 'Pura hathiyaar-khana: every gun, full ammo.'; },
   };
   function spawnNear(type, msg) {
     const P = g.player, pos = P.pos, n = g.net.nearest(pos.x + Math.sin(P.heading) * 8, pos.z + Math.cos(P.heading) * 8, 40, {}, r => !g.net.raised[r]);
@@ -313,7 +372,7 @@ export function installRules(g) {
   g.wasted = cause => {
     if (g.player.state === 'dead' || g.respawning) return;
     g.player.state = 'dead';
-    g.player.human.pose = 'lie';
+    Object.assign(g.player.human, { pose: 'lie', gun: null, hold: 'none', aim: 0, recoil: 0, reload: 0 });
     g.respawning = true;
     document.body.classList.add('wasted');
     const failed = endMission('You were wasted.');

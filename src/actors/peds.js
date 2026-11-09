@@ -5,6 +5,7 @@ import { makeOutfit } from './humans.js';
 import { GETUP_TIME } from './anim.js';
 import { speedOf } from './vehicle-physics.js';
 import { ZONE } from '../world/citygen.js';
+import { WEAPONS, PED_HEALTH, COP_HEALTH } from '../game/weapon-data.js';
 
 // Body radius against walls and posts, and the clear space a new person needs around them.
 const PED_R = 0.28, SPAWN_CLEAR = 0.5;
@@ -90,7 +91,7 @@ export class Peds {
     const target = g.quality.settings.peds * (g.pedScale ?? 1) * (g.quality.crowd ?? 1);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
-      if (dist(p.h.x, p.h.z, focus.x, focus.z) > 150 && !p.keep) { g.humans.remove(p.h); this.list.splice(i, 1); }
+      if (p.gone || (dist(p.h.x, p.h.z, focus.x, focus.z) > 150 && !p.keep)) { g.humans.remove(p.h); this.list.splice(i, 1); }
     }
     this.spawnT -= dt;
     let budget = this.list.length < target * 0.5 ? 8 : 2;
@@ -264,6 +265,88 @@ export class Peds {
     this.forEachNear(p.h.x, p.h.z, 18, o => { if (o !== p && (o.state === 'walk' || o.state === 'idle' || o.state === 'phone')) { o.state = Math.random() < 0.3 ? 'cower' : 'flee'; o.t = 6 + Math.random() * 4; } });
   }
 
+  /**
+   * Hit by a bullet, a pan or a blast for `dmg` against their health (100, police 130), shoved at
+   * (vx, vz). At nothing they are knocked out for good. A story fight's target counts every hit
+   * toward beating them (on the ground too) and is never knocked out. Returns 'dead', 'hit' or null.
+   */
+  shot(p, dmg, vx, vz, cause = 'shot') {
+    if (p.state === 'dead') return null;
+    if (p.mission && p.needHits) {
+      if (p.state === 'down' || p.state === 'getup') { p.hits++; this.game.onPedHurt?.(p, cause); } else this.knock(p, vx, vz, 1.6 + Math.random() * 0.6, cause);
+      return 'hit';
+    }
+    p.health ??= p.cop || p.h.outfit?.kind === 'police' ? COP_HEALTH : PED_HEALTH;
+    p.health -= dmg;
+    if (p.health <= 0) { this.kill(p, vx, vz, cause); return 'dead'; }
+    if (p.state === 'down' || p.state === 'getup') return 'hit';
+    // A hard hit puts them down; a lighter one sends them running (an officer, or someone already
+    // fighting, fights on).
+    if (cause === 'explosion' || dmg >= 40 || Math.random() < dmg / 70) this.knock(p, vx, vz, 1.4 + Math.random() * 0.8, cause);
+    else {
+      this._keepRole(p);
+      p.hits++;
+      if (!(p.cop || p.state === 'fight')) { p.state = Math.random() < 0.2 ? 'cower' : 'flee'; p.t = 10; }
+      this.bark(p, 'hit');
+      this.game.onPedHurt?.(p, cause);
+    }
+    return 'hit';
+  }
+
+  /** Knocked out for good: down where they fall, still, and gone once nobody is looking (no blood: CONTRIBUTING). */
+  kill(p, vx = 0, vz = 0, cause = 'shot') {
+    if (p.state === 'dead') return;
+    p.state = 'dead'; p.t = 0; p.vx = vx; p.vz = vz; p.vy = Math.min(3, Math.hypot(vx, vz) * 0.3);
+    p.health = 0; p.hits++; p.keep = false; p.blip = null; p.role = null; p.after = null; p.grudge = 0; p.armed = null;
+    const h = p.h;
+    h.pose = 'lie'; h.speed = 0; h.punch = 0; h.guard = 0; h.lookYaw = 0; h.gun = null; h.aim = 0; h.hold = 'none';
+    this.game.onPedHurt?.(p, cause);
+    this.forEachNear(h.x, h.z, 25, o => { if (o !== p && (o.state === 'walk' || o.state === 'idle' || o.state === 'phone')) { o.state = Math.random() < 0.3 ? 'cower' : 'flee'; o.t = 8 + Math.random() * 4; } });
+  }
+
+  /** Gunfire at (x, z): everyone within earshot just going about their day runs or ducks (a fare waving for a ride too). */
+  gunfire(x, z, r = 40) {
+    this.panic = 1;
+    this.forEachNear(x, z, r, o => {
+      if (o.state !== 'walk' && o.state !== 'idle' && o.state !== 'phone' && o.state !== 'hail') return;
+      this._keepRole(o);
+      o.state = Math.random() < 0.3 ? 'cower' : 'flee'; o.t = 6 + Math.random() * 5;
+      if (Math.random() < 0.25) this.bark(o, 'flee');
+    });
+  }
+
+  /** Can a body lying at h be seen? In front of the camera and within 70 m (no camera: within 40 m of the player). */
+  _inView(h) {
+    const g = this.game, cam = g.camera3;
+    if (!cam?.quaternion) return dist(h.x, h.z, g.player.x, g.player.z) < 40;
+    const q = cam.quaternion, dx = h.x - cam.position.x, dy = (h.y || 0) - cam.position.y, dz = h.z - cam.position.z, d = Math.hypot(dx, dy, dz);
+    if (d > 70) return false;
+    if (d < 3) return true;
+    const fx = -2 * (q.x * q.z + q.w * q.y), fy = -2 * (q.y * q.z - q.w * q.x), fz = -(1 - 2 * (q.x * q.x + q.y * q.y));
+    return (dx * fx + dy * fy + dz * fz) / d > 0.45; // inside ~63° of the view's centre: the widest a phone's screen shows
+  }
+
+  /** Thrown along the ground in steps of 20 cm or less (a hard throw on a phone's long frame stops at a wall), then down onto the floor. */
+  _tumble(p, dt) {
+    const g = this.game, h = p.h;
+    const steps = clamp(Math.ceil(Math.hypot(p.vx, p.vz) * dt / 0.2), 1, 8), c = this._c, o = this._o;
+    for (let k = 0; k < steps; k++) {
+      h.x += p.vx * dt / steps; h.z += p.vz * dt / steps;
+      c.x = h.x; c.z = h.z;
+      if (g.colliders.resolveCircle(c, 0.3, o, Infinity, this._level(h))) {
+        h.x = c.x; h.z = c.z;
+        const vn = p.vx * o.nx + p.vz * o.nz;
+        if (vn < 0) { p.vx -= vn * o.nx; p.vz -= vn * o.nz; }
+      }
+    }
+    // Down onto whatever is under them: the footpath, a flyover's deck, the ground.
+    const floor = this._floor(p);
+    p.vy = (p.vy || 0) - 18 * dt;
+    h.y = Math.max(floor, (h.y || 0) + p.vy * dt);
+    const slow = Math.exp(-dt * (h.y > floor + 0.05 ? 0.3 : 4));
+    p.vx *= slow; p.vz *= slow;
+  }
+
   _update(p, dt) {
     const g = this.game, h = p.h, net = this.net;
     p.t -= dt; p.barkCool = (p.barkCool || 0) - dt; p.cool -= dt;
@@ -271,7 +354,7 @@ export class Peds {
     const player = g.player, pp = player.pos;
     const dpx = h.x - pp.x, dpz = h.z - pp.z, dPlayer = Math.hypot(dpx, dpz);
     // Vehicles: dive out of the way, or get hit.
-    if (p.state !== 'down') {
+    if (p.state !== 'down' && p.state !== 'dead') {
       for (const v of g.vehicles.list) {
         const dx = h.x - v.x, dz = h.z - v.z;
         if (Math.abs(v.y - (h.y || 0)) > 1.5 || dx * dx + dz * dz > 120) continue; // one of them up on a flyover
@@ -301,29 +384,18 @@ export class Peds {
       }
     }
     switch (p.state) {
-      case 'down': {
+      case 'down':
         h.pose = 'lie';
-        // Thrown in steps of 20 cm or less, so a hard throw on a phone's long frame stops at a
-        // wall instead of passing through it, and slides along it.
-        const steps = clamp(Math.ceil(Math.hypot(p.vx, p.vz) * dt / 0.2), 1, 8), c = this._c, o = this._o;
-        for (let k = 0; k < steps; k++) {
-          h.x += p.vx * dt / steps; h.z += p.vz * dt / steps;
-          c.x = h.x; c.z = h.z;
-          if (g.colliders.resolveCircle(c, 0.3, o, Infinity, this._level(h))) {
-            h.x = c.x; h.z = c.z;
-            const vn = p.vx * o.nx + p.vz * o.nz;
-            if (vn < 0) { p.vx -= vn * o.nx; p.vz -= vn * o.nz; }
-          }
-        }
-        // Down onto whatever is under them: the footpath, a flyover's deck, the ground.
-        const floor = this._floor(p);
-        p.vy = (p.vy || 0) - 18 * dt;
-        h.y = Math.max(floor, (h.y || 0) + p.vy * dt);
-        const slow = Math.exp(-dt * (h.y > floor + 0.05 ? 0.3 : 4));
-        p.vx *= slow; p.vz *= slow;
+        this._tumble(p, dt);
         if (p.t <= 0) { p.state = 'getup'; p.t = GETUP_TIME; }
         break;
-      }
+      case 'dead':
+        // Lying still where they fell (p.t counts down from 0: how long ago), gone once out of
+        // sight a while, or after two minutes whatever.
+        h.pose = 'lie'; h.speed = 0;
+        if (Math.hypot(p.vx, p.vz) > 0.05 || h.y > this._floor(p) + 0.02) this._tumble(p, dt);
+        if ((p.t < -6 && !this._inView(h)) || p.t < -120) p.gone = true;
+        break;
       case 'getup':
         h.pose = 'getup';
         if (p.t <= 0) { p.state = p.after || 'flee'; p.t = p.state === 'cower' ? 5 : 10; if (p.state === 'fight') this.bark(p, 'fight'); }
@@ -354,12 +426,21 @@ export class Peds {
         // foot, until the police stand down (police.js).
         const to = Math.atan2(-dpx, -dpz);
         h.yaw = dampAngle(h.yaw, to, 10, dt);
+        h.aim = 0;
         const apart = Math.abs((h.y || 0) - (pp.y || 0)) > 1.5;
         if (!(p.cop && p.keep) && (player.state === 'driving' || dPlayer > 25 || apart || p.t < -14)) { p.state = 'flee'; p.t = 5; break; }
         // In to arm's reach of someone on foot; up to a step from the car they're in, not into it
-        // (pressed against it as it pulls away, a cop would be run over).
+        // (pressed against it as it pulls away, a cop would be run over). An armed officer (three
+        // stars and up) who can see the player stops at range and shoots instead; close in, they
+        // still go for the arrest.
         const car = player.vehicle;
-        if (car ? !this._byVehicle(car, h.x, h.z, 0.8) : dPlayer > 1.15) {
+        if (p.armed && !apart && dPlayer > 4 && dPlayer < 40 && this._sees(p, pp, dt)) {
+          const sp = dPlayer > 20 ? 3.2 : 0;
+          if (sp) { h.x += Math.sin(h.yaw) * sp * dt; h.z += Math.cos(h.yaw) * sp * dt; }
+          h.pose = sp ? 'walk' : 'idle'; h.speed = sp;
+          h.aim = 1; h.aimYaw = 0; h.aimPitch = Math.atan2((pp.y || 0) + 1.1 - (h.y || 0) - 1.45, dPlayer);
+          if (p.cool <= 0) { p.cool = p.armed === 'm416' ? 0.3 + Math.random() * 0.3 : 0.9 + Math.random() * 0.6; g.pedShoots?.(p); }
+        } else if (car ? !this._byVehicle(car, h.x, h.z, 0.8) : dPlayer > 1.15) {
           const sp = 4.2;
           h.x += Math.sin(h.yaw) * sp * dt; h.z += Math.cos(h.yaw) * sp * dt;
           h.pose = 'run'; h.speed = sp;
@@ -397,25 +478,40 @@ export class Peds {
     }
     // Fists up when squaring up to the player. Out of a fight the fists come down (mid-punch,
     // too), and the head turns back from the player once they stop standing about.
-    h.guard = p.state === 'fight' && dPlayer < 4 ? 1 : 0;
+    h.guard = p.state === 'fight' && dPlayer < 4 && !p.armed ? 1 : 0;
     if (p.state !== 'fight') { h.punch = 0; p.punchT = 0; }
+    // An officer's gun: in hand while on their feet, raised only while shooting (the fight case).
+    if (p.armed || h.gun) {
+      const up = p.armed && p.state !== 'down' && p.state !== 'getup' && p.state !== 'dead';
+      h.gun = up ? p.armed : null; h.hold = up ? WEAPONS[p.armed].hold : 'none';
+      if (!up || p.state !== 'fight' || h.guard || h.speed > 3.5) h.aim = 0;
+    }
     if (p.state !== 'idle' && p.state !== 'phone') h.lookYaw = 0;
     // Global panic: wanted chases and crashes scatter people.
     if ((p.state === 'walk' || p.state === 'idle' || p.state === 'phone') && g.police?.level >= 2 && dPlayer < 14 && player.state === 'foot') { p.state = 'flee'; p.t = 6; }
     // Stay out of buildings (walkers do this in _walk, stepping round what they meet; a story
     // stands its actors where it wants them, until a scare sets them moving).
     if (p.state !== 'walk') p.shoveX = p.shoveZ = 0;
-    if (p.state !== 'walk' && !(p.state === 'scripted' && !p.role) && p.state !== 'down') {
+    if (p.state !== 'walk' && !(p.state === 'scripted' && !p.role) && p.state !== 'down' && p.state !== 'dead') {
       const c = this._c; c.x = h.x; c.z = h.z;
       if (g.colliders.resolveCircle(c, 0.3, this._o, Infinity, this._level(h))) { h.x = c.x; h.z = c.z; if (p.state === 'flee') h.yaw += 0.8; }
     }
     // People push past each other and the player.
-    if (dPlayer < 0.7 && player.state === 'foot' && p.state !== 'down') {
+    if (dPlayer < 0.7 && player.state === 'foot' && p.state !== 'down' && p.state !== 'dead') {
       const k = (0.7 - dPlayer) / Math.max(dPlayer, 0.05);
       h.x += dpx * k * 0.5; h.z += dpz * k * 0.5;
     }
     // On whatever is under them, whatever they're doing (the fallen land on it above).
-    if (p.state !== 'down') h.y = this._floor(p);
+    if (p.state !== 'down' && p.state !== 'dead') h.y = this._floor(p);
+  }
+
+  /** Does officer p have a clear line to the player (at pos)? Looked at again every 0.4 s. */
+  _sees(p, pos, dt) {
+    if ((p.losT = (p.losT || 0) - dt) > 0) return p.los;
+    p.losT = 0.4;
+    const h = p.h, col = this.game.colliders;
+    p.los = !col?.raycast || col.raycast(h.x, (h.y || 0) + 1.5, h.z, pos.x, (pos.y || 0) + 1.3, pos.z, 0.05) >= 0.999;
+    return p.los;
   }
 
   _walk(p, dt) {
@@ -523,7 +619,7 @@ export class Peds {
     const fx = Math.sin(player.heading), fz = Math.cos(player.heading);
     let best = null, bd = 1.6;
     for (const p of this.list) {
-      if (p.state === 'down' || Math.abs((p.h.y || 0) - (player.y || 0)) > 1.5) continue; // not through a flyover's deck
+      if (p.state === 'down' || p.state === 'dead' || Math.abs((p.h.y || 0) - (player.y || 0)) > 1.5) continue; // not through a flyover's deck
       const dx = p.h.x - player.x, dz = p.h.z - player.z, d = Math.hypot(dx, dz);
       if (d > bd || d < 0.01) continue;
       if ((dx * fx + dz * fz) / d < 0.45) continue;
