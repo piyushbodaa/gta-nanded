@@ -357,9 +357,11 @@ body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
 .scope-h::before { content: ''; position: absolute; left: 32%; right: 32%; top: 2px; height: 1px; background: #111; }
 .scope-h::after { content: ''; position: absolute; left: 34%; right: 34%; top: -2px; height: 9px; background: radial-gradient(circle, #111 1.4px, #0000 1.9px) center / calc(100% / 8) 100% repeat-x; }
 .scope-v::before { content: ''; position: absolute; top: 32%; bottom: 50%; left: 2px; width: 1px; background: #111; }
-/* Looking through a scope on a phone, the top-centre MAP and pause sit inside the lens over its top post: out of
-   the way until the scope comes down (one tap on SCOPE). */
-body.scoped .touch-top { opacity: 0; pointer-events: none; }
+/* Looking through a scope on a phone, the top-centre MAP and pause sit inside the lens over its top post, and with
+   the weapon wheel open they poke out above its top slot: out of the way until the scope comes down (one tap on
+   SCOPE) or the wheel closes. The help box steps out of both too (it comes back with the time it had left). */
+body.scoped .touch-top, body.wheel-open .touch-top { opacity: 0; pointer-events: none; }
+body.scoped .help-box, body.wheel-open .help-box { visibility: hidden; }
 #hud-scope-zoom { position: absolute; left: 0; right: 0; bottom: 9%; text-align: center; font: 700 14px/1 var(--cond); letter-spacing: 1px; color: #111c; }
 /* Why the trigger does nothing (holy places), under the crosshair. */
 .hud-notice { position: absolute; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 32px); top: calc(50% + 44px); padding: 6px 12px; background: #000000c4; border-left: 3px solid #ffd23f; font: 600 15px/1.3 var(--body); color: #f4f1e8; text-align: center; }
