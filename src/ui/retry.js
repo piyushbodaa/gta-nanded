@@ -13,7 +13,8 @@ const CSS = `
 #retry button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 #retry .retry-from { font: 600 15px/1.2 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
 #retry kbd { font: 600 12px/1 system-ui, sans-serif; opacity: .7; margin-left: 8px; }
-body.retry-choice .touch { display: none !important; }
+body.retry-choice .touch, body.retry-choice #hud-area, body.retry-choice #hud-vehicle { display: none !important; }
+@media (max-height: 480px) { #retry { bottom: calc(5% + env(safe-area-inset-bottom, 0px)); } body.retry-choice .big-message { top: 16%; } }
 body.retry-fade::after { content: ''; position: fixed; inset: 0; background: #000; z-index: 35; pointer-events: none; animation: retry-fade .9s ease-out forwards; }
 @keyframes retry-fade { 0%, 30% { opacity: 1; } 100% { opacity: 0; } }
 @media (pointer: coarse) { #retry kbd { display: none; } }
