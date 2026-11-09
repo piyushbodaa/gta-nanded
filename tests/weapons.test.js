@@ -304,6 +304,9 @@ test('guns stay holstered at holy places', () => {
   shoot(g, input);
   assert.equal(w.mag, 15);
   assert.ok(g.sounds.includes('empty'));
+  input.state.aim = true; run(g, input, 0.1);
+  assert.equal(w.aiming, false, 'no aiming there either');
+  input.state.aim = false;
   g.player.x = NO_FIRE['hazur-sahib'] + 5;
   run(g, input, 0.3);
   assert.equal(w.blocked, null);
@@ -500,6 +503,12 @@ test('with a gun out the attack button fires instead of punching, and the player
   assert.equal(P.human.gun, 'p92');
   assert.equal(P.human.hold, 'pistol');
   assert.equal(P.human.aim, 1);
+  // At a holy place the gun is put away (the HUD says so), and back out beyond it.
+  w.blocked = 'holy'; w._holyT = 99; step();
+  assert.equal(P.human.gun, null);
+  assert.equal(P.human.aim, 0);
+  w.blocked = null; step();
+  assert.equal(P.human.gun, 'p92');
   // In a car the gun is put away.
   P.enterVehicle({ model: { seat: { pose: 'sit', y: 0.5 } } });
   assert.equal(P.human.gun, null);
@@ -600,4 +609,20 @@ test('with the wheel up the game runs slow, next and previous are the wheel\'s, 
   w.openWheel(); g.player.state = 'driving';
   run(g, input, 1 / 60);
   assert.deepEqual([w.wheelOpen, g.timeScale], [false, 1]);
+});
+
+test('the first gun out brings up how to shoot, once, and not in a mission', () => {
+  const { g, w, input } = gunGame();
+  let shown = 0;
+  g.onGunOut = () => { shown++; g.save.set('seenGunHelp', true); };
+  run(g, input, 0.1);
+  assert.equal(shown, 0, 'fists: nothing to say');
+  g.missions = { active: { def: {} } };
+  w.equip('p92'); run(g, input, 0.1);
+  assert.equal(shown, 0, 'the story is talking');
+  g.missions = { active: null };
+  run(g, input, 0.5);
+  assert.equal(shown, 1);
+  w.equip('fist'); run(g, input, 0.1); w.equip('p92'); run(g, input, 0.1);
+  assert.equal(shown, 1, 'only the once');
 });

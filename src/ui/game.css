@@ -344,8 +344,10 @@ body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
 .hitmark i:first-child { transform: rotate(45deg); } .hitmark i:last-child { transform: rotate(-45deg); }
 .hitmark.kill i { background: linear-gradient(90deg, #ff3b30 0 36%, #0000 36% 64%, #ff3b30 64%); }
 /* A sniper's scope: a round lens in black, thick posts that thin to a fine cross with range marks, a red dot. */
-.scope { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center; }
-.scope-lens { position: relative; width: min(94vh, 94vw); aspect-ratio: 1; border-radius: 50%; box-shadow: 0 0 0 100vmax #000, inset 0 0 0 3px #000, inset 0 0 50px 14px #000d; }
+.scope { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center;
+  /* The black surround is a gradient, not a huge box-shadow spread: phone Chrome drops a spread that size and left it see-through. */
+  background: radial-gradient(circle at 50% 50%, #0000 calc(min(47vh, 47vw) - 1px), #000 min(47vh, 47vw)); }
+.scope-lens { position: relative; width: min(94vh, 94vw); aspect-ratio: 1; border-radius: 50%; box-shadow: inset 0 0 0 3px #000, inset 0 0 50px 14px #000d; }
 .scope-lens::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #ff2a2a; box-shadow: 0 0 3px #ff2a2a; }
 .scope-h, .scope-v { position: absolute; background: #111; }
 .scope-h { left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px; background: linear-gradient(90deg, #111 0 32%, #0000 32% 68%, #111 68%); }

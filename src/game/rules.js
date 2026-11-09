@@ -6,7 +6,7 @@ import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 import { HOSPITAL, POLICE_STATION } from './story.js';
 import { DynamicDriver } from '../actors/traffic.js';
 import { driveHunters } from './missions.js';
-import { drivingHelp, vehicleKeys } from '../ui/controls.js';
+import { drivingHelp, vehicleKeys, weaponHelp } from '../ui/controls.js';
 import { tapButtons } from '../ui/tap.js';
 import { WEAPONS } from './weapon-data.js';
 
@@ -109,6 +109,9 @@ export function installRules(g) {
       g.hud.help(`${drivingHelp(g)}<br>${vehicleKeys(g)}`, 8);
     }
   };
+
+  // A gun in hand for the first time: how to fire, aim and get at the wheel, once.
+  g.onGunOut = () => { g.save.set('seenGunHelp', true); g.hud.help(weaponHelp(g), 9); };
 
   g.onExitedVehicle = (v, spd) => { g.audio.sfx('door'); if (spd > 7) g.camera.addShake(0.3); };
 

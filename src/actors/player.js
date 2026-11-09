@@ -169,9 +169,10 @@ export class Player {
     const look = wrapAngle(g.camera.facing - this.heading);
     h.lookYaw = this.speed < 0.5 && Math.abs(look) < 1.7 && !aimFace ? clamp(look, -1.1, 1.1) * 0.8 : 0;
     // The weapon in hand, and where it points (anim.js raises the arms; WeaponFx puts the gun in them).
-    const gun = W && W.current !== 'fist' ? W.current : null;
+    // At a holy place the gun goes away, as the HUD's notice says (Weapons won't fire it there).
+    const gun = W && W.current !== 'fist' && !W.blocked ? W.current : null;
     h.gun = gun; h.hold = gun ? W.def.hold : 'none';
-    h.aim = aimFace ? 1 : 0;
+    h.aim = aimFace && gun ? 1 : 0;
     h.aimYaw = aimFace ? clamp(wrapAngle(face - this.heading), -1.2, 1.2) : 0;
     h.aimPitch = aimFace ? W.aimPitch : 0;
     h.reload = W?.reloading || 0;

@@ -130,7 +130,7 @@ export class PauseMenu {
 
   _drawMap() {
     const g = this.game;
-    const blips = [...g.hud.collectBlips(), ...g.missions.blips(), ...(g.jobs?.staticBlips() || [])];
+    const blips = [...g.hud.collectBlips(), ...g.missions.blips(), ...(g.jobs?.staticBlips() || []), ...(g.weapons?.blips() || [])];
     this.map.draw(blips, g.hud.route);
   }
 
