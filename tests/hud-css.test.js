@@ -102,4 +102,7 @@ test('held upright, the left FIRE sits under the middle column (objective, subti
   assert.ok(top + 70 <= H * 0.7 - 62, 'clear of the stick\'s ring');
   // Through a scope, MAP and pause step out of the lens.
   assert.ok(rules.some(([sels, body]) => sels.includes('body.scoped .touch-top') && /opacity:\s*0/.test(body)));
+  // ...and out from behind the open weapon wheel; the help box hides for both.
+  assert.ok(rules.some(([sels, body]) => sels.includes('body.wheel-open .touch-top') && /opacity:\s*0/.test(body)));
+  for (const s of ['body.scoped .help-box', 'body.wheel-open .help-box']) assert.ok(rules.some(([sels, body]) => sels.includes(s) && /visibility:\s*hidden/.test(body)), s);
 });

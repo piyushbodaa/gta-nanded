@@ -4,6 +4,7 @@
 // the tests drive it with a fake game.
 import { WEAPONS, AMMO, SLOTS, ORDER, LOOT_TABLE, AIRDROP_TABLE, HEADSHOT, NO_FIRE, interval, falloff } from './weapon-data.js';
 import { rng, hash2, clamp, dist, wrapAngle } from '../core/math.js';
+import { inStory } from './mission-state.js';
 
 const WATER_Y = -2.7; // world/water.js (not imported: it brings three.js along)
 const SEG = 24; // a long shot is marched in pieces this long (Colliders.raycastSolid walks a box)
@@ -19,6 +20,8 @@ const PICKUP = 1.3; // walk this close to a crate to take it
 const RESPAWN = 300; // a taken crate is back after five minutes of play
 const AIRDROP_EVERY = 420; // an air drop every seven minutes out of missions
 const DROP_SPEED = 5.5; // m/s under the parachute
+const BLAST_AT = { x: 0, z: 0 }; // where the last grenade went off: the hurt marker points there
+const BLAST_W = { x: 0, y: 0, z: 0 }; // a wheel's centre, for the tyres a blast bursts
 const SLOT_EVENTS = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7'];
 // Where the crates lie: thick around the station (where a new story opens) and home (where play
 // resumes), then across the city. Coordinates of main.js's station start and story.js's HOME.
@@ -85,6 +88,7 @@ export class Weapons {
     this._wasActive = undefined; this._needRelease = false;
     this._faceT = -99; this._turnT = -99; // a hip shot waiting for the body to turn to the aim
     this._tg = []; this._tgN = 0; // what one shot's pellets hit, added up per person and per vehicle
+    this._droneDmg = 0; // and what they did to the police drone
     this._deckT = -1; this._decks = false; this._nq = {}; this._raised = r => this.game.net.raised[r];
     this.grenades = [];
     this.airdrop = null; this.airdropT = AIRDROP_EVERY;
@@ -164,6 +168,20 @@ export class Weapons {
     const list = this.owned.filter(id => WEAPONS[id].slot === slotId);
     if (list.length > 1) this.equip(list[(list.indexOf(w) + 1) % list.length]);
     return true;
+  }
+
+  /**
+   * After a mission retry: each magazine and calibre back to the larger of now and the checkpoint
+   * (`inv` as missions keeps it), capped by what can be carried, so spent rounds come back and loot
+   * picked up since stays. Never takes anything away.
+   */
+  topUp(inv) {
+    if (!inv) return;
+    for (const id of inv.weapons || []) if (WEAPONS[id] && id !== 'grenade') this.inv.add(id);
+    for (const k in AMMO) { const n = Math.min(AMMO[k].max, Math.max(this.ammo[k] || 0, Math.floor(Number(inv.ammo?.[k]) || 0))); if (n > 0) this.ammo[k] = n; }
+    if (this.ammo.frag > 0) this.inv.add('grenade');
+    for (const id in inv.mags || {}) { const wd = WEAPONS[id]; if (wd?.mag && this.inv.has(id)) this.mags[id] = Math.min(wd.mag, Math.max(this.mags[id] || 0, Math.floor(Number(inv.mags[id]) || 0))); }
+    this._changed();
   }
 
   openWheel() {
@@ -400,10 +418,9 @@ export class Weapons {
    * new direction into d; true when it bent.
    */
   _assist(o, d, range, t0) {
-    const g = this.game, peds = g.peds?.list;
-    if (!peds) return false;
+    const g = this.game, peds = g.peds?.list || [];
     const raw = this.trace(o.x, o.y, o.z, d.x, d.y, d.z, range, this._hit, t0);
-    if (raw.kind === 'ped') return false;
+    if (raw.kind === 'ped' || raw.kind === 'drone') return false;
     // On a car: only someone in front of it is the better guess.
     const far = raw.kind === 'vehicle' ? raw.t : range;
     const base = g.camera?.fovBase || 62, fov = g.camera3?.fov || base, reach = ASSIST * clamp(fov / base, 0.12, 1);
@@ -424,11 +441,20 @@ export class Weapons {
       if (score >= bestA || this.inHoly(h.x, h.z)) continue;
       best = p; bestA = score; bx = tx / l; by = ty / l; bz = tz / l;
     }
+    // The police drone, small and high up: it pulls from twice as far off the crosshair.
+    const dr = g.nakabandi?.drone;
+    if (dr && dr.state === 'fly') {
+      const tx = dr.x - o.x, ty = dr.y - o.y, tz = dr.z - o.z, l = Math.hypot(tx, ty, tz);
+      if (l < range && l > t0) {
+        const a = Math.acos(clamp((tx * d.x + ty * d.y + tz * d.z) / l, -1, 1)) / 2;
+        if (a < bestA) { best = dr; bestA = a; bx = tx / l; by = ty / l; bz = tz / l; }
+      }
+    }
     if (!best) return false;
     const was = this._dir; was.x = d.x; was.y = d.y; was.z = d.z;
     d.x = bx; d.y = by; d.z = bz;
     const hit = this.trace(o.x, o.y, o.z, d.x, d.y, d.z, range, this._hit, t0);
-    if (hit.ped === best) return true;
+    if (hit.ped === best || (best === dr && hit.kind === 'drone')) return true;
     d.x = was.x; d.y = was.y; d.z = was.z;
     return false;
   }
@@ -492,6 +518,9 @@ export class Weapons {
       if (ta >= best) continue;
       best = ta; kind = 'vehicle'; out.vehicle = v; out.ped = null; out.head = false;
     }
+    // The police drone overhead (nakabandi, five stars): a small sphere.
+    const td = g.nakabandi?.droneHit?.(ox, oy, oz, dx, dy, dz, best) ?? -1;
+    if (td >= t0 && td < best) { best = td; kind = 'drone'; out.ped = null; out.vehicle = null; out.head = false; }
     out.t = best; out.kind = kind;
     out.x = ox + dx * best; out.y = oy + dy * best; out.z = oz + dz * best;
     return out;
@@ -587,7 +616,7 @@ export class Weapons {
     const pellets = Math.min(8, w.pellets || 1), spread = this.spread * (assisted ? 0.5 : 1);
     // Every pellet is traced before any lands: the first one's knock-down must not let the rest
     // pass over the body (or on into someone behind). What each person and vehicle took is added up.
-    this._tgN = 0;
+    this._tgN = 0; this._droneDmg = 0;
     for (let k = 0; k < pellets; k++) {
       this._cone(d, spread, dir);
       this.trace(o.x, o.y, o.z, dir.x, dir.y, dir.z, range, hit, t0);
@@ -605,13 +634,20 @@ export class Weapons {
         if (dead) { kills++; kill = true; }
         if (e.head) { heads++; head = true; }
         // The story's own fights are no crime (as for punches).
-        if (!p.mission) this._crime(p, dead ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', p.h.x, p.h.z, 80);
+        if (!p.mission || p.eventTarget) this._crime(p, dead ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', p.h.x, p.h.z, 80);
       } else {
         const v = e.vehicle;
         g.damageVehicle?.(v, e.dmg * (w.vehicle ?? 1), true);
         if (v.type === 'police' && v.driver && v.driver !== P.human) this._crime(v, 'shotCop', v.x, v.z, 80, true);
       }
       e.ped = null; e.vehicle = null;
+    }
+    // The drone: hurt, maybe brought down, and shooting at it is a crime against the police.
+    const drone = g.nakabandi?.drone;
+    if (this._droneDmg > 0 && drone) {
+      if (g.nakabandi.hitDrone(this._droneDmg)) kill = true;
+      marked = true;
+      this._crime(drone, 'drone', drone.x, drone.z, 80, true);
     }
     if (marked) { const hm = this._hm; hm.t = g.time; hm.kill = kill; hm.head = head; this.hitMarker = hm; }
     if (kills) g.save?.stat?.('kills', kills);
@@ -644,13 +680,16 @@ export class Weapons {
 
   /** One pellet's hit: its puff, and its damage added to what that person or vehicle takes from this shot (none inside a holy place). */
   _pellet(hit, w, m, dir) {
-    const fx = this.game.weaponFx;
+    const g = this.game, fx = g.weaponFx;
     if (!hit.kind) return;
     const p = hit.ped, v = hit.vehicle;
     if ((p || v) && this.inHoly(p ? p.h.x : v.x, p ? p.h.z : v.z)) { fx?.impact?.(hit.x, hit.y, hit.z, 'ground'); return; }
+    if (hit.kind === 'drone') { fx?.impact?.(hit.x, hit.y, hit.z, 'metal'); this._droneDmg += falloff(w, dist(m.x, m.z, hit.x, hit.z)); return; }
     if (!p && !v) { fx?.impact?.(hit.x, hit.y, hit.z, hit.kind); return; }
     fx?.impact?.(hit.x, hit.y, hit.z, p ? 'body' : 'metal');
     const dmg = falloff(w, dist(m.x, m.z, hit.x, hit.z)) * (p && hit.head ? HEADSHOT : 1);
+    // A bullet that meets a tyre bursts it.
+    if (v && g.vehicles?.wheelNear && v.model?.wheels) { const i = g.vehicles.wheelNear(v, hit.x, hit.y, hit.z, 0.15); if (i >= 0) g.burstTyre?.(v, i); }
     let e = null;
     for (let i = 0; i < this._tgN; i++) if ((p && this._tg[i].ped === p) || (v && this._tg[i].vehicle === v)) { e = this._tg[i]; break; }
     if (!e) {
@@ -683,7 +722,7 @@ export class Weapons {
     const g = this.game;
     if (g.time - this._panicT > 0.5) { this._panicT = g.time; g.peds?.gunfire?.(x, z, 40); }
     // Inside a mission the story decides when the police come.
-    if (g.missions?.active || g.time - this._shotReportT < 2) return;
+    if (inStory(g) || g.time - this._shotReportT < 2) return; // a street event's gunfire still draws the police
     this._shotReportT = g.time;
     const someone = (g.peds?.list || []).some(p => p.state !== 'dead' && Math.abs(p.h.x - x) < 50 && Math.abs(p.h.z - z) < 50);
     g.police?.report('shoot', x, z, { r: HEAR, witness: someone });
@@ -807,7 +846,8 @@ export class Weapons {
     const level = oy => Math.abs((oy || 0) - y) < 3;
     if (!P.vehicle && dP < R && level(P.y) && (P.state === 'foot' || P.state === 'down')) {
       const k = (3 + 6 * (1 - dP / R)) / Math.max(dP, 0.5);
-      P.damage?.((R - dP) * 12, 'explosion');
+      BLAST_AT.x = x; BLAST_AT.z = z;
+      P.damage?.((R - dP) * 12, 'explosion', BLAST_AT);
       P.knockDown?.((pos.x - x) * k, (pos.z - z) * k, 1.5);
     }
     let kills = 0;
@@ -821,7 +861,7 @@ export class Weapons {
       const res = g.peds.shot(p, w.damage * (1 - pd / (R + 1)), dx * k, dz * k, 'explosion');
       if (res === 'dead') kills++;
       // Hurting people is a crime in a mission too (as a bullet's or a pan's is); the story's own are not.
-      if (!p.mission && res) this._crime(p, res === 'dead' ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', x, z, HEAR);
+      if ((!p.mission || p.eventTarget) && res) this._crime(p, res === 'dead' ? (p.cop ? 'killCop' : 'killPed') : p.cop ? 'shotCop' : 'shotPed', x, z, HEAR);
     }
     for (const v of g.vehicles?.list || []) {
       if (v === P.vehicle || v.vital || v.removed || !level(v.y) || this.inHoly(v.x, v.z)) continue;
@@ -829,11 +869,14 @@ export class Weapons {
       if (od > 9) continue;
       const k = (9 - od) * 1.2;
       g.damageVehicle?.(v, (9 - od) * 60, true);
+      // Tyres within 4 m of the blast burst.
+      const W = v.model?.wheels;
+      if (W && g.vehicles?.wheelWorld && g.burstTyre) for (let i = 0; i < W.length; i++) { const c = g.vehicles.wheelWorld(v, i, BLAST_W); if (c && Math.hypot(c.x - x, c.y - y, c.z - z) < 4) g.burstTyre(v, i); }
       if (v.vx !== undefined) { v.vx += (v.x - x) / Math.max(od, 0.5) * k; v.vz += (v.z - z) / Math.max(od, 0.5) * k; }
     }
     if (kills) { g.save?.stat?.('kills', kills); const hm = this._hm; hm.t = g.time; hm.kill = true; hm.head = false; this.hitMarker = hm; }
     // The bang itself: the story decides when the police come.
-    if (!g.missions?.active) g.police?.report('blast', x, z, { r: HEAR * 1.5 });
+    if (!inStory(g)) g.police?.report('blast', x, z, { r: HEAR * 1.5 });
     g.peds?.gunfire?.(x, z, 60);
   }
 

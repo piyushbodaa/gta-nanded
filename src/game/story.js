@@ -90,7 +90,15 @@ export function dressWorld(g) {
  * Spawn a vehicle at the kerb near a point, facing along the street. With `toward`, a place the
  * player will drive it to, the kerb facing the way the route there leaves.
  */
-function kerbSpawn(c, name, type, at, opts = {}) {
+export function kerbSpawn(c, name, type, at, opts = {}) {
+  const rp = kerbSpot(c, type, at, opts);
+  return c.spawnVehicle(name, type, rp.x, rp.z, rp.heading, opts);
+}
+/**
+ * The kerb spot kerbSpawn would use for a `type` near `at`: { x, z, heading }. opts.ignore: a
+ * vehicle not to count as in the way (one a checkpoint is moving there).
+ */
+export function kerbSpot(c, type, at, opts = {}) {
   const x = at.x + (opts.dx || 0), z = at.z + (opts.dz || 0), half = VEHICLE_TYPES[type].L / 2;
   let side = opts.side ?? 1, first = c.roadPoint(x, z, side);
   // Never nosed into a dead end: a tipper can't turn in a 4.8 m lane, and a hunter or a getaway
@@ -104,12 +112,12 @@ function kerbSpawn(c, name, type, at, opts = {}) {
   // Something already on that spot (a scene vehicle, traffic, the player): a car length further
   // along the kerb, then back, rather than on top of it.
   let rp = first;
-  for (let k = 1; kerbTaken(c.g, rp, half); k++) {
+  for (let k = 1; kerbTaken(c.g, rp, half, opts.ignore); k++) {
     if (k > 6) { rp = first; break; } // nowhere free close by: where the script says
     const along = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (half * 2 + 1.5);
     rp = c.roadPoint(x + Math.sin(first.heading) * along, z + Math.cos(first.heading) * along, side);
   }
-  return c.spawnVehicle(name, type, rp.x, rp.z, rp.heading, opts);
+  return rp;
 }
 /** Does the street a kerb spot faces down end in a dead end (through any plain bends) before a junction? */
 function deadAhead(net, { road, dir }) {
@@ -131,17 +139,17 @@ function leavesAhead(net, at, to) {
   while (k < p.length - 2 && dist(p[k], p[k + 1], p[0], p[1]) < 8) k += 2;
   return Math.sin(at.heading) * (p[k] - p[0]) + Math.cos(at.heading) * (p[k + 1] - p[1]) > 0;
 }
-function kerbTaken(g, at, half) {
+function kerbTaken(g, at, half, ignore) {
   const P = g.player;
   if (!P.vehicle && dist(P.x, P.z, at.x, at.z) < half + 1) return true;
-  return g.vehicles.list.some(v => dist(v.x, v.z, at.x, at.z) < v.hd + half + 0.5);
+  return g.vehicles.list.some(v => v !== ignore && v !== P.vehicle && dist(v.x, v.z, at.x, at.z) < v.hd + half + 0.5);
 }
-function nearPed(c, name, kind, at, dx, dz, opts = {}) { return c.spawnPed(name, kind, at.x + dx, at.z + dz, opts); }
+export function nearPed(c, name, kind, at, dx, dz, opts = {}) { return c.spawnPed(name, kind, at.x + dx, at.z + dz, opts); }
 /**
  * Stand a story actor somewhere else in the scene, on their feet and facing (fx, fz), whatever
  * a scare left them doing. Only while the player is far away: they don't walk there, they're there.
  */
-function standAt(c, name, x, z, fx, fz) {
+export function standAt(c, name, x, z, fx, fz) {
   const p = c.ent[name];
   if (!p?.h) return;
   const h = p.h;
@@ -150,13 +158,13 @@ function standAt(c, name, x, z, fx, fz) {
   p.state = 'scripted'; p.t = 999; p.role = null; p.homeX = p.homeZ = undefined; p.vx = p.vz = 0;
 }
 /** Dress someone for their part: colours and build, plus flags to add or drop (never their shoes). */
-function dress(outfit, { add = [], drop = [], ...rest }) {
+export function dress(outfit, { add = [], drop = [], ...rest }) {
   Object.assign(outfit, rest);
   for (const f of add) outfit.flags.add(f);
   for (const f of drop) outfit.flags.delete(f);
   return outfit;
 }
-const LOOK = {
+export const LOOK = {
   pakya: { shirt: 0x3f88c5, sleeve: 0x3f88c5, pants: 0x2b2b2b, legs: 0x2b2b2b },
   savkar: { shirt: 0xf4f1e8, sleeve: 0xf4f1e8, pants: 0xf4f1e8, legs: 0xf4f1e8, heavy: 0.8, add: ['kurta', 'moustache'], drop: ['stubble', 'collar', 'belt'], code: 3 << 4 },
   bunty: { shirt: 0x1f6f5c, sleeve: 0x1f6f5c, trim: 0xf4f1ea, code: 3 | (1 << 4), add: ['stubble'] },
@@ -179,7 +187,7 @@ function yardScene(c) {
   kerbSpawn(c, 'yardAuto', 'auto', P.yard, { dx: 20, color: 0x1d1d1d });
 }
 /** Put a character's look on a vehicle's driver. */
-function driverAs(v, look) { if (v?.driver) dress(v.driver.outfit, look); return v; }
+export function driverAs(v, look) { if (v?.driver) dress(v.driver.outfit, look); return v; }
 
 /** Checkpoints every ~step metres along a road route through the given points. */
 function routeCheckpoints(g, pts, step = 300) {
@@ -243,8 +251,8 @@ export const STORY = [
       S.call(c => {
         const p = c.ent.pakya;
         if (p) { const outfit = p.h.outfit; c.g.peds.remove(p); delete c.ent.pakya; c.g.vehicles.addPassenger(c.ent.auto, outfit); }
-        c.g.hud.help(`${drivingHelp(c.g)} Follow the yellow route on the radar.`, 9);
       }),
+      S.call(c => c.g.hud.help(`${drivingHelp(c.g)} Follow the yellow route on the radar.`, 9), { replay: false }),
       S.goTo(P.oldMondha, "Drive to <b>Kaka Savkar's office</b> in the Old Mondha lanes.", {
         vehicle: 'auto', radius: 8,
         chatter: [
@@ -253,6 +261,7 @@ export const STORY = [
           [0.35, [['PAKYA', "Careful, bhau. People say Savkar's money isn't his. Somebody bigger stands behind him."]]],
         ],
       }),
+      S.checkpoint("Savkar's office", { vehicle: 'auto', at: P.oldMondha }),
       S.call(c => {
         const at = c.roadPoint(P.oldMondha.x + 10, P.oldMondha.z, 1);
         for (let i = 0; i < 3; i++) nearPed(c, `g${i}`, 'goon', at, Math.cos(i * 2.1) * 2.6, Math.sin(i * 2.1) * 2.6, {});
@@ -267,6 +276,7 @@ export const STORY = [
         ['SAVKAR', "Six lakh by Diwali, Patil, or the land is mine. And the interest starts tomorrow."],
         ['PAKYA', "Bhau, let's go — before his friends in khaki turn up."],
       ]),
+      S.checkpoint('Old Mondha, after the fight', { vehicle: 'auto', at: { x: P.oldMondha.x - 12, z: P.oldMondha.z } }),
       S.goTo(P.zenda, 'Drive home to <b>Zenda Chowk</b>.', { vehicle: 'auto', radius: 7 }),
       S.say([
         ['BABA', "Sunny? You went to Savkar? Beta, don't fight them. Next they'll burn the crop."],
@@ -287,10 +297,11 @@ export const STORY = [
         ['YOU', "Students' bikes…"],
         ['BUNTY', "Their fathers will buy new ones. Yours can't buy back his land."],
       ], { block: true }),
+      S.checkpoint('Taroda Naka'),
       S.goTo(P.iib, 'Go to the coaching classes at <b>Parnakuti</b>.', { radius: 14, stop: false }),
       S.call(c => kerbSpawn(c, 'bike1', 'bike', P.iib, { dx: 6, label: 'black Tejas', color: 0x151515 })),
       S.enter('bike1', 'Steal the <b>black Tejas</b>.'),
-      S.call(c => { c.g.police.setLevel(1); c.g.hud.big('WANTED', 'A student saw you take it', 'wanted', 2.5); }),
+      S.call(c => { c.g.police.setLevel(1); c.g.hud.big('WANTED', 'A student saw you take it', 'wanted', 2.5); }, { replay: false }),
       S.goTo(P.workshop, "Ride it to <b>Anna's garage</b> at Workshop Corner.", { vehicle: 'bike1', radius: 7 }),
       S.leave('Get off the bike.'),
       S.say([
@@ -305,9 +316,11 @@ export const STORY = [
         if (c.g.player.vehicle === c.ent.bike1) c.g.player.leaveVehicle(true);
         c.g.vehicles.remove(c.ent.bike1); delete c.ent.bike1;
       }),
+      S.checkpoint("Anna's garage", { at: P.workshop }),
       S.goTo(P.bhagya, 'One more: Bunty says another stands outside a class in <b>Bhagya Nagar</b>.', { radius: 14, stop: false }),
       S.call(c => kerbSpawn(c, 'bike2', 'bike', P.bhagya, { dx: 5, label: 'Tejas', color: 0x1e3a8a })),
       S.enter('bike2', 'Steal the second <b>Tejas</b>.'),
+      S.checkpoint('Bhagya Nagar', { vehicle: 'bike2' }),
       S.escape(2, "A constable saw you! Lose the police — or ride into <b>Anna's garage</b> for a respray."),
       S.goTo(P.workshop, "Deliver it to <b>Anna's garage</b>.", { vehicle: 'bike2', radius: 7 }),
       S.say([['BUNTY_PH', 'Two bikes. Forty thousand, minus my cut. Pakya was right about you.'], ['BUNTY_PH', 'Shera wants to meet you. Behind Phule Market. He runs the numbers in this town.']]),
@@ -333,6 +346,7 @@ export const STORY = [
         ['SHERA', "Take my car. Bring back the bag. Pappu, I don't care about."],
       ], { block: true }),
       S.call(c => driverAs(kerbSpawn(c, 'pappu', 'scooter', P.phule, { dx: 90, label: 'Pappu', color: 0xd32f2f, driver: true }), { shirt: 0xf0ad4e, sleeve: 0xf0ad4e })),
+      S.checkpoint("Shera's den"),
       S.enter('car', "Get in <b>Shera's car</b>."),
       S.chase('pappu', P.namaskar, 'Catch <b>Pappu</b> — ram his scooty till he gives up.', { driverAs: 'pappuMan', rams: 3 }),
       S.fight(['pappuMan'], 'Get the bag off <b>Pappu</b>.', { pappuMan: 1 }),
@@ -345,7 +359,8 @@ export const STORY = [
       ]),
       S.call(c => kerbSpawn(c, 'cash', 'hatch', P.phule, { dx: 8, label: 'cash car', color: 0x4a4a4a })),
       S.enter('cash', 'Get in the <b>cash car</b>.'),
-      S.call(c => c.g.police.setLevel(2)),
+      S.checkpoint('the cash car', { vehicle: 'cash' }),
+      S.call(c => c.g.police.setLevel(2), { replay: false }),
       S.goTo(P.workshop, "Get the cash to <b>Anna's garage</b> before the raid team catches up.", { vehicle: 'cash', radius: 7, timer: 150, timerFail: "Kadam's team caught up with the cash." }),
       S.say([['SHERA_PH', "The den was empty when Kadam walked in. He bought a paan and left. You've got a future, Patil."], ['SHERA_PH', 'Mama wants to see you. The sand ghat below the Govardhan bridge, on the south bank.']]),
     ],
@@ -368,9 +383,11 @@ export const STORY = [
         ['MAMA', 'The government auctions a few ghats a year. My boats work every night. A tipper of river sand is fifty thousand in the city.'],
         ['MAMA', "The tipper up on the road goes to a builder's site near Raj Corner. The revenue flying squad watches the bridges. Don't let them see you."],
       ], { block: true }),
+      S.checkpoint("Mama's ghat"),
       S.enter('tipper', 'Get in the <b>sand tipper</b> up on the main road.'),
       S.goTo(P.bridgeN, 'Cross the <b>Govardhan bridge</b> into the city.', { vehicle: 'tipper', radius: 16, stop: false }),
-      S.call(c => { c.g.police.setLevel(1); c.g.hud.big('FLYING SQUAD', 'They saw the tipper', 'wanted', 2.5); }),
+      S.checkpoint('the bridge', { vehicle: 'tipper', at: P.bridgeN }),
+      S.call(c => { c.g.police.setLevel(1); c.g.hud.big('FLYING SQUAD', 'They saw the tipper', 'wanted', 2.5); }, { replay: false }),
       S.escape(1, "Lose the flying squad — or get to <b>Anna's garage</b>."),
       S.goTo(P.site, "Deliver the sand to the <b>builder's site</b> near Raj Corner.", { vehicle: 'tipper', radius: 10, maxDamage: 0.55, damageFail: 'The tipper is wrecked and the sand is all over the road.' }),
       S.say([['MUNSHI', "Mama's sand? Tip it at the back. Here — cash for Mama."], ['MAMA_PH', 'Good boy. Twenty-five hundred for you. There is more where the river comes from.']]),
@@ -391,6 +408,7 @@ export const STORY = [
         ['MAMA', 'Tomorrow they auction it. Today it comes home. Nobody gets hurt — you just drive it out.'],
         ['SHERA', 'The watchman naps after his chai. Mostly.'],
       ], { block: true }),
+      S.checkpoint("Mama's ghat"),
       S.goTo(P.yard, 'Go to the <b>impound yard</b> behind the Central Bus Stand.', { radius: 16, stop: false }),
       // Facing the way out of the yard's lane, toward the main road home, not up to its bend.
       S.call(c => { kerbSpawn(c, 'seized', 'truck', P.yard, { dx: 6, label: "Mama's tipper", color: 0xc9a227, toward: P.ghatRoad }); yardScene(c); }),
@@ -404,7 +422,8 @@ export const STORY = [
         standAt(c, 'mama', at.x + ox * 2.4 + fx * 1.5, at.z + oz * 2.4 + fz * 1.5, at.x, at.z);
         standAt(c, 'shera', at.x + ox * 2.4 - fx * 1.5, at.z + oz * 2.4 - fz * 1.5, at.x, at.z);
       }),
-      S.call(c => { c.g.police.setLevel(2); c.g.hud.big('WANTED', 'The watchman blew his whistle', 'wanted', 2.5); }),
+      S.checkpoint('the impound yard', { vehicle: 'seized' }),
+      S.call(c => { c.g.police.setLevel(2); c.g.hud.big('WANTED', 'The watchman blew his whistle', 'wanted', 2.5); }, { replay: false }),
       S.escape(2, "Lose the police — <b>Anna's garage</b> resprays anything, even a tipper."),
       S.goTo(P.ghatRoad, "Bring the tipper home: park it on the main road above <b>Mama's ghat</b>.", { vehicle: 'seized', radius: 12, maxDamage: 0.6, damageFail: 'The tipper is too smashed to work.' }),
       S.say([
@@ -432,6 +451,7 @@ export const STORY = [
           ['MAMA_PH', 'Win this, Patil, and you get a share of every boat.'],
           ['YOU', 'Try to keep up, Tiger.'],
         ], { block: true }),
+        S.checkpoint('the grid'),
         S.enter('racer', 'Get in <b>your car</b>.'),
         S.wait(1),
         S.race(cps, ['tiger', 'rival'], 'Win the race to <b>Vishnupuri Dam</b>.'),
@@ -453,9 +473,11 @@ export const STORY = [
         ['YOU', "Sand I can live with, Mama. What's under the onions?"],
         ['MAMA', 'Ganja. Two hundred kilos, Odisha to Mumbai, and Nanded is on the way. Take it to my godown at Taroda Naka and half your father\'s debt is gone tonight.'],
       ], { block: true }),
+      S.checkpoint("Mama's ghat"),
       S.goTo(P.degloor, 'Go to <b>Degloor Naka</b>.', { radius: 14, stop: false }),
       S.call(c => kerbSpawn(c, 'onions', 'tempo', P.degloor, { dx: 6, label: 'onion tempo', color: 0x7b5e3b })),
       S.enter('onions', 'Get in the <b>onion tempo</b>.'),
+      S.checkpoint('Degloor Naka', { vehicle: 'onions' }),
       S.call(c => {
         // Coming in behind you on the Telangana road (the way the tempo came), on the carriageway
         // you are about to take: not in the back lane behind the shops, where he could only rock.
@@ -469,6 +491,7 @@ export const STORY = [
         ['KADAM_PH', 'Two hundred kilos is an NDPS case: ten years for the driver. Bring it to Vazirabad Police Station and walk away, and I forget your face.'],
         ['YOU', "…Baba didn't raise a ganja runner."],
       ]),
+      S.checkpoint('the old city', { vehicle: 'onions', at: P.oldMondha, hunters: ['tigerCar'] }),
       S.goTo(P.police, 'Drive the tempo to <b>Vazirabad Police Station</b>.', { vehicle: 'onions', radius: 9, maxDamage: 0.75, damageFail: 'The tempo is wrecked and the load is all over the road.' }),
       S.leave('Get out and leave the tempo with the police.'),
       S.call(c => {
@@ -495,6 +518,7 @@ export const STORY = [
         ['YOU', 'Not any more.'],
         ['ANNA', 'Then take my car. And bring it back with all four wheels.'],
       ], { block: true }),
+      S.checkpoint("Anna's garage"),
       S.enter('annaCar', "Take <b>Anna's car</b>."),
       S.goTo(P.oldMondha, 'Drive to the <b>Old Mondha</b> lanes.', { vehicle: 'annaCar', radius: 14, stop: false }),
       S.call(c => {
@@ -510,6 +534,7 @@ export const STORY = [
         // He sprints to his bike up the lane and is already moving off.
         driverAs(kerbSpawn(c, 'sheraBike', 'bike', P.oldMondha, { dx: 30, label: 'Shera', color: 0x151515, driver: true }), LOOK.shera);
       }),
+      S.checkpoint('Old Mondha', { vehicle: 'annaCar', at: { x: P.oldMondha.x - 14, z: P.oldMondha.z } }),
       S.say([['SHERA', 'Mama will skin you alive, Patil!']]),
       S.enter('annaCar', "Shera is getting away! Back in <b>Anna's car</b>."),
       S.chase('sheraBike', P.latur, 'Run <b>Shera</b> down.', { driverAs: 'sheraMan', rams: 3 }),
@@ -540,7 +565,9 @@ export const STORY = [
         const p = c.ent.pakya;
         if (p) { const outfit = p.h.outfit; c.g.peds.remove(p); delete c.ent.pakya; c.g.vehicles.addPassenger(c.ent.auto, outfit); }
       }),
+      S.checkpoint('Zenda Chowk', { vehicle: 'auto' }),
       S.goTo(P.oldMondha, "Drive to <b>Savkar's office</b>.", { vehicle: 'auto', radius: 9 }),
+      S.checkpoint("Savkar's office", { vehicle: 'auto', at: P.oldMondha }),
       S.leave('Leave the auto with Pakya and go in on foot.'),
       S.call(c => {
         const at = c.roadPoint(P.oldMondha.x + 14, P.oldMondha.z + 6, -1);
@@ -550,10 +577,9 @@ export const STORY = [
       S.goTo(c => c.vars.door, "Sneak to <b>Savkar's back door</b>.", { radius: 3, onFoot: true }),
       S.fight(['guard0', 'guard1'], 'Deal with the <b>guards</b>.'),
       S.say([['YOU', "The safe… stamp papers, the diary — the ledger. And Baba's 7/12 papers!"], ['PAKYA', 'Bhau! Savkar called his people! Run!']]),
-      S.call(c => {
-        c.g.police.setLevel(1);
-        kerbSpawn(c, 'savkarCar', 'sedan', P.oldMondha, { dx: 50, label: "Savkar's men", color: 0xeeeeee, driver: true });
-      }),
+      S.checkpoint("Savkar's back door", { at: c => c.vars.door, park: { auto: P.oldMondha } }),
+      S.call(c => c.g.police.setLevel(1), { replay: false }),
+      S.call(c => { kerbSpawn(c, 'savkarCar', 'sedan', P.oldMondha, { dx: 50, label: "Savkar's men", color: 0xeeeeee, driver: true }); }),
       S.hunters(['savkarCar']),
       S.enter('auto', "Back to <b>Pakya's auto</b>!"),
       S.escape(1, "Lose the police and Savkar's men."),
@@ -575,7 +601,9 @@ export const STORY = [
       ], { block: true }),
       S.call(c => kerbSpawn(c, 'car', 'sedan', P.police, { dx: 6, label: "Kadam's car", color: 0x2a2f36 })),
       S.enter('car', "Take <b>Kadam's car</b>."),
+      S.checkpoint('the police station', { vehicle: 'car' }),
       S.goTo(P.ghat, 'Get to the <b>sand ghat</b> below the Govardhan bridge.', { radius: 16, stop: false, timer: 200, timerFail: "Mama didn't wait." }),
+      S.checkpoint('the sand ghat', { vehicle: 'car', at: P.ghatRoad }),
       S.call(c => {
         const at = c.roadPoint(P.ghat.x, P.ghat.z, 1);
         nearPed(c, 'mama', 'man', at, 7, 2, {}); dress(c.ent.mama.h.outfit, LOOK.mama); // by Pakya, out in the open
@@ -595,6 +623,7 @@ export const STORY = [
         // His SUV waits up the bank, clear of the fight, its engine running.
         driverAs(kerbSpawn(c, 'mamaCar', 'suv', P.ghat, { dx: -30, label: 'Mama', color: 0xf7f7f7, driver: true }), LOOK.mama);
       }),
+      S.checkpoint('the ghat, after the fight', { vehicle: 'car', at: P.ghatRoad }),
       S.say([['MAMA', 'Useless! All of you!']]),
       S.enter('car', "Mama is running! Back in <b>Kadam's car</b>."),
       S.chase('mamaCar', P.dam, 'Run <b>Mama</b> off the road.', { driverAs: 'mamaMan', rams: 4 }),

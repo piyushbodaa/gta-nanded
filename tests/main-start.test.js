@@ -27,20 +27,17 @@ function cover(init, { sound = true, failStart = false, failIntro = false } = {}
 }
 
 for (const mode of ['continue', 'free', 'new']) {
-  test(`${mode} starts after the audio deadline even if resume never settles`, async () => {
+  test(`${mode} starts at once even if the phone's audio never opens`, async () => {
     const c = cover(() => new Promise(() => {}));
-    const pending = c.controls.begin(mode);
+    c.controls.begin(mode);
     assert.equal(c.initCalls, 1, 'audio starts synchronously in the user gesture');
-    await c.controls.begin(mode);
-    assert.equal(c.initCalls, 1, 'a second tap cannot start a second audio wait');
-    assert.equal(c.starts.length, 0);
-    c.timeout();
-    await pending;
-    assert.equal(c.timers.size, 0);
+    c.controls.begin(mode);
+    assert.equal(c.initCalls, 1, 'a second tap cannot start the audio or the game again');
+    assert.equal(c.timers.size, 0, 'nothing waits on the audio');
     if (mode === 'new') {
       assert.equal(c.introCalls, 1);
       assert.equal(c.starts.length, 0, 'the intro still precedes gameplay');
-      await c.controls.begin('free');
+      c.controls.begin('free');
       assert.equal(c.initCalls, 1, 'the guard stays set throughout the intro');
       c.finishIntro();
     }
@@ -52,28 +49,28 @@ for (const mode of ['continue', 'free', 'new']) {
 test('audio success, rejection or a synchronous failure cannot hold the cover open', async () => {
   for (const init of [() => Promise.resolve(), () => Promise.reject(new Error('blocked')), () => { throw new Error('unsupported'); }]) {
     const c = cover(init);
-    await c.controls.begin('free');
+    c.controls.begin('free');
     assert.deepEqual(c.starts, ['free']);
-    assert.equal(c.timers.size, 0, 'settled audio clears its deadline');
+    await new Promise(r => setImmediate(r)); // a rejected init is caught, not left unhandled
   }
 });
 
-test('startup and intro failures release the start guard', async () => {
+test('startup and intro failures release the start guard', () => {
   for (const options of [{ failStart: true }, { failIntro: true }]) {
     const c = cover(() => Promise.resolve(), options);
-    await assert.rejects(c.controls.begin(options.failIntro ? 'new' : 'free'), /failed/);
+    assert.throws(() => c.controls.begin(options.failIntro ? 'new' : 'free'), /failed/);
     assert.equal(c.controls.starting, false);
     assert.equal(c.controls.onMenu, true);
   }
   const c = cover(() => Promise.resolve(), { failStart: true });
-  await c.controls.begin('new');
+  c.controls.begin('new');
   assert.throws(() => c.finishIntro(), /start failed/);
   assert.equal(c.controls.starting, false, 'a delayed intro callback also releases the guard');
 });
 
 test('sound off starts immediately without initializing audio', async () => {
   const c = cover(() => { throw new Error('audio should stay off'); }, { sound: false });
-  await c.controls.begin('free');
+  c.controls.begin('free');
   assert.equal(c.initCalls, 0);
   assert.deepEqual(c.starts, ['free']);
   assert.equal(c.timers.size, 0);

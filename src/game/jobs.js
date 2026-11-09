@@ -1,7 +1,8 @@
 // Side activities: auto-rickshaw fares, Bhookh Express deliveries, the landmark
 // passport, street races, roadside snacks and Anna's respray garage.
 import { dist, rng, hash2, clamp } from '../core/math.js';
-import { speedOf } from '../actors/vehicle-physics.js';
+import * as VP from '../actors/vehicle-physics.js';
+const { speedOf } = VP;
 import { GARAGE } from './story.js';
 import { markerY } from './missions.js';
 import { PROP } from '../world/citygen.js';
@@ -78,9 +79,12 @@ export class Jobs {
     if (g.input.pressed('job') && P.state === 'driving' && !g.missions.active) {
       const race = this._raceAt(P.vehicle);
       if (this.active) this.stop();
-      else if (race) this._startRace(race);
-      else if (P.vehicle.type === 'auto') this._startTaxi();
-      else if (P.vehicle.type === 'scooter' || P.vehicle.type === 'bike') this._startDelivery();
+      else {
+        g.events?.discardOffer?.(); // a street event on offer gives way to the job
+        if (race) this._startRace(race);
+        else if (P.vehicle.type === 'auto') this._startTaxi();
+        else if (P.vehicle.type === 'scooter' || P.vehicle.type === 'bike') this._startDelivery();
+      }
     }
     // Respray.
     if (g.save.data.garage && P.vehicle && g.police.level > 0 && dist(P.vehicle.x, P.vehicle.z, GARAGE.x, GARAGE.z) < 6 && speedOf(P.vehicle) < 6) this._respray();
@@ -273,8 +277,52 @@ export class Jobs {
     // Checkpoints up on a flyover (Station to Airport's first) stand on its deck, where the GPS leads.
     const ys = def.points.map(p => markerY(g.net, p.x, p.z));
     this.active = { kind: 'race', label: def.name, def, rivals, ys, idx: 0, t: -3, vehicle: v, earned: 0 };
+    this.lastRace = { def, type: v.type, color: v.color, vehicle: v, rivals };
     g.hud.big(def.name.toUpperCase(), 'STREET RACE', 'title', 2.5);
     g.hud.help('Reach every checkpoint first. Rivals play dirty.', 5);
+  }
+  /**
+   * The RETRY / QUIT card for the race just lost (or a death or arrest during it: rules passes its
+   * respawn as onQuit, which clears g.respawning). False when there is no race or no card.
+   */
+  offerRaceRetry(onQuit) {
+    const g = this.game;
+    if (!this.lastRace || !g.retryCard) return false;
+    g.retryCard.offer({ title: 'RACE LOST', from: 'the grid', onRetry: () => this.retryRace(), onQuit: () => { this.lastRace = null; onQuit?.(); } });
+    return true;
+  }
+  /** Back on the grid of the last race in the same car (or a fresh one if it was wrecked), rivals anew. */
+  retryRace() {
+    const g = this.game, P = g.player, lr = this.lastRace;
+    if (!lr) { g.respawning = false; return false; }
+    g.retryCard?.fade?.();
+    const def = lr.def;
+    if (this.active) this.stop(true);
+    if (typeof document !== 'undefined') document.body?.classList.remove('wasted', 'busted');
+    P.teleport?.(def.start.x, def.start.z, P.heading || 0);
+    for (const r of lr.rivals || []) if (r !== lr.vehicle && g.vehicles.list.includes(r)) { g.controls.delete(r); g.vehicles.remove(r); }
+    // Facing along the road toward the first checkpoint.
+    const n = g.net.nearest(def.start.x, def.start.z, 30, {}, r => !g.net.raised[r]);
+    const x = n ? n.x : def.start.x, z = n ? n.z : def.start.z, p0 = def.points[0];
+    let heading = n ? Math.atan2(n.dx, n.dz) : Math.atan2(p0.x - x, p0.z - z);
+    if (n && Math.sin(heading) * (p0.x - x) + Math.cos(heading) * (p0.z - z) < 0) heading += Math.PI;
+    let v = lr.vehicle;
+    if (!v || v.wrecked || v.removed || !g.vehicles.list.includes(v)) {
+      v = g.vehicles.spawn(lr.type, x, z, heading, { role: 'player', color: lr.color });
+    } else {
+      v.x = x; v.z = z; v.heading = heading;
+      v.health = 1000; v.onFire = 0;
+    }
+    v.vx = v.vz = 0; v.w = 0; v.y = g.city?.groundHeight?.(x, z) ?? v.y;
+    VP.repairTyres?.(v);
+    P.health = P.maxHealth ?? P.health; P.state = 'foot';
+    P.enterVehicle?.(v);
+    if (!P.enterVehicle) P.vehicle = v;
+    g.police?.clear?.();
+    g.save?.stat?.('retries');
+    this._startRace(def);
+    g.respawning = false;
+    return true;
   }
   _race(dt) {
     const g = this.game, a = this.active, P = g.player;
@@ -289,7 +337,11 @@ export class Jobs {
       if (r.wrecked || r === P.vehicle) continue; // a rival you jacked is yours to drive
       const rp = pts[Math.min(r.raceIdx, pts.length - 1)];
       if (dist(r.x, r.z, rp.x, rp.z) < 15) r.raceIdx++;
-      if (r.raceIdx >= pts.length) { g.hud.big('RACE LOST', `A rival won the ${a.def.name}`, 'failed', 4); this.stop(true); return; }
+      if (r.raceIdx >= pts.length) {
+        g.hud.big('RACE LOST', `A rival won the ${a.def.name}`, 'failed', 4); this.stop(true);
+        this.offerRaceRetry(() => { g.respawning = false; });
+        return;
+      }
       const mine = a.idx * 1e5 - dist(pos.x, pos.z, p.x, p.z), theirs = r.raceIdx * 1e5 - dist(r.x, r.z, rp.x, rp.z);
       if (theirs > mine) ahead++;
       r.raceDriver.maxSpeed = r.spec.top * 0.9 * clamp(1 + (mine - theirs) / 900, 0.82, 1.15);
@@ -367,6 +419,8 @@ export class Jobs {
     const r = rng(hash2(v.id, Math.floor(g.time)));
     v.color = r.pick(v.spec.colors.concat([0x2e7d32, 0x6a1b9a, 0xf9a825, 0x00838f]));
     v.health = 1000; v.onFire = 0;
+    VP.repairTyres?.(v);
+    g.garage?.repair?.(v);
     g.police.clear();
     g.hud.big('NEW COLOUR, NEW LIFE', `Anna's Rang Garage · −₹${cost}`, 'passed', 3);
     g.audio?.sfx('spray');

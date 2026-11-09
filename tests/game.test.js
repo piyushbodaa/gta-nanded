@@ -38,6 +38,45 @@ test('unseen crimes may be reported by witnesses a moment later', () => {
   assert.ok(p.pending.length > 0, 'witnesses are calling it in');
 });
 
+test('a killing in the street is nearly always called in, within a few seconds; a shooting more often than not', () => {
+  const rnd = Math.random;
+  let s = 7;
+  Math.random = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  try {
+    const rate = crime => {
+      let calls = 0, slowest = 0;
+      for (let i = 0; i < 400; i++) {
+        const p = new Police(fakeGame());
+        p.report(crime, 0, 0);
+        if (p.pending.length) { calls++; slowest = Math.max(slowest, p.pending[0].t); }
+      }
+      return [calls / 400, slowest];
+    };
+    const [kill, killT] = rate('killPed'), [shot] = rate('shotPed'), [punch] = rate('punch');
+    assert.ok(kill > 0.85, `a killing called in ${kill}`);
+    assert.ok(killT <= 3.5, `within ${killT.toFixed(1)} s`);
+    assert.ok(shot > 0.5 && shot < 0.7, `a shooting called in ${shot}`);
+    assert.ok(punch < 0.35, `a punch called in ${punch}`);
+    // The killing brings a star when the call comes in.
+    const g = fakeGame(), p = new Police(g);
+    for (let i = 0; i < 20 && !p.pending.length; i++) p.report('killPed', 0, 0);
+    for (let t = 0; t < 4; t += 0.1) p.update(0.1);
+    assert.ok(p.level >= 1, `wanted ${p.level}`);
+  } finally { Math.random = rnd; }
+});
+
+test('a shooting seen by an officer is a star at once; a killing called in after a shot comes as soon as the killing', () => {
+  const g = fakeGame(), p = new Police(g);
+  p.report('shotPed', 0, 0, { cop: true });
+  assert.equal(p.level, 1);
+  const q = new Police(fakeGame());
+  q.pending.push({ t: 5.5, heat: 0.6, x: 0, z: 0 }); // the gunshot, called in late
+  const rnd = Math.random; Math.random = () => 0.1;
+  try { q.report('killPed', 3, 2); } finally { Math.random = rnd; }
+  assert.equal(q.pending.length, 1, 'one call about the street');
+  assert.ok(q.pending[0].heat === 2 && q.pending[0].t <= 3.5, JSON.stringify(q.pending[0]));
+});
+
 test('the story is ten missions in a playable order, each given by someone in it', () => {
   assert.equal(STORY.length, 10);
   const ids = new Set(STORY.map(m => m.id));

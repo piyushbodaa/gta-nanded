@@ -108,6 +108,7 @@ body.busted #game-canvas { filter: saturate(.3) hue-rotate(190deg) brightness(.8
 body.cutscene .hud-bl, body.cutscene .hud-tr, body.cutscene .prompt { opacity: 0; transition: opacity .4s; }
 body.cutscene .touch-right, body.cutscene .stick-zone, body.cutscene .tb-weapon, body.cutscene .fire2 { opacity: 0; pointer-events: none; transition: opacity .4s; }
 body.cutscene .crosshair, body.cutscene .hitmark, body.cutscene .hud-weapon, body.cutscene .hud-notice { opacity: 0; }
+body.cutscene .dmg, body.cutscene .hurt { visibility: hidden; } /* their opacity is inline */
 body.cutscene::before, body.cutscene::after { content: ''; position: fixed; left: 0; right: 0; height: 9vh; background: #000; z-index: 9; animation: bars .5s ease; }
 body.cutscene::before { top: 0; } body.cutscene::after { bottom: 0; }
 @keyframes bars { from { height: 0; } }
@@ -188,6 +189,8 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
 .tabs button[aria-selected="true"] { color: #fff; border-bottom-color: var(--orange); }
 .resume { margin-left: auto; border: 2px solid #fff; background: #fff; color: #000; padding: 9px 18px; font: 800 16px/1 var(--cond); letter-spacing: 1px; }
 .resume kbd { margin: 0 0 0 9px; color: #000; background: #0000000f; border-color: #0005; }
+.resume.retry { background: #0000; color: #fff; }
+.resume.retry:not([hidden]) + .resume { margin-left: 8px; }
 .pause-body { flex: 1; min-height: 0; padding: 16px calc(26px + var(--safe-r)) calc(16px + var(--safe-b)) calc(26px + var(--safe-l)); overflow: auto; }
 .tab { display: none; height: 100%; } .tab.on { display: block; }
 .tab[data-pane="map"].on { display: grid; grid-template-columns: 1fr 330px; gap: 14px; }
@@ -200,6 +203,7 @@ body.touch-ui .stick:not(.on) { opacity: .35; }
 .map-tip { margin: 0; font-size: 12px; color: #ffffff88; }
 .map-actions { display: flex; gap: 6px; flex-wrap: wrap; } .map-actions button { border: 1px solid #ffffff33; background: #000; padding: 8px 11px; border-radius: 4px; font-weight: 700; }
 .card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.card-list > .list-head { grid-column: 1 / -1; margin: 10px 0 0; font: 800 14px var(--body); letter-spacing: .12em; color: #ffd23f; }
 .card { padding: 14px 16px; background: #ffffff0b; border: 1px solid #ffffff18; border-radius: 6px; }
 .card h3 { margin: 0 0 4px; font: 400 26px/1.05 var(--display); letter-spacing: .5px; }
 .card .sub { font: 700 13px/1 var(--cond); letter-spacing: 2px; color: #ffd27a; }
@@ -345,6 +349,13 @@ body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
 .hitmark i { position: absolute; left: -13px; top: -1px; width: 26px; height: 2px; background: linear-gradient(90deg, #fff 0 36%, #0000 36% 64%, #fff 64%); filter: drop-shadow(0 0 1px #000); }
 .hitmark i:first-child { transform: rotate(45deg); } .hitmark i:last-child { transform: rotate(-45deg); }
 .hitmark.kill i { background: linear-gradient(90deg, #ff3b30 0 36%, #0000 36% 64%, #ff3b30 64%); }
+/* Hit feedback (hit-fx.js): red chevrons round the middle pointing at whoever hit you, set by
+   inline transform/opacity; and the red-edge fallback when post processing is off. The edges mix
+   towards red, never black, and fade in well under a second. */
+.dmg { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.dmg i { position: absolute; left: -17px; top: -7px; width: 34px; height: 14px; background: #ff3b30; clip-path: polygon(0 100%, 50% 0, 100% 100%, 50% 45%); filter: drop-shadow(0 0 2px #000); opacity: 0; will-change: transform, opacity; }
+.hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, #0000 42%, rgba(199, 13, 10, .25) 70%, rgba(199, 13, 10, .6) 100%); }
+.bar.health.hit i { background: #fff; animation: none; }
 /* A sniper's scope: a round lens in black, thick posts that thin to a fine cross with range marks, a red dot. */
 .scope { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center;
   /* The black surround is a gradient, not a huge box-shadow spread: phone Chrome drops a spread that size and left it see-through. */
@@ -357,9 +368,11 @@ body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
 .scope-h::before { content: ''; position: absolute; left: 32%; right: 32%; top: 2px; height: 1px; background: #111; }
 .scope-h::after { content: ''; position: absolute; left: 34%; right: 34%; top: -2px; height: 9px; background: radial-gradient(circle, #111 1.4px, #0000 1.9px) center / calc(100% / 8) 100% repeat-x; }
 .scope-v::before { content: ''; position: absolute; top: 32%; bottom: 50%; left: 2px; width: 1px; background: #111; }
-/* Looking through a scope on a phone, the top-centre MAP and pause sit inside the lens over its top post: out of
-   the way until the scope comes down (one tap on SCOPE). */
-body.scoped .touch-top { opacity: 0; pointer-events: none; }
+/* Looking through a scope on a phone, the top-centre MAP and pause sit inside the lens over its top post, and with
+   the weapon wheel open they poke out above its top slot: out of the way until the scope comes down (one tap on
+   SCOPE) or the wheel closes. The help box steps out of both too (it comes back with the time it had left). */
+body.scoped .touch-top, body.wheel-open .touch-top { opacity: 0; pointer-events: none; }
+body.scoped .help-box, body.wheel-open .help-box { visibility: hidden; }
 #hud-scope-zoom { position: absolute; left: 0; right: 0; bottom: 9%; text-align: center; font: 700 14px/1 var(--cond); letter-spacing: 1px; color: #111c; }
 /* Why the trigger does nothing (holy places), under the crosshair. */
 .hud-notice { position: absolute; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 32px); top: calc(50% + 44px); padding: 6px 12px; background: #000000c4; border-left: 3px solid #ffd23f; font: 600 15px/1.3 var(--body); color: #f4f1e8; text-align: center; }
@@ -433,3 +446,16 @@ body.cutscene .wwheel { display: none; }
   .ww-ring { --r: 99px; --s: 70px; }
   .ww-slot b { font-size: 14px; }
 }
+
+/* Side jobs: a bar under the objective (SUSPICION, the convoy's or the cart's health). */
+#hud .meter { width: min(240px, 46vw); margin: 4px auto 0; text-align: center; pointer-events: none; }
+#hud .meter[hidden] { display: none; }
+#hud .meter b { display: block; font: 800 12px/1.2 system-ui, sans-serif; letter-spacing: .08em; color: #fff; text-shadow: 0 0 2px #000, 0 1px 3px #000; }
+#hud .meter span { display: block; height: 8px; border-radius: 4px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.75); overflow: hidden; }
+#hud .meter i { display: block; height: 100%; transform-origin: left; background: linear-gradient(90deg, #ffe14d, #ff8a1f 60%, #ff3b30); }
+#hud .meter.urgent span { border-color: #ff3b30; }
+body.touch-ui #hud .meter span { height: 10px; }
+/* A baraat's dhol beat: the DANCE button pulses on each beat. */
+#tb-action.beat { transform: scale(1.12); box-shadow: 0 0 0 4px rgba(79,163,255,.7); transition: transform .06s; }
+/* Big screens place the middle text one by one: the bar sits just above the objective. */
+@media (min-width: 901px) and (min-height: 501px) { #hud .meter { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(158px + var(--safe-b)); margin: 0; } }

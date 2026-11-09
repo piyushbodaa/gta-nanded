@@ -42,10 +42,11 @@ export class Player {
     this.game.camera.reset(heading);
   }
 
-  damage(amount, source) {
+  /** `from`: whoever or whatever did it (anything with x and z, never allocated per hit), for the hit marker. */
+  damage(amount, source, from = null) {
     if (this.invuln > 0 || this.state === 'dead') return;
     this.health = Math.max(0, this.health - amount);
-    this.game.onPlayerDamage?.(amount, source);
+    this.game.onPlayerDamage?.(amount, source, from);
     if (this.health <= 0) this.game.wasted?.(source);
   }
 

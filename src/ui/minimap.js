@@ -164,6 +164,10 @@ export function drawBlip(ctx, x, y, b, k, time = 0) {
   if (b.kind === 'police') {
     ctx.fillStyle = Math.floor(time * 6) % 2 ? '#e53935' : '#1e5bd8';
     ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI * 2); ctx.fill();
+  } else if (b.kind === 'drone') {
+    // The police drone: a small diamond flashing red and blue, ringed dark so it reads on any street.
+    ctx.fillStyle = Math.floor(time * 6) % 2 ? '#1e5bd8' : '#e53935'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, -5.5); ctx.lineTo(4.5, 0); ctx.lineTo(0, 5.5); ctx.lineTo(-4.5, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if (b.kind === 'dot') {
     ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, b.size || 3, 0, Math.PI * 2); ctx.fill();
   } else if (b.kind === 'icon') {

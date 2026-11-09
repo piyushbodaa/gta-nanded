@@ -23,6 +23,17 @@ const HORN = {
   default: { f: [415, 520], wave: 'square', pulses: 1, len: 0.32 },
 };
 
+/**
+ * Pressure horns from the Jugaad Garage (garage.js: v.hornTune), each { notes: [[freq, at, len]...], wave, gain }.
+ * Original note patterns, not film tunes.
+ */
+export const HORN_TUNES = {
+  pom: { notes: [[466, 0, 0.16], [370, 0.2, 0.26]], wave: 'square', gain: 1 },
+  jingle: { notes: [[784, 0, 0.1], [988, 0.12, 0.1], [1175, 0.24, 0.1], [988, 0.36, 0.1], [784, 0.48, 0.18]], wave: 'triangle', gain: 1.2 },
+  truck: { notes: [[147, 0, 1.0], [185, 0, 1.0], [220, 0, 1.0]], wave: 'sawtooth', gain: 0.9 },
+  tutari: { notes: [[392, 0, 0.22], [523, 0.24, 0.22], [659, 0.48, 0.22], [784, 0.72, 0.5]], wave: 'sawtooth', gain: 0.9 },
+};
+
 export class GameAudio {
   constructor() {
     this.ctx = null;
@@ -51,6 +62,7 @@ export class GameAudio {
     this._engine();
     this._ambience();
     this._siren();
+    this._nakabandi();
     this.radio = new Radio(ctx, this.musicBus, this.white);
     this.enabled = true;
     // A hidden page gets no frames, so update() can't fade the engine, siren and street out:
@@ -85,7 +97,7 @@ export class GameAudio {
   /** Every continuous sound to silence now, without waiting for update() to fade it. */
   _hush() {
     const now = this.ctx.currentTime, e = this.eng;
-    for (const p of [e.gain.gain, e.screech.gain, e.wind.gain, this.sir.g.gain, this.amb.bed.gain, this.amb.rain.gain, this.radio.out.gain]) {
+    for (const p of [e.gain.gain, e.screech.gain, e.wind.gain, this.sir.g.gain, this.amb.bed.gain, this.amb.rain.gain, this.radio.out.gain, this.drn.g.gain, this.rim.g.gain]) {
       p.cancelScheduledValues(now); p.setValueAtTime(0, now);
     }
   }
@@ -153,6 +165,25 @@ export class GameAudio {
     this.sir = { o, lfo, g, pan };
   }
 
+  // ---------------------------------------------------------------- nakabandi
+  /** Two loops kept silent until needed: the police drone's rotor buzz, and a rim scraping the road on a flat. */
+  _nakabandi() {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), trem = ctx.createOscillator(), depth = ctx.createGain(), f = ctx.createBiquadFilter(), g = ctx.createGain(), pan = ctx.createStereoPanner?.() || ctx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = 182; o2.type = 'sawtooth'; o2.frequency.value = 187; // two rotors a little apart: the beat is the buzz
+    trem.type = 'sine'; trem.frequency.value = 23; depth.gain.value = 0.35;
+    f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.9;
+    const amp = ctx.createGain(); amp.gain.value = 0.65; trem.connect(depth).connect(amp.gain);
+    o.connect(f); o2.connect(f); f.connect(amp).connect(g).connect(pan).connect(this.sfxBus);
+    g.gain.value = 0;
+    o.start(); o2.start(); trem.start();
+    this.drn = { g, pan };
+    const src = this._src(this.white), rf = ctx.createBiquadFilter(), rg = ctx.createGain();
+    rf.type = 'bandpass'; rf.frequency.value = 3200; rf.Q.value = 1.4; rg.gain.value = 0;
+    src.connect(rf).connect(rg).connect(this.sfxBus); src.start();
+    this.rim = { g: rg, f: rf };
+  }
+
   // ---------------------------------------------------------------- ambience
   _ambience() {
     const ctx = this.ctx;
@@ -212,6 +243,9 @@ export class GameAudio {
       case 'busted': this._tone(600, 0.25, { type: 'square', gain: 0.1 }); this._tone(450, 0.5, { type: 'square', gain: 0.1, at: 0.25 }); break;
       case 'door': this._burst(0.08, { freq: 600, q: 1, gain: 0.25 }); this._tone(140, 0.1, { gain: 0.2 }); break;
       case 'bell': this._bell(0.12 * k); break;
+      case 'heartbeat': // lub-dub, low and soft: hurt and still in danger (hit-fx.js)
+        for (const at of [0, 0.27]) { this._tone(52, 0.12, { gain: 0.3 * k, glide: 38, at }); this._burst(0.07, { freq: 160, q: 0.7, gain: 0.18 * k, type: 'lowpass', buf: this.brown, at }); }
+        break;
       case 'wanted': this._tone(988, 0.15, { type: 'square', gain: 0.07 }); this._tone(740, 0.15, { type: 'square', gain: 0.07, at: 0.16 }); break;
       // Guns: a sharp crack (filtered white noise), a body (low brown noise) and a thump (a falling
       // tone), each kept under 0.5 so the master compressor doesn't pump on full auto.
@@ -230,6 +264,23 @@ export class GameAudio {
         this._burst(0.05, { freq: 2200, q: 2, gain: 0.13 * k, at: 0.14 }); this._tone(1400, 0.03, { type: 'square', gain: 0.04 * k, at: 0.14 });
         break;
       case 'pickup': this._tone(660, 0.1, { type: 'triangle', gain: 0.12 * k }); this._tone(990, 0.16, { type: 'triangle', gain: 0.12 * k, at: 0.08 }); this._burst(0.05, { freq: 1800, q: 1, gain: 0.08 * k }); break;
+      case 'burst': // a tyre bursting: a sharp bang, then the air rushing out
+        this._burst(0.07, { freq: 1600, q: 0.6, gain: 0.55 * k });
+        this._tone(95, 0.12, { gain: 0.4 * k, glide: 45 });
+        this._burst(0.7, { freq: 4200, q: 0.5, gain: 0.16 * k, type: 'highpass', at: 0.04 });
+        break;
+      case 'rim': // a bare rim striking the road
+        this._tone(2100, 0.12, { type: 'triangle', gain: 0.06 * k, glide: 1700 }); this._burst(0.08, { freq: 3000, q: 1.2, gain: 0.12 * k });
+        break;
+      case 'chirp': // a key fob: the car locks or unlocks
+        this._tone(2200, 0.06, { type: 'square', gain: 0.07 * k }); this._tone(2200, 0.06, { type: 'square', gain: 0.07 * k, at: 0.1 });
+        break;
+      case 'alarm': // one whoop of a car alarm (garage.js repeats it)
+        this._tone(700, 0.42, { type: 'square', gain: 0.07 * k, glide: 1300 });
+        break;
+      case 'dhol': // a baraat's dhol: a deep thump with a skin slap
+        this._tone(92, 0.22, { gain: 0.4 * k, glide: 60 }); this._burst(0.09, { freq: 260, q: 0.8, gain: 0.25 * k, type: 'lowpass', buf: this.brown });
+        break;
       case 'throw': this._tone(2400, 0.03, { type: 'square', gain: 0.04 * k }); this._burst(0.28, { freq: 900, q: 0.6, gain: 0.12 * k, at: 0.05 }); break;
     }
   }
@@ -294,10 +345,23 @@ export class GameAudio {
     if (!this.enabled || !this.ctx || !v) return;
     const now = this.ctx.currentTime;
     if ((this.hornCool.get(v.id) || 0) > now) return;
+    const tune = HORN_TUNES[v.hornTune];
     const h = HORN[v.type] || HORN.default;
     const d = this.listener ? dist(v.x, v.z, this.listener.x, this.listener.z) : 0;
     const g = clamp(1 / (1 + d / 18), 0, 1) * 0.14 * vol;
     if (g < 0.004) return;
+    if (tune) { // a pressure horn: its notes at 1.6x, and no second press until the last note ends
+      const end = Math.max(...tune.notes.map(([, at, len]) => at + len));
+      this.hornCool.set(v.id, now + end + 0.15);
+      for (const [f, at, len] of tune.notes) {
+        const o = this.ctx.createOscillator(), gn = this.ctx.createGain(), flt = this.ctx.createBiquadFilter(), t = now + at, gg = g * 1.6 * tune.gain;
+        o.type = tune.wave; o.frequency.value = f;
+        flt.type = 'lowpass'; flt.frequency.value = 2600;
+        gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(gg, t + 0.015); gn.gain.setValueAtTime(gg, t + len - 0.03); gn.gain.linearRampToValueAtTime(0, t + len);
+        o.connect(flt).connect(gn).connect(this.sfxBus); o.start(t); o.stop(t + len + 0.05);
+      }
+      return;
+    }
     this.hornCool.set(v.id, now + h.len * h.pulses + 0.15);
     // Forget the cooldowns that are over: traffic keeps spawning cars with new ids.
     if (this.hornCool.size > 64) for (const [id, until] of this.hornCool) if (until <= now) this.hornCool.delete(id);
@@ -347,6 +411,20 @@ export class GameAudio {
     }
     this.sir.g.gain.setTargetAtTime(g.paused ? 0 : best * 0.09, now, 0.1);
     if (this.sir.pan.pan) this.sir.pan.pan.setTargetAtTime(pan, now, 0.1);
+    // The police drone overhead, louder as it nears, panned to its side.
+    const dr = g.nakabandi?.drone;
+    let dk = 0, dpan = 0;
+    if (dr && !g.paused) {
+      const cam = g.camera3.position, d = Math.hypot(dr.x - cam.x, dr.y - cam.y, dr.z - cam.z);
+      dk = clamp(1 / (1 + d / 18), 0, 1) * (dr.state === 'fall' ? 0.5 : 1);
+      const rx = Math.cos(g.camera.facing), rz = -Math.sin(g.camera.facing);
+      dpan = clamp(((dr.x - cam.x) * -rx + (dr.z - cam.z) * -rz) / Math.max(d, 1), -0.8, 0.8);
+    }
+    this.drn.g.gain.setTargetAtTime(dk * 0.07, now, 0.15);
+    if (this.drn.pan.pan) this.drn.pan.pan.setTargetAtTime(dpan, now, 0.15);
+    // A rim on the road: the player's car running on a flat grinds, harder the faster it goes.
+    const rimK = v && v.flatN && !g.paused && !v.wrecked ? clamp((Math.hypot(v.vx, v.vz) - 3) / 20, 0, 1) * Math.min(1, v.flatN / 2) : 0;
+    this.rim.g.gain.setTargetAtTime(rimK * 0.09, now, 0.08);
     // Ambience by place and time.
     const a = this.amb, sky = g.sky, pos = P.pos;
     const dens = g.city.densityAt(pos.x, pos.z);

@@ -481,7 +481,7 @@ export class Peds {
         if (p.state === 'scripted' && !p.role) break;
         const bx = (p.homeX ?? h.x) - h.x, bz = (p.homeZ ?? h.z) - h.z, back = Math.hypot(bx, bz);
         if (back > 0.5 && (p.backT = (p.backT || 0) + dt) < 40) {
-          const sp = 1.4, step = Math.min(back, sp * dt) / back;
+          const sp = p.homeSpeed || 1.4, step = Math.min(back, sp * dt) / back;
           h.yaw = dampAngle(h.yaw, Math.atan2(bx, bz), 8, dt);
           h.x += bx * step; h.z += bz * step;
           h.pose = 'walk'; h.speed = sp;

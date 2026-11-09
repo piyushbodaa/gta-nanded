@@ -22,6 +22,34 @@ export function createBody(type, x, z, heading) {
 }
 
 export const speedOf = v => Math.hypot(v.vx, v.vz);
+
+/**
+ * Burst tyre i (an index into v.model.wheels: 0 FL, 1 FR, 2 RL, 3 RR on four wheels, +x the vehicle's
+ * left; 0 front and 1 rear on two-wheelers). No sound or effects (rules' g.burstTyre adds them).
+ * False when the tyres are bulletproof, i is out of range or that tyre is already flat.
+ */
+export function burstTyre(v, i) {
+  const W = v.model?.wheels;
+  if (v.mods?.bpTyres || !W || !(i >= 0 && i < W.length && i < 8) || (v.flat || 0) & (1 << i)) return false;
+  v.flat = (v.flat || 0) | (1 << i);
+  flatStats(v);
+  return true;
+}
+/** Every tyre whole again. */
+export function repairTyres(v) { v.flat = 0; v.flatN = 0; v.flatF = 0; v.flatR = 0; v.flatPull = 0; }
+
+function flatStats(v) {
+  const W = v.model.wheels;
+  let n = 0, f = 0, fN = 0, r = 0, rN = 0, left = 0, right = 0;
+  for (let i = 0; i < W.length && i < 8; i++) {
+    const flat = (v.flat >> i) & 1, front = W[i][3];
+    if (front) { fN++; f += flat; } else { rN++; r += flat; }
+    n += flat;
+    if (flat && W[i][0] > 0.01) left++; else if (flat && W[i][0] < -0.01) right++;
+  }
+  v.flatN = n; v.flatF = fN ? f / fN : 0; v.flatR = rN ? r / rN : 0;
+  v.flatPull = (left - right) / Math.max(1, W.length / 2);
+}
 export const forwardSpeed = v => v.vx * Math.sin(v.heading) + v.vz * Math.cos(v.heading);
 
 // Normalised tyre curve: rises linearly, peaks near 8-10 degrees of slip, then fades a little.
@@ -54,16 +82,19 @@ export function stepBody(v, ctl, dt, assist = 1) {
 
   // Steering lock shrinks with speed so keyboard steering stays sane at 120 km/h.
   const maxLock = s.steerLock / (1 + speed * (two ? 0.045 : 0.05) * assist);
-  const target = clamp(ctl.steer, -1, 1) * maxLock;
+  // A flat tyre drags the car toward its side (cars only; a two-wheeler wobbles instead, below).
+  const flat = v.flat ? v.flatN : 0;
+  const target = clamp(ctl.steer, -1, 1) * maxLock + (flat && !two ? v.flatPull * 0.06 : 0);
   const rate = (Math.abs(target) < Math.abs(v.steer) ? 6 : 3.4) * (ctl.analog ? 2 : 1);
   v.steer += clamp(target - v.steer, -rate * dt, rate * dt);
   const delta = v.steer, cd = Math.cos(delta), sd = Math.sin(delta);
 
   // Engine and brakes.
   const m = v.mass, L = s.wheelbase;
+  const top = flat ? s.top * (two ? 1 - 0.18 * flat : Math.max(0.6, 1 - 0.12 * flat)) : s.top;
   let Fx = 0;
   if (drive > 0) {
-    const frac = clamp(vF / s.top, 0, 1.2);
+    const frac = clamp(vF / top, 0, 1.2);
     Fx = s.accel * m * drive * Math.max(0, 1 - frac * frac) * (frac < 0.15 ? 1.15 : 1);
   } else if (drive < 0) {
     const frac = clamp(-vF / s.reverseTop, 0, 1.2);
@@ -77,6 +108,8 @@ export function stepBody(v, ctl, dt, assist = 1) {
   const Nf = clamp(m * G * v.b / L - m * v.longAcc * h / L, m * G * 0.15, m * G * 0.85);
   const Nr = m * G - Nf;
   const mu = s.grip * (v.wrecked ? 0.6 : 1);
+  // Grip per axle: a flat tyre's axle holds less.
+  const muF = flat ? mu * (1 - (two ? 0.35 : 0.45) * v.flatF) : mu, muR = flat ? mu * (1 - (two ? 0.35 : 0.45) * v.flatR) : mu;
 
   // Slip at each axle.
   const vRf = vR - v.w * v.a, vRr = vR + v.w * v.b;
@@ -84,25 +117,25 @@ export function stepBody(v, ctl, dt, assist = 1) {
   const longF = vF * cd - vRf * sd;
   const alphaF = Math.atan2(latF, Math.max(Math.abs(longF), 0.6));
   const alphaR = Math.atan2(vRr, Math.max(Math.abs(vF), 0.6));
-  let FyF = -mu * Nf * tyre(alphaF);
-  let FyR = -mu * Nr * tyre(alphaR);
+  let FyF = -muF * Nf * tyre(alphaF);
+  let FyR = -muR * Nr * tyre(alphaR);
   let FxF = 0, FxR = 0;
   if (s.drive === 'front') FxF = Fx; else FxR = Fx;
   FxF -= brakeF * 0.62 * sgn; FxR -= brakeF * 0.38 * sgn;
   if (ctl.handbrake && !two) {
     // Rear wheels lock: they drag and lose most of their side grip.
     FyR *= 0.3;
-    FxR = -sgn * mu * Nr * 0.6;
-  } else if (ctl.handbrake) FxR = -sgn * mu * Nr * 0.7;
+    FxR = -sgn * muR * Nr * 0.6;
+  } else if (ctl.handbrake) FxR = -sgn * muR * Nr * 0.7;
   // Friction circle per axle.
-  const limR = mu * Nr * 1.05, limF = mu * Nf * 1.05;
+  const limR = muR * Nr * 1.05, limF = muF * Nf * 1.05;
   const magR = Math.hypot(FxR, FyR); if (magR > limR) { FxR *= limR / magR; FyR *= limR / magR; }
   const magF = Math.hypot(FxF, FyF); if (magF > limF) { FxF *= limF / magF; FyF *= limF / magF; }
   const wheelspin = drive > 0.8 && Math.abs(Fx) > limR * 0.95 && speed < 10;
   v.slip = speed > 4 ? Math.max(Math.abs(alphaR) * 2.2, ctl.handbrake ? 0.6 : 0, wheelspin ? 0.5 : 0) : (wheelspin ? 0.5 : 0);
 
   // Resultant in the body frame (front forces rotate with the wheels).
-  const fLong = FxR + FxF * cd + FyF * sd - 0.42 * vF * Math.abs(vF) - 0.012 * m * G * sgn;
+  const fLong = FxR + FxF * cd + FyF * sd - 0.42 * vF * Math.abs(vF) - (flat ? 0.012 + 0.03 * flat : 0.012) * m * G * sgn;
   const fLat = FyR + FyF * cd - FxF * sd;
   const torque = -v.a * (FyF * cd - FxF * sd) + v.b * FyR;
 
@@ -131,7 +164,7 @@ export function stepBody(v, ctl, dt, assist = 1) {
   // Faster than its engine could drive it (thrown back by a crash or a blast): the tyres skid it down
   // to that, rather than it stopping dead like a wall in front of whatever hit it.
   const skid = mu * G * dt;
-  if (nF > s.top * 1.08) nF = Math.max(s.top * 1.08, nF - skid);
+  if (nF > top * 1.08) nF = Math.max(top * 1.08, nF - skid);
   if (nF < -s.reverseTop * 1.2) nF = Math.min(-s.reverseTop * 1.2, nF + skid);
   if (drive === 0 && brake > 0 && Math.abs(nF) < 0.4) nF = 0;
   if (drive === 0 && brake === 0 && Math.abs(nF) < 0.08) nF = 0;
@@ -150,7 +183,8 @@ export function stepBody(v, ctl, dt, assist = 1) {
   v.pitch += (tp - v.pitch) * clamp(dt * 6, 0, 1);
   v.roll += (tr - v.roll) * clamp(dt * 6, 0, 1);
   if (two) {
-    const lean = clamp(Math.atan2(nF * v.w, G), -0.75, 0.75);
+    let lean = clamp(Math.atan2(nF * v.w, G), -0.75, 0.75);
+    if (flat) lean += Math.sin(v.wheelSpin * 2.3) * 0.04 * clamp(Math.abs(nF) / 10, 0, 1);
     v.lean += (lean - v.lean) * clamp(dt * 7, 0, 1);
   }
   // Engine note: fake gears by speed band.
@@ -158,7 +192,7 @@ export function stepBody(v, ctl, dt, assist = 1) {
   const gears = [0, 22, 45, 70, 100, 140, 999];
   let gear = 1; while (kmh > gears[gear] && gear < 6) gear++;
   v.gear = nF < -0.3 ? -1 : gear;
-  const lo = gears[gear - 1], hi = Math.min(gears[gear], s.top * 3.6 * 1.05);
+  const lo = gears[gear - 1], hi = Math.min(gears[gear], top * 3.6 * 1.05);
   const rpmT = 0.18 + 0.82 * clamp((kmh - lo) / Math.max(10, hi - lo), 0, 1) * (drive !== 0 ? 1 : 0.6) + (wheelspin ? 0.3 : 0);
   v.rpm += (Math.min(1, rpmT) - v.rpm) * clamp(dt * 6, 0, 1);
   return v;

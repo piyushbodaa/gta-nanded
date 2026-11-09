@@ -1,6 +1,7 @@
 // Touch controls: a floating stick under the left thumb, contextual buttons
 // under the right, and the rest of the screen drags the camera.
 import { WEAPONS } from '../game/weapon-data.js';
+import { haptic } from './haptics.js';
 
 const $ = id => document.getElementById(id);
 
@@ -78,7 +79,7 @@ export class TouchControls {
         if (hold) t[hold] = hold === 'gas' || hold === 'brake' ? 1 : true;
         if (tap) this.input.trigger(tap);
         this.input.mode = 'touch';
-        navigator.vibrate?.(8);
+        haptic(this.game, 8);
       });
       const up = () => { b.classList.remove('down'); if (hold) t[hold] = hold === 'gas' || hold === 'brake' ? 0 : false; };
       for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
@@ -143,8 +144,11 @@ export class TouchControls {
     setButton('tb-reload', gun && 'RELOAD');
     $('tb-aim').classList.toggle('on', armed && Boolean(w.aiming));
     // The weapon button: name over ammo (one line on the shortest phones, game.css). Fists too: it is the way to the wheel.
-    const ammo = def.ammo ? (def.hold === 'throw' ? `×${w.mag}` : `${w.mag}/${w.reserve}`) : '';
-    setButton('tb-weapon', !driving && (ammo ? `${def.short}\n${ammo}` : def.short));
+    // With the wheel open it shows the weapon the wheel points at, the one a tap (or letting go) would take.
+    const ww = this.game.weaponWheel, hid = (w.wheelOpen && ww?.open && ww.chosen?.()) || w.current;
+    const hd = WEAPONS[hid] || def, ha = hid === w.current ? { mag: w.mag, reserve: w.reserve } : w.ammoOf?.(hid) || { mag: 0, reserve: 0 };
+    const ammo = hd.ammo ? (hd.hold === 'throw' ? `×${ha.mag}` : `${ha.mag}/${ha.reserve}`) : '';
+    setButton('tb-weapon', !driving && (ammo ? `${hd.short}\n${ammo}` : hd.short));
     const btn = $('tb-weapon');
     btn.classList.toggle('reloading', Boolean(w.reloading));
     btn.classList.toggle('empty', gun && w.mag === 0);

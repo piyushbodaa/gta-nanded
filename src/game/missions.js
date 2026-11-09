@@ -6,7 +6,8 @@ import { track } from '../core/analytics.js';
 import { makeOutfit } from '../actors/humans.js';
 import { speedOf } from '../actors/vehicle-physics.js';
 import { DynamicDriver } from '../actors/traffic.js';
-import { CHARACTERS } from './story.js';
+import { CHARACTERS, kerbSpot } from './story.js';
+import { AMMO, WEAPONS } from './weapon-data.js';
 
 export class Missions {
   constructor(game, defs) {
@@ -19,7 +20,13 @@ export class Missions {
     this.cooldown = 0;
     this._leftovers = []; // the last mission's cast and props, cleared when the next one starts
     this._driven = new WeakSet(); // every vehicle the player has driven: theirs to keep, never cleared away
+    this.retryOffer = null; // { id, cp, reason }: what a RETRY on the failed card restarts from
+    this.replaying = false; // true while a retry replays the steps before its checkpoint
+    this.tries = {}; // mission id -> attempts this session
   }
+
+  /** A retry is on offer from the pause menu: a story or side mission is running (never an event). */
+  get canRetry() { return Boolean(this.active && !this.active.def.event); }
 
   get byId() { return this._byId || (this._byId = new Map(this.defs.map(d => [d.id, d]))); }
 
@@ -63,7 +70,7 @@ export class Missions {
         const pos = g.player.pos;
         if (ready && dist(pos.x, pos.z, p.x, p.z) < 2.6 && (!g.player.vehicle || speedOf(g.player.vehicle) < 3)) this.start(d.id);
       }
-      g.effects?.markers.set([...markers, ...(g.jobs?.markers?.() || [])]);
+      g.effects?.markers.set([...markers, ...(g.jobs?.markers?.() || []), ...(g.garage?.markers?.() || [])]);
       return;
     }
     const m = this.active;
@@ -99,20 +106,94 @@ export class Missions {
     }
   }
 
-  start(id) {
+  /**
+   * Start a mission. With `cp` (a checkpoint snapshot, from retry()), the steps before it are
+   * replayed silently from the start point, the checkpoint puts the player and vehicle back, and
+   * play goes on live from the step after it.
+   */
+  start(id, { cp = null } = {}) {
     const g = this.game, def = this.byId.get(id);
     if (!def || this.active) return;
+    g.events?.discardOffer?.();
     this._clearLeftovers();
     g.jobs?.stop?.(true);
+    this.retryOffer = null;
     const m = {
       def, i: -1, time: 0, timer: null, timerLabel: '', vars: {}, ent: {}, target: null, steps: def.steps(g),
     };
     m.ctx = this._ctx(m);
+    m.cpTotal = m.steps.filter(s => s.kind === 'checkpoint').length;
+    m.cp0 = { k: -1, n: 0, label: 'the start', ...this._snap() };
+    m.cp = cp || m.cp0;
+    m.tries = this.tries[id] = (this.tries[id] || 0) + 1;
     this.active = m;
-    g.hud.big(def.title, def.subtitle || '', 'title', 3.2);
+    g.hud.big(def.title, cp ? 'RETRY' : def.subtitle || '', 'title', 3.2);
     g.audio?.sfx('mission');
     def.onStart?.(m.ctx);
+    if (cp && cp.k >= 0) {
+      this.replaying = true;
+      try {
+        for (let i = 0; i < cp.k && i < m.steps.length; i++) m.steps[i].replay?.(m.ctx);
+        g.police?.clear?.();
+        m.i = cp.k;
+        m.steps[cp.k]?.restore?.(m.ctx);
+      } catch (err) { this.replaying = false; this._crash(err); return; }
+      this.replaying = false;
+    }
     this._next();
+  }
+
+  /**
+   * Street events (street-events.js): build a mission and its context without making it active, so
+   * the offer's people and vehicles go through m.ctx. adopt() then runs it as start() would, with a
+   * toast and a chime instead of the title card; discard() takes away what the offer spawned.
+   */
+  draft(def) {
+    const m = { def, i: -1, time: 0, timer: null, timerLabel: '', vars: {}, ent: {}, target: null, steps: def.steps(this.game) };
+    m.ctx = this._ctx(m);
+    m.cpTotal = 0;
+    m.cp0 = m.cp = { k: -1, n: 0, label: 'the start' };
+    return m;
+  }
+
+  adopt(m) {
+    const g = this.game;
+    if (this.active || !m) return false;
+    this._clearLeftovers();
+    g.jobs?.stop?.(true);
+    this.retryOffer = null;
+    this.active = m;
+    g.hud.toast?.(m.def.title || 'Street event', 3);
+    g.audio?.sfx('checkpoint');
+    m.def.onStart?.(m.ctx);
+    this._next();
+    return true;
+  }
+
+  discard(m) {
+    const g = this.game, P = g.player;
+    if (!m) return;
+    for (const e of Object.values(m.ent)) {
+      if (!e) continue;
+      if (e.h) g.peds.remove(e);
+      else if (e !== P.vehicle && e !== P.enterTarget && !e.owned && !this._driven.has(e)) { g.vehicles.remove(e); g.controls?.delete(e); }
+    }
+  }
+
+  /** An event ended (passed or failed): its HUD goes quietly, no card, no save, no retry. */
+  _endEvent() {
+    const g = this.game;
+    g.hud.objective('');
+    g.hud.setTimer(null);
+    g.hud.route = null;
+    g.cutscene = false;
+    this.cooldown = 2;
+  }
+
+  /** What a checkpoint remembers besides its place: time of day, weather, what the player carried. */
+  _snap() {
+    const g = this.game, sky = g.sky || g.world?.sky;
+    return { hours: sky?.hours, weather: sky?.weather, inv: g.weapons?.toSave?.() || null };
   }
 
   _next() {
@@ -129,7 +210,9 @@ export class Missions {
   /** A scripting error should never strand the player in a half-started mission. */
   _crash(err) {
     console.error('Mission script error', err);
+    this._crashed = true;
     this.fail('Something went wrong with this mission. Try it again.');
+    this._crashed = false;
   }
 
   pass() {
@@ -138,10 +221,12 @@ export class Missions {
     const def = m.def;
     this._cleanup(m, true);
     this.active = null;
+    if (def.event) { this._endEvent(); g.events?.passed?.(def, m); return; }
+    const before = new Set(this.available().map(d => d.id));
     g.save.complete(def.id);
     track('mission_complete');
     if (def.reward) g.addCash(def.reward);
-    g.hud.big('MISSION PASSED', def.reward ? `₹${def.reward.toLocaleString('en-IN')}` : def.passText || 'RESPECT +', 'passed', 5);
+    g.hud.big('MISSION PASSED', def.reward ? `₹${def.reward.toLocaleString('en-IN')}${def.weapon && WEAPONS[def.weapon.id] ? ` · ${WEAPONS[def.weapon.id].name}` : ''}` : def.passText || 'RESPECT +', 'passed', 5);
     g.audio?.sfx('passed');
     g.hud.objective('');
     g.hud.setTimer(null);
@@ -149,6 +234,9 @@ export class Missions {
     def.onPass?.(g);
     this.cooldown = 4;
     g.save.flush();
+    // A side job that this pass opened: say who has work, once.
+    const fresh = this.available().find(d => d.side && !before.has(d.id));
+    if (fresh) { const ch = CHARACTERS[fresh.giver]; g.hud.help?.(`New side job: <b>${ch?.name || fresh.giver}</b> (${ch?.initial || '!'}) has work for you. Look for the letter on the map.`, 8); }
   }
 
   fail(reason) {
@@ -156,6 +244,7 @@ export class Missions {
     if (!m) return;
     this._cleanup(m, false);
     this.active = null;
+    if (m.def.event) { this._endEvent(); g.events?.failed?.(m.def, reason); return; }
     g.hud.big('MISSION FAILED', reason || '', 'failed', 5);
     g.audio?.sfx('failed');
     g.hud.objective('');
@@ -163,6 +252,66 @@ export class Missions {
     g.hud.route = null;
     g.cutscene = false;
     this.cooldown = 6;
+    if (m.def.event) return;
+    // A script error retries from the very start: replaying to a checkpoint could hit it again.
+    this.retryOffer = { id: m.def.id, cp: this._crashed ? m.cp0 : m.cp, reason };
+    if (!g.respawning) this.offerRetry(() => { g.respawning = false; this.retryOffer = null; });
+  }
+
+  /** Where a retry would begin, for the card: "Savkar's office (2/3)", or "the start". */
+  _fromText(cp) { return cp && cp.k >= 0 ? `${cp.label} (${cp.n}/${cp.total})` : 'the start'; }
+
+  /**
+   * Show the RETRY / QUIT card for the failed mission. onQuit runs on QUIT and must clear
+   * g.respawning (rules passes its respawn). False when there is nothing to offer or no card.
+   */
+  offerRetry(onQuit) {
+    const g = this.game, o = this.retryOffer;
+    if (!o || !g.retryCard) return false;
+    g.retryCard.offer({ title: 'MISSION FAILED', from: this._fromText(o.cp), onRetry: () => this.retry(), onQuit: () => { this.retryOffer = null; onQuit?.(); } });
+    return true;
+  }
+
+  /** RETRY: back to the last checkpoint (or the start) of the mission that just failed. */
+  retry() {
+    const g = this.game, o = this.retryOffer, P = g.player;
+    if (!o) { g.respawning = false; return; }
+    const def = this.byId.get(o.id), cp = o.cp;
+    if (!def) { this.retryOffer = null; g.respawning = false; return; }
+    if (this.active) { this._cleanup(this.active, false); this.active = null; }
+    g.retryCard?.fade?.();
+    const s = this.startPoint(def);
+    P.teleport?.(s.x, s.z, P.heading || 0);
+    this._clearLeftovers(true); // after the teleport: never the car the player sat in
+    g.jobs?.stop?.(true);
+    g.police?.clear?.();
+    g.weapons?.closeWheel?.();
+    if (g.weapons?.grenades) g.weapons.grenades.length = 0;
+    g.events?.discardOffer?.();
+    g.hitFx?.reset?.();
+    if (typeof document !== 'undefined') document.body?.classList.remove('wasted', 'busted');
+    P.health = P.maxHealth ?? 100; P.state = 'foot';
+    const sky = g.sky || g.world?.sky;
+    if (sky && cp.hours != null) { sky.hours = cp.hours; if (cp.weather && sky.weather !== cp.weather) sky.setWeather?.(cp.weather); sky.update?.(0, P.pos); }
+    if (g.renderer?.shadowMap) g.renderer.shadowMap.needsUpdate = true;
+    if (cp.inv && g.weapons) g.weapons.topUp ? g.weapons.topUp(cp.inv) : topUpInventory(g.weapons, cp.inv);
+    g.save?.stat?.('retries');
+    g.cutscene = false;
+    this.cooldown = 0;
+    this.retryOffer = null;
+    this.start(def.id, { cp });
+    g.respawning = false;
+  }
+
+  /** The pause menu's Retry: drop this attempt and go back to its last checkpoint, no card, no fee. */
+  retryActive() {
+    const m = this.active;
+    if (!this.canRetry) return false;
+    this.retryOffer = { id: m.def.id, cp: m.cp, reason: '' };
+    this._cleanup(m, false);
+    this.active = null;
+    this.retry();
+    return true;
   }
 
   _cleanup(m, passed) {
@@ -189,6 +338,7 @@ export class Missions {
         this._leftovers.push(e);
       }
     }
+    if (m.def.policeLock) { g.police.lock = false; }
     g.camera.cinematic = null;
     g.cutscene = false;
     void passed;
@@ -199,11 +349,16 @@ export class Missions {
    * otherwise stand a second Shera on the first and drop the new cars onto the old ones. Not a
    * car the player is in, walking to or has driven (theirs now), nor anything claimed since.
    */
-  _clearLeftovers() {
+  _clearLeftovers(hard = false) {
     const g = this.game, P = g.player;
     for (const e of this._leftovers) {
       if (e.h) { if (!e.keep) g.peds.remove(e); }
-      else if (!e.keep && e !== P.vehicle && e !== P.enterTarget && e.role !== 'player' && !this._driven.has(e)) { g.vehicles.remove(e); g.controls.delete(e); }
+      else if (e.owned || e === P.vehicle) continue;
+      // A retry (hard) also takes the mission cars the player drove: the replay brings fresh ones.
+      else if (hard || (!e.keep && e !== P.enterTarget && e.role !== 'player' && !this._driven.has(e))) {
+        if (hard && e.role === 'player') e.role = 'abandoned';
+        g.vehicles.remove(e); g.controls.delete(e);
+      }
     }
     this._leftovers = [];
   }
@@ -333,7 +488,8 @@ export const Steps = {
   },
   /** Chatter that plays while the next steps continue. */
   chat(lines) { return { kind: 'chat', lines, enter(c) { c.say(lines); }, update() { return 'done'; } }; },
-  call(fn) { return { kind: 'call', enter: fn, update() { return 'done'; } }; },
+  /** Run fn once. replay:false for what only belongs to the live attempt (a WANTED card, setLevel, help). */
+  call(fn, { replay = true } = {}) { return { kind: 'call', enter: fn, replay: replay ? fn : null, update() { return 'done'; } }; },
   wait(seconds) { let t = 0; return { kind: 'wait', enter() { t = 0; }, update(c, dt) { t += dt; return t >= seconds ? 'done' : null; } }; },
 
   /** Get into a named vehicle. */
@@ -341,6 +497,7 @@ export const Steps = {
     return {
       kind: 'enter', vehicle: name,
       enter(c) { const v = c.ent[name]; if (v) { v.arrow = true; v.vital = true; } c.objective(text); },
+      replay(c) { const v = c.ent[name]; if (v) v.vital = true; },
       update(c) {
         const v = c.ent[name];
         if (!v) return 'fail:The vehicle is gone.';
@@ -400,6 +557,7 @@ export const Steps = {
   fight(names, text, hits = {}) {
     return {
       kind: 'fight', names,
+      replay(c) { for (const n of names) { const p = c.ent[n]; if (p) { c.g.peds.remove(p); delete c.ent[n]; } } },
       enter(c) {
         c.objective(text);
         for (const n of names) {
@@ -524,6 +682,12 @@ export const Steps = {
     };
     return {
       kind: 'chase', vehicle: name,
+      // Caught already: the car it fled in goes; nobody is left to fight (the fight's replay skips them).
+      replay(c) {
+        const v = c.ent[name];
+        for (const e of Object.values(c.ent)) if (e?.id && e !== v) e.vital = false;
+        if (v) { c.g.controls.delete(v); c.g.vehicles.remove(v); delete c.ent[name]; }
+      },
       enter(c) {
         const v = c.ent[name];
         if (!v) return;
@@ -579,13 +743,90 @@ export const Steps = {
 
   /** A hostile vehicle that tries to ram the player while the given steps run. */
   hunters(names) {
+    const hunt = c => { for (const n of names) { const v = c.ent[n]; if (v) { v.kinematic = false; v.role = 'mission'; v.hunt = c.driver(v, { aggression: 0.9, maxSpeed: v.spec.top }); v.blip = '#ff4d4d'; } } };
+    return { kind: 'hunters', enter: hunt, replay: hunt, update() { return 'done'; } };
+  },
+
+  /**
+   * A checkpoint: reached live, it remembers the time, weather and weapons and says so; a retry
+   * starts again here. opts: { at (point or c => point: where the player and `vehicle` are put;
+   * without it the vehicle stays where its spawn left it and a player on foot at the start),
+   * vehicle (entity name to seat the player in), park ({ name: point }: vehicles moved, not
+   * entered), hunters ([names] put ~90 m behind the player, out of view, so they close in) }.
+   *
+   * RULE for story edits: a retry replays every step before a checkpoint from the mission's start
+   * point. An S.call before a checkpoint must not spawn relative to where the player is then (only
+   * to fixed places); put such calls after the checkpoint (c7's and c10's Kadam).
+   */
+  checkpoint(label, opts = {}) {
+    let n = 0;
     return {
-      kind: 'hunters',
-      enter(c) { for (const n of names) { const v = c.ent[n]; if (v) { v.kinematic = false; v.role = 'mission'; v.hunt = c.driver(v, { aggression: 0.9, maxSpeed: v.spec.top }); v.blip = '#ff4d4d'; } } },
+      kind: 'checkpoint', label, opts,
+      enter(c) {
+        const self = c.g.missions, steps = c.m.steps;
+        const k = steps.indexOf(this);
+        n = steps.slice(0, k + 1).filter(s => s.kind === 'checkpoint').length;
+        c.m.cp = { k, n, total: c.m.cpTotal, label, ...self._snap() };
+        if (self.replaying) return;
+        c.g.hud.toast?.('Checkpoint ✓');
+        c.g.audio?.sfx('checkpoint');
+        if (!c.g.save?.data?.seenRetryHelp) { c.g.save?.set?.('seenRetryHelp', true); c.g.hud.help?.('Checkpoint ✓ If this goes wrong you can retry from here.', 5); }
+      },
       update() { return 'done'; },
+      restore(c) { restoreCheckpoint(c, opts); },
     };
   },
 };
+
+/** Put the player (and their vehicle) where a checkpoint says. */
+function restoreCheckpoint(c, { at, vehicle, park, hunters }) {
+  const g = c.g, P = g.player;
+  const spot = (name, p) => {
+    const v = c.ent[name];
+    if (!v || !p) return v;
+    const k = kerbSpot(c, v.type, p, { ignore: v });
+    v.x = k.x; v.z = k.z; v.heading = k.heading; v.vx = v.vz = v.w = 0;
+    v.y = g.city?.groundHeight?.(k.x, k.z) ?? 0;
+    return v;
+  };
+  const pt = typeof at === 'function' ? at(c) : at;
+  for (const [name, p] of Object.entries(park || {})) spot(name, typeof p === 'function' ? p(c) : p);
+  const v = vehicle ? spot(vehicle, pt) : null;
+  if (v) { v.wrecked = false; v.health = 1000; v.onFire = 0; P.enterVehicle?.(v); }
+  else if (pt) {
+    // On foot: on the footpath beside the kerb, or the kerb itself if that is inside something.
+    const k = c.roadPoint(pt.x, pt.z, 1), n = g.net.nearest?.(k.x, k.z, 30, {});
+    let x = k.x, z = k.z;
+    if (n) { const dx = k.x - n.x, dz = k.z - n.z, d = Math.hypot(dx, dz) || 1; x += dx / d * 2.6; z += dz / d * 2.6; }
+    if (g.colliders?.blocked?.(x, z, 0.3)) { x = k.x; z = k.z; }
+    P.teleport?.(x, z, k.heading || 0);
+  }
+  for (const name of hunters || []) {
+    const h = c.ent[name], me = P.pos;
+    if (!h) continue;
+    const hd = me.heading ?? P.heading ?? 0;
+    for (const d of [90, 120, 70, 150]) {
+      const r = c.roadPoint(me.x - Math.sin(hd) * d, me.z - Math.cos(hd) * d, 1);
+      if (inSight(g, r.x, 0, r.z) && d < 150) continue;
+      h.x = r.x; h.z = r.z; h.vx = h.vz = h.w = 0; h.heading = headingTo(r.x, r.z, me.x, me.z);
+      break;
+    }
+  }
+}
+
+/**
+ * Ammo after a retry: for each magazine and calibre the larger of now and the checkpoint, so the
+ * rounds spent on the failed attempt come back and loot picked up since stays (never taken away).
+ */
+export function topUpInventory(w, inv) {
+  if (!w || !inv) return;
+  w.mags ||= {}; w.ammo ||= {};
+  for (const id of inv.weapons || []) if (WEAPONS[id] && id !== 'grenade') w.inv?.add?.(id);
+  for (const k in AMMO) { const n = Math.min(AMMO[k].max, Math.max(w.ammo[k] || 0, Math.floor(Number(inv.ammo?.[k]) || 0))); if (n > 0) w.ammo[k] = n; }
+  if (w.ammo.frag > 0) w.inv?.add?.('grenade');
+  for (const id in inv.mags || {}) { const wd = WEAPONS[id]; if (wd?.mag && (w.inv?.has?.(id) ?? true)) w.mags[id] = Math.min(wd.mag, Math.max(w.mags[id] || 0, Math.floor(Number(inv.mags[id]) || 0))); }
+  w._owned = null; w._dirty = true;
+}
 
 /**
  * A race rival's route: to the checkpoint it owes next and on through the one after, planned again
@@ -606,7 +847,7 @@ const _view = new THREE.Frustum(), _pv = new THREE.Matrix4(), _ball = new THREE.
  * in the camera's view (as the last frame drew it) out to where the haze sets in. With no camera
  * to ask, anywhere within 45 m.
  */
-function inSight(g, x, y, z) {
+export function inSight(g, x, y, z) {
   const P = g.player.pos, d = dist(x, z, P.x, P.z), cam = g.camera3;
   if (!cam?.projectionMatrix) return d < 45;
   if (d < 15) return true;

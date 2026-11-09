@@ -1,7 +1,7 @@
 // The rules of the city: crimes and consequences, money, damage, wrecks,
 // WASTED and BUSTED, discoveries and photos. Wires the systems together.
 import { dist, clamp } from '../core/math.js';
-import { speedOf, forwardSpeed } from '../actors/vehicle-physics.js';
+import { speedOf, forwardSpeed, burstTyre, repairTyres } from '../actors/vehicle-physics.js';
 import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 import { HOSPITAL, POLICE_STATION } from './story.js';
 import { DynamicDriver } from '../actors/traffic.js';
@@ -9,6 +9,8 @@ import { driveHunters } from './missions.js';
 import { drivingHelp, vehicleKeys, weaponHelp } from '../ui/controls.js';
 import { tapButtons } from '../ui/tap.js';
 import { WEAPONS } from './weapon-data.js';
+import { HitFx } from '../ui/hit-fx.js';
+import { haptic } from '../ui/haptics.js';
 
 const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
 
@@ -24,7 +26,8 @@ export function installRules(g) {
 
   g.nearShrine = () => { const p = g.player.pos; return shrines.some(s => dist(s.x, s.z, p.x, p.z) < 70); };
 
-  g.contextAction = () => g.jobs?.contextAction();
+  // On foot or driving, the action button: a street event's (DANCE) first, then the garage's (lock, buy), then a job's.
+  g.contextAction = () => g.events?.contextAction?.() || g.garage?.contextAction?.() || g.jobs?.contextAction();
 
   g.playerPunch = player => {
     g.audio.sfx('step', 2);
@@ -43,7 +46,7 @@ export function installRules(g) {
     if (g.cutscene) return; // the player is held still and can't fight back
     const P = g.player;
     if (P.state !== 'foot' || dist(p.h.x, p.h.z, P.x, P.z) > 1.5) return;
-    P.damage(dmg, p.cop ? 'police' : 'fight');
+    P.damage(dmg, p.cop ? 'police' : 'fight', p.h);
     g.audio.sfx('punch', 0.7);
     g.camera.addShake(0.12);
     // Down long enough to fall before getting up (a shorter one skips the fall: player.js _down).
@@ -110,12 +113,13 @@ export function installRules(g) {
       g.save.set('seenDriveHelp', true);
       g.hud.help(`${drivingHelp(g)}<br>${vehicleKeys(g)}`, 8);
     }
+    g.garage?.onEnter?.(v);
   };
 
   // A gun in hand for the first time: how to fire, aim and get at the wheel, once.
   g.onGunOut = () => { g.save.set('seenGunHelp', true); g.hud.help(weaponHelp(g), 9); };
 
-  g.onExitedVehicle = (v, spd) => { g.audio.sfx('door'); if (spd > 7) g.camera.addShake(0.3); };
+  g.onExitedVehicle = (v, spd) => { g.audio.sfx('door'); if (spd > 7) g.camera.addShake(0.3); g.garage?.onExit?.(v, spd); };
 
   // Who ran into whom: each car's speed toward the other before this frame's physics (onImpact
   // comes after the bounce; the rules hook notes the speeds just before it). Police units ram the
@@ -127,9 +131,11 @@ export function installRules(g) {
     return mine > 3 && mine > theirs;
   };
   g.vehicles.onImpact = (v, speed, other) => {
+    if (v.owned && v.role !== 'player') g.garage?.alarm?.(v); // a parked car of the player's, rammed
+    if (v.role === 'player' && speed > 5) g.events?.jolt?.(speed, 'crash'); // a passenger feels it
     if (v.role === 'player' || other?.role === 'player') {
       const k = clamp(speed / 20, 0.1, 1);
-      if (v.role === 'player') { g.camera.addShake(k * 0.7); g.audio.sfx('crash', k); g.save.stat('crashes'); }
+      if (v.role === 'player') { g.camera.addShake(k * 0.7); g.audio.sfx('crash', k); g.save.stat('crashes'); if (speed > 6) haptic(g, 30); }
       if (other?.role === 'player' && !storyCar(v) && playerRammed(v, other)) {
         const fresh = g.time - (v.rammedT ?? -9) > 1; // one shunt (and its bounces) is one crime
         v.rammedT = g.time; // and if it blows up, that's the player's doing too (explode)
@@ -151,6 +157,7 @@ export function installRules(g) {
   // Speed breakers and potholes: a thud and a shake under the player.
   g.vehicles.onBump = (v, speed, hole) => {
     if (v.role !== 'player') return;
+    if (v === g.player.vehicle) g.events?.jolt?.(speed, 'bump');
     const k = clamp(speed / (hole ? 4 : 6), 0.15, 1);
     g.camera.addShake(k * (hole ? 0.22 : 0.4));
     g.audio.sfx('thud', k);
@@ -177,6 +184,8 @@ export function installRules(g) {
    */
   g.damageVehicle = (v, dmg, byPlayer = false) => {
     if (!v || v.removed || v.exploded || !(dmg > 0)) return;
+    dmg *= v.dmgK ?? 1; // armour plating (garage)
+    if (v.owned) g.garage?.alarm?.(v);
     if (v.kinematic) g.vehicles.wake(v);
     v.health = Math.max(0, v.health - dmg);
     // A story's car blowing up is the story's (as for a ram: its wreck must not bring the police into the fight that follows).
@@ -210,6 +219,13 @@ export function installRules(g) {
    * and on someone standing still. ~8 a hit; a car takes it on the bodywork instead.
    */
   const muzzle = { x: 0, y: 0, z: 0 };
+  /** Every tyre that bursts goes through here: the bang, and for the player's own car a jolt and the stat. */
+  g.burstTyre = (v, i) => {
+    if (!burstTyre(v, i)) return false;
+    g.audio.sfxAt?.('burst', v.x, v.z);
+    if (v === g.player.vehicle) { g.camera.addShake(0.25); g.save.stat('flats'); }
+    return true;
+  };
   g.pedShoots = p => {
     const P = g.player, pos = P.pos, h = p.h, gun = WEAPONS[p.armed] ? p.armed : 'p92', W = g.weapons;
     if (g.cutscene || g.respawning || P.state === 'dead') return false;
@@ -221,8 +237,13 @@ export function installRules(g) {
     const chance = clamp(0.7 - d / 45, 0.12, 0.65) * (P.speed > 4 ? 0.6 : 1) * (gun === 'm416' ? 0.75 : 1) * (P.state === 'down' ? 0.5 : 1);
     const hit = Math.random() < chance;
     if (hit) {
-      if (P.vehicle) g.damageVehicle(P.vehicle, 18, false);
-      else { P.damage(gun === 'm416' ? 7 : 8, 'police'); g.camera.addShake(0.08); }
+      if (P.vehicle) {
+        g.damageVehicle(P.vehicle, 18, false); g.hitFx?.incoming(h.x, h.z);
+        // From three stars one hit in five goes into a tyre.
+        const W2 = P.vehicle.model?.wheels;
+        if ((g.police?.level || 0) >= 3 && W2?.length && Math.random() < 0.2) g.burstTyre(P.vehicle, Math.floor(Math.random() * W2.length));
+      }
+      else { P.damage(gun === 'm416' ? 7 : 8, 'police', h); g.camera.addShake(0.08); }
     }
     // The tracer from the officer's gun (or hands); a miss goes past, a step or two wide.
     const m = muzzle;
@@ -245,8 +266,8 @@ export function installRules(g) {
     // The blast throws people and cars away from it, hardest close in, and only on its own level
     // (a car blowing up on a flyover doesn't reach the street below).
     const level = o => Math.abs((o.y || 0) - v.y) < 3;
-    if (P.vehicle === v) { P.leaveVehicle(true); P.damage(70, 'explosion'); P.knockDown(Math.random() * 4 - 2, Math.random() * 4 - 2, 2); }
-    else if (d < 7 && P.state === 'foot' && level(P)) { const k = (3 + 6 * (1 - d / 7)) / Math.max(d, 0.5); P.damage((7 - d) * 12, 'explosion'); P.knockDown((pos.x - v.x) * k, (pos.z - v.z) * k, 1.5); }
+    if (P.vehicle === v) { P.leaveVehicle(true); P.damage(70, 'explosion', v); P.knockDown(Math.random() * 4 - 2, Math.random() * 4 - 2, 2); }
+    else if (d < 7 && P.state === 'foot' && level(P)) { const k = (3 + 6 * (1 - d / 7)) / Math.max(d, 0.5); P.damage((7 - d) * 12, 'explosion', v); P.knockDown((pos.x - v.x) * k, (pos.z - v.z) * k, 1.5); }
     g.peds.forEachNear(v.x, v.z, 8, p => {
       if (!level(p.h)) return;
       const dx = p.h.x - v.x, dz = p.h.z - v.z, pd = Math.max(0.5, Math.hypot(dx, dz)), k = (3 + 9 * (1 - pd / 8)) / pd;
@@ -269,6 +290,7 @@ export function installRules(g) {
   // Per-frame rules.
   let skidT = 0, smokeT = 0, saveT = 0;
   g.hooks = [dt => {
+    g.hitFx?.update(g.timeScale > 0 ? dt / g.timeScale : dt); // real time: slow motion doesn't stretch it
     const P = g.player;
     // Through stat(), which marks the save dirty: the autosave below then writes them even on a
     // long quiet drive where nothing else changes.
@@ -276,6 +298,8 @@ export function installRules(g) {
     if (P.vehicle) g.save.stat('distance', speedOf(P.vehicle) * dt);
     driveHunters(g, dt);
     g.jobs.update(dt);
+    g.events?.update?.(dt);
+    g.garage?.update?.(dt);
     // Damage effects and wrecks.
     smokeT -= dt;
     for (const v of g.vehicles.list) {
@@ -327,7 +351,7 @@ export function installRules(g) {
   const CHEATS = {
     BHAUMONEY: () => { g.addCash(5000); return '₹5,000. Paisa hi paisa!'; },
     KADAMCHUTTI: () => { g.police.clear(); return 'Inspector Kadam is on leave.'; },
-    JUGAAD: () => { const v = g.player.vehicle; if (v) { v.health = 1000; v.onFire = 0; v.wrecked = false; v.explodeAt = 0; } g.player.health = g.player.maxHealth; return 'Jugaad: everything fixed.'; },
+    JUGAAD: () => { const v = g.player.vehicle; if (v) { v.health = 1000; v.onFire = 0; v.wrecked = false; v.explodeAt = 0; repairTyres(v); } g.player.health = g.player.maxHealth; return 'Jugaad: everything fixed.'; },
     LALPARI: () => spawnNear('bus', 'Lal Pari at your service.'),
     RICKSHAW: () => spawnNear('auto', 'Auto aala!'),
     POLICEWALA: () => spawnNear('police', 'A jeep, no questions asked.'),
@@ -407,9 +431,11 @@ export function installRules(g) {
 
   // ---------------------------------------------------------------- death and arrest
   // A mission fails at once, but its card waits for the respawn: the HUD has one big-message slot.
-  const endMission = reason => g.missions.active ? (g.missions.fail(reason), reason) : null;
+  // A street event ends quietly: no MISSION FAILED card and no retry.
+  const endMission = reason => { const a = g.missions.active; if (!a) return null; g.missions.fail(reason); return a.def?.event ? null : reason; };
   g.wasted = cause => {
     if (g.player.state === 'dead' || g.respawning) return;
+    const lastV = g.player.vehicle;
     g.player.state = 'dead';
     Object.assign(g.player.human, { pose: 'lie', gun: null, hold: 'none', aim: 0, recoil: 0, reload: 0 });
     g.respawning = true;
@@ -417,12 +443,18 @@ export function installRules(g) {
     const failed = endMission('You were wasted.');
     g.hud.big('WASTED', cause === 'drowned' ? 'The Godavari wins this one' : '', 'wasted', 4.2);
     g.audio.sfx('wasted');
+    g.hitFx?.wasted();
     g.save.stat('wasted');
+    const wasRace = g.jobs.active?.kind === 'race';
     g.jobs.stop(true);
-    setTimeout(() => respawn(HOSPITAL, fee => fee ? `SGGS Civil Hospital: ₹${fee} for the stitches.` : 'SGGS Civil Hospital patched you up for free.', 200, failed), 4200);
+    setTimeout(() => {
+      const quit = () => { g.garage?.onRespawn?.('wasted', lastV); respawn(HOSPITAL, fee => fee ? `SGGS Civil Hospital: ₹${fee} for the stitches.` : 'SGGS Civil Hospital patched you up for free.', 200, failed); };
+      offerOr(failed, wasRace, quit);
+    }, 4200);
   };
   g.busted = () => {
     if (g.respawning) return;
+    const lastV = g.player.vehicle;
     g.respawning = true;
     g.player.state = 'dead';
     document.body.classList.add('busted');
@@ -430,9 +462,21 @@ export function installRules(g) {
     g.hud.big('BUSTED', 'Inspector Kadam sends his regards', 'busted', 4);
     g.audio.sfx('busted');
     g.save.stat('busted');
+    const wasRace = g.jobs.active?.kind === 'race';
     g.jobs.stop(true);
-    setTimeout(() => respawn(POLICE_STATION, fee => fee ? `Released from Vazirabad Police Station. Fine: ₹${fee}.` : 'Released from Vazirabad Police Station with a warning.', 300, failed), 4000);
+    setTimeout(() => {
+      const quit = () => { g.garage?.onRespawn?.('busted', lastV); respawn(POLICE_STATION, fee => fee ? `Released from Vazirabad Police Station. Fine: ₹${fee}.` : 'Released from Vazirabad Police Station with a warning.', 300, failed); };
+      offerOr(failed, wasRace, quit);
+    }, 4000);
   };
+  /**
+   * After WASTED or BUSTED in a story mission or a race: the RETRY / QUIT card (QUIT is the usual
+   * respawn, with its fee and the MISSION FAILED card). Anything else respawns at once.
+   */
+  function offerOr(failed, wasRace, quit) {
+    if ((failed && g.missions.offerRetry?.(quit)) || (wasRace && g.jobs.offerRaceRetry?.(quit))) return;
+    quit();
+  }
   /** Back on your feet at `at`; msg(fee charged) says where. A mission that failed shows its card now. */
   function respawn(at, msg, fee, failed) {
     const P = g.player;
@@ -442,6 +486,7 @@ export function installRules(g) {
     const fine = Math.min(fee, g.save.cash);
     if (fine) g.addCash(-fine);
     P.health = P.maxHealth;
+    g.hitFx?.reset();
     const n = g.net.nearest(at.x, at.z, 50, {}, r => !g.net.raised[r]);
     const off = n ? (g.net.width[n.road] / 2 + 1) * (g.net.kerbSide(n.road) || 1) : 0;
     P.teleport(n ? n.x + n.dz * off : at.x, n ? n.z - n.dx * off : at.z, n ? Math.atan2(n.dx, n.dz) : 0);
@@ -451,7 +496,8 @@ export function installRules(g) {
     g.save.flush();
   }
 
-  g.onPlayerDamage = () => {};
+  g.hitFx ??= new HitFx(g);
+  g.onPlayerDamage = (a, s, f) => g.hitFx?.hurt(a, s, f);
   g.onWantedChange = (level, before) => {
     if (level > before) { g.audio.sfx('wanted'); if (before === 0 && !g.save.data.seenWantedHelp) { g.save.set('seenWantedHelp', true); g.hud.help(`You are <b>wanted</b>. Break line of sight and get out of the flashing search area on the radar to lose the police.${g.save.data.garage ? ' A respray at Anna\'s garage works too.' : ''}`, 8); } }
   };
@@ -516,12 +562,14 @@ export function installRules(g) {
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   });
   document.getElementById('photo-share').addEventListener('click', async () => {
+    g.lifecycle?.leaving?.(); // the share sheet takes the screen: save and pause first
     const text = `${g._photoName || 'Nanded'} in GTA Nanded! Play free in your browser: https://gta.nanded.fun`;
     const file = g._photoFile;
     try {
       if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], text });
       else if (navigator.share) await navigator.share({ text });
       else open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+      g.hud.toast('Shared ✓'); clearTimeout(g._photoT); photo.hidden = true;
     } catch { /* closed the share sheet */ }
   });
 }

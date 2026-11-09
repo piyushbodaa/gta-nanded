@@ -243,33 +243,94 @@ export class Game {
   }
 
   /**
-   * While the menu is up, compile one at a time the shaders of everything the city hasn't drawn
-   * yet. The crowd, cars and animals would otherwise compile the first time each comes into
-   * view, and a phone that can't compile in the background stops for every one (Test Lab,
-   * 2026-10-25: a dozen programs in the first seconds of play, frames of up to a second).
-   * `going()` says whether to carry on; whatever is left compiles on first use, as before.
+   * While the menu is up, in the browser's idle time, rehearse the start. Play begins at one of
+   * `spots` (likeliest first), far from where the city was built for loading, and its first
+   * frame would build the streets there, compile shaders and send every new mesh to the
+   * graphics chip: 1.1 s on a Nord CE 3 Lite and 2.3 s on a Galaxy A15 (Test Lab, 2026-10-25).
+   * So, a slice at a time: the ground right around each spot, the shaders of everything not
+   * drawn yet (guns, crates, loot beams and tracers included), the first spot's traffic and
+   * people, and each spot drawn once behind the cover. `going()` says whether to carry on;
+   * whatever is left happens at the start, as before. `this.ready` tells how far it got.
    */
-  warmShaders(going) {
-    const r = this.renderer, seen = new Set(), todo = [];
+  getReady(spots, going) {
+    const ready = (this.ready = { filled: null, done: false });
+    const tasks = spots.map(s => until => this.world.chunks.prepare(s.x, s.z, until));
+    tasks.push(...this._shaderTasks());
+    const fill = this.fillStreets(), first = spots[0];
+    if (first) {
+      tasks.push(() => { this._standAt(first); return true; });
+      tasks.push(until => {
+        while (performance.now() < until) if (fill.next().done) { ready.filled = first.key; return true; }
+        return false;
+      });
+    }
+    for (const s of spots) tasks.push(() => { this._standAt(s); this.renderWorld(0, false); return true; });
+    this._idleRun(tasks, going, () => (ready.done = true));
+  }
+
+  /**
+   * Compile only, in idle slices: the shaders of everything in the scene, one per material and
+   * kind of mesh. No teleport and no street fill, so it is safe in play too (after the graphics
+   * chip comes back). `onDone` runs once all of them are ready.
+   */
+  warmShaders(going, onDone) {
+    this._idleRun(this._shaderTasks(), going, onDone);
+  }
+
+  /** One task per shader the scene needs: a material on a kind of mesh (instanced, coloured per instance, skinned...), which picks the variant. */
+  _shaderTasks() {
+    const r = this.renderer, seen = new Set(), tasks = [];
     this.scene.traverse(o => {
-      const m = o.material;
-      if (!(o.isMesh || o.isLine || o.isPoints) || !m || Array.isArray(m) || seen.has(m)) return;
-      seen.add(m);
-      if (!r.properties.get(m).programs) todo.push(o);
+      const m = o.material, geo = o.geometry, a = geo?.attributes;
+      if (!(o.isMesh || o.isLine || o.isPoints || o.isSprite) || !m || Array.isArray(m)) return;
+      let key = `${m.uuid} ${!!o.isInstancedMesh} ${!!o.instanceColor} ${!!o.morphTexture} ${!!o.isBatchedMesh} ${!!o.isSkinnedMesh} ${a?.color?.itemSize} ${!!a?.uv1}`;
+      if (a?.tangent) key += ' t';
+      const morph = geo?.morphAttributes;
+      if (morph && Object.keys(morph).length) key += ` m${Object.keys(morph).join()}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      tasks.push(() => {
+        // The scene is drawn into the post-processing buffer, and the target decides the program
+        // (tone mapping, colour space): compiled for the screen, it would be compiled again.
+        const was = r.getRenderTarget();
+        r.setRenderTarget(this.post?.enabled && this.post.rt ? this.post.rt : null);
+        r.compile(o, this.camera3, this.scene);
+        r.setRenderTarget(was);
+        // Without KHR_parallel_shader_compile the link goes on in the background but the first
+        // draw waits for it: wait here instead, one shader at a time.
+        for (const p of r.properties.get(m).programs?.values() ?? []) p.getUniforms();
+        return true;
+      });
     });
-    const later = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 100 }) : setTimeout(f, 16));
-    const next = () => {
-      const o = todo.shift();
-      if (!o || !going()) return;
-      // The scene is drawn into the post-processing buffer, and the target decides the program
-      // (tone mapping, colour space): compiled for the screen, it would be compiled again.
-      const was = r.getRenderTarget();
-      r.setRenderTarget(this.post.enabled ? this.post.rt : null);
-      r.compile(o, this.camera3, this.scene);
-      r.setRenderTarget(was);
-      later(next);
+    return tasks;
+  }
+
+  /** Run `tasks` in idle slices (each returns true when finished; it is given the slice's deadline) while `going()`, then `onDone`. */
+  _idleRun(tasks, going, onDone) {
+    const later = f => (globalThis.requestIdleCallback ? globalThis.requestIdleCallback(f, { timeout: 100 }) : setTimeout(f, 16));
+    const run = idle => {
+      if (!going()) return;
+      const until = performance.now() + Math.max(5, idle?.timeRemaining?.() ?? 10);
+      while (tasks.length && performance.now() < until) if (tasks[0](until)) tasks.shift();
+      if (tasks.length) later(run);
+      else onDone?.();
     };
-    later(next);
+    later(run);
+  }
+
+  /** The streets filled before the first frame: two seconds of traffic and people, a step at a time, then the parked cars. */
+  *fillStreets() {
+    for (let i = 0; i < 40; i++) { this.traffic?.update(0.05); this.peds?.update(0.05); yield; }
+    if (this.parked) { this.parked.t = 0; this.parked.update(1); }
+  }
+
+  /** Stand the player at a spot, the camera behind and the streets as seen from there, as play would begin. */
+  _standAt(s) {
+    const P = this.player, h = P.human;
+    P.teleport(s.x, s.z, s.heading);
+    h.x = P.x; h.y = P.y; h.z = P.z; h.yaw = P.heading;
+    this.camera.update(0, this.input, { human: h, speed: 0, heading: P.heading, groundY: P.groundY });
+    this.world.chunks.showFrom(s.x, s.z);
   }
 
   // ---------------------------------------------------------------- helpers for actors
@@ -301,7 +362,7 @@ export class Game {
       actor.x += nx * d; actor.z += nz * d;
       const spd = speedOf(v);
       if (spd > 4 && actor.knockDown && actor === this.player) {
-        actor.damage(spd * 2.2, 'vehicle');
+        actor.damage(spd * 2.2, 'vehicle', v);
         actor.knockDown(v.vx * 0.6 + nx * 3, v.vz * 0.6 + nz * 3, 1.4);
       }
     }
@@ -329,14 +390,24 @@ export class Game {
     }
     const input = this.input;
     input.update();
+    // The RETRY / QUIT card reads its keys first: Esc or Start there quits the card, never pauses.
+    this.retryCard?.update(real);
+    // The Jugaad Garage menu reads Esc / A / B before they are dropped; a pause press closes it instead of pausing.
+    if (this.garageMenu?.open) {
+      this.garageMenu.update(real);
+      const s = input.state;
+      s.moveX = s.moveY = s.throttle = s.steer = 0; s.brake = this.player.vehicle ? 1 : 0; s.handbrake = false;
+      for (const a of CUTSCENE_DROPS) input.events.delete(a);
+      input.events.delete('pause'); input.events.delete('map');
+    }
     // Menus: Esc pauses, M opens the map, and either closes the menu again.
     if (this.started && this.pause && !this.respawning) {
       if (input.pressed('pause')) this.pause.toggle(this.pause.tab);
       if (input.pressed('map')) this.pause.open ? this.pause.close() : this.pause.openMenu('map');
     }
     document.body.classList.toggle('cutscene', Boolean(this.cutscene));
-    if (this.cutscene) {
-      // Scripted moments: the player stands still and the camera tells the story.
+    if (this.cutscene || this.retryCard?.open) {
+      // Scripted moments (and the retry card): the player stands still and the camera tells the story.
       const s = input.state;
       s.moveX = s.moveY = s.throttle = s.steer = 0; s.brake = this.player.vehicle ? 1 : 0; s.handbrake = false;
       for (const a of CUTSCENE_DROPS) input.events.delete(a);
@@ -353,6 +424,7 @@ export class Game {
       this.stands?.update(dt);
       this.markets?.update(dt);
       this.police?.update(dt);
+      this.nakabandi?.update(dt);
       this.missions?.update(dt);
       this.hooks?.forEach(f => f(dt));
       this.vehicles.step(dt, this.controls);
@@ -361,6 +433,7 @@ export class Game {
       this.animals?.update(dt);
     }
     this.touch?.update();
+    this.lifecycle?.update();
     this.weaponWheel?.update(real);
     // The mouse wheel picks weapons on foot (the camera zoom is V): input reads this when it turns.
     input.weaponScroll = this.player.state === 'foot';
@@ -400,6 +473,7 @@ export class Game {
     this.vehicles.render(dt, cam.position, casters);
     this.humans.update(dt, cam.position, casters, cam);
     this.weaponFx?.update(dt);
+    this.nakabandiFx?.update(dt);
     this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     if (q.shadows > 0) {

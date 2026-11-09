@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { world } from './helpers.js';
-import { ChunkManager } from '../src/world/chunks.js';
+import { ChunkManager, NEAR, RUSH } from '../src/world/chunks.js';
 import { CHUNK } from '../src/world/citygen.js';
 
 function manager() {
@@ -91,4 +91,50 @@ test('far chunks are plain blocks, swapped for the close-up as the player comes 
   const cx = (ch.cx + 0.5) * CHUNK, cz = (ch.cz + 0.5) * CHUNK;
   for (let i = 0; i < 20000 && cm.update(cx, cz, 50) > 0; i++);
   assert.ok(ch.levels[0]?.group.visible && !ch.levels[1]?.group.visible, 'close-up on arrival');
+});
+
+/** The chunks a player standing at (x, z) needs at once: those within RUSH of their square. */
+function underfoot(x, z) {
+  const keys = [];
+  for (let cx = Math.floor((x - RUSH) / CHUNK); cx <= Math.floor((x + RUSH) / CHUNK); cx++) {
+    for (let cz = Math.floor((z - RUSH) / CHUNK); cz <= Math.floor((z + RUSH) / CHUNK); cz++) {
+      if (Math.hypot(Math.max(cx * CHUNK - x, 0, x - (cx + 1) * CHUNK), Math.max(cz * CHUNK - z, 0, z - (cz + 1) * CHUNK)) < RUSH) keys.push(`${cx},${cz}`);
+    }
+  }
+  return keys;
+}
+
+test('the ground where play will start is built ahead, in slices, and the first update there has nothing to rush', () => {
+  const cm = manager();
+  cm.setRadius(300);
+  for (let i = 0; i < 4000 && cm.update(160, 375, 1) > 0; i++); // the city around the loading spot
+  const loaded = [...cm.chunks.keys()];
+  // Zenda Chowk, where Free Roam begins: by a chunk edge (two chunks underfoot), 2.5 km away.
+  const x = -935, z = -1834, need = underfoot(x, z);
+  let slices = 1;
+  while (!cm.prepare(x, z, performance.now() + 1)) slices++;
+  assert.ok(slices > need.length, `${slices} slices`);
+  assert.ok(loaded.every(k => cm.chunks.has(k)), 'nothing dropped while the menu is up');
+  const groups = need.map(k => cm.chunks.get(k)?.levels[NEAR]?.group);
+  assert.ok(groups.every(Boolean), 'every chunk underfoot built close-up');
+  assert.equal(cm.prepare(x, z, performance.now() + 1), true, 'and nothing more to do');
+  cm.update(x, z, 0.01);
+  assert.deepEqual(need.map(k => cm.chunks.get(k)?.levels[NEAR]?.group), groups, 'none of them built again');
+  assert.ok(loaded.every(k => !cm.chunks.has(k)), 'the old spot let go');
+});
+
+test('streaming and building ahead share their builders without spoiling a chunk', () => {
+  const cm = manager(), ref = manager();
+  const x = 517, z = 600, cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK), key = `${cx},${cz}`;
+  ref._build(key, cx, cz);
+  // Half a chunk streamed, then building ahead takes over, then streaming again.
+  cm.setRadius(200);
+  cm.update(x, z, 0.01);
+  for (let i = 0; i < 50 && !cm.job; i++) cm.update(x, z, 0.01);
+  cm._dispose(key, cm.chunks.get(key));
+  cm.prepare(x, z, 0);
+  assert.ok(cm._prep && !cm.job, 'building ahead dropped the half-streamed chunk');
+  for (let i = 0; i < 4000 && cm.update(x, z, 1) > 0; i++);
+  assert.ok(!cm._prep, 'and gave way to streaming');
+  assert.equal(fingerprint(cm.chunks.get(key)), fingerprint(ref.chunks.get(key)));
 });

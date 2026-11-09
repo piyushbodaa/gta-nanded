@@ -134,6 +134,26 @@ export class Vehicles {
     out.x = v.x + s.x * c + s.z * sn; out.z = v.z - s.x * sn + s.z * c;
     return out;
   }
+  /** Centre of wheel i (an index into v.model.wheels) in world space, out = {x, y, z}; a flat one sits lower. */
+  wheelWorld(v, i, out = {}) {
+    const w = v.model.wheels[i];
+    if (!w) return null;
+    local(v, w[0], w[1], out);
+    out.y = v.y + (v.flat & (1 << i) ? w[2] * 0.78 : w[2]);
+    return out;
+  }
+  /** The wheel whose tyre (x, y, z) is within r of, the nearest of them, or -1. */
+  wheelNear(v, x, y, z, r) {
+    const W = v.model.wheels, p = this._wn || (this._wn = {});
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < W.length; i++) {
+      this.wheelWorld(v, i, p);
+      const d = Math.hypot(p.x - x, p.y - y, p.z - z) - W[i][2];
+      if (d < r && d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
   /**
    * Door position where people get in and out: the driver's side (right-hand drive), and the left of
    * a two-wheeler, the side its stand and the rider's foot are on (local +x is the vehicle's left).
@@ -257,7 +277,8 @@ export class Vehicles {
       b.x = x - b.vx * back; b.z = z - b.vz * back;
       // Traffic and parked vehicles meet a crash with their real mass: as walls, a scooter would throw
       // a hatch back the way it came. A brush leaves them to their drivers.
-      const wakes = b.kinematic && b.role !== 'parked-static' && closingSpeed(a, b) > 1.5;
+      // A nakabandi's jeep is a wall to a car nosing into it; rammed hard (over 6 m/s) it is shoved aside.
+      const wakes = b.kinematic && b.role !== 'parked-static' && closingSpeed(a, b) > (b.role === 'roadblock' ? 6 : 1.5);
       if (wakes) b.kinematic = false;
       const imp = collidePair(a, b);
       if (imp > 1.5) {
@@ -316,7 +337,7 @@ export class Vehicles {
   }
 
   _impact(v, speed, other) {
-    const dmg = Math.max(0, speed - 3) * (v.spec.mass > 5000 ? 2 : 9) * (other && other.mass > v.mass * 3 ? 1.6 : 1);
+    const dmg = Math.max(0, speed - 3) * (v.spec.mass > 5000 ? 2 : 9) * (other && other.mass > v.mass * 3 ? 1.6 : 1) * (v.dmgK ?? 1);
     v.health = Math.max(0, v.health - dmg);
     v.lastHit = this.time;
     v.lastImpact = Math.max(v.lastImpact || 0, speed);
@@ -337,6 +358,7 @@ export class Vehicles {
     let wn = 0, bn = 0, hn = 0;
     const night = this.night;
     const maxD2 = this.drawDistance * this.drawDistance;
+    this.extras?.begin(); // owned cars' underglow and stickers (garage)
     // Vehicles inside the sun's shadow map first: the shadow pass draws only those.
     for (let pass = 0; pass < 2; pass++) {
       if (pass === 1) { for (const t of TYPE_KEYS) this.meshes[t].nShadow = this.meshes[t].n; this.wheelsShadow = wn; }
@@ -371,21 +393,27 @@ export class Vehicles {
         // night, only with someone at the wheel (off, they darken with the night like the paint);
         // tail lamps brighter braking; the light bar flashing red (1) and blue (2) with the siren.
         const lit = Boolean(v.driver) && !v.wrecked;
-        const lamp = v.wrecked ? 0.15 : lit ? 0.55 + night * 0.9 : 0.55 - night * 0.4;
+        // An owned car's lock chirp and alarm blink its lamps (garage: v.flashT).
+        const blink = v.flashT > this.time && Math.floor(this.time * 8) % 2;
+        const lamp = (v.wrecked ? 0.15 : lit ? 0.55 + night * 0.9 : 0.55 - night * 0.4) + (blink ? 0.8 : 0);
         const flash = v.sirenOn && !v.wrecked ? 1 + (Math.floor(this.time * 7 + v.id) % 2) : 0;
         M.lights.setColorAt(i, _c.setRGB(lamp, lamp + (lit && v.braking ? 0.5 : 0), flash));
         // Wheels.
         const model = v.model;
-        for (const [wx, wz, r, front, width] of model.wheels) {
+        for (let k = 0; k < model.wheels.length; k++) {
+          const [wx, wz, r, front, width] = model.wheels[k];
           if (wn >= this.wheels.instanceMatrix.count) break;
           _e.set(v.wheelSpin || 0, front ? v.steer : 0, 0, 'YXZ');
           _q.setFromEuler(_e);
-          _p.set(wx, r, wz);
-          _s.set(width, r, r);
+          // A burst tyre is squashed flat, the rim nearly on the road.
+          const fr = v.flat & (1 << k) ? r * 0.78 : r;
+          _p.set(wx, fr, wz);
+          _s.set(width, fr, fr);
           _t.compose(_p, _q, _s);
           _w.multiplyMatrices(_m, _t);
           this.wheels.setMatrixAt(wn++, _w);
         }
+        if (v.mods && (v.mods.neon || v.mods.sticker != null)) this.extras?.add(v, _m);
         // Contact shadow.
         if (bn < this.blobs.instanceMatrix.count) {
           _e.set(0, v.heading, 0); _q.setFromEuler(_e);
@@ -421,6 +449,7 @@ export class Vehicles {
     this.wheels.visible = wn > 0; this.blobs.visible = bn > 0; this.beams.visible = hn > 0;
     this.beams.material.opacity = clamp(night * 0.55, 0, 0.55);
     this.beams.visible = hn > 0 && night > 0.05;
+    this.extras?.end(night);
   }
 
   _seat(v, M) {

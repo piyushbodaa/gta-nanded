@@ -18,12 +18,23 @@ import { Police } from './game/police.js';
 import { Weapons } from './game/weapons.js';
 import { WeaponFx } from './game/weapon-fx.js';
 import { WeaponWheel } from './ui/weapon-wheel.js';
+import { Nakabandi } from './game/nakabandi.js';
+import { NakabandiFx } from './game/nakabandi-fx.js';
+import { RetryCard } from './ui/retry.js';
 import { Missions } from './game/missions.js';
 import { Jobs } from './game/jobs.js';
+import { SIDE } from './game/side.js';
+import { Garage } from './game/garage.js';
+import { GarageMenu } from './ui/garage-menu.js';
+import { VehicleExtras } from './actors/vehicle-extras.js';
+import { StreetEvents } from './game/street-events.js';
 import { Save } from './game/save.js';
-import { STORY, HOME, dressWorld } from './game/story.js';
+import { STORY, dressWorld } from './game/story.js';
+import { startSpot } from './game/start-spot.js';
 import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
+import { Lifecycle } from './core/lifecycle.js';
+import { applyResume, shouldResume, resumeContext, resumeLabel } from './game/resume.js';
 import { track } from './core/analytics.js';
 import { press } from './ui/controls.js';
 import { installKind } from './ui/install.js';
@@ -69,6 +80,7 @@ function keepFullscreen(game) {
 async function boot() {
   const probe = document.createElement('canvas').getContext('webgl2');
   if (!probe) { fatal('GTA Nanded needs WebGL 2. Use a current Chrome, Edge, Firefox or Safari with hardware acceleration on, then reload.'); return; }
+  probe.getExtension('WEBGL_lose_context')?.loseContext(); // give the probe's context back at once
   const intro = createIntro();
   const canvas = $('game-canvas');
   const game = new Game(canvas);
@@ -89,13 +101,18 @@ async function boot() {
   game.peds = new Peds(game);
   game.animals = new Animals(game);
   game.police = new Police(game);
-  // Guns and their loot. WeaponFx adds its meshes now, before the menu compiles the shaders (warmShaders).
+  game.nakabandi = new Nakabandi(game); // roadblocks from three stars, the drone at five
+  // Guns and their loot. WeaponFx adds its meshes now, before the menu gets the start ready (getReady compiles their shaders).
   game.weapons = new Weapons(game);
   game.weaponFx = new WeaponFx(game);
+  game.nakabandiFx = new NakabandiFx(game); // its meshes too, so the warm-up compiles them
+  game.vehicles.extras = new VehicleExtras(game.scene, game); // owned cars' underglow and stickers (also before getReady)
   game.camera.weapons = game.weapons;
-  game.missions = new Missions(game, STORY);
+  game.missions = new Missions(game, [...STORY, ...SIDE]); // the story, and the side jobs it opens
   dressWorld(game);
   game.jobs = new Jobs(game);
+  game.garage = new Garage(game); // Society Parking and the Jugaad Garage (after Missions: its bays keep clear of every start)
+  game.events = new StreetEvents(game); // something happening nearby in free roam
   // The radar's activity icons follow the save: the garage opens in the story, stamped landmarks
   // drop off and NEW STORY starts over, so they are read fresh each time (a few dozen, 30 times a second).
   // Loot crates nearby join them; the list is put together at most twice a second, not on every read.
@@ -103,13 +120,16 @@ async function boot() {
   let blips = [], blipsAt = -Infinity;
   Object.defineProperty(game, 'staticBlips', {
     get: () => {
-      if (Math.abs(game.time - blipsAt) >= 0.5) { blipsAt = game.time; blips = [...game.jobs.staticBlips(), ...pumps, ...game.weapons.blips()]; }
+      if (Math.abs(game.time - blipsAt) >= 0.5) { blipsAt = game.time; blips = [...game.jobs.staticBlips(), ...game.garage.staticBlips(), ...pumps, ...game.weapons.blips()]; }
       return blips;
     },
   });
   game.touch = new TouchControls(game);
   game.weaponWheel = new WeaponWheel(game);
+  game.retryCard = new RetryCard(game);
+  game.garageMenu = new GarageMenu(game);
   game.pause = new PauseMenu(game);
+  game.lifecycle = new Lifecycle(game);
   keepFullscreen(game);
   installRules(game);
   game.hud.radioText = (name, tag, color = '#fff') => {
@@ -134,34 +154,33 @@ async function boot() {
     status('Tuning the graphics for this device');
     await new Promise(r => setTimeout(r, 30)); // let the status paint before the GPU is busy
     // Timed on the station forecourt, where a new story opens: the busiest place play begins.
-    game.calibrate({ x: 5.3 - 4, z: 10.9 + 2, heading: Math.PI * 0.75 });
+    game.calibrate(startSpot(game.net, 'new'));
   }
   status('The city is yours', 1);
   const has = game.save.hasProgress;
   const done = STORY.filter(m => game.save.done(m.id)).length;
   if (has) { $('menu-continue').hidden = false; $('menu-continue-meta').textContent = `${done}/${STORY.length} MISSIONS · ₹${game.save.cash.toLocaleString('en-IN')}`; }
+  // Back within minutes of the phone dropping the game (WhatsApp, a call): carry on where you were.
+  const resume = game.save.data.resume;
+  const canResume = shouldResume(resume, resumeContext());
+  if (canResume) { $('menu-continue').hidden = false; $('menu-continue').querySelector('strong').textContent = 'TAP TO CARRY ON'; $('menu-continue-meta').textContent = resumeLabel(resume); }
   for (const id of ['menu-continue', 'menu-new', 'menu-free']) $(id).disabled = false;
-  // While the player reads the menu, compile the shaders that play would otherwise stop for.
+  // While the player reads the menu, get the start ready where they will likely begin: at home
+  // to continue a game, at the station for a first one (Free Roam begins at home too).
   let onMenu = true;
-  game.warmShaders(() => onMenu && !game.started);
+  const spots = has ? [startSpot(game.net, 'continue'), startSpot(game.net, 'new')] : [startSpot(game.net, 'new'), startSpot(game.net, 'free')];
+  game.getReady(spots, () => onMenu && !game.started);
 
   // Set at the first tap: a second one while the sound starts up (a double tap) must not start the game twice.
   let starting = false;
-  const begin = async mode => {
+  const begin = mode => {
     if (starting || game.started) return;
     starting = true;
     onMenu = false;
     try {
       fullscreen(); // while the tap still counts as a user gesture
-      if (st.sound !== false) {
-        let timeout;
-        try {
-          // An interrupted audio session can leave resume() pending indefinitely.
-          await Promise.race([game.audio.init(), new Promise(r => { timeout = setTimeout(r, 1000); })]);
-          game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true);
-        } catch { /* audio is optional */ }
-        finally { clearTimeout(timeout); }
-      }
+      // Sound starts with the tap, but the game doesn't wait for the phone's audio to open.
+      if (st.sound !== false) { try { game.audio.init().catch(() => {}); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
       const play = () => {
         try { startGame(game, mode); }
         finally { starting = false; onMenu = !game.started; }
@@ -170,7 +189,7 @@ async function boot() {
       else play();
     } catch (err) { starting = false; onMenu = !game.started; throw err; }
   };
-  $('menu-continue').addEventListener('click', () => begin('continue'));
+  $('menu-continue').addEventListener('click', () => begin(canResume ? 'resume' : 'continue'));
   // Over a save, NEW STORY asks first, in its big label: a phone player can't read the small one.
   // The second tap must be a deliberate one: not the other half of a double tap, and not one
   // long after the question went away.
@@ -202,26 +221,24 @@ async function boot() {
 
 function startGame(game, mode) {
   track('game_start', { mode });
-  const P = game.player;
+  const P = game.player, spot = startSpot(game.net, mode);
   game.save.data.started = true;
   // What the save carries (a NEW STORY has just reset it to the starter pistol).
   game.weapons.fromSave(game.save.data.inventory);
-  if (mode === 'new') {
-    // The story opens on the station forecourt, Hazur Sahib Nanded, late in the afternoon.
-    P.teleport(5.3 - 4, 10.9 + 2, Math.PI * 0.75);
-    game.sky.hours = 17.1;
-  } else {
-    const n = game.net.nearest(HOME.x, HOME.z, 30, {});
-    P.teleport(HOME.x + (n ? n.dz * 4 : 0), HOME.z - (n ? n.dx * 4 : 0), n ? Math.atan2(n.dx, n.dz) : 0);
-    game.sky.hours = 9.5 + Math.random() * 7;
-  }
+  P.teleport(spot.x, spot.z, spot.heading);
+  // The player's own cars wait in their bays (before a resume, which may put the player in one).
+  game.garage?.fromSave(game.save.data.fleet);
+  game.garage?.spawnAll();
+  // The story opens on the station forecourt late in the afternoon; anything else at home, by day.
+  game.sky.hours = mode === 'new' ? 17.1 : 9.5 + Math.random() * 7;
   if (mode === 'free') game.freeRoam = true;
+  // Carrying on after the phone dropped the game: back where you were, before the streets fill there.
+  if (mode === 'resume') applyResume(game, game.save.data.resume);
   document.body.classList.add('playing');
   game.hud.show(true);
   game.touch.show(true);
-  // Populate the streets before the first frame.
-  for (let i = 0; i < 40; i++) { game.traffic.update(0.05); game.peds.update(0.05); }
-  game.parked.t = 0; game.parked.update(1);
+  // Populate the streets before the first frame, unless the menu already did it here.
+  if (mode === 'resume' || game.ready?.filled !== spot.key) for (const _ of game.fillStreets());
   // Keys pressed on the cover or during the intro were not meant for the street.
   game.input.clear(); game.input.live = true;
   game.start();
@@ -240,7 +257,7 @@ function startGame(game, mode) {
   const finished = STORY.every(m => game.save.done(m.id));
   if (mode === 'new') { game.hud.big('गोदावरी गोल्ड', 'GODAVARI GOLD', 'title', 3.4); setTimeout(() => game.missions.start(STORY[0].id), 3600); }
   else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map${finished ? ': races and landmarks to photograph are marked on it.' : ', or find a contact marker to play the story.'}`, 7);
-  else game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. ${finished ? `Godavari Gold is done: the city is yours. ${press(game, 'map')} for races and landmarks.` : 'Your next contact is on the radar.'}`, 6);
+  else if (mode !== 'resume') game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. ${finished ? `Godavari Gold is done: the city is yours. ${press(game, 'map')} for races and landmarks.` : 'Your next contact is on the radar.'}`, 6);
   game.canvas.focus();
 }
 

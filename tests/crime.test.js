@@ -237,6 +237,30 @@ test('WASTED in a mission shows its card, then MISSION FAILED after the respawn;
   } finally { mock.timers.reset(); }
 });
 
+test('WASTED during a street event ends it quietly: no MISSION FAILED card after the respawn', () => {
+  const g = rulesGame();
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    g.missions.active = { def: { event: 'snatch' } };
+    g.wasted();
+    assert.equal(g.missions.active, null, 'the event is over');
+    mock.timers.tick(4200);
+    assert.ok(!g.big.includes('MISSION FAILED') || g.big.lastIndexOf('MISSION FAILED') < g.big.lastIndexOf('WASTED'), 'no failed card after WASTED');
+  } finally { mock.timers.reset(); }
+});
+
+test('the action button asks a street event first, then the garage, then a job', () => {
+  const g = rulesGame();
+  g.jobs.contextAction = () => ({ label: 'JOB' });
+  assert.equal(g.contextAction().label, 'JOB');
+  g.garage = { contextAction: () => ({ label: 'LOCK CAR' }) };
+  assert.equal(g.contextAction().label, 'LOCK CAR');
+  g.events = { contextAction: () => ({ label: 'DANCE' }) };
+  assert.equal(g.contextAction().label, 'DANCE');
+  g.events.contextAction = () => null;
+  assert.equal(g.contextAction().label, 'LOCK CAR');
+});
+
 test('a frozen player is not beaten up during a cutscene', () => {
   const g = rulesGame();
   g.cutscene = true;

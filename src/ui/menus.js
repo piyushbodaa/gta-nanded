@@ -5,6 +5,7 @@ import { dist } from '../core/math.js';
 import { key, keyName, verb, pick } from './controls.js';
 import { installKind, promptInstall } from './install.js';
 import { tapButtons } from './tap.js';
+import { haptic } from './haptics.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -27,6 +28,12 @@ export class PauseMenu {
     const g = this.game;
     for (const b of this.root.querySelectorAll('[data-tab]')) b.addEventListener('click', () => this.show(b.dataset.tab));
     $('pause-resume').addEventListener('click', () => this.close());
+    // Back to the last checkpoint of this mission, or to the grid of this race.
+    $('pause-retry').addEventListener('click', () => {
+      this.close();
+      if (g.missions.canRetry) g.missions.retryActive();
+      else if (g.jobs.active?.kind === 'race') { g.jobs.stop(true); g.jobs.retryRace(); }
+    });
     $('map-zoom-in').addEventListener('click', () => this.map.zoomBy(1.4));
     $('map-zoom-out').addEventListener('click', () => this.map.zoomBy(0.7));
     $('map-me').addEventListener('click', () => { const p = g.player.pos; this.map.focus(p.x, p.z, 0.8); });
@@ -35,6 +42,13 @@ export class PauseMenu {
     $('set-quality').addEventListener('click', () => { g.quality.cycle(g); this._settings(); });
     $('set-fps').addEventListener('click', () => { g.quality.cycleFps(); this._settings(); });
     $('set-perf').addEventListener('click', () => { const s = g.save.data.settings; s.perf = !s.perf; g.hud.showPerf(s.perf); g.save.dirty(); this._settings(); });
+    // Vibration (Android): turning it on buzzes once, so the player feels it work. The menu pauses
+    // the game, and haptic() stays quiet while paused, so this one goes to the phone directly.
+    $('set-haptics').addEventListener('click', () => {
+      const s = g.save.data.settings; s.haptics = s.haptics === false; g.save.dirty(); this._settings();
+      if (s.haptics) haptic({ save: g.save, input: g.input }, 30, true);
+    });
+    $('set-awake')?.addEventListener('click', () => { const s = g.save.data.settings; s.awake = s.awake === false; g.save.dirty(); this._settings(); });
     $('set-install').addEventListener('click', async () => {
       if (installKind() === 'ios') { $('set-install-help').hidden = !$('set-install-help').hidden; return; }
       await promptInstall();
@@ -98,6 +112,7 @@ export class PauseMenu {
     this.root.querySelector(`[data-tab="${tab}"]`)?.focus({ preventScroll: true });
   }
   close() {
+    if (this.game.lifecycle?.blocking) return; // the GPU-lost card is up: it closes the menu itself
     const g = this.game;
     // Full screen coming back after an app switch: stay paused until the screen has settled, then
     // close, unless the player has gone again meanwhile.
@@ -113,6 +128,7 @@ export class PauseMenu {
   show(tab) {
     this.tab = tab;
     $('pause-resume').querySelector('kbd').textContent = keyName(this.game, 'pause'); // Esc, or Start on a gamepad
+    $('pause-retry').hidden = !(this.game.missions?.canRetry || this.game.jobs?.active?.kind === 'race');
     for (const b of this.root.querySelectorAll('[data-tab]')) {
       const on = b.dataset.tab === tab;
       b.setAttribute('aria-selected', String(on));
@@ -151,13 +167,17 @@ export class PauseMenu {
 
   _story() {
     const g = this.game, s = g.save;
-    $('story-list').innerHTML = STORY.map((m, i) => {
+    const card = (m, n) => {
       const done = s.done(m.id), open = (m.requires || []).every(r => s.done(r));
       const ch = CHARACTERS[m.giver];
-      return `<div class="card ${done ? 'done' : open ? '' : 'locked'}"><span class="sub">${String(i + 1).padStart(2, '0')} · ${esc(ch?.name || '')}</span><h3>${esc(m.subtitle)}</h3><p lang="mr">${esc(m.title)}${m.reward ? ` · ₹${m.reward.toLocaleString('en-IN')}` : ''}</p>${!done && open ? `<button type="button" data-go="${m.id}">Set waypoint</button>` : done ? '' : '<p>Locked: finish earlier missions.</p>'}</div>`;
-    }).join('');
+      return `<div class="card ${done ? 'done' : open ? '' : 'locked'}"><span class="sub">${n} · ${esc(ch?.name || '')}</span><h3>${esc(m.subtitle)}</h3><p lang="mr">${esc(m.title)}${m.reward ? ` · ₹${m.reward.toLocaleString('en-IN')}` : ''}</p>${!done && open ? `<button type="button" data-go="${m.id}">Set waypoint</button>` : done ? '' : '<p>Locked: finish earlier missions.</p>'}</div>`;
+    };
+    // The side jobs follow the story: they open as it goes on.
+    const side = (g.missions?.defs || []).filter(d => d.side);
+    $('story-list').innerHTML = STORY.map((m, i) => card(m, String(i + 1).padStart(2, '0'))).join('')
+      + (side.length ? `<h3 class="list-head">SIDE JOBS · साईड काम</h3>${side.map(m => card(m, m.id.toUpperCase())).join('')}` : '');
     for (const b of $('story-list').querySelectorAll('[data-go]')) b.addEventListener('click', () => {
-      const m = STORY.find(x => x.id === b.dataset.go);
+      const m = g.missions.byId.get(b.dataset.go);
       const p = g.missions.startPoint(m);
       this.setWaypoint(p.x, p.z, m.subtitle);
       this.show('map');
@@ -172,6 +192,9 @@ export class PauseMenu {
       ['BHOOKH EXPRESS', 'डिलिव्हरी', `On any bike or scooty ${job}. Collect orders from restaurants and deliver them while they are still hot.`, `${g.save.data.stats.deliveries} deliveries`],
       ...j.races.map(r => [r.name.toUpperCase(), 'STREET RACE', `Drive into the orange marker and ${pick(g, { keyboard: job, gamepad: job, touch: 'tap <kbd class="tap">START RACE</kbd>' })}. ₹${r.reward} for first place.`, rec[r.id] ? `Best: ${rec[r.id].toFixed(1)}s` : 'Not raced yet', r]),
       ['RANG GARAGE', 'रंग गॅरेज', g.save.data.garage ? "Drive into Anna's garage at Workshop Corner while wanted: new colour, repairs, stars cleared. ₹250." : 'Unlocks during the story.', ''],
+      ['JUGAAD GARAGE', 'जुगाड गॅरेज', "Bablu Mistri, next to Anna's (J on the radar). Drive in and stop: engine, brakes, armour, bulletproof tyres, pressure horns, neon, stickers, paint. A dealer lot next door sells cars.", ''],
+      ['SOCIETY PARKING', 'सोसायटी पार्किंग', `Zenda Chowk (P). Stop any car in a free bay to make it yours (up to 4). ${key(g, 'action')} / action locks it. Left far away, it is towed home for ₹100.`, `${g.save.data.fleet?.cars?.length || 0}/4 cars`],
+      ['STREET EVENTS', 'रस्त्यावरचे प्रसंग', 'In free roam something happens nearby every few minutes: a blue ! on the radar. Chase a chain-snatcher, drive someone hurt to hospital, get a student to the exam, or join a baraat. Helping earns cash and Izzat.', `${g.save.data.stats.events || 0} helped · Izzat ${g.save.data.events?.izzat || 0}`],
       ['ROADSIDE SNACKS', 'चहा · वडा पाव', `Walk up to a tea stall or handcart and ${pick(g, { keyboard: `press ${key(g, 'action')}`, gamepad: `press ${key(g, 'action')}`, touch: 'tap the button that appears' })}: chai, vada pav, misal… They heal you and give you a burst of energy.`, ''],
     ];
     $('jobs-list').innerHTML = cards.map(([t, sub, p, meta, race], i) => `<div class="card"><span class="sub">${sub}</span><h3>${t}</h3><p>${p}</p>${meta ? `<p class="small">${meta}</p>` : ''}${race ? `<button type="button" data-race="${i}">Set waypoint</button>` : ''}</div>`).join('');
@@ -188,15 +211,17 @@ export class PauseMenu {
   }
 
   _stats() {
-    const s = this.game.save.data, st = s.stats;
+    const s = this.game.save.data, st = s.stats, sideDefs = (this.game.missions?.defs || []).filter(d => d.side);
     const items = [
       [`${STORY.filter(m => s.story.includes(m.id)).length}/${STORY.length}`, 'Story missions'],
+      ...(sideDefs.length ? [[`${sideDefs.filter(m => s.story.includes(m.id)).length}/${sideDefs.length}`, 'Side jobs']] : []),
       [`₹${s.cash.toLocaleString('en-IN')}`, 'Cash'],
       [`${(st.distance / 500).toFixed(1)} km`, 'Driven (city scale)'],
       [st.fares, 'Rickshaw fares'], [st.deliveries, 'Deliveries'],
       [`${s.stamps.length}/17`, 'Passport stamps'], [`${s.districts.length}/53`, 'Neighbourhoods'],
       [st.jacked, 'Vehicles jacked'], [st.crashes, 'Crashes'], [st.punches, 'Punches thrown'],
       [st.shots ?? 0, 'Shots fired'], [st.kills ?? 0, 'Knock-outs'], [st.headshots ?? 0, 'Headshots'],
+      [st.events || 0, 'Street events'], [s.events?.izzat || 0, 'Izzat'],
       [st.busted, 'Times busted'], [st.wasted, 'Times wasted'],
       [`${Math.floor(st.playTime / 3600)}h ${Math.floor((st.playTime % 3600) / 60)}m`, 'Played'],
     ];
@@ -208,6 +233,9 @@ export class PauseMenu {
     $('set-quality').textContent = g.quality.label();
     $('set-fps').textContent = g.quality.fpsLabel();
     $('set-perf').textContent = s.perf ? 'On' : 'Off';
+    $('set-haptics-row').hidden = !(typeof navigator !== 'undefined' && 'vibrate' in navigator); // Android only: hidden on iOS and desktop
+    $('set-haptics').textContent = s.haptics === false ? 'Off' : 'On';
+    if ($('set-awake')) { $('set-awake').textContent = s.awake !== false ? 'On' : 'Off'; $('set-awake').closest('.row').hidden = !navigator.wakeLock; }
     const install = installKind();
     $('set-install-row').hidden = !install;
     $('set-install').textContent = install === 'ios' ? 'How?' : 'Install the game';
