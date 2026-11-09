@@ -556,6 +556,10 @@ export class Humans {
     const h = {
       outfit, x, y: 0, z, yaw: 0, pose: 'idle', speed: 0, t: 0,
       pitch: 0, roll: 0, visible: true, punch: 0, lookYaw: 0, seatY: 0, armsUp: 0, air: false, vy: 0, guard: 0, near: false,
+      // A weapon in hand (weapons.js and peds.js set these, anim.js poses them, weapon-fx.js draws the gun).
+      gun: null, hold: 'none', aim: 0, aimYaw: 0, aimPitch: 0, recoil: 0, reload: 0,
+      // This frame's row in the bone texture (-1: not drawn) and how much of the body was posed.
+      _row: -1, _lod: 2,
     };
     this.list.push(h);
     return h;
@@ -580,6 +584,7 @@ export class Humans {
     vis.length = 0;
     let near = 0;
     for (const h of this.list) {
+      h._row = -1;
       if (!h.visible) { h.near = false; continue; }
       const dx = h.x - cam.x, dz = h.z - cam.z, d2 = dx * dx + dz * dz;
       if (d2 > maxD2 || vis.length >= this.capacity) { h.near = false; continue; }
@@ -603,8 +608,10 @@ export class Humans {
     for (const h of vis) {
       const d2 = h._d2;
       this._at = start[bucket(h)]++ * BLOCK * 4;
+      // Where weapon-fx.js finds this person's bones (the rows are re-sorted every frame).
+      h._row = this._at; h._lod = d2 > 3600 ? 2 : d2 > 900 ? 1 : 0;
       // Close up the whole body moves; a street away hands stay off handlebars; far off only the body shows.
-      animate(h, dt, d2 > 3600 ? 2 : d2 > 900 ? 1 : 0);
+      animate(h, dt, h._lod);
       this._pose(h, d2 > 3600);
       // Seated riders and drivers are covered by their vehicle's shade.
       if (this.blobsOn && d2 < blobD2 && h.pose !== 'sit' && h.pose !== 'ride') {

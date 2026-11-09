@@ -8,6 +8,7 @@
 // legs, the shoulders turn against the hips and the head stays level. When someone starts doing
 // something else they ease out of the pose they were in instead of snapping into the next one.
 import { clamp, lerp, wrapAngle, TAU } from '../core/math.js';
+import { GRIPS } from './gun-models.js';
 
 // ---------------------------------------------------------------- the pose
 /** Where each joint sits in a pose. Lengths are metres of an unscaled body, angles radians. */
@@ -209,6 +210,12 @@ function create(h) {
     shift: 0, shiftTo: r() < 0.5 ? -1 : 1, shiftT: 2 + r() * 6, look: 0, lookTo: 0, lookT: 1 + r() * 5, lookYaw: 0,
     wPhone: 0, wWave: 0, wUp: 0, wGuard: 0, guardT: 0, wPunch: 0, lastPunch: 0, punch: 0, punches: 0,
     wAir: 0, air: false, airLead: 0, airLeap: 0, lastVy: 0, land: 0, landV: 0, footDown: 0,
+    // A weapon: what is in hand now ('none' between), the last thing held (its pose eases out),
+    // how far up it is and how far aimed, a throw under way, the way they travel against the
+    // way they face (aiming) and the weapon's direction for weapon-fx.js.
+    holding: 'none', hold: 'none', gunId: null, wHold: 0, wAim: 0, lastRecoil: 0, throwT: 0, reEase: false,
+    planar: 0, moveRel: 0, legRel: 0, backward: false, ph: 0,
+    gun: { on: false, arm: false, dx: 0, dy: 0, dz: 1, ux: 0, uy: 1, uz: 0 },
     style: styleOf(h.outfit),
   };
 }
@@ -221,16 +228,22 @@ export function animate(h, dt, lod = 0) {
   const a = h.anim || (h.anim = create(h));
   // How fast they really go forward and turn, from where they were last frame.
   const dx = h.x - a.lx, dz = h.z - a.lz, jumped = dx * dx + dz * dz > 9;
+  // Aiming, they face the aim and walk any way: the steps follow the ground speed in any direction.
+  const strafe = (h.gun && h.aim > 0) || a.wAim > 0.01;
   if (dt > 0) {
     const fwd = jumped ? h.speed || 0 : (dx * Math.sin(h.yaw) + dz * Math.cos(h.yaw)) / dt;
+    const planar = jumped ? h.speed || 0 : Math.sqrt(dx * dx + dz * dz) / dt;
+    if (!jumped && planar > 0.4) a.moveRel = wrapAngle(Math.atan2(dx, dz) - h.yaw);
+    a.planar = planar;
     const prev = a.spd;
     // Never faster than they mean to go; slower when something holds them up.
-    a.spd += (clamp(Math.min(h.speed || 0, fwd + 0.15), 0, 12) - a.spd) * ease(10, dt);
+    a.spd += (clamp(Math.min(h.speed || 0, (strafe ? planar : fwd) + 0.15), 0, 12) - a.spd) * ease(10, dt);
     a.acc += ((a.spd - prev) / dt - a.acc) * ease(6, dt);
     a.turn += (clamp(jumped ? 0 : wrapAngle(h.yaw - a.lyaw) / dt, -8, 8) - a.turn) * ease(8, dt);
     a.t += dt;
   }
-  const fam = FAMILY[h.pose] || 'ground', changed = fam !== a.family, first = a.family === null;
+  const fam = FAMILY[h.pose] || 'ground', first = a.family === null;
+  let changed = fam !== a.family;
   if (changed) {
     if (!first) {
       // Ease the body over from where it was drawn: into a seat, out of a door, onto the road.
@@ -253,18 +266,34 @@ export function animate(h, dt, lod = 0) {
     if (Math.abs(dy) > 0.03 && Math.abs(dy) < 0.45) { a.root.y -= dy; a.rootEasing = true; }
   }
   a.ft += dt;
+  // What is in hand: a weapon swapped for another (not drawn or put away, which the weights
+  // ease) blends the whole pose over like any change of what they do.
+  const holding = h.gun && fam === 'ground' ? (h.hold && h.hold !== 'none' ? h.hold : GRIPS[h.gun]?.hold || 'none') : 'none';
+  if (holding !== 'none') {
+    if (a.hold !== 'none' && (holding !== a.hold || h.gun !== a.gunId) && a.wHold > 0.05) a.reEase = true;
+    a.hold = holding; a.gunId = h.gun;
+  }
+  a.holding = holding;
+  // A shot's kick (h.recoil, set to 1 for each one) dies away here; a new one with a grenade in hand is a throw.
+  const rc = h.recoil || 0;
+  if (rc > a.lastRecoil + 0.3 && a.hold === 'throw') a.throwT = THROW_TIME;
+  if (rc > 0 && dt > 0) h.recoil = Math.max(0, rc - dt * 7);
+  a.lastRecoil = h.recoil || 0;
   const P = a.pose;
   P.set(STANDING);
   if (lod >= 2) far(a, h, P);
-  else if (fam === 'ground') ground(a, h, P, dt);
+  else if (fam === 'ground') ground(a, h, P, dt, lod);
   else if (fam === 'sit') sit(a, h, P, lod);
   else if (fam === 'ride') ride(a, h, P, dt, lod);
   else if (fam === 'lie') lie(a, h, P);
   else if (fam === 'getup') clip(P, GETUP[a.fall > 0 ? 'front' : 'back'], a.ft);
   else if (fam === 'cower') cower(a, P);
   else clip(P, DIVE, a.ft);
+  if (lod >= 2 || fam !== 'ground') { a.wHold = a.wAim = 0; a.gun.on = false; }
   // Ease out of the last pose.
   const out = a.out;
+  if (a.reEase && !changed && !first) { a.settle = 14; changed = true; }
+  a.reEase = false;
   if (changed && !first) {
     for (let i = 0; i < N; i++) { a.off[i] = out[i] - P[i]; a.offV[i] = 0; }
     a.easing = true;
@@ -302,7 +331,7 @@ function far(a, h, P) {
 }
 
 // ---------------------------------------------------------------- on foot
-function ground(a, h, P, dt) {
+function ground(a, h, P, dt, lod = 0) {
   const st = a.style, sc = h.outfit.scale || 1;
   const v = a.spd / sc, spin = Math.abs(a.turn);
   const run = smooth(2.0, 2.9, v), k = smooth(0.05, 0.9, v);
@@ -316,7 +345,8 @@ function ground(a, h, P, dt) {
   const vc = Math.max(a.spd, 1.8 * turning);
   const f = (lerp(0.47 + 0.3 * vc, 1.18 + 0.06 * vc, run) * st.cad) / Math.sqrt(sc);
   if (dt > 0) a.phase = (a.phase + f * dt) % 1;
-  const ph = a.phase * TAU, beta = lerp(0.67 - 0.035 * v, 0.4 - 0.024 * v, run), L = (v * beta) / f;
+  const ph = a.phase * TAU; a.ph = ph;
+  const beta = lerp(0.67 - 0.035 * v, 0.4 - 0.024 * v, run), L = (v * beta) / f;
   const still = 1 - k, guard = a.wGuard * (1 - run);
   // Standing: weight shifts from one leg to the other every few seconds, and the eyes wander.
   if (dt > 0) {
@@ -344,6 +374,14 @@ function ground(a, h, P, dt) {
     o.x = side * width;
     // Fists up: the left foot leads. Resting on one leg: the other eases out a little.
     o.z += 0.13 * guard * side + 0.05 * still * Math.max(0, -side * a.shift);
+  }
+  // Aiming one way and walking another: the stride turns to the way they go (backwards, it runs
+  // in reverse) and the hips turn part of the way with it, the shoulders staying on the aim.
+  const sr = a.legRel * k;
+  if (Math.abs(sr) > 1e-3 || a.backward) {
+    const c = Math.cos(sr), s = Math.sin(sr), m = a.backward ? -1 : 1;
+    for (const o of a.feet) { const x0 = o.x, z0 = o.z * m; o.x = x0 * c + z0 * s; o.z = -x0 * s + z0 * c; }
+    P[C.PW] += clamp(sr, -0.6, 0.6);
   }
   // The pelvis rides as high as the loaded legs reach (a run adds its bounce).
   const low = STAND - 0.07 - 0.006 * Math.max(0, v - 3);
@@ -390,6 +428,7 @@ function ground(a, h, P, dt) {
   P[C.HP] += -0.75 * (P[C.TP] + P[C.PP]) + 0.04;
   P[C.HR] = -0.6 * (P[C.PR] + P[C.TR]);
   air(a, h, P);
+  gunArms(a, h, P, lod);
 }
 
 /** One foot on its path at phase p of the gait: ankle height and forward offset, pitch, load. */
@@ -440,6 +479,7 @@ function overlayWeights(a, h, dt) {
   if (p > 0) {
     // A new punch: the player's combo picks it (jab, cross, hook); anyone else alternates.
     if (a.lastPunch === 0 || p < a.lastPunch) a.punches = h.combo !== undefined ? (h.combo + 2) % 3 : (a.punches + 1 + (Math.random() < 0.25 ? 1 : 0)) % 3;
+    if (a.holding === 'melee') a.punches = 1; // a pan swings from the right, arm out
     a.punch = p; a.guardT = 1.6;
   }
   a.wPunch = toward(a.wPunch, p > 0 ? 1 : 0, p > 0 ? 30 : 10, dt);
@@ -451,14 +491,28 @@ function overlayWeights(a, h, dt) {
   if (!h.air && a.air) a.landV = -clamp(Math.abs(a.lastVy) * 0.55, 0.5, 4);
   a.air = Boolean(h.air); a.lastVy = h.vy || 0;
   a.wAir = toward(a.wAir, a.air ? 1 : 0, a.air ? 18 : 12, dt);
+  // A weapon comes up, and up to the eye; with a gun in both hands there are no fists to put up.
+  const held = a.holding !== 'none';
+  a.wHold = toward(a.wHold, held ? 1 : 0, 9, dt);
+  a.wAim = toward(a.wAim, held && a.holding !== 'melee' && h.aim > 0 ? 1 : 0, 12, dt);
+  if (held && a.holding !== 'melee') a.guardT = 0;
+  if (a.throwT > 0) a.throwT = Math.max(0, a.throwT - dt);
+  // Which way the stride runs against the facing: straight back is a backpedal, not a stride
+  // turned round (with a little give either side, so it doesn't flicker between the two).
+  const want = a.wAim > 0.01 && a.planar > 0.35 ? a.moveRel : 0, off = Math.abs(want);
+  const back = a.backward ? off > 1.6 : off > 1.95;
+  const target = back ? wrapAngle(want - Math.PI) : want;
+  if (back !== a.backward) { a.backward = back; a.legRel = target; a.reEase = true; }
+  else a.legRel += wrapAngle(target - a.legRel) * ease(8, dt);
 }
 
 const mixTo = (P, i, v, w) => { P[i] += (v - P[i]) * w; };
 
 /** Arms and shoulders over the walk: a phone, hailing an auto, fists up, a punch, hands up. */
 function upper(a, h, P) {
-  if (a.wPhone > 0.01) {
-    const w = a.wPhone;
+  const free = 1 - a.wHold; // hands on a weapon are not on a phone or hailing an auto
+  if (a.wPhone * free > 0.01) {
+    const w = a.wPhone * free;
     if (a.style.phone === 'screen') {
       mixTo(P, C.SF + 1, 0.72, w); mixTo(P, C.SA + 1, 0.12, w); mixTo(P, C.ST + 1, 0.55, w); mixTo(P, C.EL + 1, 1.95, w);
       mixTo(P, C.SF, 0.42, w); mixTo(P, C.ST, 0.6, w); mixTo(P, C.EL, 1.55, w);
@@ -468,12 +522,12 @@ function upper(a, h, P) {
       mixTo(P, C.HR, -0.12, w);
     }
   }
-  if (a.wWave > 0.01) {
+  if (a.wWave * free > 0.01) {
     // Hailing an auto, Indian style: arm out toward the road, the hand flapping down and up.
-    const w = a.wWave, f = Math.sin(a.t * 13);
+    const w = a.wWave * free, f = Math.sin(a.t * 13);
     mixTo(P, C.SF + 1, 1.35 + 0.22 * f, w); mixTo(P, C.SA + 1, 0.45, w); mixTo(P, C.ST + 1, 0.9, w); mixTo(P, C.EL + 1, 0.3 + 0.18 * f, w);
   }
-  const g = a.wGuard * (1 - 0.7 * smooth(2.0, 3.5, a.spd));
+  const g = a.wGuard * (1 - 0.7 * smooth(2.0, 3.5, a.spd)) * (a.hold === 'melee' ? 1 : free);
   if (g > 0.01) {
     for (const k of ARM) { mixTo(P, C[k], GUARD[k][0], g); mixTo(P, C[k] + 1, GUARD[k][1], g); }
     mixTo(P, C.TW, GUARD.TW, g); P[C.TP] += GUARD.TP * g; P[C.HP] += GUARD.HP * g;
@@ -493,6 +547,7 @@ function upper(a, h, P) {
     const w = a.wUp;
     for (let s = 0; s < 2; s++) { mixTo(P, C.SF + s, 2.5, w); mixTo(P, C.SA + s, 0.5, w); mixTo(P, C.ST + s, -0.4, w); mixTo(P, C.EL + s, 1.0, w); }
   }
+  gunBody(a, h, P);
 }
 
 /** In the air: tucked going up, legs reaching down to land; a running jump is a leap. */
@@ -514,6 +569,197 @@ function air(a, h, P) {
     mixTo(P, C.SA + s, lerp(0.3, 0.7, tuck), w); mixTo(P, C.EL + s, lerp(0.45, 0.9, leap), w);
   }
   mixTo(P, C.TP, 0.06 + 0.12 * tuck + 0.1 * leap, w);
+}
+
+// ---------------------------------------------------------------- weapons
+// Hands go where the weapon is: a long gun's butt in the right shoulder and the left hand on its
+// handguard (GRIPS gives the points on each model), a pistol out in front in both hands. Between
+// aims they carry it: a rifle at the low ready across the body, a pistol down at the side. The
+// weapon's direction is left in h.anim.gun for weapon-fx.js, which puts the model in the right fist.
+/** How long a grenade throw takes, from the wind-up to the follow-through (s). */
+export const THROW_TIME = 0.5;
+const norm3 = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+const upOf = d => norm3(-d[0] * d[1], 1 - d[1] * d[1], -d[2] * d[1]); // straight up, square to d
+// Carried (in the body's frame, from the pelvis: + left, + up, + forward): where the right fist is and the way the muzzle points.
+const CARRY = {
+  rifle: { hand: [-0.12, 0.25, 0.25], dir: norm3(0.5, -0.35, 0.79), tw: -0.25 },
+  pistol: { hand: [-0.2, -0.1, 0.1], dir: norm3(0, -0.8, 0.6), tw: 0 },
+};
+for (const k in CARRY) CARRY[k].up = upOf(CARRY[k].dir);
+// Aimed: the shoulder pocket the butt goes in (torso frame), how far side-on a rifle turns the body;
+// a pistol out from the chest at arm's length.
+const POCKET = [-0.13, 0.46, 0.07], RIFLE_TW = -0.55, CHEST = [-0.04, 0.36, 0.1], REACH = 0.4;
+// A throw: the right fist (torso frame) from the wind-up behind the head, over the top, through
+// and down; the left arm points at the target, then pulls down.
+const THROW_KEYS = [[0, [-0.3, 0.68, -0.12]], [0.3, [-0.22, 0.78, 0.16]], [0.55, [-0.08, 0.48, 0.46]], [1, [0.08, 0.18, 0.36]]];
+const THROW_LEFT = [[0.2, 0.45, 0.42], [0.22, 0.12, 0.12]];
+const DEFAULT_GUN = { rifle: 'akm', pistol: 'p92', melee: 'pan', throw: 'grenade' };
+const throwEnv = u => smooth(0, 0.12, u) * (1 - smooth(0.82, 1, u));
+const _R = [0, 0, 0], _L = [0, 0, 0], _t = [0, 0, 0], _arms = new Float32Array(8), _po = [0, 0];
+
+/** v from the torso's frame into the body's. Needs _pm, _tm and the pelvis's shift in _po. */
+function toBody(v, x, y, z) {
+  const t = _tm, p = _pm;
+  const a = t[0] * x + t[1] * y + t[2] * z, b = t[3] * x + t[4] * y + t[5] * z + BODY.torsoY, c = t[6] * x + t[7] * y + t[8] * z;
+  v[0] = p[0] * a + p[1] * b + p[2] * c + _po[0]; v[1] = p[3] * a + p[4] * b + p[5] * c; v[2] = p[6] * a + p[7] * b + p[8] * c + _po[1];
+}
+/** The weapon's direction and top, made square and unit length. */
+function setGun(g, dx, dy, dz, ux, uy, uz) {
+  let l = Math.hypot(dx, dy, dz) || 1;
+  dx /= l; dy /= l; dz /= l;
+  const k = ux * dx + uy * dy + uz * dz;
+  ux -= k * dx; uy -= k * dy; uz -= k * dz;
+  l = Math.hypot(ux, uy, uz) || 1;
+  g.dx = dx; g.dy = dy; g.dz = dz; g.ux = ux / l; g.uy = uy / l; g.uz = uz / l;
+}
+/** Both hands to _R and _L (body frame, unscaled), blended over the arms as they were by wr and wl. */
+function reachBoth(P, wr, wl) {
+  for (let i = 0; i < 8; i++) _arms[i] = P[C.SF + i];
+  if (wr > 0) reachArm(P, 1, _R[0], _R[1], _R[2]);
+  if (wl > 0) reachArm(P, 0, _L[0], _L[1], _L[2]);
+  for (let i = 0; i < 8; i++) P[C.SF + i] = lerp(_arms[i], P[C.SF + i], i % 2 ? wr : wl);
+}
+
+/** The torso with a weapon up: side-on behind a rifle, square behind a pistol, wound up to throw. */
+function gunBody(a, h, P) {
+  const wh = a.wHold;
+  if (wh < 0.01) return;
+  const hold = a.hold, w = a.wAim * wh, ay = clamp(h.aimYaw || 0, -1.2, 1.2), ap = clamp(h.aimPitch || 0, -1.3, 1.3);
+  if (hold === 'rifle' || hold === 'pistol') {
+    if (CARRY[hold].tw) mixTo(P, C.TW, CARRY[hold].tw, wh * (1 - a.wAim));
+    if (w > 0.001) {
+      // The shoulders square to the aim whichever way the hips go (the walk turns them).
+      mixTo(P, C.TW, ay + (hold === 'rifle' ? RIFLE_TW : -0.05) - P[C.PW], w);
+      P[C.TP] += -ap * 0.35 * w;
+    }
+    P[C.TP] -= 0.05 * (h.recoil || 0) * wh; // a shot rocks the shoulders back
+  } else if (hold === 'throw') {
+    const u = a.throwT > 0 ? 1 - a.throwT / THROW_TIME : -1, wt = Math.max(w, u >= 0 ? throwEnv(u) * wh : 0);
+    if (wt < 0.001) return;
+    // Side-on, the throwing shoulder back; the throw turns the body through and over.
+    const tw = u >= 0 ? lerp(-0.5, 0.45, smooth(0.15, 0.65, u)) : -0.5, tp = u >= 0 ? 0.28 * Math.sin(Math.PI * smooth(0.2, 1, u)) : 0;
+    mixTo(P, C.TW, tw + ay - P[C.PW], wt);
+    P[C.TP] += (tp - ap * 0.2) * wt;
+  }
+}
+
+/** Fixed arm angles for people a street away (no reaching), worked out once from the near pose. */
+let FIXED = null;
+function fixedArms() {
+  FIXED = {};
+  const P = Float32Array.from(STANDING), g = { dx: 0, dy: 0, dz: 1, ux: 0, uy: 1, uz: 0 };
+  for (const hold of ['rifle', 'pistol', 'throw']) {
+    const sets = [];
+    for (const aim of [0, 1]) {
+      P.set(STANDING); P[C.PP] = 0.02;
+      P[C.TW] = hold === 'rifle' ? (aim ? RIFLE_TW : CARRY.rifle.tw) : hold === 'throw' ? -0.5 : aim ? -0.05 : 0;
+      const a = { hold, gunId: DEFAULT_GUN[hold], wHold: 1, wAim: aim, throwT: 0, ph: 0, spd: 0, gun: g };
+      gunPose(a, { aimYaw: 0, aimPitch: 0, recoil: 0, reload: 0, outfit: { scale: 1 } }, P, 0);
+      sets.push(P.slice(C.SF, C.SF + 8));
+    }
+    FIXED[hold] = sets;
+  }
+}
+
+/** Arms and head for the weapon in hand (after everything else has posed the body). */
+function gunArms(a, h, P, lod) {
+  a.gun.on = a.wHold > 0.02;
+  if (!a.gun.on) return;
+  gunPose(a, h, P, lod);
+}
+
+function gunPose(a, h, P, lod) {
+  const g = a.gun, wh = a.wHold, w = a.wAim, hold = a.hold, sc = h.outfit.scale || 1;
+  const G = GRIPS[a.gunId] || GRIPS[DEFAULT_GUN[hold]], kick = h.recoil || 0;
+  yxz(_pm, P[C.PP], P[C.PW], P[C.PR]);
+  yxz(_tm, P[C.TP], P[C.TW], P[C.TR]);
+  _po[0] = P[C.PX]; _po[1] = P[C.PZ];
+  const ay = clamp(h.aimYaw || 0, -1.2, 1.2), ap = clamp(h.aimPitch || 0, -1.3, 1.3);
+  if (hold === 'melee' || hold === 'throw') oneHand(a, h, P, lod, G, sc);
+  else {
+    g.arm = false;
+    // The aim, and the weapon's top square to it (a shot kicks the muzzle up), in the body's frame.
+    const p = ap + 0.05 * kick, cp = Math.cos(p), sp = Math.sin(p), cy = Math.cos(ay), sy = Math.sin(ay);
+    const dx = sy * cp, dy = sp, dz = cy * cp, ux = -sy * sp, uy = cp, uz = -cy * sp;
+    const K = CARRY[hold];
+    setGun(g, lerp(K.dir[0], dx, w), lerp(K.dir[1], dy, w), lerp(K.dir[2], dz, w), lerp(K.up[0], ux, w), lerp(K.up[1], uy, w), lerp(K.up[2], uz, w));
+    // The right fist: aimed, the butt in the shoulder (or out in front at arm's length); carried, low.
+    if (hold === 'rifle') {
+      toBody(_t, POCKET[0], POCKET[1], POCKET[2]);
+      const bz = G.butt[2] / sc - 0.035 * kick, by = G.butt[1] / sc;
+      _R[0] = _t[0] - dx * bz - ux * by; _R[1] = _t[1] - dy * bz - uy * by; _R[2] = _t[2] - dz * bz - uz * by;
+    } else {
+      toBody(_t, CHEST[0], CHEST[1], CHEST[2]);
+      const r = REACH - 0.03 * kick;
+      _R[0] = _t[0] + dx * r; _R[1] = _t[1] + dy * r + 0.02 * kick; _R[2] = _t[2] + dz * r;
+    }
+    const swing = hold === 'pistol' ? 0.06 * Math.sin(a.ph) * smooth(0.2, 1.6, a.spd) : 0;
+    for (let i = 0; i < 3; i++) _R[i] = lerp(K.hand[i] + (i === 2 ? swing : 0), _R[i], w);
+    // A reload lowers the weapon and cants it over to the magazine.
+    const r = clamp(h.reload || 0, 0, 1), re = r > 0 ? Math.sin(Math.PI * r) : 0;
+    if (re > 0) {
+      _R[1] -= 0.06 * re;
+      const c = Math.cos(0.45 * re), s = Math.sin(0.45 * re);
+      const lx = g.uy * g.dz - g.uz * g.dy, ly = g.uz * g.dx - g.ux * g.dz, lz = g.ux * g.dy - g.uy * g.dx;
+      setGun(g, g.dx, g.dy, g.dz, g.ux * c + lx * s, g.uy * c + ly * s, g.uz * c + lz * s);
+    }
+    // The left hand: on the handguard, or round the right fist; to the magazine and back in a reload.
+    const lx = g.uy * g.dz - g.uz * g.dy, ly = g.uz * g.dx - g.ux * g.dz, lz = g.ux * g.dy - g.uy * g.dx; // the gun's left
+    const S = G.support || [0.03, -0.03, -0.01];
+    for (let i = 0; i < 3; i++) _L[i] = _R[i] + ((i === 0 ? g.dx : i === 1 ? g.dy : g.dz) * S[2] + (i === 0 ? g.ux : i === 1 ? g.uy : g.uz) * S[1] + (i === 0 ? lx : i === 1 ? ly : lz) * S[0]) / sc;
+    if (re > 0) {
+      const M = G.mag || [0, -0.1, 0], go = smooth(0, 0.2, r) * (1 - smooth(0.8, 1, r)), dip = Math.sin(Math.PI * smooth(0.2, 0.7, r)) * 0.14;
+      for (let i = 0; i < 3; i++) {
+        const d = i === 0 ? g.dx : i === 1 ? g.dy : g.dz, u = i === 0 ? g.ux : i === 1 ? g.uy : g.uz;
+        _L[i] = lerp(_L[i], _R[i] + (d * M[2] + u * (M[1] - dip)) / sc, go);
+      }
+    }
+    const wl = hold === 'rifle' ? wh : wh * Math.max(w, smooth(0, 0.15, r) * (1 - smooth(0.85, 1, r)));
+    if (lod >= 1) {
+      if (!FIXED) fixedArms();
+      const F = FIXED[hold];
+      for (let i = 0; i < 8; i++) mixTo(P, C.SF + i, lerp(F[0][i], F[1][i], w), i % 2 ? wh : wl);
+    } else reachBoth(P, wh, wl);
+  }
+  // Aiming, the head looks down the sights (along the aim, a rifle's cheek on its stock).
+  const wa = w * wh;
+  if (wa > 0.01) {
+    mixTo(P, C.HW, ay - (P[C.PW] + P[C.TW]), wa);
+    mixTo(P, C.HP, -ap - (P[C.TP] + P[C.PP]) + (hold === 'rifle' ? 0.12 : 0.04), wa);
+  }
+}
+
+/** A pan or a grenade in the right fist: carried, swung (the punch), wound up and thrown. */
+function oneHand(a, h, P, lod, G, sc) {
+  const g = a.gun, wh = a.wHold, w = a.wAim, hold = a.hold;
+  g.arm = true; // in the forearm's own frame (weapon-fx.js)
+  // Carried: the forearm forward a little, the head of the pan or the grenade in front.
+  const busy = hold === 'melee' ? Math.max(a.wPunch, a.wGuard) : 0, cw = wh * (1 - busy);
+  if (cw > 0.01) { mixTo(P, C.SF + 1, 0.3, cw); mixTo(P, C.SA + 1, 0.14, cw); mixTo(P, C.ST + 1, 0.3, cw); mixTo(P, C.EL + 1, hold === 'melee' ? 0.75 : 0.95, cw); }
+  if (hold === 'melee') {
+    // Held like a hammer, the handle through the fist; the head flicks forward through a swing.
+    const f = 1.05 * punchExt(a.punch) * a.wPunch, c = Math.cos(f), s = Math.sin(f);
+    setGun(g, 0, -0.34 * c - 0.94 * s, -0.34 * s + 0.94 * c, 0, 0.94 * c - 0.34 * s, 0.94 * s + 0.34 * c);
+    return;
+  }
+  setGun(g, 0, 0, 1, 0, 1, 0);
+  const u = a.throwT > 0 ? 1 - a.throwT / THROW_TIME : -1;
+  if (u > 0.42) g.on = false; // let go: it flies on its own now
+  const wt = wh * Math.max(w, u >= 0 ? throwEnv(u) : 0);
+  if (wt < 0.01) return;
+  if (lod >= 1) {
+    if (!FIXED) fixedArms();
+    for (let i = 0; i < 8; i++) mixTo(P, C.SF + i, FIXED.throw[1][i], wt);
+    return;
+  }
+  // Along the throw (or held at the wind-up while aiming).
+  let k = 0;
+  const t = u >= 0 ? u : 0;
+  while (k < THROW_KEYS.length - 2 && t > THROW_KEYS[k + 1][0]) k++;
+  const [t0, A] = THROW_KEYS[k], [t1, B] = THROW_KEYS[k + 1], f = smooth(0, 1, (t - t0) / (t1 - t0)), l = smooth(0.25, 0.8, t);
+  toBody(_R, lerp(A[0], B[0], f), lerp(A[1], B[1], f), lerp(A[2], B[2], f));
+  toBody(_L, lerp(THROW_LEFT[0][0], THROW_LEFT[1][0], l), lerp(THROW_LEFT[0][1], THROW_LEFT[1][1], l), lerp(THROW_LEFT[0][2], THROW_LEFT[1][2], l));
+  reachBoth(P, wt, wt);
 }
 
 // ---------------------------------------------------------------- vehicles
