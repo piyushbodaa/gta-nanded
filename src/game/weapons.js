@@ -701,7 +701,7 @@ export class Weapons {
     c.taken = true; c.respawnAt = g.time + RESPAWN;
     g.hud?.toast?.(`<b>${msg}</b>`, 2.5);
     g.audio?.sfx('pickup');
-    if (c.kind === 'airdrop' && this.airdrop?.crate === c) this.airdrop.smoke = Math.min(this.airdrop.smoke, 4);
+    if (c.kind === 'airdrop' && this.airdrop?.crate === c) { this.airdrop.taken = true; this.airdrop.smoke = Math.min(this.airdrop.smoke, 4); }
     this._blipT = 0; this._saveT = 0;
     return true;
   }
@@ -745,7 +745,7 @@ export class Weapons {
       if (ground < -0.4 || this.zones.some(s => (s.x - x) ** 2 + (s.z - z) ** 2 < s.r2)) continue;
       // The last one, untaken, goes.
       if (this.airdrop?.crate) { const i = this.loot.indexOf(this.airdrop.crate); if (i >= 0) this.loot.splice(i, 1); }
-      this.airdrop = { x, z, y: ground + 110, ground, landed: false, smoke: 90, t: 0, crate: null };
+      this.airdrop = { x, z, y: ground + 110, ground, landed: false, smoke: 90, t: 0, crate: null, taken: false };
       g.hud?.toast?.('<b>Air drop!</b> A care package is coming down nearby: follow the red smoke.', 5);
       g.audio?.sfx('wanted', 0.6);
       this._blipT = 0;
@@ -754,24 +754,22 @@ export class Weapons {
     return false;
   }
 
-  /** Radar icons: crates within 150 m and the air drop (one array and its blips, reused). */
+  /** Radar icons: crates within 150 m (one array and its blips, reused). The HUD marks the air drop itself, at any distance. */
   blips() { return this._blips; }
 
   _refreshBlips() {
     const g = this.game, P = g.player, out = this._blips, pool = this._blipPool;
     if (!P) return;
     out.length = 0;
-    const blip = (x, z, label, color, size) => {
-      const b = pool[out.length] || (pool[out.length] = { x: 0, z: 0, kind: 'icon', label: '', color: '', size: undefined });
-      b.x = x; b.z = z; b.label = label; b.color = color; b.size = size;
+    const blip = (x, z, label, color) => {
+      const b = pool[out.length] || (pool[out.length] = { x: 0, z: 0, kind: 'icon', label: '', color: '' });
+      b.x = x; b.z = z; b.label = label; b.color = color;
       out.push(b);
     };
     for (const c of this.loot) {
       if (c.taken || c.kind === 'airdrop' || Math.abs(c.x - P.x) > 150 || Math.abs(c.z - P.z) > 150 || dist(c.x, c.z, P.x, P.z) > 150) continue;
       blip(c.x, c.z, c.id ? '🔫' : '•', c.id ? '#e8b931' : '#c9a227');
     }
-    const a = this.airdrop;
-    if (a && !(a.crate?.taken)) blip(a.x, a.z, '🪂', '#e53935', 7);
   }
 
   // ---------------------------------------------------------------- save
