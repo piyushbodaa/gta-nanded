@@ -33,7 +33,10 @@ const rnd = () => Math.random() - 0.5;
 function tracerMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: { uRes: { value: new THREE.Vector2(1, 1) }, uWidth: { value: 3 } },
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    // Light added over a slightly dimmed background (premultiplied "over"): it glows at night and
+    // still reads as a hot yellow line against a sunlit wall, where plain additive washes out.
+    transparent: true, depthWrite: false, blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     vertexShader: /* glsl */`
       attribute float side; attribute float along; attribute vec3 iA; attribute vec3 iB; attribute vec4 iC;
       uniform vec2 uRes; uniform float uWidth; varying vec4 vC; varying float vS;
@@ -54,7 +57,7 @@ function tracerMaterial() {
       }`,
     fragmentShader: /* glsl */`
       varying vec4 vC; varying float vS;
-      void main() { gl_FragColor = vec4(vC.rgb, vC.a * (1.0 - vS * vS));
+      void main() { float a = vC.a * (1.0 - vS * vS); gl_FragColor = vec4(vC.rgb * a, a * 0.55);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
       }`,
@@ -269,7 +272,9 @@ export class WeaponFx {
         chute.rotation.set(0, chute.rotation.y, 1.2 * k);
         chute.scale.set(1 + 0.2 * k, Math.max(0.05, 1 - k), 1 + 0.2 * k);
       }
-      if (A.smoke !== false && !dropTaken && g.effects) {
+      // weapons.js counts the smoke down (seconds, then false: a few seconds more once opened).
+      const smoking = A.smoke === undefined || A.smoke === true ? !(dropTaken || A.taken) : A.smoke !== false && A.smoke > 0;
+      if (smoking && g.effects) {
         this.smokeAcc += dt * (this.low ? 5 : 10);
         while (this.smokeAcc >= 1) {
           this.smokeAcc -= 1;
@@ -303,7 +308,7 @@ export class WeaponFx {
     T.a[i * 3] = ax; T.a[i * 3 + 1] = ay; T.a[i * 3 + 2] = az;
     T.b[i * 3] = bx; T.b[i * 3 + 1] = by; T.b[i * 3 + 2] = bz;
     const len = Math.hypot(bx - ax, by - ay, bz - az);
-    T.age[i] = 0; T.life[i] = 0.06 + Math.min(len, 400) / 2000; T.w[i] = id === 'awm' || id === 'kar98k' ? 1.4 : id === 's12k' ? 0.7 : 1;
+    T.age[i] = 0; T.life[i] = 0.07 + Math.min(len, 400) / 1600; T.w[i] = id === 'awm' || id === 'kar98k' ? 1.4 : id === 's12k' ? 0.7 : 1;
     // One flash a frame however many pellets.
     const E = this.game.effects;
     if (!E || this._flashT === this.t) return;
@@ -311,7 +316,7 @@ export class WeaponFx {
     const k = FLASH[id] ?? 1, ux = len > 0 ? (bx - ax) / len : 0, uy = len > 0 ? (by - ay) / len : 0, uz = len > 0 ? (bz - az) / len : 0;
     E.spawn(ax, ay, az, 0, 0, 0, 0.05, 0.38 * k, 1, 0.86, 0.45, 1, { grow: 0.5 });
     E.spawn(ax + ux * 0.12 * k, ay + uy * 0.12 * k, az + uz * 0.12 * k, ux * 2, uy * 2, uz * 2, 0.045, 0.26 * k, 1, 0.95, 0.7, 1, { grow: 0.3 });
-    if (!this.low) E.spawn(ax, ay, az, 0, 0, 0, 0.07, 0.75 * k, 1, 0.6, 0.2, 0.35, { grow: 0.4 }); // the soft glow round it
+    if (!this.low) E.spawn(ax, ay, az, 0, 0, 0, 0.06, 0.42 * k, 1, 0.62, 0.22, 0.3, { grow: 0.4 }); // the soft glow round it
   }
 
   /** Where a bullet stopped: 'metal' | 'wall' | 'ground' | 'body' | 'water'. */
@@ -342,13 +347,15 @@ export class WeaponFx {
       T.age[i] += dt;
       const u = T.age[i] / T.life[i];
       if (u >= 1) { T.life[i] = -1; Cc[i * 4 + 3] = 0; continue; }
-      // The head races out to the hit, a streak (8 m at most) behind it.
+      // The head races out to the hit with the streak drawn back to the muzzle at first (seen from
+      // behind the shoulder a shot is nearly end on, and a short streak far off is a few pixels),
+      // then the tail follows it in (30 m at most behind the head).
       const ax = T.a[i * 3], ay = T.a[i * 3 + 1], az = T.a[i * 3 + 2], dx = T.b[i * 3] - ax, dy = T.b[i * 3 + 1] - ay, dz = T.b[i * 3 + 2] - az;
-      const len = Math.hypot(dx, dy, dz) || 1, head = Math.min(1, u / 0.6 + 0.12), tail = Math.max(0, head - 8 / len, (u - 0.3) / 0.7);
+      const len = Math.hypot(dx, dy, dz) || 1, head = Math.min(1, u / 0.5 + 0.25), tail = Math.max(0, head - 30 / len, (u - 0.3) / 0.7);
       A[i * 3] = ax + dx * tail; A[i * 3 + 1] = ay + dy * tail; A[i * 3 + 2] = az + dz * tail;
       B[i * 3] = ax + dx * head; B[i * 3 + 1] = ay + dy * head; B[i * 3 + 2] = az + dz * head;
       const f = 1 - Math.max(0, (u - 0.55) / 0.45);
-      Cc[i * 4] = 1.6 * T.w[i]; Cc[i * 4 + 1] = 1.35 * T.w[i]; Cc[i * 4 + 2] = 0.75 * T.w[i]; Cc[i * 4 + 3] = f;
+      Cc[i * 4] = 1.7 * T.w[i]; Cc[i * 4 + 1] = 1.3 * T.w[i]; Cc[i * 4 + 2] = 0.45 * T.w[i]; Cc[i * 4 + 3] = f;
       hi = i + 1;
     }
     g.instanceCount = hi;
@@ -356,7 +363,7 @@ export class WeaponFx {
     for (const k of ['iA', 'iB', 'iC']) sendFirst(g.attributes[k], hi);
     if (hi > 0) {
       const r = this.game.renderer;
-      if (r) { r.getDrawingBufferSize(_res); this.tracers.material.uniforms.uRes.value.copy(_res); this.tracers.material.uniforms.uWidth.value = 2.4 * r.getPixelRatio(); }
+      if (r) { r.getDrawingBufferSize(_res); this.tracers.material.uniforms.uRes.value.copy(_res); this.tracers.material.uniforms.uWidth.value = 3.5 * r.getPixelRatio(); }
     }
   }
 }
