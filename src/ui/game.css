@@ -359,7 +359,7 @@ body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
 
 /* Touch: AIM and RELOAD sit in the button grid's bottom row beside 📷 (the grid keeps its width), the weapon
    button at the right edge under the stars, and a second FIRE for the left thumb above the stick's ring. */
-.tb.word { font: 800 13px/1 var(--cond); letter-spacing: .3px; }
+.tb.word { padding: 0; font: 800 13px/1 var(--cond); letter-spacing: .3px; overflow: hidden; }
 .tb.on { background: #ffd23fdd; border-color: #fff; color: #111; }
 .tb.fire2 { position: absolute; left: calc(16px + var(--safe-l)); top: max(35%, calc(122px + var(--safe-t))); pointer-events: auto; background: #b71c1c88; }
 .tb.fire2.down { background: #ffffffcc; }
@@ -392,6 +392,14 @@ body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
 #ww-hint { margin-top: 5px; font: 600 11px/1.25 var(--body); font-style: normal; color: #ffffffaa; }
 body.cutscene .wwheel { display: none; }
 
+/* Touch screens held sideways: a mission timer goes beside the weapon button rather than under it, clear of the
+   button grid's wide rows (on the shortest phones it sits at the bottom anyway, below). */
+@media (orientation: landscape) {
+  body.touch-ui .timer { right: calc(112px + var(--safe-r)); top: calc(124px + var(--safe-t)); }
+}
+@media (orientation: landscape) and (max-width: 900px), (orientation: landscape) and (max-height: 500px) {
+  body.touch-ui .timer { right: calc(104px + var(--safe-r)); top: calc(84px + var(--safe-t)); }
+}
 @media (max-width: 900px), (max-height: 500px) {
   #hud-wname { font-size: 17px; } #hud-wammo { font-size: 14px; } #hud-wammo b { font-size: 20px; }
   .hud-weapon .wbar { width: 84px; }
@@ -403,8 +411,10 @@ body.cutscene .wwheel { display: none; }
   .hud-notice { font-size: 13px; }
 }
 @media (max-height: 420px) {
-  body:not(.touch-ui) .hud.armed .timer { top: auto; } /* it sits at the bottom here (above) */
-  .tb.word { font-size: 11px; }
+  body:not(.touch-ui) .hud.armed .timer, body.touch-ui .timer { top: auto; right: auto; } /* it sits at the bottom here (above) */
+  .tb.word { font-size: 10px; letter-spacing: 0; }
+  /* Under the timer (which sits at the bottom here) and between the stick and the buttons. */
+  .hud-notice { top: auto; bottom: calc(64px + var(--safe-b)); max-width: 170px; padding: 4px 8px; font-size: 12px; }
   .tb-weapon { top: calc(82px + var(--safe-t)); height: 38px; min-width: 72px; padding: 0 9px; font-size: 12px; }
   .tb-weapon::first-line { font-size: 15px; }
 }

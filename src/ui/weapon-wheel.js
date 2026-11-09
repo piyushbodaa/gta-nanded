@@ -180,6 +180,7 @@ export class WeaponWheel {
   _open(mode) {
     const w = this.game.weapons;
     if (!w.wheelOpen) w.openWheel();
+    if (!w.wheelOpen) return; // refused (respawning, say): don't flash the overlay
     this.open = true; this.mode = mode;
     this.cursor.x = this.cursor.y = 0;
     for (const s of SLOTS) this.pick[s.id] = w.slotWeapon(s.id);
