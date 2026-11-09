@@ -168,12 +168,17 @@ async function boot() {
     if (starting || game.started) return;
     starting = true;
     onMenu = false;
-    fullscreen(); // while the tap still counts as a user gesture
-    // Sound starts with the tap, but the game doesn't wait for the phone's audio to open.
-    if (st.sound !== false) { try { game.audio.init().catch(() => {}); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
-    const play = () => startGame(game, mode);
-    if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
-    else play();
+    try {
+      fullscreen(); // while the tap still counts as a user gesture
+      // Sound starts with the tap, but the game doesn't wait for the phone's audio to open.
+      if (st.sound !== false) { try { game.audio.init().catch(() => {}); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
+      const play = () => {
+        try { startGame(game, mode); }
+        finally { starting = false; onMenu = !game.started; }
+      };
+      if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
+      else play();
+    } catch (err) { starting = false; onMenu = !game.started; throw err; }
   };
   $('menu-continue').addEventListener('click', () => begin(canResume ? 'resume' : 'continue'));
   // Over a save, NEW STORY asks first, in its big label: a phone player can't read the small one.

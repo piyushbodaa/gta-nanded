@@ -22,17 +22,19 @@ export class Save {
   constructor() {
     this.data = DEFAULT();
     this.available = true;
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
+    let raw;
+    try { raw = localStorage.getItem(KEY); }
+    catch { this.available = false; }
+    if (raw) {
+      try {
         const d = JSON.parse(raw);
         if (d && d.version === 2) {
           const inventory = d.inventory && Array.isArray(d.inventory.weapons) ? { ...DEFAULT().inventory, ...d.inventory } : DEFAULT().inventory;
           const resume = d.resume && typeof d.resume === 'object' ? d.resume : null;
           this.data = { ...DEFAULT(), ...d, stats: { ...DEFAULT().stats, ...d.stats }, settings: { ...DEFAULT().settings, ...d.settings }, inventory, resume };
         }
-      }
-    } catch { this.available = false; }
+      } catch { /* A corrupt save starts fresh; storage can still work. */ }
+    }
     this._dirty = false;
   }
   get cash() { return this.data.cash; }

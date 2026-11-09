@@ -2,8 +2,32 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.addEventListener ??= () => {};
-const { tabEdges } = await import('../src/ui/menus.js');
+const { PauseMenu, tabEdges } = await import('../src/ui/menus.js');
+const { Hud } = await import('../src/ui/hud.js');
 const { tapButtons } = await import('../src/ui/tap.js');
+
+test('the pause map draws each mission and static blip once, including distant and boundary blips', () => {
+  let missionReads = 0, drawn, route;
+  const mission = { x: 20, z: 30, label: 'mission' };
+  const dynamic = { x: 40, z: 50, label: 'target' };
+  const staticBlips = [
+    { x: 100, z: 0, label: 'near race' },
+    { x: 260, z: 0, label: 'boundary landmark' },
+    { x: 500, z: 0, label: 'far garage' },
+    { x: 600, z: 0, label: 'far pump' },
+  ];
+  const g = {
+    player: { pos: { x: 0, z: 0 } },
+    missions: { blips() { missionReads++; return [mission]; } },
+    staticBlips,
+    jobs: { staticBlips: () => staticBlips.slice(0, 3) },
+  };
+  g.hud = Object.assign(Object.create(Hud.prototype), { game: g, blipList: [dynamic], route: { points: [0, 0, 100, 0] } });
+  PauseMenu.prototype._drawMap.call({ game: g, map: { draw(blips, gps) { drawn = blips; route = gps; } } });
+  assert.deepEqual(drawn.map(b => b.label).sort(), [dynamic, mission, ...staticBlips].map(b => b.label).sort());
+  assert.equal(missionReads, 1, 'mission availability is evaluated only once per redraw');
+  assert.equal(route, g.hud.route, 'the map keeps its GPS route');
+});
 
 // A pause-menu root that records its listeners, and a button that counts its clicks.
 function fakeMenu() {

@@ -600,6 +600,7 @@ test('rules: a shot car\'s driver gets out and runs, officers hit back only in s
 
 test('typing JUGAAD mid-play does not throw a grenade with its G', async () => {
   const listeners = [];
+  for (const n of ['HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement']) globalThis[n] ??= class {};
   const el = () => ({ addEventListener() {}, hidden: true });
   globalThis.document ??= { getElementById: el, body: { classList: { add() {}, remove() {} } } };
   const before = globalThis.addEventListener;
@@ -610,7 +611,7 @@ test('typing JUGAAD mid-play does not throw a grenade with its G', async () => {
   g.hud.cashChange = () => {};
   installRules(g);
   globalThis.addEventListener = before;
-  const type = (k, a) => { if (a) g.input.events.add(a); for (const f of listeners) f({ key: k }); };
+  const type = (k, a) => { if (a) g.input.events.add(a); for (const f of listeners) f({ key: k, code: 'Key' + k.toUpperCase(), target: null }); };
   type('j', 'attack');
   assert.ok(g.input.events.has('attack'), 'a lone J is the trigger, as ever');
   g.input.events.clear();
