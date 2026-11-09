@@ -86,10 +86,9 @@ export class WeaponFx {
     // --- loot: crates, air-drop crates, and the soft beams and ground glow that find them.
     this.crates = inst(gunGeometry('crate'), this.mat, CRATES, 'loot-crates');
     this.drops = inst(gunGeometry('airdrop'), this.mat, DROPS, 'air-drops');
-    this.chute = new THREE.Mesh(gunGeometry('parachute'), this.mat);
-    this.chute.frustumCulled = false; this.chute.visible = false; this.chute.name = 'parachute';
-    scene.add(this.chute);
-    this.chuteT = 0; this.smokeAcc = 0;
+    // (Instanced too, though there is only ever one: the same shader program as the guns, compiled on the menu.)
+    this.chute = inst(gunGeometry('parachute'), this.mat, 1, 'parachute');
+    this.chuteT = 0; this.chuteYaw = 0; this.smokeAcc = 0;
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).translate(0, 0.5, 0);
     const fade = [], bp = beam.attributes.position;
     for (let i = 0; i < bp.count; i++) { const a = Math.pow(1 - bp.getY(i), 1.6); fade.push(a, a, a); }
@@ -117,7 +116,7 @@ export class WeaponFx {
     this._flashT = -1;
     // The player's gun this frame (for muzzle()), as a column-major 4x4.
     this.placed = false; this.pm = new Float32Array(16); this.pid = null;
-    this._all = [...Object.values(this.guns), this.flying, this.crates, this.drops, this.beams, this.glows];
+    this._all = [...Object.values(this.guns), this.flying, this.crates, this.drops, this.chute, this.beams, this.glows];
     this._shadowed = [...Object.values(this.guns), this.flying, this.crates, this.drops, this.chute];
   }
 
@@ -253,24 +252,24 @@ export class WeaponFx {
     this.crates.count = nc; this.drops.count = nd; this.beams.count = nb; this.glows.count = nb;
     // Coming down: the crate under its canopy, swaying; landed, the canopy folds away and red smoke rises.
     const A = W?.airdrop, chute = this.chute;
-    chute.visible = false;
+    chute.count = 0;
     if (!A) { this.chuteT = 0; return; }
     const y = A.y ?? 0;
     if (!A.landed) {
       this.chuteT = 0;
       if (nd < DROPS) { _q.setFromAxisAngle(_Y, hash(A.x, A.z) * 6.28); this.drops.setMatrixAt(nd++, _m.compose(_p.set(A.x, y, A.z), _q, _ONE)); this.drops.count = nd; }
-      chute.visible = true;
-      chute.position.set(A.x, y + 0.95, A.z);
-      chute.rotation.set(0.06 * Math.sin(this.t * 0.9), this.t * 0.15, 0.06 * Math.cos(this.t * 0.7));
-      chute.scale.set(1, 1, 1);
+      this.chuteYaw = this.t * 0.15;
+      _q.setFromEuler(_e.set(0.06 * Math.sin(this.t * 0.9), this.chuteYaw, 0.06 * Math.cos(this.t * 0.7)));
+      chute.setMatrixAt(0, _m.compose(_p.set(A.x, y + 0.95, A.z), _q, _ONE));
+      chute.count = 1;
     } else {
       this.chuteT += dt;
       const k = this.chuteT / 1.6;
       if (k < 1) {
-        chute.visible = true;
-        chute.position.set(A.x + 2.2 * k, y + 0.95 - 0.4 * k, A.z);
-        chute.rotation.set(0, chute.rotation.y, 1.2 * k);
-        chute.scale.set(1 + 0.2 * k, Math.max(0.05, 1 - k), 1 + 0.2 * k);
+        _q.setFromEuler(_e.set(0, this.chuteYaw, 1.2 * k));
+        chute.setMatrixAt(0, _m.compose(_p.set(A.x + 2.2 * k, y + 0.95 - 0.4 * k, A.z), _q, _s.set(1 + 0.2 * k, Math.max(0.05, 1 - k), 1 + 0.2 * k)));
+        _s.set(1, 1, 1);
+        chute.count = 1;
       }
       // weapons.js counts the smoke down (seconds, then false: a few seconds more once opened).
       const smoking = A.smoke === undefined || A.smoke === true ? !(dropTaken || A.taken) : A.smoke !== false && A.smoke > 0;
@@ -360,7 +359,7 @@ export class WeaponFx {
     }
     g.instanceCount = hi;
     this.tracers.visible = hi > 0 || !(this.game.started ?? true);
-    for (const k of ['iA', 'iB', 'iC']) sendFirst(g.attributes[k], hi);
+    sendFirst(g.attributes.iA, hi); sendFirst(g.attributes.iB, hi); sendFirst(g.attributes.iC, hi);
     if (hi > 0) {
       const r = this.game.renderer;
       if (r) { r.getDrawingBufferSize(_res); this.tracers.material.uniforms.uRes.value.copy(_res); this.tracers.material.uniforms.uWidth.value = 3.5 * r.getPixelRatio(); }

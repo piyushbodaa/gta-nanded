@@ -593,6 +593,7 @@ const POCKET = [-0.13, 0.46, 0.07], RIFLE_TW = -0.55, CHEST = [-0.04, 0.36, 0.1]
 // and down; the left arm points at the target, then pulls down.
 const THROW_KEYS = [[0, [-0.3, 0.68, -0.12]], [0.3, [-0.22, 0.78, 0.16]], [0.55, [-0.08, 0.48, 0.46]], [1, [0.08, 0.18, 0.36]]];
 const THROW_LEFT = [[0.2, 0.45, 0.42], [0.22, 0.12, 0.12]];
+const WRAP = [0.03, -0.03, -0.01]; // a pistol: the left hand round the right fist
 const DEFAULT_GUN = { rifle: 'akm', pistol: 'p92', melee: 'pan', throw: 'grenade' };
 const sm = w => w * w * (3 - 2 * w); // weights ease in and out, so the arms neither jump off nor slam in
 const throwEnv = u => smooth(0, 0.12, u) * (1 - smooth(0.82, 1, u));
@@ -706,10 +707,10 @@ function gunPose(a, h, P, lod) {
     }
     // The left hand: on the handguard, or round the right fist; to the magazine and back in a reload.
     const lx = g.uy * g.dz - g.uz * g.dy, ly = g.uz * g.dx - g.ux * g.dz, lz = g.ux * g.dy - g.uy * g.dx; // the gun's left
-    const S = G.support || [0.03, -0.03, -0.01];
+    const S = G.support || WRAP;
     for (let i = 0; i < 3; i++) _L[i] = _R[i] + ((i === 0 ? g.dx : i === 1 ? g.dy : g.dz) * S[2] + (i === 0 ? g.ux : i === 1 ? g.uy : g.uz) * S[1] + (i === 0 ? lx : i === 1 ? ly : lz) * S[0]) / sc;
     if (re > 0) {
-      const M = G.mag || [0, -0.1, 0], go = smooth(0, 0.2, r) * (1 - smooth(0.8, 1, r)), dip = Math.sin(Math.PI * smooth(0.2, 0.7, r)) * 0.14;
+      const M = G.mag || WRAP, go = smooth(0, 0.2, r) * (1 - smooth(0.8, 1, r)), dip = Math.sin(Math.PI * smooth(0.2, 0.7, r)) * 0.14;
       for (let i = 0; i < 3; i++) {
         const d = i === 0 ? g.dx : i === 1 ? g.dy : g.dz, u = i === 0 ? g.ux : i === 1 ? g.uy : g.uz;
         _L[i] = lerp(_L[i], _R[i] + (d * M[2] + u * (M[1] - dip)) / sc, go);

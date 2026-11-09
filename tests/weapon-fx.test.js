@@ -314,12 +314,12 @@ test('loot shows nearby crates with glow beams and the weapon over them; the air
   g.weapons.loot = [];
   g.weapons.airdrop = { x: 30, z: 30, y: 60, landed: false };
   frame();
-  assert.ok(fx.chute.visible && fx.drops.count === 1, 'coming down under its canopy');
+  assert.ok(fx.chute.visible && fx.chute.count === 1 && fx.drops.count === 1, 'coming down under its canopy');
   assert.equal(spawned.length, 0, 'no smoke in the air');
   g.weapons.airdrop.landed = true; g.weapons.airdrop.y = 0;
   g.weapons.loot = [{ x: 30, y: 0, z: 30, id: 'awm', ammo: null, n: 10, taken: false, kind: 'airdrop' }];
   frame(120);
-  assert.equal(fx.chute.visible, false, 'the canopy folds away');
+  assert.ok(!fx.chute.visible && fx.chute.count === 0, 'the canopy folds away');
   assert.equal(fx.drops.count, 1);
   assert.ok(spawned.length > 10 && spawned.every(s => s[8] > 0.8 && s[9] < 0.3), 'red smoke');
   g.weapons.loot[0].taken = true;

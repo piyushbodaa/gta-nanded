@@ -108,7 +108,7 @@ export class GameCamera {
     } else {
       this.mode = aimK > 0.5 ? (this.scopeK > 0.5 ? 'scope' : 'aim') : 'foot';
       const h = subject.human;
-      dist = 4.3 * this.zoom + (1.65 - 4.3 * this.zoom) * aimK;
+      dist = 4.3 * this.zoom + (1.9 - 4.3 * this.zoom) * aimK;
       tx = h.x; tz = h.z; ty = h.y + 1.55 - 0.12 * aimK;
       // Keyboard and touch players get a gentle follow when they run; mouse-look players steer it
       // themselves, and so does anyone aiming.
@@ -131,7 +131,7 @@ export class GameCamera {
     // short of any wall there.
     let cx = this.target.x, cy = this.target.y, cz = this.target.z;
     if (aimK > 0 || this.shoulder > 0) {
-      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), want = 0.52 * aimK;
+      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), want = 0.62 * aimK;
       const t = want > 0 ? this.colliders.raycast(cx, cy, cz, cx + rx * (want + 0.2), cy, cz + rz * (want + 0.2), 0.05) : 1;
       const s = Math.max(0, Math.min(want, (want + 0.2) * t - 0.2));
       this.shoulder = s < this.shoulder ? s : damp(this.shoulder, s, 10, dt);
