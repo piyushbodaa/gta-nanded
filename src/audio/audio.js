@@ -212,6 +212,9 @@ export class GameAudio {
       case 'busted': this._tone(600, 0.25, { type: 'square', gain: 0.1 }); this._tone(450, 0.5, { type: 'square', gain: 0.1, at: 0.25 }); break;
       case 'door': this._burst(0.08, { freq: 600, q: 1, gain: 0.25 }); this._tone(140, 0.1, { gain: 0.2 }); break;
       case 'bell': this._bell(0.12 * k); break;
+      case 'heartbeat': // lub-dub, low and soft: hurt and still in danger (hit-fx.js)
+        for (const at of [0, 0.27]) { this._tone(52, 0.12, { gain: 0.3 * k, glide: 38, at }); this._burst(0.07, { freq: 160, q: 0.7, gain: 0.18 * k, type: 'lowpass', buf: this.brown, at }); }
+        break;
       case 'wanted': this._tone(988, 0.15, { type: 'square', gain: 0.07 }); this._tone(740, 0.15, { type: 'square', gain: 0.07, at: 0.16 }); break;
       // Guns: a sharp crack (filtered white noise), a body (low brown noise) and a thump (a falling
       // tone), each kept under 0.5 so the master compressor doesn't pump on full auto.

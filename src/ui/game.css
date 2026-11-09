@@ -108,6 +108,7 @@ body.busted #game-canvas { filter: saturate(.3) hue-rotate(190deg) brightness(.8
 body.cutscene .hud-bl, body.cutscene .hud-tr, body.cutscene .prompt { opacity: 0; transition: opacity .4s; }
 body.cutscene .touch-right, body.cutscene .stick-zone, body.cutscene .tb-weapon, body.cutscene .fire2 { opacity: 0; pointer-events: none; transition: opacity .4s; }
 body.cutscene .crosshair, body.cutscene .hitmark, body.cutscene .hud-weapon, body.cutscene .hud-notice { opacity: 0; }
+body.cutscene .dmg, body.cutscene .hurt { visibility: hidden; } /* their opacity is inline */
 body.cutscene::before, body.cutscene::after { content: ''; position: fixed; left: 0; right: 0; height: 9vh; background: #000; z-index: 9; animation: bars .5s ease; }
 body.cutscene::before { top: 0; } body.cutscene::after { bottom: 0; }
 @keyframes bars { from { height: 0; } }
@@ -345,6 +346,13 @@ body:not(.touch-ui) .hud.armed .timer { top: calc(182px + var(--safe-t)); }
 .hitmark i { position: absolute; left: -13px; top: -1px; width: 26px; height: 2px; background: linear-gradient(90deg, #fff 0 36%, #0000 36% 64%, #fff 64%); filter: drop-shadow(0 0 1px #000); }
 .hitmark i:first-child { transform: rotate(45deg); } .hitmark i:last-child { transform: rotate(-45deg); }
 .hitmark.kill i { background: linear-gradient(90deg, #ff3b30 0 36%, #0000 36% 64%, #ff3b30 64%); }
+/* Hit feedback (hit-fx.js): red chevrons round the middle pointing at whoever hit you, set by
+   inline transform/opacity; and the red-edge fallback when post processing is off. The edges mix
+   towards red, never black, and fade in well under a second. */
+.dmg { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.dmg i { position: absolute; left: -17px; top: -7px; width: 34px; height: 14px; background: #ff3b30; clip-path: polygon(0 100%, 50% 0, 100% 100%, 50% 45%); filter: drop-shadow(0 0 2px #000); opacity: 0; will-change: transform, opacity; }
+.hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, #0000 42%, rgba(199, 13, 10, .25) 70%, rgba(199, 13, 10, .6) 100%); }
+.bar.health.hit i { background: #fff; animation: none; }
 /* A sniper's scope: a round lens in black, thick posts that thin to a fine cross with range marks, a red dot. */
 .scope { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center;
   /* The black surround is a gradient, not a huge box-shadow spread: phone Chrome drops a spread that size and left it see-through. */

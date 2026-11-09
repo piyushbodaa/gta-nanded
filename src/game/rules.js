@@ -9,6 +9,8 @@ import { driveHunters } from './missions.js';
 import { drivingHelp, vehicleKeys, weaponHelp } from '../ui/controls.js';
 import { tapButtons } from '../ui/tap.js';
 import { WEAPONS } from './weapon-data.js';
+import { HitFx } from '../ui/hit-fx.js';
+import { haptic } from '../ui/haptics.js';
 
 const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
 
@@ -43,7 +45,7 @@ export function installRules(g) {
     if (g.cutscene) return; // the player is held still and can't fight back
     const P = g.player;
     if (P.state !== 'foot' || dist(p.h.x, p.h.z, P.x, P.z) > 1.5) return;
-    P.damage(dmg, p.cop ? 'police' : 'fight');
+    P.damage(dmg, p.cop ? 'police' : 'fight', p.h);
     g.audio.sfx('punch', 0.7);
     g.camera.addShake(0.12);
     // Down long enough to fall before getting up (a shorter one skips the fall: player.js _down).
@@ -127,7 +129,7 @@ export function installRules(g) {
   g.vehicles.onImpact = (v, speed, other) => {
     if (v.role === 'player' || other?.role === 'player') {
       const k = clamp(speed / 20, 0.1, 1);
-      if (v.role === 'player') { g.camera.addShake(k * 0.7); g.audio.sfx('crash', k); g.save.stat('crashes'); }
+      if (v.role === 'player') { g.camera.addShake(k * 0.7); g.audio.sfx('crash', k); g.save.stat('crashes'); if (speed > 6) haptic(g, 30); }
       if (other?.role === 'player' && !storyCar(v) && playerRammed(v, other)) {
         const fresh = g.time - (v.rammedT ?? -9) > 1; // one shunt (and its bounces) is one crime
         v.rammedT = g.time; // and if it blows up, that's the player's doing too (explode)
@@ -219,8 +221,8 @@ export function installRules(g) {
     const chance = clamp(0.7 - d / 45, 0.12, 0.65) * (P.speed > 4 ? 0.6 : 1) * (gun === 'm416' ? 0.75 : 1) * (P.state === 'down' ? 0.5 : 1);
     const hit = Math.random() < chance;
     if (hit) {
-      if (P.vehicle) g.damageVehicle(P.vehicle, 18, false);
-      else { P.damage(gun === 'm416' ? 7 : 8, 'police'); g.camera.addShake(0.08); }
+      if (P.vehicle) { g.damageVehicle(P.vehicle, 18, false); g.hitFx?.incoming(h.x, h.z); }
+      else { P.damage(gun === 'm416' ? 7 : 8, 'police', h); g.camera.addShake(0.08); }
     }
     // The tracer from the officer's gun (or hands); a miss goes past, a step or two wide.
     const m = muzzle;
@@ -243,8 +245,8 @@ export function installRules(g) {
     // The blast throws people and cars away from it, hardest close in, and only on its own level
     // (a car blowing up on a flyover doesn't reach the street below).
     const level = o => Math.abs((o.y || 0) - v.y) < 3;
-    if (P.vehicle === v) { P.leaveVehicle(true); P.damage(70, 'explosion'); P.knockDown(Math.random() * 4 - 2, Math.random() * 4 - 2, 2); }
-    else if (d < 7 && P.state === 'foot' && level(P)) { const k = (3 + 6 * (1 - d / 7)) / Math.max(d, 0.5); P.damage((7 - d) * 12, 'explosion'); P.knockDown((pos.x - v.x) * k, (pos.z - v.z) * k, 1.5); }
+    if (P.vehicle === v) { P.leaveVehicle(true); P.damage(70, 'explosion', v); P.knockDown(Math.random() * 4 - 2, Math.random() * 4 - 2, 2); }
+    else if (d < 7 && P.state === 'foot' && level(P)) { const k = (3 + 6 * (1 - d / 7)) / Math.max(d, 0.5); P.damage((7 - d) * 12, 'explosion', v); P.knockDown((pos.x - v.x) * k, (pos.z - v.z) * k, 1.5); }
     g.peds.forEachNear(v.x, v.z, 8, p => {
       if (!level(p.h)) return;
       const dx = p.h.x - v.x, dz = p.h.z - v.z, pd = Math.max(0.5, Math.hypot(dx, dz)), k = (3 + 9 * (1 - pd / 8)) / pd;
@@ -267,6 +269,7 @@ export function installRules(g) {
   // Per-frame rules.
   let skidT = 0, smokeT = 0, saveT = 0;
   g.hooks = [dt => {
+    g.hitFx?.update(g.timeScale > 0 ? dt / g.timeScale : dt); // real time: slow motion doesn't stretch it
     const P = g.player;
     // Through stat(), which marks the save dirty: the autosave below then writes them even on a
     // long quiet drive where nothing else changes.
@@ -392,6 +395,7 @@ export function installRules(g) {
     const failed = endMission('You were wasted.');
     g.hud.big('WASTED', cause === 'drowned' ? 'The Godavari wins this one' : '', 'wasted', 4.2);
     g.audio.sfx('wasted');
+    g.hitFx?.wasted();
     g.save.stat('wasted');
     g.jobs.stop(true);
     setTimeout(() => respawn(HOSPITAL, fee => fee ? `SGGS Civil Hospital: ₹${fee} for the stitches.` : 'SGGS Civil Hospital patched you up for free.', 200, failed), 4200);
@@ -417,6 +421,7 @@ export function installRules(g) {
     const fine = Math.min(fee, g.save.cash);
     if (fine) g.addCash(-fine);
     P.health = P.maxHealth;
+    g.hitFx?.reset();
     const n = g.net.nearest(at.x, at.z, 50, {}, r => !g.net.raised[r]);
     const off = n ? (g.net.width[n.road] / 2 + 1) * (g.net.kerbSide(n.road) || 1) : 0;
     P.teleport(n ? n.x + n.dz * off : at.x, n ? n.z - n.dx * off : at.z, n ? Math.atan2(n.dx, n.dz) : 0);
@@ -426,7 +431,8 @@ export function installRules(g) {
     g.save.flush();
   }
 
-  g.onPlayerDamage = () => {};
+  g.hitFx ??= new HitFx(g);
+  g.onPlayerDamage = (a, s, f) => g.hitFx?.hurt(a, s, f);
   g.onWantedChange = (level, before) => {
     if (level > before) { g.audio.sfx('wanted'); if (before === 0 && !g.save.data.seenWantedHelp) { g.save.set('seenWantedHelp', true); g.hud.help(`You are <b>wanted</b>. Break line of sight and get out of the flashing search area on the radar to lose the police.${g.save.data.garage ? ' A respray at Anna\'s garage works too.' : ''}`, 8); } }
   };

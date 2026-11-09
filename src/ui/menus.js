@@ -5,6 +5,7 @@ import { dist } from '../core/math.js';
 import { key, keyName, verb, pick } from './controls.js';
 import { installKind, promptInstall } from './install.js';
 import { tapButtons } from './tap.js';
+import { haptic } from './haptics.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -35,6 +36,12 @@ export class PauseMenu {
     $('set-quality').addEventListener('click', () => { g.quality.cycle(g); this._settings(); });
     $('set-fps').addEventListener('click', () => { g.quality.cycleFps(); this._settings(); });
     $('set-perf').addEventListener('click', () => { const s = g.save.data.settings; s.perf = !s.perf; g.hud.showPerf(s.perf); g.save.dirty(); this._settings(); });
+    // Vibration (Android): turning it on buzzes once, so the player feels it work. The menu pauses
+    // the game, and haptic() stays quiet while paused, so this one goes to the phone directly.
+    $('set-haptics').addEventListener('click', () => {
+      const s = g.save.data.settings; s.haptics = s.haptics === false; g.save.dirty(); this._settings();
+      if (s.haptics) haptic({ save: g.save, input: g.input }, 30, true);
+    });
     $('set-install').addEventListener('click', async () => {
       if (installKind() === 'ios') { $('set-install-help').hidden = !$('set-install-help').hidden; return; }
       await promptInstall();
@@ -208,6 +215,8 @@ export class PauseMenu {
     $('set-quality').textContent = g.quality.label();
     $('set-fps').textContent = g.quality.fpsLabel();
     $('set-perf').textContent = s.perf ? 'On' : 'Off';
+    $('set-haptics-row').hidden = !(typeof navigator !== 'undefined' && 'vibrate' in navigator); // Android only: hidden on iOS and desktop
+    $('set-haptics').textContent = s.haptics === false ? 'Off' : 'On';
     const install = installKind();
     $('set-install-row').hidden = !install;
     $('set-install').textContent = install === 'ios' ? 'How?' : 'Install the game';
