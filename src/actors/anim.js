@@ -607,12 +607,14 @@ function air(a, h, P) {
 export const THROW_TIME = 0.5;
 const norm3 = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
 const upOf = d => norm3(-d[0] * d[1], 1 - d[1] * d[1], -d[2] * d[1]); // straight up, square to d
-// Carried (in the body's frame, from the pelvis: + left, + up, + forward): the way the muzzle points;
-// a rifle at the low ready, its butt at the right shoulder (`butt`) and the barrel down across the
-// body past the left hip (seen from behind, not hidden by the back); a pistol in the right fist
-// (`hand`) down at the side.
+// Carried (in the body's frame, from the pelvis: + left, + up, + forward): the way the muzzle points
+// and where the middle of a long gun is (`mid`, the fist on the grip short of it by as much as the gun
+// is longer in front of the grip than behind). A long gun at the low ready across the hips, in front
+// of the belly: the muzzle down and forward past the left hip and the stock out past the right one, so from the camera behind (over the right shoulder) both ends stick out beside the
+// body instead of hiding in front of the chest; the right elbow tucked back against the side, out
+// of the stock's way. A pistol in the right fist (`hand`) down at the side.
 const CARRY = {
-  rifle: { butt: [-0.17, 0.46, 0.13], dir: norm3(0.74, -0.52, 0.43), tw: -0.2 },
+  rifle: { mid: [0.04, 0.14, 0.27], dir: norm3(0.92, -0.36, 0.2), tw: -0.2, pole: [-0.15, -1, -0.45] },
   pistol: { hand: [-0.2, -0.1, 0.1], dir: norm3(0, -0.8, 0.6), tw: 0 },
 };
 for (const k in CARRY) CARRY[k].up = upOf(CARRY[k].dir);
@@ -634,7 +636,7 @@ const WRAP = [0.03, -0.03, -0.01]; // a pistol: the left hand round the right fi
 const DEFAULT_GUN = { rifle: 'akm', pistol: 'p92', melee: 'pan', throw: 'grenade' };
 const sm = w => w * w * (3 - 2 * w); // weights ease in and out, so the arms neither jump off nor slam in
 const throwEnv = u => smooth(0, 0.12, u) * (1 - smooth(0.82, 1, u));
-const _R = [0, 0, 0], _L = [0, 0, 0], _t = [0, 0, 0], _arms = new Float32Array(8), _po = [0, 0];
+const _R = [0, 0, 0], _L = [0, 0, 0], _t = [0, 0, 0], _pr = [0, 0, 0], _arms = new Float32Array(8), _po = [0, 0];
 
 /** v from the torso's frame into the body's. Needs _pm, _tm and the pelvis's shift in _po. */
 function toBody(v, x, y, z) {
@@ -728,9 +730,10 @@ function gunPose(a, h, P, lod) {
       toBody(_t, POCKET[0], POCKET[1], POCKET[2]);
       const bz = G.butt[2] / sc - 0.035 * kick, by = G.butt[1] / sc;
       _R[0] = _t[0] - dx * bz - ux * by; _R[1] = _t[1] - dy * bz - uy * by; _R[2] = _t[2] - dz * bz - uz * by;
-      // Carried, the hand that puts the butt at the shoulder with the barrel across the body.
-      const B = K.butt, cz = G.butt[2] / sc, cy = G.butt[1] / sc;
-      for (let i = 0; i < 3; i++) _R[i] = lerp(B[i] - K.dir[i] * cz - K.up[i] * cy, _R[i], w);
+      // Carried, low across the body with the gun's middle in front of the belly, so a short gun and
+      // a long one both stick out on each side.
+      const mid = (G.butt[2] + G.muzzle[2]) / 2 / sc;
+      for (let i = 0; i < 3; i++) _R[i] = lerp(K.mid[i] - K.dir[i] * mid, _R[i], w);
     } else {
       toBody(_t, CHEST[0], CHEST[1], CHEST[2]);
       const r = REACH - 0.03 * kick;
@@ -764,7 +767,8 @@ function gunPose(a, h, P, lod) {
       for (let i = 0; i < 8; i++) mixTo(P, C.SF + i, lerp(F[0][i], F[1][i], w), i % 2 ? wh : wl);
     } else {
       const rifle = hold === 'rifle';
-      reachBoth(P, wh, wl, rifle ? POLE.rifleR : POLE.pistolR, rifle ? POLE.rifleL : POLE.pistolL);
+      if (rifle) for (let i = 0; i < 3; i++) _pr[i] = lerp(K.pole[i], POLE.rifleR[i], w); // carried tucked, aimed out
+      reachBoth(P, wh, wl, rifle ? _pr : POLE.pistolR, rifle ? POLE.rifleL : POLE.pistolL);
     }
   }
   // Aiming, the head looks down the sights: along the aim, and behind a rifle tipped down and over

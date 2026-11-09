@@ -102,6 +102,30 @@ test('aiming a rifle: the butt in the right shoulder, the left hand on the handg
   }
 });
 
+test('carried, a long gun lies low across the hips, its stock out past the right side and its muzzle past the left', () => {
+  for (const id of ['akm', 'm416', 'ump45', 's12k', 'kar98k', 'awm']) {
+    const { h, at, step, gun, arm } = rig();
+    arm(id); h.aim = 0; h.yaw = -1.1;
+    for (let i = 0; i < 60; i++) step();
+    finite(h);
+    const { d, u } = gun(), G = GRIPS[id], R = at(HAND[1], ...HAND_GRIP), L = at(HAND[0], -HAND_GRIP[0], HAND_GRIP[1], HAND_GRIP[2]);
+    const left = [Math.cos(h.yaw), 0, -Math.sin(h.yaw)], fwd = [Math.sin(h.yaw), 0, Math.cos(h.yaw)], mid = [h.x, 0, h.z];
+    const butt = [0, 1, 2].map(k => R[k] + d[k] * G.butt[2] + u[k] * G.butt[1]), muzzle = [0, 1, 2].map(k => R[k] + d[k] * G.muzzle[2]);
+    const side = p => dot(sub(p, mid), left), shoulder = at(SHOULDER[1], 0, 0, 0);
+    // Seen from behind both ends stick out beside the body (its shoulders are 0.235 m out, the hips less; the
+    // UMP is the short one).
+    assert.ok(side(butt) < (id === 'ump45' ? -0.22 : -0.28), `${id}: the stock ${side(butt).toFixed(2)} m to the left`);
+    assert.ok(side(muzzle) > 0.3, `${id}: the muzzle ${side(muzzle).toFixed(2)} m to the left`);
+    // Low and in front: below the shoulder, the muzzle down and forward of the body.
+    assert.ok(butt[1] < shoulder[1] - 0.1 && muzzle[1] < butt[1] && d[1] < -0.2, `${id}: low, muzzle down (${butt[1].toFixed(2)}, ${muzzle[1].toFixed(2)})`);
+    assert.ok(dot(sub(muzzle, mid), fwd) > 0.25 && dot(sub(R, mid), fwd) > 0.12, `${id}: in front of the body`);
+    // Both hands on it.
+    const l = [u[1] * d[2] - u[2] * d[1], u[2] * d[0] - u[0] * d[2], u[0] * d[1] - u[1] * d[0]];
+    const support = [0, 1, 2].map(k => R[k] + d[k] * (G.support[2] - 0.04) + u[k] * G.support[1] + l[k] * G.support[0]);
+    assert.ok(len(sub(L, support)) < 0.08, `${id}: left hand ${len(sub(L, support)).toFixed(3)} m off the handguard`);
+  }
+});
+
 test('aiming a pistol puts both fists out in front on the aim; carried, it hangs at the side', () => {
   const { h, at, step, gun, arm } = rig();
   arm('p92'); h.aim = 1; h.aimPitch = 0.3;

@@ -14,6 +14,12 @@ export const CRIME_HEAT = {
   shoot: 0.6, shotPed: 1, shotCop: 2.5, killPed: 2, killCop: 3, blast: 1, drone: 1,
 };
 
+// How likely someone about calls a crime in when no officer saw it: a punch is shrugged off, most
+// crimes are called in more often than not, and nobody keeps quiet about a person shot dead in the
+// street. A killing is called in sooner, too (seconds after it, not up to six).
+const WITNESS = { punch: 0.25, killPed: 0.9, killCop: 0.9 };
+const CALL_DELAY = { killPed: [2, 1.5], killCop: [2, 1.5] }; // [soonest, plus up to] seconds
+
 export class Police {
   constructor(game) {
     this.game = game;
@@ -40,10 +46,12 @@ export class Police {
   report(crime, x, z, { cop = false, r = 55, witness = true, heat = CRIME_HEAT[crime] ?? 0.5 } = {}) {
     const seenBy = cop || this._copNear(x, z, r);
     if (seenBy) { this.addHeat(heat, x, z); return; }
-    if (!witness || Math.random() >= (crime === 'punch' ? 0.25 : 0.6)) return;
-    // A call already on its way about the same street is that call (the worse of the two), not another.
-    for (const c of this.pending) if (Math.abs(c.x - x) < 40 && Math.abs(c.z - z) < 40) { c.heat = Math.max(c.heat, heat); return; }
-    this.pending.push({ t: 3 + Math.random() * 3, heat, x, z });
+    if (!witness || Math.random() >= (WITNESS[crime] ?? 0.6)) return;
+    const [soon, more] = CALL_DELAY[crime] || [3, 3], t = soon + Math.random() * more;
+    // A call already on its way about the same street is that call (the worse of the two, as soon as
+    // the sooner), not another.
+    for (const c of this.pending) if (Math.abs(c.x - x) < 40 && Math.abs(c.z - z) < 40) { c.heat = Math.max(c.heat, heat); c.t = Math.min(c.t, t); return; }
+    this.pending.push({ t, heat, x, z });
   }
 
   /** The heat a crime adds, by name (Weapons works out the difference when one gets worse). */

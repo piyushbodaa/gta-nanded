@@ -105,18 +105,21 @@ export class Effects {
    */
   explosion(x, y, z, floor = y - 0.5) {
     const R = Math.random;
-    for (let k = 0; k < 3; k++) this.spawn(x + (R() - 0.5) * 0.6, y + 0.3 + R() * 0.4, z + (R() - 0.5) * 0.6, 0, 0, 0, 0.08 + R() * 0.05, 1.5 + R() * 1, 1, 0.88, 0.55, 1, { grow: 0.7 });
-    for (let k = 0; k < 26; k++) {
-      const a = R() * 6.28, s = 1.5 + R() * 5.5, hot = R();
-      this.spawn(x + (R() - 0.5) * 0.8, y + 0.2 + R() * 0.6, z + (R() - 0.5) * 0.8, Math.cos(a) * s, 1.5 + R() * 5, Math.sin(a) * s, 0.45 + R() * 0.45, 0.35 + R() * 0.65,
-        1, 0.4 + 0.22 * hot, 0.06 + 0.1 * hot, 0.95, { grow: 1.4, drag: 3, buoy: 1.2, to: [0.33, 0.29, 0.27] });
+    for (let k = 0; k < 3; k++) this.spawn(x + (R() - 0.5) * 0.7, y + 0.3 + R() * 0.5, z + (R() - 0.5) * 0.7, 0, 0, 0, 0.09 + R() * 0.05, 2 + R() * 1.2, 1, 0.88, 0.55, 1, { grow: 0.7 });
+    // The fireball: big enough to read from a street away (15 m), the puffs still small and many.
+    for (let k = 0; k < 30; k++) {
+      const a = R() * 6.28, s = 1.8 + R() * 6, hot = R();
+      this.spawn(x + (R() - 0.5) * 1, y + 0.2 + R() * 0.8, z + (R() - 0.5) * 1, Math.cos(a) * s, 1.8 + R() * 5.5, Math.sin(a) * s, 0.5 + R() * 0.5, 0.45 + R() * 0.8,
+        1, 0.4 + 0.22 * hot, 0.06 + 0.1 * hot, 0.95, { grow: 1.5, drag: 3, buoy: 1.2, to: [0.33, 0.29, 0.27] });
     }
-    for (let k = 0; k < 16; k++) {
-      const a = R() * 6.28, s = 0.6 + R() * 2, d = 0.3 + R() * 0.25;
-      this.spawn(x + Math.cos(a) * 0.8, y + 0.5 + R() * 1.4, z + Math.sin(a) * 0.8, Math.cos(a) * s, 1 + R() * 1.6, Math.sin(a) * s, 1.6 + R() * 1.4, 0.7 + R() * 0.7,
-        0.55, 0.3, 0.14, 0.55, { grow: 2.6, drag: 1.2, buoy: 0.35, to: [d * 0.8, d * 0.8, d * 0.84] });
+    // The smoke hangs about a second and a half before it thins out (it fades as 1 - t², so most of
+    // its life it is nearly as thick as it starts), rising slowly, a mid grey that shows on the road and the sky.
+    for (let k = 0; k < 20; k++) {
+      const a = R() * 6.28, s = 0.6 + R() * 2.2, d = 0.38 + R() * 0.18;
+      this.spawn(x + Math.cos(a) * 0.9, y + 0.5 + R() * 1.6, z + Math.sin(a) * 0.9, Math.cos(a) * s, 0.8 + R() * 1.4, Math.sin(a) * s, 2.1 + R() * 1.1, 0.9 + R() * 0.8,
+        0.5, 0.36, 0.26, 0.62, { grow: 2.6, drag: 1.3, buoy: 0.22, to: [d * 0.8, d * 0.8, d * 0.84] });
     }
-    for (let k = 0; k < 8; k++) { const a = R() * 6.28; this.spawn(x, floor + 0.25, z, Math.cos(a) * 5, 0.3, Math.sin(a) * 5, 1, 0.6, 0.68, 0.6, 0.5, 0.35, { grow: 3, drag: 2.2 }); }
+    for (let k = 0; k < 10; k++) { const a = R() * 6.28; this.spawn(x, floor + 0.25, z, Math.cos(a) * 5.5, 0.3, Math.sin(a) * 5.5, 1.3, 0.7, 0.68, 0.6, 0.5, 0.38, { grow: 3, drag: 2.2 }); }
     this.sparks(x, y + 0.6, z, 24);
     this.flashes.push({ x, y: floor + 0.1, z, t: 0.5 }); // the glow lies on the road under the blast, just above it
   }

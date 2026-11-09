@@ -555,6 +555,20 @@ test('with a gun the trigger is FIRE, with a left-hand FIRE, AIM (SCOPE for a sn
   assert.equal(shown('tb-weapon'), 'FRAG\n×2');
 });
 
+test('with the wheel open the weapon button shows the weapon the wheel points at', () => {
+  const w = fakeWeapons(['fist', 'p92', 'akm'], 'fist');
+  const { t, game } = touchFor(w);
+  let hl = 'akm';
+  game.weaponWheel = { open: true, chosen: () => hl };
+  w.wheelOpen = true;
+  t.update();
+  assert.equal(shown('tb-weapon'), 'AKM\n30/300'.replace('300', String(w.ammo.akm.reserve)));
+  hl = null; t.update(); // an empty slot: what is in hand
+  assert.equal(shown('tb-weapon'), 'FIST');
+  hl = 'p92'; w.wheelOpen = false; t.update(); // closed: what is in hand again
+  assert.equal(shown('tb-weapon'), 'FIST');
+});
+
 test('driving holsters the gun: the weapon buttons hide and PUNCH is back for when you get out', () => {
   const w = fakeWeapons(['fist', 'akm'], 'akm');
   w.foot = false; // game.weapons.armed is false off foot
