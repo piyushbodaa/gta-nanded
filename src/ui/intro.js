@@ -1,5 +1,6 @@
 const LENGTH = 12000, REVEAL_AT = 11600;
-const ASSETS = Object.fromEntries(['city','driver','chase','crew'].map(name=>[name,`/media/gta-nanded-${name}.webp`]));
+// The art is AVIF, a quarter of the WebP's size; the WebP stays for browsers that cannot decode AVIF.
+const ASSETS = Object.fromEntries(['city','driver','chase','crew'].map(name=>[name,`/media/gta-nanded-${name}.avif`]));
 
 /** Original animated comic panels; gameplay starts behind the final curtain. */
 export function createIntro() {
@@ -33,7 +34,8 @@ export function createIntro() {
   const skip=$('#intro-skip'),sound=$('#intro-sound'),continueButton=$('#intro-continue');
   const fallback=$('.launch-static'),status=$('#intro-status'),time=$('#intro-time'),progress=$('#intro-progress'),fill=$('#intro-progress-fill');
   const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
-  const audio=new Audio('/media/launch-theme.m4a'); audio.preload='auto'; audio.volume=.72;
+  // The theme is fetched when it is first played, not with the page: the opening starts with sound off.
+  const audio=new Audio('/media/launch-theme.m4a'); audio.preload='none'; audio.volume=.72;
   let active=false,destroyed=false,phase='idle',complete=null,returnFocus=null,mode='drive',generation=0;
   let elapsed=0,previousTime=null,frame=0,assetTimer=0,closingTimer=0,muted=true,audioFailed=false,chapter=-1;
   let inertElements=[],tracks=[],curtainTracks=[];
@@ -108,11 +110,13 @@ export function createIntro() {
     assetTimer=setTimeout(()=>{if(active&&run===generation&&phase==='loading')staticOpening('Your streets are waiting. Continue whenever you like.');},5000);beginTimeline();return true;
   }
   function replay(){return play(null,{mode:'replay'});}
-  records.forEach(record=>{const {image}=record;image.decoding='async';listen(image,'load',()=>{if(record.state!=='pending')return;record.state='ready';beginTimeline();});listen(image,'error',()=>{if(record.state!=='pending')return;record.state='failed';image.src='/media/nanded-key-art.webp';if(active)staticOpening('Your streets are waiting. Continue straight into Nanded.');});image.src=ASSETS[image.dataset.art];});
+  records.forEach(record=>{const {image}=record;image.decoding='async';listen(image,'load',()=>{if(record.state!=='pending')return;record.state='ready';beginTimeline();});listen(image,'error',()=>{if(record.state!=='pending')return;if(!record.retried&&image.src.endsWith('.avif')){record.retried=true;image.src=ASSETS[image.dataset.art].replace('.avif','.webp');return;}record.state='failed';image.src='/media/nanded-key-art.webp';if(active)staticOpening('Your streets are waiting. Continue straight into Nanded.');});image.src=ASSETS[image.dataset.art];});
   listen(skip,'click',()=>finish());listen(continueButton,'click',()=>finish());
   const replayButton=document.getElementById('intro-replay');if(replayButton){listen(replayButton,'click',replay);replayButton.disabled=false;}
   listen(sound,'click',()=>{muted=!muted;soundLabel();if(muted)audio.pause();else playAudio();});
   listen(audio,'error',()=>{audioFailed=true;soundLabel();});
+  // Turned on mid-opening, the theme arrives after play() was asked for: join it at the scene on screen.
+  listen(audio,'loadedmetadata',()=>{if(active&&phase==='playing'&&Number.isFinite(audio.duration))audio.currentTime=Math.min(elapsed/1000,audio.duration);});
   listen(document,'visibilitychange',()=>{if(!active||phase!=='playing')return;cancelAnimationFrame(frame);previousTime=null;if(document.hidden)audio.pause();else{playAudio();frame=requestAnimationFrame(tick);}});
   listen(reducedMotion,'change',()=>{if(active&&reducedMotion.matches)staticOpening('Begin at Hazur Sahib Nanded station.');});
   listen(window,'keydown',event=>{

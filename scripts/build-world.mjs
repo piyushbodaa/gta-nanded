@@ -6,7 +6,7 @@
 //         (researched places), src/data/buildings.json (OSM footprints),
 //         research/osm-airport.json (OSM runway, taxiways, aprons, terminal),
 //         research/osm-places.json (OSM petrol pumps).
-// Output: public/data/world.json, fetched by the game at startup.
+// Output: public/data/world.json, fetched by the game at startup (packed: see src/world/worldpack.js).
 //
 // The OSM graph stores one edge per mapped segment. The game wants roads: one
 // polyline per stretch between junctions, so lanes, meshes and AI can follow a
@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pack } from '../src/world/worldpack.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => JSON.parse(readFileSync(join(root, file), 'utf8'));
@@ -198,7 +199,8 @@ const world = {
 };
 
 mkdirSync(join(root, 'public/data'), { recursive: true });
-const out = JSON.stringify(world);
+// Packed for the download (src/world/worldpack.js); the game unpacks it back into this exact shape.
+const out = JSON.stringify(pack(world));
 writeFileSync(join(root, 'public/data/world.json'), out);
 const degree = new Map();
 for (const j of junctions) degree.set(j.roads.length, (degree.get(j.roads.length) || 0) + 1);
