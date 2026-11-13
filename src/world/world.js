@@ -10,6 +10,7 @@ import { Sky } from './sky.js';
 import { createRivers } from './water.js';
 import { Colliders } from './colliders.js';
 import { createFoliageTexture, createFoliageMaterial } from './foliage.js';
+import { unpack } from './worldpack.js';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -17,7 +18,7 @@ export async function loadWorldData(onProgress) {
   const res = await fetch('/data/world.json');
   if (!res.ok) throw new Error(`World data failed to load (${res.status})`);
   const total = Number(res.headers.get('content-length')) || 0;
-  if (!res.body || !total) return res.json();
+  if (!res.body || !total) return unpack(await res.json());
   const reader = res.body.getReader();
   const parts = [];
   let got = 0;
@@ -29,7 +30,7 @@ export async function loadWorldData(onProgress) {
   }
   const all = new Uint8Array(got);
   let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
-  return JSON.parse(new TextDecoder().decode(all));
+  return unpack(JSON.parse(new TextDecoder().decode(all)));
 }
 
 /**
