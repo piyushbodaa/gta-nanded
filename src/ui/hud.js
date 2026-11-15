@@ -4,6 +4,7 @@ import { clamp, dist } from '../core/math.js';
 import { VEHICLE_TYPES } from '../actors/vehicle-types.js';
 import { key } from './controls.js';
 import { WEAPONS, AMMO } from '../game/weapon-data.js';
+import { starterBlip } from '../game/start-kit.js';
 
 const $ = id => document.getElementById(id);
 
@@ -426,6 +427,9 @@ export class Hud {
     for (const b of g.nakabandi?.blips() ?? []) out.push(b);
     // Owned cars (blue diamonds), and a street event on offer (a blue !).
     if (g.garage) for (const b of g.garage.blips()) out.push(b);
+    // The car the game started you with, while you're out of it (a garaged one has its ◆ above).
+    const car = starterBlip(g, this.carBlip ??= { x: 0, z: 0, kind: 'icon', label: '🚗', color: '#ff5a4f', clamp: true });
+    if (car) out.push(car);
     for (const b of g.events?.blips?.() ?? []) out.push(b);
     // An air drop's crate, red like its smoke, until it is opened.
     const drop = g.weapons?.airdrop;

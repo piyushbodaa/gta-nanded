@@ -21,6 +21,8 @@ export class Colliders {
     this.c = new Float32Array(cap); this.s = new Float32Array(cap);
     this.h = new Float32Array(cap);
     this.y0 = new Float32Array(cap);
+    // 1: a low kerb someone on foot can jump over or up onto and stand on (a median); still solid to vehicles.
+    this.ledge = new Uint8Array(cap);
     this.n = 0;
     this._q = 0; // resolveCircle's query number
     this._build();
@@ -29,7 +31,7 @@ export class Colliders {
   /** Double the arrays when full (a busy city outgrows any fixed estimate). */
   _grow() {
     const cap = this.type.length * 2;
-    for (const k of ['type', 'x', 'z', 'hw', 'hd', 'c', 's', 'h', 'y0']) { const a = new this[k].constructor(cap); a.set(this[k]); this[k] = a; }
+    for (const k of ['type', 'x', 'z', 'hw', 'hd', 'c', 's', 'h', 'y0', 'ledge']) { const a = new this[k].constructor(cap); a.set(this[k]); this[k] = a; }
     this._mark = null;
   }
 
@@ -232,7 +234,7 @@ export class Colliders {
           for (let j = 0; j < n; j++) {
             const u = a + ((b - a) * (j + 0.5)) / n, off = (ms ? ms * (net.inner[i] + dk * (u - net.cum[i])) : -0.35) + out;
             net.pointAt(r, u, p);
-            this.addBox(p.x + p.dz * off, p.z - p.dx * off, hw, (b - a) / n / 2, Math.atan2(p.dx, p.dz), 0.35);
+            this.ledge[this.addBox(p.x + p.dz * off, p.z - p.dx * off, hw, (b - a) / n / 2, Math.atan2(p.dx, p.dz), 0.35)] = 1;
           }
         }
       }
@@ -242,6 +244,26 @@ export class Colliders {
   /** fn(i) for colliders near the rect. Indices may repeat. */
   near(minX, minZ, maxX, maxZ, fn) { return this.grid.query(minX, minZ, maxX, maxZ, fn); }
 
+  /**
+   * The top of the ledge (a median) under (x, z) that feet at height y stand or land on, no more
+   * than LEDGE_CLEAR above them; -Infinity where there is none. A box is in every grid cell it
+   * overlaps, so the one cell under the point is enough.
+   */
+  ledgeAt(x, z, y) {
+    let best = -Infinity;
+    const G = this.grid, list = G.map.get(G.key(Math.floor(x / G.cell), Math.floor(z / G.cell)));
+    if (!list) return best;
+    for (let k = 0; k < list.length; k++) {
+      const i = list[k];
+      if (!this.ledge[i]) continue;
+      const top = this.y0[i] + Math.min(this.h[i], MEDIAN_TOP);
+      if (top <= best || top > y + LEDGE_CLEAR) continue;
+      const dx = x - this.x[i], dz = z - this.z[i], c = this.c[i], s = this.s[i];
+      if (Math.abs(dx * c - dz * s) <= this.hw[i] && Math.abs(dx * s + dz * c) <= this.hd[i]) best = top;
+    }
+    return best;
+  }
+
   /** Does collider i stand in the way of something at height `level` (about 2 m tall)? */
   _atLevel(i, level) { return this.y0[i] < level + 2 && this.y0[i] + this.h[i] > level + 0.3; }
 
@@ -249,7 +271,7 @@ export class Colliders {
    * Push a circle out of everything it overlaps. Mutates pos {x, z}; returns the
    * accumulated push normal (out.nx/out.nz) and whether anything was hit.
    */
-  resolveCircle(pos, r, out, maxH = Infinity, level = 0) {
+  resolveCircle(pos, r, out, maxH = Infinity, level = 0, feet = -Infinity) {
     let hit = false;
     out.nx = 0; out.nz = 0;
     // Walks the grid cells itself, marking each collider with this query's number so one that
@@ -270,6 +292,8 @@ export class Colliders {
           if (mark[i] === q) continue;
           mark[i] = q;
           if (this.h[i] < 0.3 || this.h[i] > maxH + 100 || !this._atLevel(i, level)) continue;
+          // A median's kerb under feet up off the road (a jump, or standing on top of it) lets them over.
+          if (this.ledge[i] && this.y0[i] + this.h[i] <= feet + LEDGE_CLEAR) continue;
           if (this.type[i] === SOLID.CIRCLE) {
             const dx = pos.x - this.x[i], dz = pos.z - this.z[i];
             const rr = r + this.hw[i], d2 = dx * dx + dz * dz;
@@ -450,6 +474,9 @@ const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 const LANE_HW = 1.25, LANE_HD = 3.8;
 // A deck this little above the street is driven or walked straight onto (as net.surfaceAt steps).
 const STEP = 0.6;
+// Feet this far below a ledge's top already clear it (a jump's apex is 0.7 m), and the planted
+// top drawn at 0.32 m is what they land and stand on.
+export const LEDGE_CLEAR = 0.2, MEDIAN_TOP = 0.32;
 
 /**
  * Tests against the other roads at street level, for laying a median, a ramp's side wall or its

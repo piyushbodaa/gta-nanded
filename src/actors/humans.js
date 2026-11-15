@@ -8,7 +8,7 @@ import { rng, clamp } from '../core/math.js';
 import { radialTexture } from '../world/citymat.js';
 import { sendFirst } from '../core/buffers.js';
 import { animate, C, BODY } from './anim.js';
-import { BONES, SLOTS, SHOW, FIXED, JOINTS, REGION, HAIRLINE, BEARDLINE, farGeometry, nearGeometry } from './people-models.js';
+import { BONES, SLOTS, SHOW, FIXED, JOINTS, REGION, ROUGH, WOMENS, HAIRLINE, BEARDLINE, farGeometry, nearGeometry } from './people-models.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // Flags that show a part as they are (hair, beards and turbans are worked out in _pose).
@@ -29,8 +29,10 @@ const luma = c => (((c >> 16) & 255) * 0.3 + ((c >> 8) & 255) * 0.59 + (c & 255)
 const contrast = (r, list, c) => { for (let k = 0; k < 6; k++) { const t = r.pick(list); if (Math.abs(luma(t) - luma(c)) > 0.28) return t; } return luma(c) > 0.5 ? 0x1f3a5f : 0xf4f1ea; };
 // The style code's bits (read by the detailed body's shader): fabric 0-2 (plain, checks,
 // stripes, print), large 3, neckline 4-5 (closed, open collar, blouse, kurta slit), a breast
-// pocket 6, a pocket each side 7.
+// pocket 6, a pocket each side 7. And what they wear's own bits (o.wear): denim trousers 0,
+// sneakers (white soles, laces) 1.
 const FABRIC = { plain: 0, checks: 1, stripes: 2, print: 3 }, NECK = { closed: 0, collar: 1, blouse: 2, kurta: 3 };
+const DENIM = 1, SNEAKERS = 2;
 
 /**
  * Outfit by kind: 'man', 'woman', 'sikh', 'student', 'elder', 'farmer', 'police', 'goon', 'player', 'friend'.
@@ -71,7 +73,8 @@ export function makeOutfit(kind, seed) {
       o.shirt = r.pick([0x111111, 0xffffff, 0x8e1b1b]); o.sleeve = o.shirt; o.pants = r.pick([0x111111, 0x1b2631]); o.legs = o.pants;
       break;
     case 'player':
-      o.skin = 0xa0672c; o.hair = 0x16110d; o.shirt = 0xe8652e; o.sleeve = 0xe8652e; o.pants = 0x1f3a5f; o.legs = o.pants; o.shoes = 0xf2f2f2; o.scale = 0.96;
+      // An orange check shirt, blue jeans, white sneakers.
+      o.skin = 0xa0672c; o.hair = 0x16110d; o.shirt = 0xd9622b; o.sleeve = o.shirt; o.pants = 0x2c4a72; o.legs = o.pants; o.shoes = 0xf4f4f2; o.scale = 0.96;
       o.flags.delete('moustache'); o.flags.add('stubble');
       break;
     default:
@@ -115,8 +118,9 @@ function closeUp(o, kind, seed) {
     fabric = r.pick([FABRIC.plain, FABRIC.stripes]); // a T-shirt
   } else {
     neck = NECK.collar; f.add('collar');
-    fabric = kind === 'player' ? FABRIC.plain : r.pick([FABRIC.plain, FABRIC.plain, FABRIC.plain, FABRIC.checks, FABRIC.checks, FABRIC.stripes, FABRIC.stripes, FABRIC.print]);
+    fabric = kind === 'player' ? FABRIC.checks : r.pick([FABRIC.plain, FABRIC.plain, FABRIC.plain, FABRIC.checks, FABRIC.checks, FABRIC.stripes, FABRIC.stripes, FABRIC.print]);
     if (r.chance(0.6)) pockets = 64;
+    if (kind === 'player') { pockets = 192; o.trim = 0x2b2420; } // both chest pockets, dark checks
     if (kind !== 'player' && kind !== 'farmer' && r.chance(kind === 'goon' ? 0.2 : 0.3)) { o.tuck = 1; f.add('belt'); }
   }
   if (f.has('bun') && r.chance(kind === 'woman' ? 0.45 : 0.2)) f.add('gajra');
@@ -125,6 +129,7 @@ function closeUp(o, kind, seed) {
     ((kind === 'man' || kind === 'friend' || kind === 'sikh') && r.chance(0.4));
   f.add(shoes && !(kind === 'woman') ? 'shoes' : 'chappal');
   o.code = fabric | (r.chance(0.5) ? 8 : 0) | (neck << 4) | pockets;
+  o.wear = kind === 'player' ? DENIM | SNEAKERS : 0;
 }
 
 // ------------------------------------------------------------------ renderer
@@ -189,7 +194,7 @@ function bone(d, o, p, po, l, x, y, z) {
 
 // Each person's row in the crowd's data texture: three texels (a 3x4 matrix) per bone, four of
 // colours, each carrying the person's mask in its last channel, then one of build and style:
-// how heavy, flags (female 1, tucked in 2, the style code from 4) and the second colour.
+// how heavy, flags (female 1, tucked in 2, the style code from 4), the second colour and o.wear.
 const BLOCK = BONES.length * 3 + 5;
 const COLOURS = BONES.length * 3, STYLE = COLOURS + 4;
 const B = Object.fromEntries(BONES.map((k, i) => [k, i]));
@@ -253,6 +258,7 @@ varying float vCrowdAO;
 flat varying int vCrowdRegion;
 flat varying int vCrowdMask;
 flat varying int vCrowdCode;
+flat varying int vCrowdWear;
 flat varying float vCrowdFemale;
 flat varying vec3 vCrowdHair;
 flat varying vec3 vCrowdTrim;
@@ -294,15 +300,27 @@ float crowdHex = crowdSlot % 3 == 0 ? crowdCs.x : crowdSlot % 3 == 1 ? crowdCs.y
 vCrowdColor = crowdSlot < 12 ? crowdRgb(crowdHex) : crowdSlot == 12 ? ${vec3(FIXED.sole)} : crowdSlot == 13 ? ${vec3(FIXED.visor)} : crowdSlot == 14 ? ${vec3(FIXED.gold)} : ${vec3(FIXED.flower)};
 vCrowdRough = crowdPart.w;
 vCrowdSkin = crowdRgb(crowdC0.x); vCrowdHair = crowdRgb(crowdC0.z); vCrowdTrim = crowdRgb(crowdS.z);
-vCrowdMask = crowdMaskI; vCrowdCode = crowdFlags >> 2; vCrowdFemale = crowdFemale;
+vCrowdMask = crowdMaskI; vCrowdCode = crowdFlags >> 2; vCrowdWear = int(crowdS.w + 0.5); vCrowdFemale = crowdFemale;
 vCrowdRegion = int(crowdSkin.z + 0.5); vCrowdAO = crowdSkin.w;
 vCrowdP = position + crowdJ[crowdB1]; vCrowdUV = crowdUV;
 `;
+// The player's own body only: a sheen on cloth (it catches the light at grazing angles, as
+// cotton and denim do) and light glowing warm through skin, a cheap stand-in for scattering.
+const HERO_HEAD_X = 0.082; // a 16 cm head; the crowd's are 18
+const HERO_VARYING = 'varying float vCrowdIsSkin;\n';
+const HERO_NORMAL = 'vCrowdIsSkin = crowdSlot == 0 ? 1.0 : 0.0;\n';
+const HERO_SHEEN = THREE.ShaderChunk.lights_physical_fragment.replace('material.sheenColor = sheenColor;',
+  `material.sheenColor = sheenColor * (vCrowdRough > ${(ROUGH.cloth - 0.03).toFixed(2)} ? 1.0 : 0.0);`);
+const HERO_SKIN = /* glsl */`
+outgoingLight += vCrowdIsSkin * diffuseColor.rgb * (reflectedLight.directDiffuse * vec3(0.18, 0.06, 0.04) + vec3(0.012, 0.004, 0.003));
+#include <opaque_fragment>`;
 const J = JOINTS, R = REGION;
 /** A GLSL function of the keyframed curve people-models.js grows hair along (see along()). */
 const curve = (name, keys) => `float ${name}(float a) {\n  float y = ${keys[0][1].toFixed(3)};\n` +
   keys.slice(0, -1).map((k, i) => `  y = mix(y, ${keys[i + 1][1].toFixed(3)}, smoothstep(${k[0].toFixed(3)}, ${keys[i + 1][0].toFixed(3)}, a));`).join('\n') + '\n  return y;\n}\n';
-const NEAR_PAINT = /* glsl */`
+// headX: the skull's half-width (narrower on the player's own body); faces and hair are painted
+// as on the crowd's skull, stretched across to it.
+const nearPaint = (headX = 0.091) => /* glsl */`
 const vec3 CROWD_HEAD = ${v3(J.head)};
 const vec3 CROWD_GOLD = ${vec3(FIXED.gold)};
 ${curve('crowdHairline', HAIRLINE)}${curve('crowdBeardline', BEARDLINE)}
@@ -409,9 +427,19 @@ vec3 crowdShirt(vec3 col, vec3 P) {
 vec3 crowdPaint(vec3 col) {
   vec3 P = vCrowdP;
   int r = vCrowdRegion;
-  if (r == ${R.face}) col = crowdFace(col, P - CROWD_HEAD);
-  else if (r == ${R.hair}) col = crowdHair(col, P - CROWD_HEAD);
+  vec3 qh = (P - CROWD_HEAD) * vec3(${(0.091 / headX).toFixed(4)}, 1.0, 1.0);
+  if (r == ${R.face}) col = crowdFace(col, qh);
+  else if (r == ${R.hair}) col = crowdHair(col, qh);
   else if (r == ${R.shirt}) col = crowdShirt(col, P);
+  else if (r == ${R.pants}) {
+    if ((vCrowdWear & ${DENIM}) != 0) {
+      // Denim: a fine diagonal twill, faded down the front of the thighs, a darker side seam.
+      float t = (P.y + (P.x + P.z) * 0.7) / 0.0032, w = fwidth(t);
+      col *= 1.0 - 0.1 * (0.5 + 0.5 * sin(t * 6.2832)) * (1.0 - smoothstep(0.5, 1.5, w));
+      col *= 1.0 + 0.22 * smoothstep(0.03, 0.08, P.z) * smoothstep(-0.05, -0.3, P.y) * (1.0 - smoothstep(-0.55, -0.7, P.y));
+      col = mix(col, col * 0.7, crowdIn(abs(P.z), 0.0018) * step(0.12, abs(P.x))); // the outer side, seat and legs alike
+    }
+  }
   else if (r == ${R.sleeveL} || r == ${R.sleeveR} || r == ${R.shortL} || r == ${R.shortR}) {
     float cx = (r == ${R.sleeveL} || r == ${R.shortL}) ? ${J.upperArmL[0].toFixed(4)} : ${J.upperArmR[0].toFixed(4)};
     bool shortSleeve = r == ${R.shortL} || r == ${R.shortR};
@@ -440,8 +468,15 @@ vec3 crowdPaint(vec3 col) {
     col = mix(col, col * 0.62, 1.0 - crowdIn(abs(vCrowdUV.y - 0.5), 0.4));
   } else if (r == ${R.shoe}) {
     float y = P.y - ${J.footL[1].toFixed(4)}, fw = fwidth(y);
-    col = mix(col, ${vec3(FIXED.sole)}, 1.0 - smoothstep(-0.047 - fw, -0.047 + fw, y));
-    col *= 1.0 - 0.15 * crowdIn(abs(y + 0.043), 0.0012);
+    // Sneakers: an off-white rubber sole, and laces down the instep.
+    bool sneaker = (vCrowdWear & ${SNEAKERS}) != 0;
+    col = mix(col, sneaker ? vec3(0.72, 0.7, 0.66) : ${vec3(FIXED.sole)}, 1.0 - smoothstep(-0.047 - fw, -0.047 + fw, y));
+    col *= 1.0 - (sneaker ? 0.3 : 0.15) * crowdIn(abs(y + 0.043), 0.0012);
+    if (sneaker) {
+      float lx = abs(P.x - (P.x > 0.0 ? ${J.footL[0].toFixed(4)} : ${J.footR[0].toFixed(4)}));
+      float lace = crowdIn(abs(fract(P.z / 0.013) - 0.5), 0.12) * crowdIn(lx, 0.011) * step(0.035, P.z) * step(P.z, 0.11) * step(-0.03, y);
+      col = mix(col, vCrowdTrim, lace * 0.8);
+    }
   } else if (r == ${R.belt}) {
     float front = step(0.0, P.z);
     col = mix(col, CROWD_GOLD * 0.9, crowdIn(abs(P.x), 0.016) * front);
@@ -461,7 +496,8 @@ vec3 crowdPaint(vec3 col) {
 `;
 
 export class Humans {
-  constructor(scene, capacity = 200) {
+  /** hero: also build the player's own body, cut finer, for people marked `hero` (see update). */
+  constructor(scene, capacity = 200, { hero = false } = {}) {
     this.capacity = capacity;
     this.list = [];
     // Everyone is in a float texture, a row per person: the processor writes the bones and the
@@ -481,11 +517,18 @@ export class Humans {
       this._mesh('human-crowd', far, far.index, crowdData, null),
     ];
     this.far = this.meshes[2];
+    // Then the heroes (the player): a man's body twice as finely cut, its head narrower.
+    this.hero = null;
+    if (hero) {
+      const hb = nearGeometry({ detail: 2, headX: HERO_HEAD_X, leaves: [WOMENS] });
+      this.hero = this._mesh('human-hero', hb.geometry, hb.men, crowdData, joints, true);
+      this.meshes.push(this.hero);
+    }
     scene.add(...this.meshes);
     this.n = 0; this.nNear = 0;
     // How close people are drawn in detail, and how many at most (set by the quality tier).
     this.nearRadius = 24; this.nearMax = 16;
-    this._vis = []; this._d2 = new Float64Array(capacity); this._start = new Int32Array(6); this._count = new Int32Array(6);
+    this._vis = []; this._d2 = new Float64Array(capacity); this._start = new Int32Array(8); this._count = new Int32Array(8);
     // A soft patch of shade under everyone on their feet, for settings whose shadow map doesn't
     // follow moving people (without it they float). One draw call for the whole crowd.
     const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
@@ -499,20 +542,24 @@ export class Humans {
     this.drawDistance = 140;
   }
 
-  /** One of the two crowd meshes: its material, shadow material, and the run of rows it draws. */
-  _mesh(name, body, index, crowdData, joints) {
+  /** One of the crowd meshes: its material, shadow material, and the run of rows it draws. */
+  _mesh(name, body, index, crowdData, joints, hero = false) {
     const detailed = !!joints, base = { value: 0 };
     const uniforms = sh => { sh.uniforms.crowdData = crowdData; sh.uniforms.crowdBase = base; if (detailed) sh.uniforms.crowdJ = joints; };
-    const mat = new THREE.MeshStandardMaterial({ metalness: 0 });
+    const mat = hero
+      ? new THREE.MeshPhysicalMaterial({ metalness: 0, sheen: 0.5, sheenRoughness: 0.75, sheenColor: 0xffffff })
+      : new THREE.MeshStandardMaterial({ metalness: 0 });
     mat.onBeforeCompile = sh => {
       uniforms(sh);
       if (detailed) {
-        sh.vertexShader = NEAR_PARS + 'attribute vec2 crowdUV;\n' + NEAR_VARYINGS + sh.vertexShader
-          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + NEAR_FETCH + NEAR_NORMAL)
+        const v = NEAR_VARYINGS + (hero ? HERO_VARYING : '');
+        sh.vertexShader = NEAR_PARS + 'attribute vec2 crowdUV;\n' + v + sh.vertexShader
+          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + NEAR_FETCH + NEAR_NORMAL + (hero ? HERO_NORMAL : ''))
           .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + NEAR_POSITION);
-        sh.fragmentShader = NEAR_VARYINGS + NEAR_PAINT + sh.fragmentShader
+        sh.fragmentShader = v + nearPaint(hero ? HERO_HEAD_X : undefined) + sh.fragmentShader
           .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= crowdPaint(vCrowdColor);')
           .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vCrowdRough;');
+        if (hero) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_fragment>', HERO_SHEEN).replace('#include <opaque_fragment>', HERO_SKIN);
       } else {
         sh.vertexShader = CROWD_PARS + sh.vertexShader
           .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + CROWD_FETCH + CROWD_NORMAL)
@@ -522,8 +569,9 @@ export class Humans {
           .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vCrowdRough;');
       }
     };
-    // The two detailed meshes differ only in their triangles: one program serves both.
-    mat.customProgramCacheKey = () => (detailed ? 'crowd-near' : 'crowd');
+    // The two detailed meshes differ only in their triangles: one program serves both. The
+    // hero's is its own (its head, sheen and skin); its shadow is drawn as theirs.
+    mat.customProgramCacheKey = () => (hero ? 'crowd-hero' : detailed ? 'crowd-near' : 'crowd');
     // The sun's shadow map draws the same poses.
     const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     depth.onBeforeCompile = sh => {
@@ -576,7 +624,8 @@ export class Humans {
     // camera's view (a little further and wider for those already detailed, so nobody flickers
     // between the two at the edges), the nearest first if there are more than it allows. Everyone
     // around is posed, seen or not: their shadows fall into view, and a camera swung round finds
-    // them mid-stride.
+    // them mid-stride. A hero (the player) is always drawn, in detail, posed in full, and doesn't
+    // count against the detailed bodies' budget.
     if (camera) {
       camera.updateMatrixWorld();
       _view.setFromProjectionMatrix(_pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
@@ -587,32 +636,36 @@ export class Humans {
       h._row = -1;
       if (!h.visible) { h.near = false; continue; }
       const dx = h.x - cam.x, dz = h.z - cam.z, d2 = dx * dx + dz * dz;
-      if (d2 > maxD2 || vis.length >= this.capacity) { h.near = false; continue; }
+      if ((d2 > maxD2 && !h.hero) || vis.length >= this.capacity) { h.near = false; continue; }
+      h._d2 = d2; h._shadow = inShadowBox(shadowBox, h.x, h.y, h.z, 2.5);
+      if (h.hero) { h.near = true; vis.push(h); continue; }
       const was = h.near, r = this.nearRadius + (was ? 2.5 : 0);
-      h._d2 = d2; h.near = d2 < r * r && (!camera || inView(h, was ? 2 : 1.2)); h._shadow = inShadowBox(shadowBox, h.x, h.y, h.z, 2.5);
+      h.near = d2 < r * r && (!camera || inView(h, was ? 2 : 1.2));
       if (h.near) D[near++] = d2;
       vis.push(h);
     }
     if (near > this.nearMax) {
       const cut = D.subarray(0, near).sort()[this.nearMax - 1];
       near = 0;
-      for (const h of vis) if (h.near && (h.near = h._d2 <= cut && near < this.nearMax)) near++;
+      for (const h of vis) if (!h.hero && h.near && (h.near = h._d2 <= cut && near < this.nearMax)) near++;
     }
-    // Rows: detailed men, detailed women, then everyone else; in each, those inside the shadow map first.
-    const start = this._start, counts = this._count, bucket = h => (h.near ? (h.outfit.female ? 2 : 0) : 4) + (h._shadow ? 0 : 1);
+    // Rows: detailed men, detailed women, everyone else, then the heroes on their own body (with
+    // none built, on the detailed one); in each, those inside the shadow map first.
+    const H = !!this.hero, start = this._start, counts = this._count;
+    const bucket = h => (h.hero && H ? 6 : h.near ? (h.outfit.female ? 2 : 0) : 4) + (h._shadow ? 0 : 1);
     counts.fill(0);
     for (const h of vis) counts[bucket(h)]++;
     start[0] = 0;
-    for (let k = 1; k < 6; k++) start[k] = start[k - 1] + counts[k - 1];
+    for (let k = 1; k < 8; k++) start[k] = start[k - 1] + counts[k - 1];
     let blobs = 0;
     for (const h of vis) {
       const d2 = h._d2;
       this._at = start[bucket(h)]++ * BLOCK * 4;
       // Where weapon-fx.js finds this person's bones (the rows are re-sorted every frame).
-      h._row = this._at; h._lod = d2 > 3600 ? 2 : d2 > 900 ? 1 : 0;
+      h._row = this._at; h._lod = h.hero ? 0 : d2 > 3600 ? 2 : d2 > 900 ? 1 : 0;
       // Close up the whole body moves; a street away hands stay off handlebars; far off only the body shows.
       animate(h, dt, h._lod);
-      this._pose(h, d2 > 3600);
+      this._pose(h, h._lod === 2);
       // Seated riders and drivers are covered by their vehicle's shade.
       if (this.blobsOn && d2 < blobD2 && h.pose !== 'sit' && h.pose !== 'ride') {
         const lying = h.pose === 'lie', s = h.outfit.scale || 1, A = h.anim, mid = A.out[C.RZ] * 0.5 * s;
@@ -624,8 +677,8 @@ export class Humans {
         _s.set(1, 1, 1);
       }
     }
-    this.n = vis.length; this.nNear = counts[0] + counts[1] + counts[2] + counts[3];
-    for (let g = 0, base = 0; g < 3; g++) { this._rows(this.meshes[g], base, counts[g * 2] + counts[g * 2 + 1], counts[g * 2]); base += counts[g * 2] + counts[g * 2 + 1]; }
+    this.n = vis.length; this.nNear = counts[0] + counts[1] + counts[2] + counts[3] + counts[6] + counts[7];
+    for (let g = 0, base = 0; g < this.meshes.length; g++) { this._rows(this.meshes[g], base, counts[g * 2] + counts[g * 2 + 1], counts[g * 2]); base += counts[g * 2] + counts[g * 2 + 1]; }
     this.dirty = this.n > 0;
     this.blobs.count = blobs;
     this.blobs.visible = blobs > 0;
@@ -668,7 +721,7 @@ export class Humans {
       d[at + k * 4] = o[SLOTS[k * 3]] ?? 0; d[at + k * 4 + 1] = o[SLOTS[k * 3 + 1]] ?? 0; d[at + k * 4 + 2] = o[SLOTS[k * 3 + 2]] ?? 0;
       d[at + k * 4 + 3] = mask;
     }
-    d[at + 16] = o.heavy ?? 0; d[at + 17] = (o.female ? 1 : 0) + (o.tuck ? 2 : 0) + 4 * (o.code ?? 0); d[at + 18] = o.trim ?? 0;
+    d[at + 16] = o.heavy ?? 0; d[at + 17] = (o.female ? 1 : 0) + (o.tuck ? 2 : 0) + 4 * (o.code ?? 0); d[at + 18] = o.trim ?? 0; d[at + 19] = o.wear ?? 0;
     // The bones, from this frame's pose (anim.js).
     const A = h.anim, P = A.out, R = A.root, row = this._at;
     // Root: on the ground at the person's spot, turned to their heading, the whole body

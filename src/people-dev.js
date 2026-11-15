@@ -31,7 +31,7 @@ scene.add(ground);
 const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 200);
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
-const humans = new Humans(scene, 64);
+const humans = new Humans(scene, 64, { hero: true });
 humans.blobsOn = false;
 let people = [];
 
@@ -39,14 +39,14 @@ let people = [];
  * Pose and frame a line-up. kinds: outfit kinds (or [kind, seed]); pose: 'idle', 'walk', 'run',
  * 'sit'; view: 'front', 'side', 'back', 'three' (three-quarter); focus: index of the person to
  * frame alone ('face' frames their head); lod: 'near' or 'far'; spacing in metres; t: seconds
- * into the pose.
+ * into the pose; hero: the player on their own finer body, as in the game (false: the crowd's).
  */
-function show({ kinds = ['man', 'woman', 'sikh', 'student', 'elder', 'farmer', 'police', 'goon', 'player'], seed = 3, pose = 'idle', view = 'front', focus = -1, face = false, lod = 'near', spacing = 0.85, t = 1.6, yaw = 0, up = 0 } = {}) {
+function show({ kinds = ['man', 'woman', 'sikh', 'student', 'elder', 'farmer', 'police', 'goon', 'player'], seed = 3, pose = 'idle', view = 'front', focus = -1, face = false, lod = 'near', spacing = 0.85, t = 1.6, yaw = 0, up = 0, hero = true } = {}) {
   for (const h of people) humans.remove(h);
   people = kinds.map((k, i) => {
     const [kind, s] = Array.isArray(k) ? k : [k, seed + i * 17];
     const h = humans.add(makeOutfit(kind, s), (i - (kinds.length - 1) / 2) * spacing, 0);
-    h.yaw = yaw;
+    h.yaw = yaw; h.hero = hero && kind === 'player';
     return h;
   });
   humans.nearRadius = lod === 'near' ? 999 : 0; humans.nearMax = 64;

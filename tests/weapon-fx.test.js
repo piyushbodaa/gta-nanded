@@ -235,7 +235,7 @@ test('without weapons the camera is as it was: no aim, no scope, the same view',
   run(1);
   assert.equal(cam.camera.fov, 62);
   assert.equal(cam.aimK, 0);
-  assert.ok(Math.abs(cam.camera.position.distanceTo(new THREE.Vector3(0, 1.55, 0)) - 4.05) < 0.05); // its orbit, a little in from the wall test
+  assert.ok(Math.abs(cam.camera.position.distanceTo(new THREE.Vector3(0, 1.5, 0)) - 3.35) < 0.05); // its orbit, a little in from the wall test
 });
 
 test('aiming brings the view in over the right shoulder and narrows it; a scope looks from the eye', () => {
