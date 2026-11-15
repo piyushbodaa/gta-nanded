@@ -89,7 +89,7 @@ export class Game {
     this.post.setDetail(w.textures.detail);
     this.sky.useSceneFog(!this.post.enabled);
     this.applyQuality();
-    this.humans = new Humans(this.scene, 220);
+    this.humans = new Humans(this.scene, 220, { hero: true });
     this.vehicles = new Vehicles(this.scene, this.humans, this.colliders, this.city);
     this.camera = new GameCamera(this.camera3, this.colliders);
     this.player = new Player(this, spawn.x, spawn.z, 0);

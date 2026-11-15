@@ -6,7 +6,10 @@ import { clamp, damp, dampAngle, wrapAngle } from '../core/math.js';
 import { WATER_Y } from '../world/water.js';
 
 const DIST = { hatch: 6.4, sedan: 6.8, suv: 7.4, police: 7.4, auto: 5.6, bike: 4.6, scooter: 4.4, bus: 13, truck: 11.5, tractor: 7, tempo: 7.6, ambulance: 8 };
-// The aim view: how far back, how far above the 1.55 m orbit centre, and how far out to the right
+// On foot: how far back the camera orbits and the height of the orbit's centre (close enough
+// that the player reads at a decent size on a phone).
+export const FOOT = { dist: 3.6, height: 1.5 };
+// The aim view: how far back, how far above the on-foot orbit centre, and how far out to the right
 // the camera turns about (walls pull it in on both counts).
 export const AIM = { dist: 1.75, up: 0.24, right: 0.7 };
 const HEIGHT = { hatch: 1.6, sedan: 1.6, suv: 2.0, police: 2.0, auto: 1.8, bike: 1.5, scooter: 1.5, bus: 3.2, truck: 3.2, tractor: 2.2, tempo: 2.0, ambulance: 2.2 };
@@ -118,8 +121,8 @@ export class GameCamera {
       const h = subject.human;
       // Aiming: in over the shoulder, out to the right of the gun and above it, so the rifle is seen
       // from the side along its length (not end-on, tucked behind the right arm) under the crosshair.
-      dist = 4.3 * this.zoom + (AIM.dist - 4.3 * this.zoom) * aimK;
-      tx = h.x; tz = h.z; ty = h.y + 1.55 + AIM.up * aimK;
+      dist = FOOT.dist * this.zoom + (AIM.dist - FOOT.dist * this.zoom) * aimK;
+      tx = h.x; tz = h.z; ty = h.y + FOOT.height + AIM.up * aimK;
       // Keyboard and touch players get a gentle follow when they run; mouse-look players steer it
       // themselves, and so does anyone aiming.
       if (!input.pointerLocked && aimK < 0.05 && subject.speed > 2.5 && this.time - this.lastManual > 1.5) {

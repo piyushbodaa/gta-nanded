@@ -31,12 +31,13 @@ import { StreetEvents } from './game/street-events.js';
 import { Save } from './game/save.js';
 import { STORY, dressWorld } from './game/story.js';
 import { startSpot } from './game/start-spot.js';
+import { giveStartKit, spawnStarterCar } from './game/start-kit.js';
 import { GameAudio } from './audio/audio.js';
 import { installRules } from './game/rules.js';
 import { Lifecycle } from './core/lifecycle.js';
 import { applyResume, shouldResume, resumeContext, resumeLabel } from './game/resume.js';
 import { track } from './core/analytics.js';
-import { press } from './ui/controls.js';
+import { press, key, pick } from './ui/controls.js';
 import { installKind } from './ui/install.js';
 
 const $ = id => document.getElementById(id);
@@ -225,6 +226,8 @@ function startGame(game, mode) {
   game.save.data.started = true;
   // What the save carries (a NEW STORY has just reset it to the starter pistol).
   game.weapons.fromSave(game.save.data.inventory);
+  // Then every gun, loaded, whatever the mode (before a resume, so the weapon it equips is carried).
+  giveStartKit(game.weapons);
   P.teleport(spot.x, spot.z, spot.heading);
   // The player's own cars wait in their bays (before a resume, which may put the player in one).
   game.garage?.fromSave(game.save.data.fleet);
@@ -239,6 +242,9 @@ function startGame(game, mode) {
   game.touch.show(true);
   // Populate the streets before the first frame, unless the menu already did it here.
   if (mode === 'resume' || game.ready?.filled !== spot.key) for (const _ of game.fillStreets());
+  // A car of the player's own at the kerb, clear of the parked cars just placed (none when a resume sat them in one).
+  if (game.starterCar && !game.starterCar.removed && game.starterCar !== P.vehicle) game.vehicles.remove(game.starterCar);
+  const car = spawnStarterCar(game);
   // Keys pressed on the cover or during the intro were not meant for the street.
   game.input.clear(); game.input.live = true;
   game.start();
@@ -255,9 +261,14 @@ function startGame(game, mode) {
   }
   // A new game: the story's title, then its first mission. Once the story is finished there is no next contact to promise.
   const finished = STORY.every(m => game.save.done(m.id));
-  if (mode === 'new') { game.hud.big('गोदावरी गोल्ड', 'GODAVARI GOLD', 'title', 3.4); setTimeout(() => game.missions.start(STORY[0].id), 3600); }
-  else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map${finished ? ': races and landmarks to photograph are marked on it.' : ', or find a contact marker to play the story.'}`, 7);
-  else if (mode !== 'resume') game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. ${finished ? `Godavari Gold is done: the city is yours. ${press(game, 'map')} for races and landmarks.` : 'Your next contact is on the radar.'}`, 6);
+  // The start kit, said once: every gun, and where the car is.
+  const wheel = key(game, 'wheel');
+  const kit = `<b>Every gun, fully loaded:</b> ${pick(game, { keyboard: `hold ${wheel} for the weapon wheel, or <kbd>1</kbd>–<kbd>7</kbd>.`, gamepad: `hold ${wheel} for the weapon wheel.`, touch: `tap ${wheel} to choose one.` })}`
+    + (car ? ` Your car is parked beside you: ${press(game, 'enter')} to get in.` : '');
+  if (mode === 'new') { game.hud.big('गोदावरी गोल्ड', 'GODAVARI GOLD', 'title', 3.4); game.hud.help(kit, 6); setTimeout(() => game.missions.start(STORY[0].id), 3600); }
+  else if (mode === 'free') game.hud.help(`<b>Free roam.</b> The whole city is open. ${press(game, 'map')} for the map${finished ? ': races and landmarks to photograph are marked on it.' : ', or find a contact marker to play the story.'} ${kit}`, 9);
+  else if (mode !== 'resume') game.hud.help(`Welcome back to <b>${game.city.district(P.x, P.z).name}</b>. ${finished ? `Godavari Gold is done: the city is yours. ${press(game, 'map')} for races and landmarks.` : 'Your next contact is on the radar.'} ${kit}`, 9);
+  else game.hud.help(kit, 6);
   game.canvas.focus();
 }
 

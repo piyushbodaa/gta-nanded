@@ -8,8 +8,9 @@
 //   tint      Uint8x4    paint colour (rgb) and a per-building seed (a)
 //   tile      Uint8x4    [atlas col, atlas row, variant count, mode]
 // Modes: 0 vertex colour only · 1 repeating facade, random variant per cell ·
-//        2 single tile clamped · 3 road (clamped across, repeating along) ·
-//        4 tile projected in world space (ground, junction pads)
+//        2 single tile clamped · 3 road asphalt in world space, lane markings drawn
+//        from uv = metres (across, along) and tint = (width dm, flags, paint freshness) ·
+//        4 tile projected in world space (ground)
 // The material is physically based: each mode sets its own roughness (glass in
 // the facades, wet asphalt in the monsoon), and a cheap ambient occlusion
 // darkens the sky light near the ground, where walls and streets meet.
@@ -30,7 +31,7 @@ export function createAtlasTextures(atlas, signs, renderer, detailCanvas) {
   map.magFilter = THREE.LinearFilter;
   map.minFilter = THREE.LinearMipmapLinearFilter;
   map.generateMipmaps = true;
-  map.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); // crisp roads at grazing angles
   map.flipY = false;
   map.needsUpdate = true;
   const emissive = new THREE.CanvasTexture(atlas.emissive);
@@ -85,6 +86,14 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
         uniform float uWet;
         ${common}
         float cityHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+        // Coverage of the stripe |d| < hw by a pixel fw across: a box filter, so lines never shimmer far off.
+        float roadBox(float d, float hw, float fw) { return clamp((min(d + 0.5 * fw, hw) - max(d - 0.5 * fw, -hw)) / fw, 0.0, 1.0); }
+        // Dashes len long every period metres along; fade to their average once a dash is under a pixel.
+        float roadDash(float s, float len, float period, float fw) {
+          float t = mod(s, period);
+          float c = clamp((min(t + 0.5 * fw, len) - max(t - 0.5 * fw, 0.0)) / fw, 0.0, 1.0);
+          return mix(c, len / period, smoothstep(period * 0.25, period * 0.5, fw));
+        }
         vec3 cityOctDecode(vec2 e) {
           vec3 n = vec3(e.x, 1.0 - abs(e.x) - abs(e.y), e.y);
           if (n.y < 0.0) n.xz = (1.0 - abs(n.zx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.z >= 0.0 ? 1.0 : -1.0);
@@ -98,7 +107,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
           vec3 paint = vTint.rgb;
           // Large, soft variation in grime and sun-bleaching hides the repeats.
           float macro = clamp(texture2D(cityDetail, vCityWorld.xz * 0.0105).g * 0.6 + texture2D(cityDetail, vCityWorld.xz * 0.047 + 0.31).g * 0.4, 0.0, 1.0);
-          float puddle = 0.0;
+          float puddle = 0.0, roadPaint = 0.0;
           if (uWet > 0.0) puddle = smoothstep(0.5, 0.7, texture2D(cityDetail, vCityWorld.xz * 0.071 + 0.57).g * 0.65 + macro * 0.35);
           if (mode < 0.5) {
             diffuseColor.rgb *= paint;
@@ -128,7 +137,10 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               f = clamp(coord, 0.0, 1.0);
               litChance = 1.0;
             } else if (mode < 3.5) {
-              f = vec2(clamp(coord.x, 0.0, 1.0), fract(coord.y));
+              // Roads, junction pads and flyover decks: one asphalt laid in world space, 4 m to a
+              // repeat, so every street and crossing is one continuous surface in one tone.
+              coord = vCityWorld.xz / 4.0;
+              f = fract(coord);
             } else {
               coord = vCityWorld.xz / 6.4;
               f = fract(coord);
@@ -140,11 +152,12 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
             // Derivatives are taken here, never inside the per-pixel branches below: there they
             // are undefined, wherever neighbouring pixels take different sides of the branch.
             vec2 cdx = dFdx(coord), cdy = dFdy(coord);
+            vec2 mdx = dFdx(vTUv), mdy = dFdy(vTUv); // road metres per pixel, for the lane markings
             vec2 gx = cdx * gscale, gy = cdy * gscale;
             ${signs ? 'vec4 tex = textureGrad(cityAtlas, auv, gx, gy);' : `
             // A tile that repeats wraps round within its own layer; only an axis clamped to one
             // picture keeps the inset from the tile's edge.
-            vec2 clamped = mode < 1.5 ? vec2(0.0) : mode < 2.5 ? vec2(1.0) : mode < 3.5 ? vec2(1.0, 0.0) : vec2(0.0);
+            vec2 clamped = mode < 1.5 ? vec2(0.0) : mode < 2.5 ? vec2(1.0) : vec2(0.0);
             vec2 tuv = mix(f, g2, clamped), flip = vec2(1.0, -1.0);
             vec4 tex = textureGrad(cityAtlas, vec3(tuv.x, 1.0 - tuv.y, origin.y * ${cols.toFixed(1)} + origin.x), cdx * flip, cdy * flip);`}
             vec3 painted = mix(tex.rgb, tex.rgb * paint * 1.12, tex.a);
@@ -241,13 +254,51 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
             } else if (mode < 2.5) {
               cityRough = ${signs ? '0.5' : '0.6'};
             } else if (mode < 3.5) {
-              // Roads: dust blown in along both edges, darker tyre-polished lanes.
-              float edge = min(f.x, 1.0 - f.x);
-              float dust = (1.0 - smoothstep(0.02, 0.2, edge)) * (0.55 + 0.45 * macro);
-              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.54, 0.45) * (0.85 + macro * 0.3), dust * 0.6);
-              diffuseColor.rgb *= 0.86 + macro * 0.22;
-              diffuseColor.rgb *= 0.74 + 0.52 * texture2D(cityDetail, vCityWorld.xz * 0.55).r;
-              cityRough = 0.9;
+              // Roads. uv: metres across from the left edge, metres along. tint: r width (dm),
+              // g marking flags (chunks.js MARK), b how fresh the paint is. Width 0: a junction pad.
+              float W = vTint.r * 25.5, flags = floor(vTint.g * 255.0 + 0.5), fresh = vTint.b;
+              float u = vTUv.x, s = vTUv.y;
+              float fwU = min(abs(mdx.x) + abs(mdy.x), 2.0) + 1e-4, fwS = min(abs(mdx.y) + abs(mdy.y), 8.0) + 1e-4;
+              // Fine aggregate at two scales, so the surface holds up right under the camera.
+              float grain = texture2D(cityDetail, vCityWorld.xz * 0.55).r * 0.6 + texture2D(cityDetail, vCityWorld.xz * 2.1 + 0.37).r * 0.4;
+              float wearN = texture2D(cityDetail, vec2(u * 1.7, s * 0.23) + vTint.a * 7.0).g;
+              vec3 asph = diffuseColor.rgb * (0.9 + macro * 0.16) * (0.8 + 0.4 * grain);
+              float wm = 0.0, ym = 0.0;
+              if (W > 0.5) {
+                // Dust blown in along both kerbs.
+                float edgeM = min(u, W - u);
+                float dust = (1.0 - smoothstep(0.05, 0.7, edgeM)) * (0.55 + 0.45 * macro);
+                asph = mix(asph, vec3(0.42, 0.38, 0.31) * (0.85 + macro * 0.3), dust * 0.5);
+                bool oneway = mod(floor(flags / 4.0), 2.0) > 0.5, twoLanes = flags >= 64.0;
+                float nL = oneway ? (W >= 6.4 ? 2.0 : 1.0) : (twoLanes ? 4.0 : 2.0), Lw = W / nL;
+                // Tyre-polished wheel paths and an oil-dark strip down the middle of each lane.
+                float lx = (fract(u / Lw) - 0.5) * Lw;
+                asph *= 1.0 - roadBox(abs(lx) - 0.85, 0.3, fwU) * 0.07 - roadBox(lx, 0.25, fwU) * 0.05;
+                float centre = mod(flags, 4.0), lw = W < 5.5 ? 0.05 : 0.075;
+                float dashL = roadDash(s, 3.0, 7.5, fwS), dashS = roadDash(s, 1.5, 4.5, fwS);
+                float dc = u - W * 0.5;
+                if (!oneway) {
+                  // Centre line: broken, solid, or a double yellow on the trunks.
+                  if (centre < 1.5) wm = max(wm, roadBox(dc, lw, fwU) * (W < 5.5 ? dashS * 0.7 : dashL));
+                  else if (centre < 2.5) wm = max(wm, roadBox(dc, lw, fwU));
+                  else ym = max(ym, max(roadBox(dc - 0.14, 0.06, fwU), roadBox(dc + 0.14, 0.06, fwU)));
+                  if (twoLanes) wm = max(wm, max(roadBox(u - W * 0.25, 0.06, fwU), roadBox(u - W * 0.75, 0.06, fwU)) * dashL);
+                } else if (nL > 1.5) wm = max(wm, roadBox(dc, 0.06, fwU) * dashL);
+                // Edge lines 0.3 m in from each side: yellow on the median side of a divided road.
+                if (mod(floor(flags / 32.0), 2.0) > 0.5) {
+                  float eL = roadBox(u - 0.3, 0.06, fwU), eR = roadBox(u - (W - 0.3), 0.06, fwU);
+                  if (mod(floor(flags / 8.0), 2.0) > 0.5) ym = max(ym, eL); else wm = max(wm, eL);
+                  if (mod(floor(flags / 16.0), 2.0) > 0.5) ym = max(ym, eR); else wm = max(wm, eR);
+                }
+                // Paint worn through in patches, most on the older back streets.
+                float keep = mix(0.35, 1.0, smoothstep(0.9 - fresh, 1.1 - fresh, wearN));
+                wm *= keep; ym *= keep;
+                asph = mix(asph, vec3(0.78, 0.77, 0.72) * (0.9 + 0.2 * grain), wm);
+                asph = mix(asph, vec3(0.72, 0.50, 0.08) * (0.9 + 0.2 * grain), ym);
+              }
+              roadPaint = max(wm, ym);
+              diffuseColor.rgb = asph;
+              cityRough = mix(0.88, 0.6, roadPaint);
             } else {
               vec4 det = texture2D(cityDetail, vCityWorld.xz * 0.23);
               diffuseColor.rgb *= 0.84 + macro * 0.3;
@@ -259,7 +310,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               if (mode > 2.5) {
                 bool asphalt = mode < 3.5 || (abs(vTile.x - 1.0) < 0.5 && abs(vTile.y - 7.0) < 0.5);
                 float wet = min(1.0, uWet * 1.25) * (0.7 + 0.3 * puddle);
-                diffuseColor.rgb *= 1.0 - (asphalt ? 0.55 : 0.4) * wet;
+                diffuseColor.rgb *= 1.0 - (asphalt ? mix(0.55, 0.25, roadPaint) : 0.4) * wet; // paint stays bright in the rain
                 cityRough = mix(cityRough, asphalt ? mix(0.18, 0.02, puddle) : mix(0.45, 0.08, puddle), wet);
               } else {
                 diffuseColor.rgb *= 1.0 - 0.18 * uWet;
@@ -290,7 +341,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += cityGlow;`);
   };
-  material.customProgramCacheKey = () => (signs ? 'city-signs-v7' : 'city-v7');
+  material.customProgramCacheKey = () => (signs ? 'city-signs-v8' : 'city-v8');
   return material;
 }
 

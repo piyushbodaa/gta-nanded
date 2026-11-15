@@ -212,7 +212,7 @@ function walker(x, z, y = world().net.surfaceAt(x, z, 0)) {
   P.groundY = P.y = y;
   const input = { mode: 'keyboard', state: { moveX: 0, moveY: 0, sprint: false }, pressed: () => false };
   return {
-    P,
+    P, input,
     walk(seconds, aim) {
       for (let t = 0; t < seconds; t += 1 / 60) {
         const to = aim(P);
@@ -436,4 +436,87 @@ test('out of a car against a bridge railing, or knocked toward a flyover\'s, you
     }
   }
   assert.ok(decks >= 30, `${decks} knockdowns on a deck`);
+});
+
+/**
+ * Straight median pieces on the street, each with the line across it through its middle: where
+ * along that line (from its centre, n the way across) the median starts and ends, and a clear
+ * run of road either side, with nothing else in the way and the road flat.
+ */
+function mediansToCross(max = 12) {
+  const { net, city } = world();
+  const cols = colliders(), found = [], o = {};
+  for (let i = 0; i < cols.n && found.length < max; i += 211) { // spread over the city's roads
+    if (!cols.ledge[i] || cols.hd[i] < 3) continue;
+    const cx = cols.x[i], cz = cols.z[i], nx = cols.c[i], nz = -cols.s[i];
+    const at = d => ({ x: cx + nx * d, z: cz + nz * d });
+    // The median's extent across, both halves of a divided road's included.
+    let lo = 0, hi = 0;
+    while (hi < 3 && cols.ledgeAt(at(hi + 0.05).x, at(hi + 0.05).z, 9) > -Infinity) hi += 0.05;
+    while (lo > -3 && cols.ledgeAt(at(lo - 0.05).x, at(lo - 0.05).z, 9) > -Infinity) lo -= 0.05;
+    if (hi - lo > 1.4) continue;
+    const from = hi + 1.5, to = lo - 1.5;
+    let ok = true;
+    for (let d = to; d <= from && ok; d += 0.1) {
+      const q = at(d), p = { ...q };
+      if (Math.abs(net.surfaceAt(q.x, q.z, 0)) > 0.02 || Math.abs(city.groundHeight(q.x, q.z)) > 0.02) ok = false;
+      else if ((d > hi + 0.45 || d < lo - 0.45) && cols.resolveCircle(p, 0.4, o, Infinity, 0)) ok = false;
+      else if (cols.resolveCircle(p, 0.4, o, Infinity, 0, 1)) ok = false; // something other than the median
+    }
+    if (ok) found.push({ i, at, lo, hi, from, to });
+  }
+  return found;
+}
+
+test('on foot: a median is jumped across, or onto, but not walked through', () => {
+  const ms = mediansToCross();
+  assert.ok(ms.length >= 6, `${ms.length} medians to try`);
+  for (const { i, at, lo, hi, from, to } of ms) {
+    const s = at(from), far = at(to - 3);
+    const side = P => (P.x - at(0).x) * (s.x - at(0).x) / from + (P.z - at(0).z) * (s.z - at(0).z) / from;
+    // Walking into it: the kerb stops us.
+    const w = walker(s.x, s.z);
+    w.walk(3, () => far);
+    assert.ok(side(w.P) > hi, `median ${i}: walked through it (${side(w.P).toFixed(2)})`);
+    // A running jump: over to the far carriageway.
+    const j = walker(s.x, s.z);
+    j.input.pressed = k => k === 'jump' && j.P.onGround && side(j.P) > hi && side(j.P) - hi < 0.34 + 0.45;
+    j.walk(2.5, () => far);
+    j.input.pressed = () => false;
+    assert.ok(side(j.P) < lo - 0.34, `median ${i}: jumped only to ${side(j.P).toFixed(2)} (median ${lo.toFixed(2)}..${hi.toFixed(2)})`);
+    assert.ok(j.P.onGround && Math.abs(j.P.y) < 0.01, `median ${i}: on the road beyond at ${j.P.y.toFixed(2)}`);
+    // From a standstill at the kerb: up onto the planted top, and stood there.
+    const k = at(hi + 0.36), u = walker(k.x, k.z);
+    let jumped = false, onTop = 0;
+    u.input.pressed = key => key === 'jump' && !jumped && (jumped = true);
+    u.walk(1.2, P => { if (P.onGround && Math.abs(P.y - 0.32) < 0.01) onTop++; return far; });
+    assert.ok(onTop > 3, `median ${i}: ${onTop} frames stood on top`);
+  }
+});
+
+test('a median is still solid to a car, and a jump does not clear a bridge parapet', () => {
+  const { net, city } = world();
+  const cols = colliders(), out = {};
+  const ms = mediansToCross();
+  for (const { i } of ms) {
+    const rot = Math.atan2(cols.s[i], cols.c[i]);
+    assert.ok(cols.boxContact(cols.x[i] + cols.c[i] * 0.9, cols.z[i] - cols.s[i] * 0.9, 0.9, 2.2, rot, out, 0), `median ${i}: a car drives through`);
+  }
+  // Jumping at the Govardhan bridge's parapets, all along it, either side: still on the deck.
+  const road = 2094, len = net.length[road], p = {};
+  let tries = 0;
+  for (let s = 10; s < len - 10; s += 15) {
+    net.pointAt(road, s, p);
+    for (const side of [1, -1]) {
+      const off = side * (net.edgeAt(road, s, side) - 1), x = p.x + p.dz * off, z = p.z - p.dx * off, d = net.surfaceAt(x, z, 0);
+      if (d - city.groundHeight(x, z) < 1) continue; // over the river, a fall to fear
+      const w = walker(x, z, d), away = { x: x + p.dz * side * 10, z: z - p.dx * side * 10 };
+      w.input.pressed = k => k === 'jump';
+      let lowest = d;
+      w.walk(3, P => { lowest = Math.min(lowest, P.y); return away; });
+      assert.ok(lowest > d - 0.5, `bridge at ${s} m: jumped off the deck to ${lowest.toFixed(2)}`);
+      tries++;
+    }
+  }
+  assert.ok(tries >= 6, `${tries} jumps at the parapet`);
 });

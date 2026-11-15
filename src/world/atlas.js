@@ -174,8 +174,8 @@ function painter(ctx, mode) {
       }
       ctx.putImageData(img, px, py);
     },
-    /** Thin jagged cracks, drawn twice a tile apart so they wrap with the tile. */
-    cracks(n, seed, alpha = 0.35, wrap = true) {
+    /** Thin jagged cracks, drawn again a tile apart so they wrap with the tile (across too, with wrapX). */
+    cracks(n, seed, alpha = 0.35, wrap = true, wrapX = false) {
       if (mode !== 'color') return;
       const r = rng(seed);
       ctx.strokeStyle = `rgba(20,18,16,${alpha})`;
@@ -184,9 +184,9 @@ function painter(ctx, mode) {
         const pts = [[r() * T, r() * T]];
         let a = r() * Math.PI * 2;
         for (let i = 0; i < 9; i++) { a += (r() - 0.5) * 1.2; const [px, py] = pts[pts.length - 1]; pts.push([px + Math.cos(a) * 9, py + Math.sin(a) * 9]); }
-        for (const oy of wrap ? [-T, 0, T] : [0]) {
+        for (const oy of wrap ? [-T, 0, T] : [0]) for (const ox of wrapX ? [-T, 0, T] : [0]) {
           ctx.beginPath();
-          pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py + oy) : ctx.moveTo(px, py + oy)));
+          pts.forEach(([px, py], i) => (i ? ctx.lineTo(px + ox, py + oy) : ctx.moveTo(px + ox, py + oy)));
           ctx.stroke();
         }
       }
@@ -543,24 +543,21 @@ function paintBlank(g, v, seed) {
   if (v === 7) { g.rect(0, 180, T, 76, '#c9a227', 'wall'); }
 }
 
-function asphalt(g, seed, base = '#5c5f60') {
+const ROAD_BASE = '#6c6f70'; // one weathered grey for every road; tune here only
+function asphalt(g, seed, base = ROAD_BASE) {
   g.rect(0, 0, T, T, base);
-  // Sun-faded binder: broad stains plus a fine grain, periodic along the road.
-  const stain = fbm(seed, [[3, 0.5], [6, 0.3], [12, 0.2]]);
-  const chips = periodicNoise(96, seed + 5);
+  // Laid in world space on both axes (citymat mode 3), so every noise here is periodic both
+  // ways; lanes, wheel tracks and markings are drawn per road by the shader, not baked in.
+  const stain = fbm(seed, [[2, 0.45], [4, 0.35], [8, 0.2]]);
+  const chips = periodicNoise(128, seed + 5), fine = periodicNoise(64, seed + 7);
   const r = rng(seed + 9);
   g.pixels(0, 0, T, T, (u, v, c) => {
-    const k = 0.86 + stain(u, v) * 0.26 + (chips(u, v) - 0.5) * 0.14 + (r() - 0.5) * 0.1;
+    const k = 0.93 + (stain(u, v) - 0.5) * 0.12 + (chips(u, v) - 0.5) * 0.16 + (fine(u, v) - 0.5) * 0.08 + (r() - 0.5) * 0.12;
     c[0] *= k; c[1] *= k; c[2] *= k;
   });
-  // Pale stone chips where the binder has worn off.
-  g.speckle(0, 0, T, T, 700, ['rgba(170,166,156,0.28)', 'rgba(25,25,25,0.25)', 'rgba(140,136,128,0.3)'], 1.1, 'detail', seed);
-  // Tyre-polished wheel tracks and oil dripped down the middle of each lane.
-  if (g.mode === 'color') {
-    g.rect(34, 0, 46, T, 'rgba(0,0,0,0.08)'); g.rect(176, 0, 46, T, 'rgba(0,0,0,0.08)');
-    g.rect(98, 0, 18, T, 'rgba(10,8,6,0.07)'); g.rect(140, 0, 18, T, 'rgba(10,8,6,0.07)');
-  }
-  g.cracks(3, seed + 2, 0.32);
+  // Aggregate: pale quartz and dark basalt chips a pixel or two across (1.5-3 cm at 4 m a repeat).
+  g.speckle(0, 0, T, T, 2600, ['rgba(198,194,184,0.34)', 'rgba(150,146,138,0.3)', 'rgba(26,26,28,0.34)'], 1.0, 'detail', seed);
+  g.cracks(2, seed + 2, 0.22, true, true);
 }
 
 /** Painted road marking with the paint worn through in patches. */

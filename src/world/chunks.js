@@ -334,14 +334,24 @@ function buildGround(ctx) {
 }
 
 // ------------------------------------------------------------------ roads
-function roadTile(city, net, road) {
-  const type = net.type[road], w = net.width[road];
-  const p = net.pointAt(road, net.length[road] / 2, roadTile._p || (roadTile._p = {}));
-  const zone = city.zoneAt(p.x, p.z);
-  if (w <= 5) return (hash2(road, 3) & 3) !== 0 && zone !== ZONE.RURAL ? TILE.CONCRETE_ROAD : TILE.ASPHALT;
-  if (type >= 4) return zone === ZONE.RURAL ? TILE.ASPHALT : TILE.ASPHALT_DASH;
-  if (w >= 9) return TILE.ASPHALT_MAIN;
-  return TILE.ASPHALT_DASH;
+// Every road, junction pad and deck is the same asphalt; the lane markings are drawn by the city
+// shader (citymat.js, mode 3) from per-vertex data: uv = metres across from the left edge and
+// metres along; tint r = carriageway width in dm, g = these flags, b = how fresh the paint is.
+const MARK = { BROKEN: 1, SOLID: 2, DOUBLE_YELLOW: 3, ONEWAY: 4, MEDIAN_L: 8, MEDIAN_R: 16, EDGES: 32, TWO_LANES: 64 };
+const PAINT = [235, 225, 205, 190, 165, 130]; // by ROAD_TYPES index: trunks freshly painted, lanes worn
+function roadMarks(net, road, divided, ms) {
+  const w = net.width[road];
+  let f = 0;
+  if (net.oneway[road]) {
+    f |= MARK.ONEWAY;
+    if (divided) f |= ms > 0 ? MARK.MEDIAN_L : MARK.MEDIAN_R; // ms +1: the median is on the left (u = 0)
+    if (divided || w >= 6) f |= MARK.EDGES;
+  } else {
+    if (net.lanes[road] === 2) f |= MARK.TWO_LANES | MARK.DOUBLE_YELLOW;
+    else f |= w >= 9 ? MARK.SOLID : MARK.BROKEN;
+    if (w >= 8) f |= MARK.EDGES;
+  }
+  return f;
 }
 
 function buildRoads(ctx, data) {
@@ -369,7 +379,6 @@ const medianP = {}, medianQ = {};
 function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   const { g, city, net } = ctx;
   const w = net.width[road], hw = w / 2, len = net.length[road];
-  const tile = roadTile(city, net, road);
   // Mitred offsets at interior vertices keep curves seamless.
   const start = net.ptStart[road], end = net.ptStart[road + 1] - 1;
   const off0 = offsetAt(net, road, i, sa > net.cum[i] + 1e-3, start, end, sa, p);
@@ -377,16 +386,22 @@ function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   // Edges left and right of a->b at each end: a carriageway of a divided road stops at its median.
   const e0 = [net.edgeAt(road, sa, 1), net.edgeAt(road, sa, -1)], e1 = [net.edgeAt(road, sb, 1), net.edgeAt(road, sb, -1)];
   const d0 = net.deckAt(road, sa), d1 = net.deckAt(road, sb), y = ROAD_Y[net.type[road]] ?? 0.06;
-  g.setTint(0xffffff, road & 255).setTile(tile[0], tile[1], 1, 3);
-  const a = g.v(p.x + off0.nx * e0[0], y + d0, p.z + off0.nz * e0[0], 0, sa / FLOOR);
-  const b = g.v(p.x - off0.nx * e0[1], y + d0, p.z - off0.nz * e0[1], 1, sa / FLOOR);
-  const c = g.v(q.x - off1.nx * e1[1], y + d1, q.z - off1.nz * e1[1], 1, sb / FLOOR);
-  const d = g.v(q.x + off1.nx * e1[0], y + d1, q.z + off1.nz * e1[0], 0, sb / FLOOR);
-  // a,b at sa (left, right), c,d at sb (right, left): this order faces up.
-  g.quad(a, b, c, d);
   // The median side of a divided road (+1 left of a->b, -1 right), where the other carriageway runs alongside.
   const ms = net.oneway[road] ? -net.oneway[road] : 0, mk = ms > 0 ? 0 : 1;
   const divided = ms !== 0 && (e0[mk] < hw - 0.05 || e1[mk] < hw - 0.05);
+  // uv in metres (across from the left edge, along); the tint carries width, markings and paint age.
+  const W0 = e0[0] + e0[1], W1 = e1[0] + e1[1];
+  const marks = roadMarks(net, road, divided, ms);
+  const paint = Math.max(60, (PAINT[net.type[road]] ?? 150) - (hash2(road, 7) & 31));
+  const tint = W => (Math.min(255, Math.round(W * 10)) << 16) | (marks << 8) | paint;
+  g.setTile(TILE.ASPHALT[0], TILE.ASPHALT[1], 1, 3).setTint(tint(W0), road & 255);
+  const a = g.v(p.x + off0.nx * e0[0], y + d0, p.z + off0.nz * e0[0], 0, sa);
+  const b = g.v(p.x - off0.nx * e0[1], y + d0, p.z - off0.nz * e0[1], W0, sa);
+  g.setTint(tint(W1), road & 255);
+  const c = g.v(q.x - off1.nx * e1[1], y + d1, q.z - off1.nz * e1[1], W1, sb);
+  const d = g.v(q.x + off1.nx * e1[0], y + d1, q.z + off1.nz * e1[0], 0, sb);
+  // a,b at sa (left, right), c,d at sb (right, left): this order faces up.
+  g.quad(a, b, c, d);
   if (net.bridge[road] || d0 > 0.05 || d1 > 0.05) buildBridgeSpan(ctx, p, q, off0, off1, e0, e1, divided ? ms : 0, d0, d1);
   else {
     if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1]);
@@ -587,13 +602,19 @@ function zebra(ctx, p, off, edges, dir, s) {
   const back = 0.8, depth = 3;
   const ax = p.x + ux * back, az = p.z + uz * back;
   const bx = ax + ux * depth, bz = az + uz * depth;
-  g.setTint(0xffffff, 0).setTile(TILE.ZEBRA[0], TILE.ZEBRA[1], 1, 2);
+  // Real painted bars on the road's own asphalt (IRC: 0.5 m bars, 0.5 m gaps), centred across it.
   const y = PAD_Y + 0.004;
-  const wl = edges[0] * 0.96, wr = edges[1] * 0.96;
-  const v0 = g.v(ax + nx * wl, y, az + nz * wl, 0, 0), v1 = g.v(ax - nx * wr, y, az - nz * wr, 1, 0);
-  const v2 = g.v(bx - nx * wr, y, bz - nz * wr, 1, 1), v3 = g.v(bx + nx * wl, y, bz + nz * wl, 0, 1);
-  // Facing up regardless of dir.
-  if (dir > 0) g.quad(v0, v1, v2, v3); else g.quad(v0, v3, v2, v1);
+  g.color(0xe4e1d8, 0);
+  const wl = edges[0] - 0.3, wr = edges[1] - 0.3, bar = 0.5, gap = 0.5;
+  const total = wl + wr, n = Math.max(1, Math.floor((total + gap) / (bar + gap)));
+  const from = -wr + (total - (n * (bar + gap) - gap)) / 2; // lateral offset, + to the left
+  for (let k = 0; k < n; k++) {
+    const l0 = from + k * (bar + gap), l1 = l0 + bar;
+    const v0 = g.v(ax + nx * l1, y, az + nz * l1), v1 = g.v(ax + nx * l0, y, az + nz * l0);
+    const v2 = g.v(bx + nx * l0, y, bz + nz * l0), v3 = g.v(bx + nx * l1, y, bz + nz * l1);
+    // Facing up regardless of dir.
+    if (dir > 0) g.quad(v0, v1, v2, v3); else g.quad(v0, v3, v2, v1);
+  }
 }
 
 function buildFootpaths(ctx, p, q, o0, o1, hw, sides) {
@@ -718,7 +739,7 @@ function buildJunction(ctx, j) {
     if (net.ra[r] === j && net.rb[r] === j) break;
   }
   pts.sort((a, b) => Math.atan2(a[1] - jz, a[0] - jx) - Math.atan2(b[1] - jz, b[0] - jx));
-  g.setTint(0xffffff, 0).setTile(TILE.ASPHALT[0], TILE.ASPHALT[1], 1, 4);
+  g.setTint(0x000000, 0).setTile(TILE.ASPHALT[0], TILE.ASPHALT[1], 1, 3); // the roads' own asphalt; width 0: no markings
   const c = g.v(jx, PAD_Y + lift, jz);
   const ids = pts.map(([x, z]) => g.v(x, PAD_Y + lift, z));
   for (let i = 0; i < ids.length; i++) {

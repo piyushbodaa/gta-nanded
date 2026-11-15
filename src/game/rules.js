@@ -486,6 +486,8 @@ export function installRules(g) {
     const fine = Math.min(fee, g.save.cash);
     if (fine) g.addCash(-fine);
     P.health = P.maxHealth;
+    // Back out with the start kit: every gun, full ammo.
+    g.weapons?.giveAll?.();
     g.hitFx?.reset();
     const n = g.net.nearest(at.x, at.z, 50, {}, r => !g.net.raised[r]);
     const off = n ? (g.net.width[n.road] / 2 + 1) * (g.net.kerbSide(n.road) || 1) : 0;
