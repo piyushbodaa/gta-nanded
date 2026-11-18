@@ -74,7 +74,7 @@ export function installRules(g) {
     h.x = door.x; h.z = door.z;
     g.peds.adoptEjected(h, v, player);
     g.save.stat('jacked');
-    g.audio.sfx('door');
+    g.audio.sfx(v.spec?.two ? 'mount' : 'door');
     if (v.type === 'police') g.police.report('hitCop', v.x, v.z, { cop: true });
     // Pulling someone out of their car is a crime wherever it waited: in traffic, at the station's
     // auto stand, filling up at a pump. Pulling out a mission's own driver (the man you chase, the
@@ -108,7 +108,7 @@ export function installRules(g) {
     const spec = VEHICLE_TYPES[v.type];
     const st = g.audio.radio?.station;
     g.hud.vehicleName(spec.name, `${spec.mr}${st ? ` · 📻 ${st.name}` : ''}`);
-    g.audio.sfx('door');
+    g.audio.sfx(v.spec?.two ? 'mount' : 'door');
     if (!g.save.data.seenDriveHelp && !g.missions.active) {
       g.save.set('seenDriveHelp', true);
       g.hud.help(`${drivingHelp(g)}<br>${vehicleKeys(g)}`, 8);
@@ -119,7 +119,7 @@ export function installRules(g) {
   // A gun in hand for the first time: how to fire, aim and get at the wheel, once.
   g.onGunOut = () => { g.save.set('seenGunHelp', true); g.hud.help(weaponHelp(g), 9); };
 
-  g.onExitedVehicle = (v, spd) => { g.audio.sfx('door'); if (spd > 7) g.camera.addShake(0.3); g.garage?.onExit?.(v, spd); };
+  g.onExitedVehicle = (v, spd) => { g.audio.sfx(v.spec?.two ? 'mount' : 'door'); if (spd > 7) g.camera.addShake(0.3); g.garage?.onExit?.(v, spd); };
 
   // Who ran into whom: each car's speed toward the other before this frame's physics (onImpact
   // comes after the bounce; the rules hook notes the speeds just before it). Police units ram the
@@ -337,7 +337,7 @@ export function installRules(g) {
     }
     if (v && wet < 0.35 && Math.abs(forwardSpeed(v)) > 8 && g.city.densityAt(v.x, v.z) < 0.15 && Math.random() < 0.3) g.effects.dust(v.x - Math.sin(v.heading) * v.hd, v.z - Math.cos(v.heading) * v.hd, 1, undefined, v.y);
     // Vehicle into the Godavari.
-    if (v && v.sinking > 0.4) { if (!v.splashed) { v.splashed = true; g.effects.splash(v.x, v.z); g.audio.sfx('crash', 0.5); } if (v.sinking > 1.5) { const vv = v; P.leaveVehicle(true); g.wasted('drowned'); vv.wrecked = true; } }
+    if (v && v.sinking > 0.4) { if (!v.splashed) { v.splashed = true; g.effects.splash(v.x, v.z); g.audio.sfx('splash', 0.65); } if (v.sinking > 1.5) { const vv = v; P.leaveVehicle(true); g.wasted('drowned'); vv.wrecked = true; } }
     // Health regenerates slowly to half.
     if (P.health < 50 && P.state !== 'dead') P.heal(dt * 1.2);
     // Radio, camera, map, photo.

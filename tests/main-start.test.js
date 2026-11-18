@@ -21,7 +21,7 @@ function cover(init, { sound = true, failStart = false, failIntro = false } = {}
     clearTimeout(id) { timers.delete(id); },
   });
   return { game, controls, starts, timers, get initCalls() { return initCalls; }, get introCalls() { return introCalls; },
-    finishIntro() { completeIntro(); },
+    finishIntro(skipCampaign = false) { completeIntro(skipCampaign); },
     timeout() { for (const { fn, delay } of timers.values()) { assert.equal(delay, 1000); fn(); } },
   };
 }
@@ -74,4 +74,28 @@ test('sound off starts immediately without initializing audio', async () => {
   assert.equal(c.initCalls, 0);
   assert.deepEqual(c.starts, ['free']);
   assert.equal(c.timers.size, 0);
+});
+
+test('Skip story starts free roam without clearing a previously confirmed story save', () => {
+  const c = cover(() => Promise.resolve());
+  c.game.save.data = { story: ['c1'], cash: 810, seenIntro: true };
+  c.game.save.reset = () => assert.fail('free roam must preserve progress');
+  c.controls.begin('new', true);
+  assert.equal(c.introCalls, 1);
+  c.finishIntro(true);
+  assert.deepEqual(c.starts, ['free']);
+  assert.deepEqual(c.game.save.data.story, ['c1']);
+  assert.equal(c.game.save.data.cash, 810);
+});
+
+test('Skip intro commits a confirmed new story and keeps sound settings', () => {
+  const c = cover(() => Promise.resolve());
+  const settings = { sound: false, music: .35 };
+  c.game.save.data = { settings, story: ['c1'] };
+  c.game.save.reset = () => { c.game.save.data = { story: [] }; };
+  c.controls.begin('new', true);
+  c.finishIntro();
+  assert.deepEqual(c.starts, ['new']);
+  assert.deepEqual(c.game.save.data.story, []);
+  assert.equal(c.game.save.data.settings, settings);
 });

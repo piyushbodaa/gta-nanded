@@ -437,7 +437,11 @@ export class Post {
   render(scene, camera, dt = 0, sceneScale = this.sceneScale) {
     const r = this.renderer;
     if (this.enabled) this._ensure(sceneScale);
-    if (!this.enabled) { r.setRenderTarget(null); r.render(scene, camera); return; }
+    if (!this.enabled) {
+      // Devices without the HDR pass still get the exposure of the current time of day.
+      r.toneMappingExposure = Math.max(1, this.sky.look.exposure);
+      r.setRenderTarget(null); r.render(scene, camera); return;
+    }
     r.setRenderTarget(this.rt);
     r.render(scene, camera);
     const autoClear = r.autoClear;

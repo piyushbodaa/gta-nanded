@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 // Just enough Web Audio to run the game's sound: nodes remember what they connect to and their
 // parameters their latest value, and the context keeps a clock the tests move by hand.
 const param = value => ({ value, setValueAtTime(v) { this.value = v; }, setTargetAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; }, exponentialRampToValueAtTime(v) { this.value = v; }, cancelScheduledValues() {} });
-class Node { constructor() { this.to = []; } connect(n) { this.to.push(n); return n; } start() {} stop() {} }
+class Node { constructor() { this.to = []; } connect(n) { this.to.push(n); return n; } start(...args) { this.started = args; } stop() { this.stopped = true; } disconnect() {} }
 class Ctx {
   constructor() { this.currentTime = 0; this.sampleRate = 4000; this.state = 'running'; this.destination = new Node(); }
   createGain() { return Object.assign(new Node(), { gain: param(1) }); }
+  createDelay() { return Object.assign(new Node(), { delayTime: param(0) }); }
   createOscillator() { return Object.assign(new Node(), { frequency: param(440) }); }
   createBufferSource() { return new Node(); }
   createBiquadFilter() { return Object.assign(new Node(), { frequency: param(350), Q: param(1) }); }
@@ -40,7 +41,7 @@ function fakeGame(settings = {}) {
 const car = { type: 'auto', rpm: 0.4, throttle: 1, vx: 8, vz: 0, slip: 0, spec: {}, wrecked: false };
 
 test('switching the radio station while music plays carries on with the new station', () => {
-  const ctx = new Ctx(), radio = new Radio(ctx, ctx.destination, ctx.createBuffer(1, 8));
+  const ctx = new Ctx(), radio = new Radio(ctx, ctx.destination, async () => ({ duration: 60 }));
   const frames = n => { for (let i = 0; i < n; i++) { ctx.currentTime += 1 / 60; radio.update(1 / 60, true, null); } };
   frames(60);
   assert.equal(radio.playing, true);
@@ -125,4 +126,56 @@ test('horn cooldowns are forgotten once over', async () => {
   audio.listener = { x: 0, z: 0 };
   for (let id = 0; id < 500; id++) { audio.ctx.currentTime += 0.5; audio.horn({ id, type: 'auto', x: 5, z: 0 }); }
   assert.ok(audio.hornCool.size <= 65, `${audio.hornCool.size} entries`);
+});
+
+test('the street, pursuits and broadcasts hand off with Radio off and pause respected', async () => {
+  const ctx = new Ctx(), game = fakeGame();
+  const radio = new Radio(ctx, ctx.destination, async () => ({ duration: 62 }));
+  const update = async (driving, seconds = 1) => {
+    ctx.currentTime += seconds;
+    radio.update(1 / 60, driving, game);
+    await new Promise(resolve => setImmediate(resolve));
+    return radio.player.current?.url;
+  };
+  assert.match(await update(false), /backstreets/);
+  assert.match(await update(true), /forecourt/);
+  const old = radio.player.current.source;
+  game.police = { level: 2 };
+  assert.match(await update(true), /checkpost/);
+  assert.ok(old.stopped);
+  game.police.level = 0;
+  assert.match(await update(true, STATIONS[0].tracks[0].seconds), /ring-road/);
+  assert.ok(radio.player.current.source.started[1] > 0, 'the station kept broadcasting during the chase');
+  radio.setIndex(-1);
+  assert.equal(await update(true), undefined);
+  assert.match(await update(false), /backstreets/);
+  game.paused = true;
+  assert.equal(await update(false), undefined);
+  game.paused = false; game.cutscene = true;
+  assert.equal(await update(false), undefined);
+});
+
+test('a late decode cannot start a previous station or play after a skip', async () => {
+  const { MusicPlayer } = await import('../src/audio/music.js');
+  const ctx = new Ctx(), pending = new Map();
+  const player = new MusicPlayer(ctx, ctx.destination, (_, url) => new Promise(resolve => pending.set(url, resolve)));
+  player.play('first', .5); player.play('second', .6);
+  pending.get('first')({ duration: 10 });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(player.current, null);
+  player.stop(); pending.get('second')({ duration: 10 });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(player.current, null);
+});
+
+test('nearby moving traffic is audible and pans across the listener', async () => {
+  const audio = new GameAudio(); await audio.init();
+  const game = fakeGame(), van = { x: 6, z: 2, vx: 10, vz: 0, type: 'tempo' };
+  game.vehicles.list = [van]; audio.update(.02, game);
+  assert.ok(audio.trafficVoice.gain.gain.value > 0);
+  assert.ok(audio.trafficVoice.pan.pan.value < 0);
+  van.x = -6; audio.update(.02, game);
+  assert.ok(audio.trafficVoice.pan.pan.value > 0);
+  game.paused = true; audio.update(.02, game);
+  assert.equal(audio.trafficVoice.gain.gain.value, 0);
 });

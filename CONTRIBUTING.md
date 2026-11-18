@@ -22,7 +22,7 @@ Open the URL Vite prints. `dev.html` is a free-fly camera over the city (WASD, Q
 | `src/world/` | road network, city generation, texture atlas, city shader, chunk streaming, landmarks, sky, water, colliders |
 | `src/actors/` | people, vehicles (models, physics, rendering), traffic, pedestrians, the player |
 | `src/game/` | the loop, camera, police, missions and story, side jobs, rules, effects, saves |
-| `src/audio/` | synthesised sound effects, engines and the procedural radio |
+| `src/audio/` | vehicle and street sounds, station playlists and score playback. Regenerate the audio with `uv run scripts/render-soundtrack.py` and FFmpeg |
 | `src/ui/` | HUD, radar and city map, pause menu, touch controls, cover and intro styles |
 | `scripts/` | data builds (`build-world.mjs`, `build-city-data.py`, `build-buildings.py`) |
 | `research/` | sourced place records, OSM snapshots and notes |
