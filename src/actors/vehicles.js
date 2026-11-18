@@ -425,7 +425,7 @@ export class Vehicles {
         _s.set(1, 1, 1);
         _m.compose(_p, _q, _s);
         // Seat people even when the body is far (they're culled by their own distance check).
-        this._seat(v, _m);
+        this._seat(v, _m, _e);
         if (!near || !v.visible || M.n >= M.cap) continue;
         const i = M.n++;
         M.paint.setMatrixAt(i, _m); M.glass.setMatrixAt(i, _m); M.fixed.setMatrixAt(i, _m); M.lights.setMatrixAt(i, _m);
@@ -557,15 +557,17 @@ export class Vehicles {
     return index;
   }
 
-  _seat(v, M) {
+  _seat(v, M, rotation) {
     const speed = speedOf(v);
     const place = (h, sx, sy, sz) => {
       if (!h) return;
-      _p.set(sx, 0, sz).applyMatrix4(M);
-      h.x = _p.x; h.y = _p.y; h.z = _p.z;
+      // Bank the saddle with the frame. The ride pose adds its height back along world Y.
+      const saddleHeight = v.spec.two ? sy : 0;
+      _p.set(sx, saddleHeight, sz).applyMatrix4(M);
+      h.x = _p.x; h.y = _p.y - saddleHeight; h.z = _p.z;
       h.yaw = v.heading; h.speed = 0;
-      h.roll = v.spec.two ? -(v.lean + (v.standLean || 0)) : 0;
-      h.pitch = 0; h.air = false;
+      h.roll = v.spec.two ? rotation.z : 0;
+      h.pitch = v.spec.two ? rotation.x : 0; h.air = false;
       // What anim.js needs to put hands on the bars and sway with the ride.
       h.vType = v.type; h.vDriver = h === v.driver; h.vSteer = v.steer; h.vSpeed = speed; h.vLat = v.latAcc; h.vLong = v.longAcc;
     };
