@@ -146,6 +146,27 @@ test('changing what someone does eases over instead of snapping', () => {
   assert.ok(Math.abs(head - (STAND + 0.59) * h.outfit.scale) < 0.08, `back on their feet: head bone at ${head}`);
 });
 
+test('auto drivers and passengers stay on their seat and footboard as the camera approaches', () => {
+  for (const scale of [0.88, 1.12]) {
+    for (const driver of [true, false]) {
+      const { humans, h, at } = rig('woman', 9);
+      h.outfit.scale = scale;
+      Object.assign(h, { pose: 'sit', vType: 'auto', vDriver: driver, seatY: driver ? 0.82 : 0.88 });
+      for (const x of [70, 45, 6]) {
+        humans.update(dt, { x, z: 0 }, null);
+        assert.equal(h.anim.family, 'sit');
+        assert.ok(Math.abs(at(0, 0, 0, 0)[1] - h.seatY) < 0.002);
+        for (const bone of FOOT) {
+          for (const z of [-0.07, 0.12]) {
+            const sole = at(bone, 0, -0.057, z);
+            assert.ok(Math.abs(sole[1] - 0.42) < 0.007, `sole at ${sole[1]} m from ${x} m away`);
+          }
+        }
+      }
+    }
+  }
+});
+
 test('every pose is a finite set of joint angles', () => {
   const { h, step } = rig('woman', 9);
   const poses = ['idle', 'walk', 'run', 'phone', 'wave', 'sit', 'ride', 'lie', 'getup', 'cower', 'dive'];

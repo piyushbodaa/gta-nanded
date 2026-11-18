@@ -96,7 +96,7 @@ const PUNCHES = [
 
 // Where the hands and feet go on each kind of vehicle, from the seat (metres: + left, + up, + forward).
 const SEATS = {
-  auto: { grip: [0.3, 0.3, 0.28], feet: [0.13, -0.44, 0.37], lean: 0.08 },
+  auto: { grip: [0.3, 0.3, 0.28], floorY: 0.42, lean: 0.08 },
   bike: { grip: [0.33, 0.22, 0.72], feet: [0.17, -0.42, 0.28], lean: 0.34, two: true },
   scooter: { grip: [0.31, 0.34, 0.76], feet: [0.12, -0.36, 0.33], lean: 0.18, two: true },
   car: { wheel: [0, 0.29, 0.43, 0.18], lean: -0.06 },
@@ -893,8 +893,9 @@ function oneHand(a, h, P, lod, G, sc) {
 // ---------------------------------------------------------------- vehicles
 /** In a seat: hands on the wheel or the handlebar, swaying with the turns and the brakes. */
 function sit(a, h, P, lod) {
-  const seat = SEATS[h.vType] || SEATS.car, drv = h.vDriver;
-  P[C.PY] = h.seatY || 0.55;
+  const seat = SEATS[h.vType] || SEATS.car, drv = h.vDriver, sc = h.outfit.scale || 1;
+  // Seat and floor are dimensions of the vehicle. The skeleton scales its own coordinates.
+  P[C.PY] = (h.seatY || 0.55) / sc;
   P[C.PP] = -0.08;
   P[C.TP] = (drv ? seat.lean : -0.04) + clamp(-(h.vLong || 0) * 0.012, -0.12, 0.12);
   P[C.TR] = clamp(-(h.vLat || 0) * 0.012, -0.1, 0.1);
@@ -902,15 +903,20 @@ function sit(a, h, P, lod) {
   // Hands on the thighs by default.
   for (let s = 0; s < 2; s++) { P[C.SF + s] = 0.55; P[C.SA + s] = 0.15; P[C.ST + s] = 0.3; P[C.EL + s] = 1.0; }
   P[C.HW] = drv ? clamp((h.vSteer || 0) * 0.8, -0.5, 0.5) : 0;
+  if (seat.floorY !== undefined) {
+    // Both soles rest on the footboard, including passengers and a driver seen from a street away.
+    // The targets are mirror images and the pelvis is level side to side.
+    yxz(_pm, P[C.PP], P[C.PW], P[C.PR]);
+    reachLeg(P, 0, 0.13 / sc, seat.floorY / sc + ANK - P[C.PY], 0.37 / sc);
+    footAt(P, 0, 0);
+    for (const joint of [C.HF, C.HA, C.KN, C.HT, C.AN]) P[joint + 1] = P[joint];
+  }
   if (!drv || lod > 0) return;
   yxz(_pm, P[C.PP], P[C.PW], P[C.PR]);
   yxz(_tm, P[C.TP], P[C.TW], P[C.TR]);
-  const sc = h.outfit.scale || 1;
   if (seat.grip) {
     const [gx, gy, gz] = seat.grip;
     for (let s = 0; s < 2; s++) reachArm(P, s, (s === 0 ? gx : -gx) / sc, gy / sc, gz / sc);
-    const [fx, fy, fz] = seat.feet;
-    for (let s = 0; s < 2; s++) { reachLeg(P, s, (s === 0 ? fx : -fx) / sc, fy / sc, fz / sc); footAt(P, s, -0.1); }
   } else {
     // A steering wheel turns several times the road wheels; hands at ten to two go round with it.
     const [cx, cy, cz, r] = seat.wheel, turn = clamp((h.vSteer || 0) * 3.5, -1.4, 1.4);
