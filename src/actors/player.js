@@ -17,6 +17,7 @@ export class Player {
     this.game = game;
     this.human = game.humans.add(makeOutfit('player', 7), x, z);
     this.human.hero = true; // always the detailed body, posed in full, on its own finer mesh when there is one
+    this.human.footSurface = (x, z) => this._groundAt(game, x, z, true);
     this.x = x; this.z = z; this.y = 0; this.heading = heading;
     this.vx = 0; this.vz = 0; this.vy = 0; this.onGround = true;
     this.speed = 0; this.sprinting = false; this.stamina = 1;
@@ -54,9 +55,9 @@ export class Player {
   heal(amount) { this.health = Math.min(this.maxHealth, this.health + amount); }
 
   /** The top of the footpath we are on, if we are on one (-Infinity off it: the street or the ground decides). */
-  _pavement(g) {
+  _pavement(g, x, z) {
     this._onGround ||= r => !g.net.raised[r];
-    const n = g.net.nearest(this.x, this.z, 14, this._near || (this._near = {}), this._onGround);
+    const n = g.net.nearest(x, z, 14, this._near || (this._near = {}), this._onGround);
     return (n && g.city.pavementAt(n.seg, n.dist)) || -Infinity;
   }
 
@@ -78,9 +79,9 @@ export class Player {
     this.y = this.groundY = gy; this.vy = 0; this.onGround = true;
   }
   /** The ground, or a flyover deck if that is where we are, or the footpath, or the top of a median jumped onto. */
-  _groundAt(g) {
-    return Math.max(g.city.groundHeight(this.x, this.z), g.net.surfaceAt(this.x, this.z, this.groundY ?? 0), this._pavement(g),
-      g.colliders.ledgeAt?.(this.x, this.z, this.y) ?? -Infinity);
+  _groundAt(g, x = this.x, z = this.z, drawn = false) {
+    return Math.max(g.city.groundHeight(x, z), g.net.surfaceAt(x, z, this.groundY ?? 0, drawn), this._pavement(g, x, z),
+      g.colliders.ledgeAt?.(x, z, this.y) ?? -Infinity);
   }
 
   update(dt, input) {
@@ -212,6 +213,7 @@ export class Player {
       p.x = this.x; p.z = this.z;
       if (g.colliders.resolveCircle(p, 0.34, o, Infinity, this.groundY)) { this.x = p.x; this.z = p.z; }
       this.heading = Math.atan2(ux, uz);
+      h.y = h.floor = this.y = this.groundY = this._groundAt(g);
       h.x = this.x; h.z = this.z; h.yaw = this.heading; h.speed = sp; h.pose = 'run'; h.air = false; h.lookYaw = 0;
       holster(h);
       return;

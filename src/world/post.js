@@ -48,12 +48,37 @@ const UP = /* glsl */`
     gl_FragColor = vec4(c / 16.0, 1.0);
   }`;
 
+// Reconstruct the finished frame in display space. Pairing the inner Catmull-Rom
+// weights uses the texture unit's bilinear interpolation. The four outer corners
+// contribute less than 1% altogether and can be dropped after normalization.
+const PRESENT = /* glsl */`
+  uniform sampler2D tFrame;
+  uniform vec2 uTexel;
+  varying vec2 vUv;
+  void main() {
+    vec2 pixel = vUv / uTexel - 0.5;
+    vec2 base = floor(pixel), f = fract(pixel);
+    vec2 w0 = -0.5 * f * (1.0 - f) * (1.0 - f);
+    vec2 w3 = -0.5 * f * f * (1.0 - f);
+    vec2 middle = 1.0 - w0 - w3;
+    vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    vec2 uv = (base + 0.5 + w2 / middle) * uTexel;
+    vec2 lo = (base - 0.5) * uTexel, hi = (base + 2.5) * uTexel;
+    vec3 center = texture2D(tFrame, uv).rgb;
+    vec3 horizontal = w0.x * texture2D(tFrame, vec2(lo.x, uv.y)).rgb + w3.x * texture2D(tFrame, vec2(hi.x, uv.y)).rgb;
+    vec3 vertical = w0.y * texture2D(tFrame, vec2(uv.x, lo.y)).rgb + w3.y * texture2D(tFrame, vec2(uv.x, hi.y)).rgb;
+    float weight = middle.x + middle.y - middle.x * middle.y;
+    vec3 rgb = (center * middle.x * middle.y + horizontal * middle.y + vertical * middle.x) / weight;
+    // Limit overshoot on high-contrast details such as wires against a bright sky.
+    gl_FragColor = vec4(clamp(rgb, center - 0.035, center + 0.035), 1.0);
+  }`;
+
 const FINAL = /* glsl */`
   uniform sampler2D tColor, tDepth, tBloom, tDetail;
   uniform mat4 uProjInv, uCamWorld, uViewProj;
   uniform vec3 uCamPos;
   uniform float uBloom, uExposure, uFogDensity, uFogFalloff, uViewDist, uFogOn, uWet, uSSR;
-  uniform float uSaturation, uContrast, uVignette, uGrain, uTime, uAA, uSharpen, uNear, uFar;
+  uniform float uSaturation, uContrast, uVignette, uAA, uSharpen, uNear, uFar, uContact, uIntermediate;
   uniform vec3 uHurt, uHurtDir; // hit feedback (ui/hit-fx.js): edge red, colour drain; the attacker's side and its weight
   uniform vec3 uShadowTint, uHighTint;
   uniform vec2 uResolution, uTexel;
@@ -68,6 +93,25 @@ const FINAL = /* glsl */`
   // range so it never rings.
   float lumaC(vec3 c) { float l = dot(c, vec3(0.299, 0.587, 0.114)); return l / (1.0 + l); }
   float viewZ(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+  vec3 viewPoint(vec2 uv, float z) {
+    return vec3((uv * 2.0 - 1.0) * vec2(uProjInv[0][0], uProjInv[1][1]) * z, -z);
+  }
+  // Nearby surfaces block some of the ambient light at recesses, kerbs and wheels.
+  // Sample in metres, reject depth discontinuities and fade out before samples get subpixel.
+  float contactShade(vec3 at, vec3 normal) {
+    vec2 radius = 0.5 / (-at.z * vec2(uProjInv[0][0], uProjInv[1][1]));
+    float blocked = 0.0;
+    vec2 dir = vec2(0.90, 0.435);
+    for (int i = 0; i < 6; i++) {
+      vec2 uv = vUv + dir * radius * (mod(float(i), 2.0) < 0.5 ? 0.20 : 0.46);
+      vec3 delta = viewPoint(uv, viewZ(uv)) - at;
+      float distanceSq = dot(delta, delta);
+      float horizon = max(dot(normal, delta) - 0.025, 0.0) * inversesqrt(max(distanceSq, 0.0001));
+      blocked += horizon * (1.0 - smoothstep(0.04, 0.49, distanceSq));
+      dir = mat2(0.5, 0.8660254, -0.8660254, 0.5) * dir;
+    }
+    return 1.0 - blocked * 0.10 * (1.0 - smoothstep(15.0, 35.0, -at.z));
+  }
   bool outline(vec2 uv) {
     float z = viewZ(uv), jump = z * 0.03 + 0.05;
     return abs(viewZ(uv + vec2(-1.0, -1.0) * uTexel) - z) > jump || abs(viewZ(uv + vec2(1.0, -1.0) * uTexel) - z) > jump
@@ -113,7 +157,7 @@ const FINAL = /* glsl */`
   // through the depth buffer. Puddles (same pattern as the city shader) are
   // mirrors, wet asphalt a dimmer, blurrier one.
   vec3 wetReflection(vec3 col, vec3 wp, vec3 rd) {
-    float ground = smoothstep(0.32, 0.22, wp.y) * step(-0.6, wp.y) * step(rd.y, -0.01);
+    float ground = (1.0 - smoothstep(0.22, 0.32, wp.y)) * step(-0.6, wp.y) * step(rd.y, -0.01);
     if (ground <= 0.0) return col;
     float macro = clamp(texture2D(tDetail, wp.xz * 0.0105).g * 0.6 + texture2D(tDetail, wp.xz * 0.047 + 0.31).g * 0.4, 0.0, 1.0);
     float puddle = smoothstep(0.5, 0.7, texture2D(tDetail, wp.xz * 0.071 + 0.57).g * 0.65 + macro * 0.35);
@@ -137,8 +181,8 @@ const FINAL = /* glsl */`
       t *= 1.32;
     }
     if (hit <= 0.0) return col;
-    vec2 edge = smoothstep(0.0, 0.08, hitUV) * smoothstep(1.0, 0.92, hitUV);
-    hit *= edge.x * edge.y * smoothstep(70.0, 25.0, t);
+    vec2 edge = smoothstep(0.0, 0.08, hitUV) * (1.0 - smoothstep(0.92, 1.0, hitUV));
+    hit *= edge.x * edge.y * (1.0 - smoothstep(25.0, 70.0, t));
     float fres = 0.02 + 0.98 * pow(1.0 - clamp(-rd.y, 0.0, 1.0), 5.0);
     vec3 refl = texture2D(tColor, hitUV).rgb;
     // The city shader already reflects the sky here; swap that for what is really there.
@@ -162,6 +206,12 @@ const FINAL = /* glsl */`
   void main() {
     vec3 col = uAA > 0.5 || uSharpen > 0.0 ? filtered(vUv) : texture2D(tColor, vUv).rgb;
     float depth = texture2D(tDepth, vUv).x;
+    if (uContact > 0.5) {
+      float z = uNear * uFar / (uFar - depth * (uFar - uNear));
+      vec3 point = viewPoint(vUv, z);
+      vec3 n = cross(dFdx(point), dFdy(point));
+      if (z < 35.0) col *= contactShade(point, n * inversesqrt(max(dot(n, n), 1e-16)));
+    }
     if (uFogOn > 0.5 && depth < 1.0) {
       vec3 wp = worldAt(vUv, depth);
       vec3 ray = wp - uCamPos;
@@ -183,7 +233,7 @@ const FINAL = /* glsl */`
     vec3 p = sqrt(col);
     p = clamp((p - 0.45) * uContrast + 0.45, 0.0, 1.0);
     col = p * p;
-    // Lens: darker corners and a little film grain.
+    // Lens falloff.
     vec2 q = vUv - 0.5;
     q.x *= uResolution.x / uResolution.y;
     col *= 1.0 - uVignette * smoothstep(0.35, 1.05, length(q));
@@ -191,10 +241,9 @@ const FINAL = /* glsl */`
     float he = smoothstep(0.42, 1.0, length(q));
     float hd = uHurtDir.z * max(0.0, dot(normalize(q + 1e-5), uHurtDir.xy));
     col = mix(col, vec3(0.78, 0.05, 0.04), clamp(uHurt.x * he * (0.55 + 0.6 * hd), 0.0, 0.6));
-    float n = hash(vUv * uResolution + fract(uTime * 7.31) * 517.0);
-    col += (n - 0.5) * uGrain * (0.5 + 0.5 * l);
     gl_FragColor = vec4(col, 1.0);
-    #include <colorspace_fragment>
+    // The ordinary RGBA8 intermediate stores display-encoded values for reconstruction.
+    gl_FragColor = uIntermediate > 0.5 ? sRGBTransferOETF(gl_FragColor) : linearToOutputTexel(gl_FragColor);
     // Dither the 8-bit output so skies and haze never band.
     gl_FragColor.rgb += (hash(gl_FragCoord.xy + 0.5) - 0.5) / 255.0;
   }`;
@@ -217,6 +266,7 @@ export class Post {
     this.bloomOn = true;
     this.ssrOn = true;
     this.levels = 6;
+    this.sceneScale = 1;
     this.size = new THREE.Vector2();
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -233,13 +283,15 @@ export class Post {
       uProjInv: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uViewProj: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
       uWet: { value: 0 }, uSSR: { value: 1 },
       uBloom: { value: 0.08 }, uExposure: { value: 1 }, uFogDensity: { value: 0.0013 }, uFogFalloff: { value: 0.012 }, uViewDist: { value: 540 }, uFogOn: { value: 1 },
-      uSaturation: { value: 1.1 }, uContrast: { value: 1.06 }, uVignette: { value: 0.28 }, uGrain: { value: 0.012 }, uTime: { value: 0 },
+      uSaturation: { value: 1.1 }, uContrast: { value: 1.06 }, uVignette: { value: 0.22 }, uContact: { value: 0 }, uIntermediate: { value: 0 },
       uShadowTint: { value: new THREE.Color(1, 1, 1) }, uHighTint: { value: new THREE.Color(1, 1, 1) }, uResolution: { value: new THREE.Vector2(1, 1) },
       uTexel: { value: new THREE.Vector2(1, 1) }, uAA: { value: 0 }, uSharpen: { value: 0 }, uNear: { value: 0.3 }, uFar: { value: 900 },
       uHurt: { value: new THREE.Vector3() }, uHurtDir: { value: new THREE.Vector3() },
       uSunDir: su.uSunDir, uZenith: su.uZenith, uHorizon: su.uHorizon, uSunColor: su.uSunColor, uNight: su.uNight, uGrey: su.uGrey, uCityGlow: su.uCityGlow,
     });
     this.rt = null;
+    this.graded = null;
+    this.present = pass(PRESENT, { tFrame: { value: null }, uTexel: this.final.uniforms.uTexel });
     this.mips = [];
   }
 
@@ -248,12 +300,15 @@ export class Post {
    * pass (by default whenever there is no MSAA); `sharpen` (0 to about 0.3) offsets the blur
    * of the browser stretching a lower-resolution frame over the screen.
    */
-  configure({ msaa, bloom, reflections = bloom, aa = !msaa, sharpen = 0 }) {
+  configure({ msaa, bloom, reflections = bloom, aa = !msaa, sharpen = 0, sceneScale = 1, contactShade = false }) {
     // A GPU that refused multisampled HDR targets once isn't asked again (on every resize).
     const samples = msaa && !this.msaaRefused ? 4 : 0;
-    if (samples !== this.msaa) { this.msaa = samples; this._dispose(); }
+    if (samples !== this.msaa || Boolean(bloom) !== this.bloomOn) this._dispose();
+    this.msaa = samples;
     this.bloomOn = Boolean(bloom);
     this.ssrOn = Boolean(reflections);
+    this.sceneScale = sceneScale;
+    this.final.uniforms.uContact.value = contactShade ? 1 : 0;
     // Without the MSAA it asked for, the frame is smoothed in the final pass instead.
     this.final.uniforms.uAA.value = aa || (msaa && this.msaaRefused) ? 1 : 0;
     this.final.uniforms.uSharpen.value = sharpen;
@@ -272,6 +327,9 @@ export class Post {
     this.rt?.depthTexture?.dispose();
     this.rt?.dispose();
     this.rt = null;
+    this.graded?.dispose();
+    this.graded = null;
+    this.present.uniforms.tFrame.value = null;
     for (const m of this.mips) m.dispose();
     this.mips = [];
   }
@@ -287,11 +345,12 @@ export class Post {
    * if a driver refuses the format or its multisampling, fall back to the same without MSAA,
    * then half floats, and finally to drawing straight to the screen, rather than showing black.
    */
-  _ensure() {
+  _ensure(sceneScale = this.sceneScale) {
     const r = this.renderer;
     r.getDrawingBufferSize(this.size);
-    const w = Math.max(1, this.size.x), h = Math.max(1, this.size.y);
-    if (this.rt && this.rt.width === w && this.rt.height === h) return;
+    const w = Math.max(1, Math.round(this.size.x * sceneScale)), h = Math.max(1, Math.round(this.size.y * sceneScale));
+    const upscale = w < this.size.x || h < this.size.y;
+    if (this.rt && this.rt.width === w && this.rt.height === h && Boolean(this.graded) === upscale) return;
     this._dispose(); // the old size's target and bloom chain
     // EXT_color_buffer_float (behind R11G11B10) also makes half floats renderable.
     const formats = this.format === 'r11g11b10' ? ['r11g11b10', 'half'] : [this.format];
@@ -299,7 +358,7 @@ export class Post {
     for (const format of formats) {
       for (const samples of msaa ? [msaa, 0] : [0]) {
         this.format = format; this.msaa = samples;
-        this._create(w, h);
+        this._create(w, h, upscale);
         if (this._complete()) {
           // MSAA refused: remember it, and smooth the frame in the final pass instead.
           if (msaa && !samples) { this.msaaRefused = true; this.final.uniforms.uAA.value = 1; }
@@ -311,17 +370,22 @@ export class Post {
     console.warn('GTA Nanded: the GPU cannot render to an HDR target; drawing without post-processing.');
     this.enabled = this.supported = false;
     this.sky.useSceneFog(true);
+    this.onFallback?.();
   }
 
-  _create(w, h) {
+  _create(w, h, upscale) {
     const opts = this._targetOptions();
     this.rt = new THREE.WebGLRenderTarget(w, h, {
       ...opts, samples: this.msaa, depthBuffer: true, stencilBuffer: false,
       minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
     });
     this.rt.depthTexture = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
+    if (upscale) {
+      this.graded = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, generateMipmaps: false });
+      this.present.uniforms.tFrame.value = this.graded.texture;
+    }
     let mw = w, mh = h;
-    for (let i = 0; i < this.levels; i++) {
+    for (let i = 0; this.bloomOn && i < this.levels; i++) {
       mw = Math.max(1, mw >> 1); mh = Math.max(1, mh >> 1);
       this.mips.push(new THREE.WebGLRenderTarget(mw, mh, { ...opts, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false }));
     }
@@ -333,7 +397,7 @@ export class Post {
   _complete() {
     const r = this.renderer, gl = r.getContext(), prev = r.getRenderTarget();
     let ok = true;
-    for (const t of [this.rt, this.mips[0]]) {
+    for (const t of [this.rt, this.mips[0], this.graded]) {
       if (!t) continue;
       r.setRenderTarget(t);
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { ok = false; break; }
@@ -366,9 +430,9 @@ export class Post {
     return this.mips[0].texture;
   }
 
-  render(scene, camera, dt = 0) {
+  render(scene, camera, dt = 0, sceneScale = this.sceneScale) {
     const r = this.renderer;
-    if (this.enabled) this._ensure();
+    if (this.enabled) this._ensure(sceneScale);
     if (!this.enabled) { r.setRenderTarget(null); r.render(scene, camera); return; }
     r.setRenderTarget(this.rt);
     r.render(scene, camera);
@@ -395,8 +459,9 @@ export class Post {
     u.uContrast.value = look.contrast;
     u.uShadowTint.value.copy(look.shadowTint);
     u.uHighTint.value.copy(look.highTint);
-    u.uTime.value += dt;
-    this._blit(this.final, null);
+    u.uIntermediate.value = this.graded ? 1 : 0;
+    this._blit(this.final, this.graded);
+    if (this.graded) this._blit(this.present, null);
     r.autoClear = autoClear;
   }
 }

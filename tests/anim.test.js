@@ -54,6 +54,49 @@ test('walking and running plant the feet: heels and balls stay put while they ar
   }
 });
 
+test('a foot holds its place while a walker rounds a tight corner', () => {
+  const { h, at, step } = rig('player');
+  h.speed = 1.6; h.pose = 'walk';
+  const plants = [null, null];
+  let worst = 0;
+  for (let i = 0; i < 360; i++) {
+    h.yaw += 2.1 * dt;
+    h.x += h.speed * Math.sin(h.yaw) * dt; h.z += h.speed * Math.cos(h.yaw) * dt;
+    step();
+    for (let side = 0; side < 2; side++) {
+      const phase = (h.anim.phase + 0.5 * side) % 1;
+      if (i < 60 || phase < 0.12 || phase > 0.4) { plants[side] = null; continue; }
+      const sole = at(FOOT[side], 0, -0.057, 0);
+      plants[side] ??= sole;
+      worst = Math.max(worst, Math.hypot(sole[0] - plants[side][0], sole[2] - plants[side][2]));
+    }
+  }
+  assert.ok(worst < 0.025, `planted foot travelled ${worst.toFixed(3)} m on the turn`);
+});
+
+test('each planted shoe and its contact shadow find their own kerb height', () => {
+  const { h, at, humans, step } = rig('player');
+  h.hero = true; h.floor = h.y = 0;
+  let samples = 0;
+  h.footSurface = x => { samples++; return x > 0 ? 0.2 : 0; };
+  humans.blobsOn = false;
+  for (let i = 0; i < 90; i++) step();
+  const left = at(FOOT[0], 0, -0.057, 0), right = at(FOOT[1], 0, -0.057, 0);
+  assert.ok(Math.abs(left[1] - 0.2) < 0.025 && Math.abs(right[1]) < 0.025, `soles at ${left[1]} and ${right[1]}`);
+  assert.ok(samples < 15, `resting feet made ${samples} terrain queries`);
+  assert.equal(humans.blobs.count, 2);
+  const shadow = new THREE.Matrix4();
+  humans.blobs.getMatrixAt(0, shadow);
+  assert.ok(Math.abs(shadow.elements[13] - 0.206) < 0.002);
+  h.air = true; h.vy = 1; h.y = 0.7;
+  step();
+  assert.equal(humans.blobs.count, 0, 'both shoes have lifted');
+  humans.blobsOn = true;
+  step();
+  humans.blobs.getMatrixAt(0, shadow);
+  assert.ok(shadow.elements[13] < 0.02, 'the broader fallback shade stays on the street during a jump');
+});
+
 test('a stride lengthens with speed instead of the legs spinning faster', () => {
   const cycles = speed => {
     const { h, step } = rig();
@@ -101,6 +144,27 @@ test('changing what someone does eases over instead of snapping', () => {
   assert.ok(watch(30, () => { h.pose = 'idle'; }) < 0.12, 'standing');
   const head = at(2, 0, 0, 0)[1];
   assert.ok(Math.abs(head - (STAND + 0.59) * h.outfit.scale) < 0.08, `back on their feet: head bone at ${head}`);
+});
+
+test('auto drivers and passengers stay on their seat and footboard as the camera approaches', () => {
+  for (const scale of [0.88, 1.12]) {
+    for (const driver of [true, false]) {
+      const { humans, h, at } = rig('woman', 9);
+      h.outfit.scale = scale;
+      Object.assign(h, { pose: 'sit', vType: 'auto', vDriver: driver, seatY: driver ? 0.82 : 0.88 });
+      for (const x of [70, 45, 6]) {
+        humans.update(dt, { x, z: 0 }, null);
+        assert.equal(h.anim.family, 'sit');
+        assert.ok(Math.abs(at(0, 0, 0, 0)[1] - h.seatY) < 0.002);
+        for (const bone of FOOT) {
+          for (const z of [-0.07, 0.12]) {
+            const sole = at(bone, 0, -0.057, z);
+            assert.ok(Math.abs(sole[1] - 0.42) < 0.007, `sole at ${sole[1]} m from ${x} m away`);
+          }
+        }
+      }
+    }
+  }
 });
 
 test('every pose is a finite set of joint angles', () => {

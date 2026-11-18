@@ -77,8 +77,10 @@ export class Sky {
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
     sc.left = -95; sc.right = 95; sc.top = 95; sc.bottom = -95; sc.near = 1; sc.far = 400;
-    this.sun.shadow.bias = -0.0006;
-    this.sun.shadow.normalBias = 0.0;
+    // A depth offset of 0.0006 on this 400 m frustum lifted soles and tyres
+    // a quarter metre off their shadows. Offset along the surface normal instead.
+    this.sun.shadow.bias = -0.00012;
+    this.sun.shadow.normalBias = 0.018;
     this.sun.target = new THREE.Object3D();
     scene.add(this.sun, this.sun.target);
     // The shadow map's footprint as the sun sees it (see inShadowBox); everything casts until placed.
@@ -154,7 +156,7 @@ export class Sky {
           if (uNight > 0.01 && d.y > 0.02) {
             vec2 sp = d.xz / (d.y + 0.3) * 160.0;
             float s = h21(floor(sp));
-            float star = step(0.9965, s) * smoothstep(0.5, 0.0, length(fract(sp) - 0.5));
+            float star = step(0.9965, s) * (1.0 - smoothstep(0.0, 0.5, length(fract(sp) - 0.5)));
             col += vec3(star) * uNight * (0.6 + 0.4 * sin(uTime * 3.0 + s * 50.0)) * (1.0 - uGrey) * 1.5;
           }
           // Cumulus on a plane above the city, lit from the sun's side, darker underneath.

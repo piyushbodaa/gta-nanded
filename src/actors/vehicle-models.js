@@ -11,6 +11,7 @@ const GLASS = 0x26343c, BLACK = 0x1a1a1a, GREY = 0x55595b, CHROME = 0xb8bec2, PL
 const HEAD = 0xfff3c4, TAIL = 0xd81b1b, AMBER = 0xff9a1f, BAR_RED = 0xff2020, BAR_BLUE = 0x2050ff;
 /** What a lamp is, by its colour (vehicles.js lights each kind its own way): 0 in front, 1 tail lamp, 2 light bar. */
 const lampKind = color => (color === TAIL ? 1 : color === BAR_RED || color === BAR_BLUE ? 2 : 0);
+const partColor = new THREE.Color();
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -20,8 +21,9 @@ class VB {
     if (part === 'fixed' && color === GLASS) part = 'glass';
     const P = this.parts[part];
     P.pos.push(...a, ...b, ...c);
-    const r = ((color >> 16) & 255) / 255, g = ((color >> 8) & 255) / 255, bl = (color & 255) / 255;
-    for (let i = 0; i < 3; i++) P.col.push(r, g, bl);
+    // The palette is sRGB; Three's vertex colours are linear, like its paint instance colours.
+    partColor.setHex(color);
+    for (let i = 0; i < 3; i++) P.col.push(partColor.r, partColor.g, partColor.b);
     if (P.lamp) { const k = lampKind(color); P.lamp.push(k, k, k); }
   }
   quad(part, a, b, c, d, color) { this._tri(part, a, b, c, color); this._tri(part, a, c, d, color); }
@@ -85,7 +87,7 @@ class VB {
     if (!caps) return;
     for (const [st, c, sign] of [[stations[0], cen[0], -1], [stations[stations.length - 1], cen[cen.length - 1], 1]]) {
       const m = [c[0], c[1], st.z];
-      for (let i = 0; i < segs; i++) {
+      for (let i = 0; i < n; i++) {
         const a = P(st, i), b = P(st, (i + 1) % n);
         const cz = (a[0] - m[0]) * (b[1] - m[1]) - (a[1] - m[1]) * (b[0] - m[0]);
         if ((cz >= 0) === (sign > 0)) this._tri(partOf(0, 0, sign, -1), m, a, b, color); else this._tri(partOf(0, 0, sign, -1), m, b, a, color);
@@ -169,6 +171,28 @@ function stationsAlong(z0, z1, n, knots = []) {
   return [...zs].sort((a, b) => a - b);
 }
 
+// Cut an opening above each axle and put the dark wheel housing inboard of the tyre.
+// Sharing the arch stations across both flanks keeps them in the existing body draw call.
+function wheelWells(b, wheels, hw, low, high, sections, knots, section) {
+  const axles = wheels.filter(w => w[0] > 0);
+  for (const [, z, r] of axles) {
+    const radius = r + 0.085;
+    for (let i = 0; i <= 8; i++) knots.push(z + radius * Math.cos(i * Math.PI / 8));
+  }
+  const stations = stationsAlong(low, high, sections, knots).map(z => {
+    let arch = 0;
+    for (const [, axle, r] of axles) {
+      const radius = r + 0.085, dz = z - axle;
+      if (Math.abs(dz) < radius) arch = Math.max(arch, r + Math.sqrt(radius * radius - dz * dz));
+    }
+    return { z, pts: section(z, arch) };
+  });
+  b.loft(stations, () => 'paint');
+  const r = axles[0][2], underside = r * 0.9;
+  b.box('fixed', 0, (underside + r * 2) / 2, (low + high) / 2,
+    hw * 2 - axles[0][4] * 2 - 0.08, r * 2 - underside, (high - low) * 0.92, 0x282c2c);
+}
+
 /**
  * Car body: a lower shell lofted along the side profile with bumpers rounded
  * off, and a cabin whose sides and sloped ends are glass under a painted roof
@@ -177,13 +201,12 @@ function stationsAlong(z0, z1, n, knots = []) {
 function carBody(b, { lower, house, hw, houseHw, wheels = [] }) {
   const zs = lower.map(p => p[0]), zmin = Math.min(...zs) + 0.015, zmax = Math.max(...zs) - 0.015;
   const zmid = (zmin + zmax) / 2, half = (zmax - zmin) / 2;
-  const body = stationsAlong(zmin, zmax, 18, lower.map(p => p[0])).map(z => {
+  wheelWells(b, wheels, hw, zmin, zmax, 12, lower.map(p => p[0]), (z, arch) => {
     const u = Math.abs(z - zmid) / half;
     const w = hw * (1 - 0.1 * smooth(0.7, 1, u));
     const yt = profileAt(lower, z, true), yb = profileAt(lower, z, false) + 0.05 * smooth(0.82, 1, u);
-    return { z, pts: roundRect(w, yb, Math.max(yt, yb + 0.02), 0.1 + 0.08 * smooth(0.75, 1, u), 0.06, 0.965) };
+    return roundRect(w, Math.max(yb, arch), Math.max(yt, yb + 0.02), 0.1 + 0.08 * smooth(0.75, 1, u), arch ? 0.025 : 0.06, 0.965);
   });
-  b.loft(body, () => 'paint');
   // Cabin.
   const hz = house.map(p => p[0]), h0 = Math.min(...hz) + 0.01, h1 = Math.max(...hz) - 0.01;
   const cabin = stationsAlong(h0, h1, 14, hz).map(z => {
@@ -193,7 +216,18 @@ function carBody(b, { lower, house, hw, houseHw, wheels = [] }) {
   b.loft(cabin, (nx, ny, nz) => (Math.abs(nx) > 0.72 || Math.abs(nz) > 0.35 ? 'glass' : 'paint'), 0, false, false);
   // Pillars: A (along the windscreen edge), B (black, mid-cabin), C (behind the rear door).
   const roofFront = house[1], roofRear = house[house.length - 2], baseFront = house[0], baseRear = house[house.length - 1];
+  const sill = Math.max(baseFront[1], baseRear[1]);
+  b.box('fixed', 0, sill + 0.005, (baseRear[0] + baseFront[0]) / 2,
+    houseHw * 1.9, 0.025, (baseFront[0] - baseRear[0]) * 0.935, 0x2b3132);
   for (const sgn of [1, -1]) {
+    // Seat backs and head restraints can be seen through the glazed cabin.
+    for (const z of [-0.48, roofRear[0] + 0.12]) {
+      b.box('fixed', sgn * houseHw * 0.47, sill + 0.06, z, 0.43, 0.14, 0.13, 0x3c4040);
+      b.box('fixed', sgn * houseHw * 0.47, sill + 0.18, z - 0.02, 0.25, 0.15, 0.10, 0x333737);
+    }
+    // A wiper parked low on the sloped windscreen.
+    const onGlass = (x, t) => [x, baseFront[1] + (roofFront[1] - baseFront[1]) * t + 0.012, baseFront[0] + (roofFront[0] - baseFront[0]) * t + 0.01];
+    b.bar('fixed', onGlass(sgn * 0.34 - 0.24, 0.08), onGlass(sgn * 0.34 + 0.15, 0.16), 0.009, 0x252a2c);
     const xb = sgn * (houseHw + 0.005), xt = sgn * (houseHw * 0.86 - 0.02);
     b.bar('paint', [xb, baseFront[1], baseFront[0] - 0.03], [xt, roofFront[1] - 0.02, roofFront[0] - 0.02], 0.035, 0);
     b.bar('paint', [xb, baseRear[1], baseRear[0] + 0.08], [xt, roofRear[1] - 0.02, roofRear[0] + 0.05], 0.05, 0);
@@ -202,19 +236,53 @@ function carBody(b, { lower, house, hw, houseHw, wheels = [] }) {
     // Door seams and handles.
     b.box('fixed', sgn * (hw * 0.995), (yb + profileAt(lower, zb, false)) / 2 + 0.05, zb, 0.008, yb - profileAt(lower, zb, false) - 0.12, 0.012, 0x222222);
     b.box('fixed', sgn * (hw * 0.997), yb - 0.1, zb + 0.35, 0.01, 0.03, 0.14, CHROME);
-    for (const [wx, wz, r] of wheels) if (Math.sign(wx) === sgn) b.arch(sgn * (hw * (1 - 0.1 * smooth(0.7, 1, Math.abs(wz - zmid) / half)) + 0.004), wz, r, r + 0.07, sgn);
+    b.box('fixed', sgn * (hw * 0.997), yb - 0.1, zb - 0.38, 0.015, 0.035, 0.14, CHROME);
   }
 }
 
-function lampsAndPlates(b, { front, rear, y, hw, commercial = false, lampW = 0.3 }) {
+const plateGlyphs = {
+  M: [[0,0,0,1],[0,1,0.5,0.5],[0.5,0.5,1,1],[1,1,1,0]],
+  H: [[0,0,0,1],[1,0,1,1],[0,0.5,1,0.5]],
+};
+const digitStrokes = [[0,1,1,1],[1,1,1,0.5],[1,0.5,1,0],[0,0,1,0],[0,0,0,0.5],[0,0.5,0,1],[0,0.5,1,0.5]];
+['012345','12','01643','01623','5612','05623','054326','012','0123456','012356'].forEach((indices, digit) => {
+  plateGlyphs[digit] = [...indices].map(i => digitStrokes[i]);
+});
+
+/** The registration and blue strip are flat ink in the existing trim batch. */
+function registration(b, y, z, face, number, background = PLATE_W) {
+  b.box('fixed', 0, y, z - face * 0.024, 0.52, 0.135, 0.062, 0x282d2e);
+  b.box('fixed', 0, y, z, 0.5, 0.12, 0.016, background);
+  const plane = z + face * 0.009;
+  const quad = (a, c, d, e, color) => {
+    const p = ([x, h]) => [x * face, y + h, plane];
+    b.quad('fixed', p(a), p(c), p(d), p(e), color);
+  };
+  quad([-0.242,-0.053],[-0.205,-0.053],[-0.205,0.053],[-0.242,0.053],0x184f87);
+  const label = 'MH26' + number;
+  for (let i = 0; i < label.length; i++) {
+    const origin = -0.18 + i * 0.052 + (i >= 4 ? 0.009 : 0);
+    for (const [x0, y0, x1, y1] of plateGlyphs[label[i]]) {
+      const a = origin + x0 * 0.031, c = origin + x1 * 0.031, h = -0.035 + y0 * 0.070, k = -0.035 + y1 * 0.070;
+      const len = Math.hypot(c - a, k - h), ox = (h - k) * 0.0045 / len, oy = (c - a) * 0.0045 / len;
+      quad([a - ox,h - oy],[c - ox,k - oy],[c + ox,k + oy],[a + ox,h + oy],0x191e20);
+    }
+  }
+}
+
+function lampsAndPlates(b, { front, rear, y, hw, number, lampW = 0.3 }) {
   for (const s of [1, -1]) {
+    b.box('fixed', s * (hw - lampW / 2 - 0.06), y, front - 0.01, lampW + 0.045, 0.17, 0.048, 0x30383b);
     b.box('lights', s * (hw - lampW / 2 - 0.06), y, front, lampW, 0.13, 0.05, HEAD);
     b.box('lights', s * (hw - 0.14), y + 0.02, rear, 0.22, 0.14, 0.05, TAIL);
     b.box('lights', s * (hw - 0.05), y - 0.02, front - 0.05, 0.06, 0.06, 0.06, AMBER);
   }
-  // Indian plates: white front and back on private vehicles, yellow on commercial ones.
-  b.box('fixed', 0, y - 0.22, front + 0.02, 0.5, 0.12, 0.02, commercial ? PLATE_Y : PLATE_W);
-  b.box('fixed', 0, y - 0.18, rear - 0.02, 0.5, 0.12, 0.02, commercial ? PLATE_Y : PLATE_W);
+  // Separate the radiator opening, its trim and the reflector line in the rear lamp cluster.
+  b.box('fixed', 0, y - 0.045, front + 0.026, hw * 0.96, 0.145, 0.025, 0x172023);
+  for (const dy of [-0.085, -0.015]) b.box('fixed', 0, y + dy, front + 0.043, hw * 0.89, 0.018, 0.01, 0x828b8f);
+  for (const s of [1, -1]) b.box('fixed', s * (hw - 0.14), y + 0.04, rear - 0.029, 0.17, 0.019, 0.01, 0xffa49a);
+  registration(b, y - 0.22, front + 0.07, 1, number);
+  registration(b, y - 0.18, rear - 0.075, -1, number);
 }
 
 // Each builder returns { geos, wheels: [[x, z, r, front, width]], seat: {x, y, z, pose}, siren? }
@@ -226,10 +294,10 @@ const BUILDERS = {
       lower: [[-1.9, 0.28], [1.88, 0.28], [1.93, 0.58], [1.78, 0.83], [0.92, 0.98], [-1.78, 0.98], [-1.93, 0.74]],
       house: [[0.92, 0.98], [0.12, 1.47], [-1.22, 1.47], [-1.8, 0.98]], hw: 0.85, houseHw: 0.77, wheels,
     });
-    b.box('fixed', 0, 0.42, 1.9, 1.62, 0.24, 0.12, GREY); b.box('fixed', 0, 0.42, -1.9, 1.62, 0.24, 0.12, GREY);
+    b.box('fixed', 0, 0.39, 1.915, 1.38, 0.07, 0.07, 0x343a3d); b.box('fixed', 0, 0.40, -1.915, 1.48, 0.08, 0.07, 0x343a3d);
     b.box('fixed', 0, 0.7, 1.9, 0.9, 0.16, 0.05, BLACK);
     for (const s of [1, -1]) b.box('paint', s * 0.9, 1.0, 0.75, 0.12, 0.08, 0.14, 0);
-    lampsAndPlates(b, { front: 1.92, rear: -1.92, y: 0.72, hw: 0.82 });
+    lampsAndPlates(b, { front: 1.92, rear: -1.92, y: 0.72, hw: 0.82, number: '4281' });
     return { b, wheels, seat: { x: -0.36, y: 0.5, z: -0.2, pose: 'sit' } };
   },
   sedan() {
@@ -239,10 +307,10 @@ const BUILDERS = {
       lower: [[-2.12, 0.3], [2.1, 0.3], [2.14, 0.6], [1.96, 0.82], [1.02, 0.95], [-1.55, 0.97], [-2.08, 0.92], [-2.14, 0.62]],
       house: [[1.02, 0.95], [0.22, 1.43], [-0.98, 1.43], [-1.58, 0.97]], hw: 0.86, houseHw: 0.78, wheels,
     });
-    b.box('fixed', 0, 0.44, 2.11, 1.64, 0.22, 0.1, GREY); b.box('fixed', 0, 0.44, -2.11, 1.64, 0.22, 0.1, GREY);
+    b.box('fixed', 0, 0.42, 2.10, 1.45, 0.08, 0.08, 0x343a3d); b.box('fixed', 0, 0.43, -2.105, 1.48, 0.08, 0.08, 0x343a3d);
     b.box('fixed', 0, 0.7, 2.13, 0.9, 0.16, 0.04, CHROME);
     for (const s of [1, -1]) b.box('paint', s * 0.92, 0.98, 0.85, 0.12, 0.08, 0.14, 0);
-    lampsAndPlates(b, { front: 2.14, rear: -2.14, y: 0.74, hw: 0.83 });
+    lampsAndPlates(b, { front: 2.14, rear: -2.14, y: 0.74, hw: 0.83, number: '7194' });
     return { b, wheels, seat: { x: -0.37, y: 0.5, z: -0.15, pose: 'sit' } };
   },
   suv() {
@@ -256,7 +324,7 @@ const BUILDERS = {
     b.box('fixed', 0, 0.95, 2.22, 1.1, 0.24, 0.04, CHROME);
     for (const s of [1, -1]) { b.box('fixed', s * 0.62, 1.92, -0.6, 0.06, 0.06, 2.6, CHROME); b.box('fixed', s * 0.95, 0.5, 0, 0.08, 0.1, 2.4, BLACK); }
     b.cyl('fixed', 0, 1.0, -2.32, 0.34, 0.22, 'z', 10, BLACK);
-    lampsAndPlates(b, { front: 2.25, rear: -2.23, y: 0.92, hw: 0.88 });
+    lampsAndPlates(b, { front: 2.25, rear: -2.23, y: 0.92, hw: 0.88, number: '3625' });
     return { b, wheels, seat: { x: -0.4, y: 0.72, z: 0.05, pose: 'sit' } };
   },
   police() {
@@ -277,7 +345,7 @@ const BUILDERS = {
     b.box('fixed', 0, 1.93, 0.1, 1.2, 0.08, 0.3, BLACK);
     b.box('lights', 0.32, 2.03, 0.1, 0.5, 0.14, 0.26, BAR_RED);
     b.box('lights', -0.32, 2.03, 0.1, 0.5, 0.14, 0.26, BAR_BLUE);
-    lampsAndPlates(b, { front: 2.11, rear: -2.09, y: 0.92, hw: 0.84 });
+    lampsAndPlates(b, { front: 2.11, rear: -2.09, y: 0.92, hw: 0.84, number: '1082' });
     // A second officer beside the driver from two stars up (police.js), and the back bench.
     return { b, wheels, seat: { x: -0.4, y: 0.72, z: 0.0, pose: 'sit' }, passengers: [[0.4, 0.72, 0.0], [-0.4, 0.72, -1.1], [0.4, 0.72, -1.1]], siren: true };
   },
@@ -294,14 +362,40 @@ const BUILDERS = {
     };
     b.loft(stationsAlong(-1.28, 1.3, 16, keys.map(k => k[0])).map(z => { const [, w, yb, yt, r] = at(z); return { z, pts: roundRect(w, yb, yt, r, 0.06, 0.97) }; }), () => 'paint');
     for (const sgn of [1, -1]) b.arch(sgn * 0.649, -0.8, 0.23, 0.3, sgn);
-    // Canopy: yellow roof over black fabric, open at the sides.
-    const roof = stationsAlong(-1.34, 0.74, 10).map(z => ({ z, pts: archSection(0.68, 1.44, 1.79 - 0.08 * smooth(0.3, 0.74, z), 0.62, 0.26) }));
+    // Canvas spans three hoops. It draws in at either end and sags slightly between the bows.
+    const canopyAt = z => {
+      const rear = 1 - smooth(-1.35, -1.03, z), front = smooth(0.43, 0.76, z), end = rear + front;
+      const sag = 0.022 * Math.sin(Math.PI * (z + 1.12) / 0.74) ** 2;
+      return archSection(0.685 - 0.037 * end, 1.47, 1.81 - 0.215 * rear - 0.085 * front - sag, 0.615 - 0.035 * end, 0.26, 6);
+    };
+    const roof = stationsAlong(-1.35, 0.76, 16, [-1.12, -0.38, 0.36]).map(z => ({ z, pts: canopyAt(z) }));
     b.loft(roof, () => 'fixed', 0xf2c230, false, true);
     b.loft(roof.map(st => ({ z: st.z, pts: st.pts.map(([x, y]) => [x * 0.985, y - 0.02]) })), () => 'fixed', 0x1d1d1d, false, false, true);
-    for (const sgn of [1, -1]) b.box('fixed', sgn * 0.675, 1.47, -0.3, 0.025, 0.08, 2.08, 0x1d1d1d);
-    // Back panel with a small plastic window; grab poles at the corners.
-    b.box('fixed', 0, 1.2, -1.31, 1.3, 0.78, 0.04, 0x1d1d1d);
-    b.box('fixed', 0, 1.36, -1.335, 0.56, 0.2, 0.012, GLASS);
+    for (const z of [-1.12, -0.38, 0.36]) {
+      b.loft([z - 0.009, z + 0.009].map(t => ({ z: t, pts: canopyAt(t).map(([x, y]) => [x * 1.004, y + 0.003]) })),
+        () => 'fixed', 0xd6a729, false, false);
+    }
+    for (const sgn of [1, -1]) b.box('fixed', sgn * 0.655, 1.465, -0.30, 0.04, 0.064, 2.04, 0x292928);
+    // The bowed vinyl curtain wraps the back corners. Its rubber welt surrounds an actual
+    // opening, so the back of the driver's head and the road ahead show through the plastic.
+    const curtain = (w, low, high, rt, rb, offset = 0) =>
+      roundRect(w, low, high, rt, rb, 0.975).map(([x, y]) =>
+        [x, y, -1.353 + 0.095 * (Math.abs(x) / 0.65) ** 2 + offset]);
+    const hem = curtain(0.652, 0.80, 1.57, 0.09, 0.045);
+    const welt = curtain(0.435, 1.055, 1.477, 0.08, 0.07, -0.005);
+    const pane = curtain(0.403, 1.09, 1.445, 0.07, 0.055);
+    for (const p of pane) p[2] = -1.35;
+    for (let i = 0; i < hem.length; i++) {
+      const j = (i + 1) % hem.length;
+      b.quad('fixed', hem[i], welt[i], welt[j], hem[j], 0x292925);
+      b.quad('fixed', welt[i], pane[i], pane[j], welt[j], 0x555449);
+      b._tri('glass', [0, 1.27, -1.35], pane[j], pane[i], GLASS);
+    }
+    for (const x of [-0.54, -0.23, 0.23, 0.54]) b.cyl('fixed', x, 0.843, -1.36 + 0.095 * (x / 0.65) ** 2, 0.014, 0.015, 'z', 6, CHROME);
+    for (const side of [-1, 1]) {
+      b.bar('fixed', [0.56 * side, 0.86, -1.29], [0.43 * side, 1.02, -1.32], 0.007, 0x565247);
+      b.box('fixed', side * 0.62, 0.29, -0.15, 0.19, 0.055, 0.68, 0x61625b);
+    }
     for (const sgn of [1, -1]) { b.bar('fixed', [sgn * 0.64, 0.84, 0.6], [sgn * 0.64, 1.45, 0.7], 0.022, BLACK); b.bar('fixed', [sgn * 0.64, 0.84, -1.28], [sgn * 0.64, 1.45, -1.3], 0.022, BLACK); }
     // Windscreen in a black frame, wiper, handlebar and mirrors.
     b.box('fixed', 0, 1.29, 0.7, 1.06, 0.46, 0.03, GLASS);
@@ -311,29 +405,47 @@ const BUILDERS = {
     for (const sgn of [1, -1]) { b.bar('fixed', [sgn * 0.3, 1.12, 0.48], [sgn * 0.42, 1.36, 0.52], 0.01, BLACK); b.box('fixed', sgn * 0.44, 1.4, 0.52, 0.12, 0.08, 0.02, CHROME); }
     // Seats: the passengers' bench and backrest, the driver's saddle.
     b.box('fixed', 0, 0.86, -0.75, 1.2, 0.16, 0.6, 0x2b211d);
-    b.box('fixed', 0, 1.16, -1.16, 1.2, 0.5, 0.12, 0x2b211d);
+    b.box('fixed', 0, 1.03, -1.16, 1.16, 0.28, 0.12, 0x392f28);
     b.box('fixed', 0, 0.88, 0.16, 0.42, 0.12, 0.42, 0x2b211d);
     // Lamps, indicators, number plate.
     b.box('lights', 0, 0.86, 1.25, 0.2, 0.17, 0.08, HEAD);
-    for (const sgn of [1, -1]) { b.box('lights', sgn * 0.28, 0.98, 1.06, 0.07, 0.05, 0.05, AMBER); b.box('lights', sgn * 0.55, 0.62, -1.3, 0.14, 0.12, 0.04, TAIL); }
-    b.box('fixed', 0, 0.5, -1.31, 0.48, 0.13, 0.02, PLATE_Y);
+    for (const sgn of [1, -1]) {
+      b.box('lights', sgn * 0.28, 0.98, 1.06, 0.07, 0.05, 0.05, AMBER);
+      b.box('fixed', sgn * 0.50, 0.59, -1.285, 0.19, 0.205, 0.047, 0x202424);
+      b.box('lights', sgn * 0.50, 0.57, -1.315, 0.155, 0.108, 0.024, TAIL);
+      b.box('lights', sgn * 0.50, 0.655, -1.315, 0.155, 0.04, 0.024, AMBER);
+    }
+    // Meter next to the driver's right hand and a rub strip round the rear tub.
+    b.box('fixed', -0.34, 1.105, 0.58, 0.20, 0.13, 0.12, 0x23292b);
+    b.box('fixed', -0.34, 1.12, 0.512, 0.14, 0.055, 0.014, 0x8aada0);
+    b.box('fixed', 0, 0.765, -1.30, 1.11, 0.036, 0.022, 0xe8b43b);
+    for (const y of [0.624,0.668,0.712]) b.box('fixed', 0, y, -1.291, 0.45, 0.018, 0.027, 0x5b625e);
+    b.box('fixed', 0, 0.39, -1.30, 1.14, 0.065, 0.065, 0x606967);
+    registration(b, 0.5, -1.318, -1, '6329', PLATE_Y);
     b.box('fixed', 0, 0.6, 1.31, 0.3, 0.1, 0.02, PLATE_Y);
     return { b, wheels: [[0.6, -0.8, 0.23, false, 0.16], [-0.6, -0.8, 0.23, false, 0.16], [0, 1.15, 0.23, true, 0.14]], seat: { x: 0, y: 0.82, z: 0.18, pose: 'sit' }, passengers: [[0.3, 0.88, -0.75], [-0.3, 0.88, -0.75]] };
   },
   bike() {
     const b = new VB();
-    b.box('paint', 0, 0.86, 0.22, 0.3, 0.2, 0.46, 0);
-    b.box('paint', 0, 0.72, -0.15, 0.22, 0.2, 0.4, 0);
-    b.box('fixed', 0, 0.9, -0.3, 0.26, 0.08, 0.62, BLACK);
-    b.box('fixed', 0, 0.5, 0.08, 0.26, 0.3, 0.42, GREY);
-    b.box('fixed', -0.16, 0.42, -0.4, 0.08, 0.08, 0.6, CHROME);
+    const tank = [[-0.13, 0.09, 0.77, 0.89], [0.02, 0.16, 0.76, 0.98],
+      [0.22, 0.19, 0.74, 1.0], [0.36, 0.15, 0.77, 0.96], [0.44, 0.08, 0.8, 0.89]];
+    b.loft(tank.map(([z, w, low, high]) => ({ z, pts: roundRect(w, low, high, 0.12, 0.045, 0.9, 2) })), () => 'paint');
+    b.cyl('fixed', 0, 1.002, 0.18, 0.043, 0.012, 'y', 8, CHROME);
+    b.extrude('paint', [[-0.74, 0.77], [-0.26, 0.63], [-0.06, 0.69], [0.01, 0.84], [-0.71, 0.86]], -0.12, 0.12, 0);
+    b.extrude('fixed', [[-0.72, 0.84], [-0.15, 0.82], [-0.04, 0.85], [-0.08, 0.89], [-0.42, 0.9], [-0.7, 0.94]], -0.14, 0.14, BLACK);
+    b.cyl('fixed', 0, 0.45, 0.04, 0.13, 0.31, 'x', 10, GREY);
+    b.box('fixed', 0, 0.58, 0.14, 0.20, 0.21, 0.17, 0x2b3031);
+    for (const y of [0.53, 0.57, 0.61, 0.65]) b.box('fixed', 0, y, 0.14, 0.24, 0.018, 0.2, 0x899294);
+    b.cyl('fixed', -0.19, 0.43, -0.43, 0.053, 0.54, 'z', 8, CHROME);
     b.box('paint', 0, 0.68, -0.72, 0.16, 0.06, 0.32, 0);
     b.box('paint', 0, 0.66, 0.66, 0.14, 0.05, 0.3, 0);
     for (const s of [1, -1]) {
-      const g = new THREE.CylinderGeometry(0.025, 0.025, 0.7, 5);
-      g.rotateX(0.35); g.translate(s * 0.07, 0.68, 0.56);
-      const p = (g.index ? g.toNonIndexed() : g).attributes.position.array;
-      for (let i = 0; i < p.length; i += 9) b._tri('fixed', [p[i], p[i + 1], p[i + 2]], [p[i + 3], p[i + 4], p[i + 5]], [p[i + 6], p[i + 7], p[i + 8]], CHROME);
+      b.bar('fixed', [s * 0.078, 0.31, 0.64], [s * 0.078, 1.01, 0.44], 0.024, CHROME);
+      b.bar('fixed', [s * 0.1, 0.31, -0.63], [s * 0.1, 0.44, -0.04], 0.032, GREY);
+      b.bar('fixed', [s * 0.105, 0.35, -0.56], [s * 0.105, 0.78, -0.37], 0.025, CHROME);
+      b.bar('fixed', [s * 0.28, 1.03, 0.44], [s * 0.34, 1.20, 0.48], 0.009, GREY);
+      b.box('fixed', s * 0.36, 1.22, 0.48, 0.13, 0.065, 0.026, BLACK);
+      b.box('fixed', s * 0.36, 1.22, 0.464, 0.11, 0.049, 0.008, CHROME);
     }
     b.box('fixed', 0, 1.02, 0.44, 0.72, 0.04, 0.04, BLACK);
     b.box('lights', 0, 0.92, 0.6, 0.16, 0.14, 0.08, HEAD);
@@ -347,7 +459,17 @@ const BUILDERS = {
     const b = new VB();
     b.extrude('paint', [[0.42, 0.25], [0.62, 0.3], [0.68, 1.0], [0.52, 1.06], [0.4, 0.4]], -0.2, 0.2, 0);
     b.box('fixed', 0, 0.32, 0.0, 0.3, 0.06, 0.5, GREY);
-    b.extrude('paint', [[-0.82, 0.28], [-0.2, 0.28], [-0.12, 0.7], [-0.9, 0.78]], -0.2, 0.2, 0);
+    const shell = [[-0.91, 0.1, 0.62, 0.74], [-0.78, 0.19, 0.50, 0.79], [-0.53, 0.215, 0.47, 0.78],
+      [-0.31, 0.19, 0.34, 0.73], [-0.12, 0.14, 0.31, 0.67]];
+    b.loft(shell.map(([z, w, low, high]) => ({ z, pts: roundRect(w, low, high, 0.08, 0.08, 0.9, 2) })), () => 'paint');
+    b.bar('fixed', [-0.13, 0.24, -0.62], [-0.13, 0.32, -0.15], 0.055, GREY);
+    b.cyl('fixed', 0.15, 0.32, -0.60, 0.058, 0.42, 'z', 8, 0x3e4142);
+    for (const s of [1, -1]) {
+      b.bar('fixed', [s * 0.072, 0.24, 0.62], [s * 0.072, 0.52, 0.56], 0.024, GREY);
+      b.bar('fixed', [s * 0.25, 1.07, 0.50], [s * 0.32, 1.23, 0.52], 0.009, GREY);
+      b.box('fixed', s * 0.34, 1.24, 0.52, 0.13, 0.068, 0.028, BLACK);
+      b.box('fixed', s * 0.34, 1.24, 0.504, 0.11, 0.051, 0.008, CHROME);
+    }
     b.box('fixed', 0, 0.82, -0.48, 0.28, 0.08, 0.6, BLACK);
     b.box('fixed', 0, 1.06, 0.5, 0.66, 0.05, 0.05, BLACK);
     b.box('lights', 0, 0.98, 0.6, 0.14, 0.1, 0.06, HEAD);
@@ -359,14 +481,28 @@ const BUILDERS = {
   },
   bus() {
     const b = new VB();
-    b.box('paint', 0, 1.7, 0, 2.5, 2.5, 10.6, 0);
+    const wheels = wheels4(3.4, -2.4, 1.08, 0.5, 0.32);
+    wheelWells(b, wheels, 1.25, -5.3, 5.3, 2, [], (z, arch) =>
+      roundRect(1.25, Math.max(0.45, arch), 2.95, 0.12, 0.045, 1, 1));
     b.box('fixed', 0, 3.0, 0, 2.42, 0.12, 10.4, 0xece6d6);
     for (const s of [1, -1]) {
       b.box('fixed', s * 1.252, 1.48, 0, 0.012, 0.12, 10.5, 0xf2c230);
       b.box('fixed', s * 1.253, 2.12, -0.2, 0.012, 0.66, 9.2, GLASS);
       for (let z = -4.6; z < 4.6; z += 1.15) b.box('paint', s * 1.256, 2.12, z, 0.014, 0.66, 0.1, 0);
-      b.box('fixed', s * 1.252, 0.62, 0, 0.012, 0.2, 10.5, 0x2a2a2a);
+      b.box('fixed', s * 1.258, 2.32, -0.20, 0.012, 0.027, 9.20, 0x929b9b);
+      for (const [from, to] of [[-5.25, -3.0], [-1.8, 2.8], [4, 5.25]]) {
+        b.box('fixed', s * 1.25, 0.62, (from + to) / 2, 0.012, 0.18, to - from, 0x323638);
+      }
     }
+    // A folding passenger door on the kerb side, rubber seals and a low metal step.
+    for (const centre of [2.28, 2.68]) {
+      b.box('fixed', 1.26, 1.47, centre, 0.023, 1.84, 0.40, 0x34383a);
+      b.box('fixed', 1.274, 1.90, centre, 0.012, 0.80, 0.32, GLASS);
+      b.box('paint', 1.275, 1.13, centre, 0.013, 0.53, 0.32, 0);
+    }
+    b.box('fixed', 1.28, 0.52, 2.47, 0.09, 0.065, 0.85, CHROME);
+    for (let i = 0; i < 4; i++) b.box('fixed', -1.257, 1.05 + i * 0.08, -4.15, 0.018, 0.035, 1.35, 0x3d4141);
+    b.box('fixed', 0, 3.095, -0.7, 0.8, 0.09, 1.12, 0xb8b8ae);
     b.box('fixed', 0, 2.05, 5.31, 2.3, 1.0, 0.02, GLASS);
     b.box('lights', 0, 2.75, 5.31, 1.6, 0.26, 0.03, 0xffb347);
     b.box('fixed', 0, 0.62, 5.32, 2.4, 0.3, 0.06, GREY);
@@ -377,7 +513,7 @@ const BUILDERS = {
     }
     b.box('fixed', 0, 0.85, -5.33, 0.5, 0.13, 0.02, PLATE_Y);
     b.box('fixed', 0, 0.62, 5.36, 0.5, 0.13, 0.02, PLATE_Y);
-    return { b, wheels: wheels4(3.4, -2.4, 1.08, 0.5, 0.32), seat: { x: -0.75, y: 1.0, z: 4.4, pose: 'sit' } };
+    return { b, wheels, seat: { x: -0.75, y: 1.0, z: 4.4, pose: 'sit' } };
   },
   truck() {
     const b = new VB();

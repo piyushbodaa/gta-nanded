@@ -327,6 +327,7 @@ export class Traffic {
     // Up and over a speed breaker, nose first.
     const fx = Math.sin(heading), fz = Math.cos(heading), half = v.spec.wheelbase / 2;
     const hf = B.heightAt(x + fx * half, z + fz * half), hr = B.heightAt(x - fx * half, z - fz * half);
+    v.deckY = y;
     v.y = y + (hf + hr) / 2;
     v.bumpPitch = Math.atan2(hf - hr, 2 * half);
     v.vx = (x - v.x) / Math.max(dt, 1e-4); v.vz = (z - v.z) / Math.max(dt, 1e-4);
@@ -335,16 +336,22 @@ export class Traffic {
     const dh = wrapAngle(heading - v.heading), turn = dh * clamp(dt * 10, 0, 1);
     v.heading = wrapAngle(v.heading + turn);
     v.w = 0;
-    v.steer = clamp(dh * 3, -0.5, 0.5);
-    v.wheelSpin += (a.speed / (v.spec.wheelR || 0.3)) * dt;
-    v.braking = a.speed < a.cruise * 0.5 && a.speed > 0.2;
-    if (v.spec.two) v.lean = clamp(v.steer * 0.8 * Math.min(1, a.speed / 6), -0.4, 0.4);
-    // The body rolls out of a turn, dips its nose braking and squats pulling away, as driven ones do.
     if (dt > 0) {
+      const yawRate = turn / dt;
       const acc = (a.speed - (a.lastSpeed ?? a.speed)) / dt;
       a.lastSpeed = a.speed;
-      v.roll += (clamp((a.speed * turn / dt) * 0.011, -0.07, 0.07) - v.roll) * clamp(dt * 6, 0, 1);
-      v.pitch += (clamp(-acc * 0.011, -0.06, 0.06) - v.pitch) * clamp(dt * 6, 0, 1);
+      const response = -Math.expm1(-dt * 8);
+      v.latAcc += (-a.speed * yawRate - v.latAcc) * response;
+      v.longAcc += (acc - v.longAcc) * response;
+      const steer = Math.atan2(v.spec.wheelbase * yawRate, Math.max(a.speed, 1));
+      v.steer += (clamp(steer, -v.spec.steerLock, v.spec.steerLock) - v.steer) * response;
+      v.braking = acc < -0.65 || a.speed < 0.15;
+      const spin = a.speed * dt / v.spec.wheelR;
+      v.wheelSpin += spin;
+      v.rearWheelSpin += spin;
+      v.roll += (clamp(-v.latAcc * 0.011, -0.07, 0.07) - v.roll) * response;
+      v.pitch += (clamp(-v.longAcc * 0.011, -0.06, 0.06) - v.pitch) * response;
+      if (v.spec.two) v.lean += (clamp(Math.atan2(-v.latAcc, 9.81), -0.6, 0.6) - v.lean) * response;
     }
   }
 

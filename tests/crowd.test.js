@@ -36,9 +36,20 @@ test('the whole crowd is two meshes, and each person is a row of bones, colours 
   // The woman: hair (with a bun or long hair) and a sari or a kurta.
   const w = row(1);
   assert.ok(mask(w) & 1 && (mask(w) & 2 || mask(w) & 4) && (mask(w) & 128 || mask(w) & 256));
-  // A hundred metres off, the limbs are left out.
-  assert.equal(mask(row(2)) & 1024, 0);
-  void far; void woman;
+  // A hundred metres off the simpler body still has working legs. Its feet remain on the
+  // street, and opposing feet move apart as the distant walker takes a stride.
+  assert.ok(mask(row(2)) & 1024);
+  const feet = [9, 12].map(bone => at => humans.data[far._row + bone * 12 + at]);
+  for (const foot of feet) assert.ok(foot(7) > 0 && foot(7) < 0.15);
+  far.speed = 1.5; far.pose = 'walk';
+  let separation = 0;
+  for (let i = 0; i < 100; i++) {
+    far.z -= 0.025; far.yaw = Math.PI;
+    humans.update(1 / 60, { x: 10, z: 10 }, null);
+    separation = Math.max(separation, Math.abs(feet[0](11) - feet[1](11)));
+  }
+  assert.ok(separation > 0.35, 'both legs move across the distant silhouette');
+  void woman;
 });
 
 test('only the instances in use are sent to the graphics chip', () => {

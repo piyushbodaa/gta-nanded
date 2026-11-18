@@ -15,7 +15,7 @@ export function createBody(type, x, z, heading) {
     vx: 0, vz: 0, w: 0, steer: 0, rpm: 0, gear: 1,
     mass: s.mass, inertia: s.mass * (s.L * s.L + s.W * s.W) / 12 * 1.05,
     a, b, hw: s.W / 2, hd: s.L / 2,
-    health: 1000, wheelSpin: 0, slip: 0, longAcc: 0, latAcc: 0, pitch: 0, roll: 0, lean: 0,
+    health: 1000, wheelSpin: 0, rearWheelSpin: 0, slip: 0, longAcc: 0, latAcc: 0, pitch: 0, roll: 0, lean: 0,
     throttle: 0, brake: 0, handbrake: false, braking: false, reversing: false,
     onFire: 0, wrecked: false, airborne: 0, vy: 0,
   };
@@ -175,7 +175,9 @@ export function stepBody(v, ctl, dt, assist = 1) {
   v.heading = wrapAngle(v.heading + v.w * dt);
   v.x += v.vx * dt;
   v.z += v.vz * dt;
-  v.wheelSpin += (nF / (s.wheelR || 0.3)) * dt;
+  const spin = (nF / s.wheelR) * dt;
+  v.wheelSpin += spin;
+  if (!ctl.handbrake) v.rearWheelSpin += spin;
   v.throttle = drive; v.brake = brake; v.handbrake = Boolean(ctl.handbrake);
 
   // Suspension feel: nose dips under braking, squats on throttle, body rolls in corners.

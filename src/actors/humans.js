@@ -473,6 +473,9 @@ vec3 crowdPaint(vec3 col) {
     col = mix(col, sneaker ? vec3(0.72, 0.7, 0.66) : ${vec3(FIXED.sole)}, 1.0 - smoothstep(-0.047 - fw, -0.047 + fw, y));
     col *= 1.0 - (sneaker ? 0.3 : 0.15) * crowdIn(abs(y + 0.043), 0.0012);
     if (sneaker) {
+      float heel = 1.0 - smoothstep(-0.066, -0.04, P.z);
+      col = mix(col, vCrowdTrim * 1.6, heel * smoothstep(-0.034, -0.028, y) * 0.65);
+      col = mix(col, vec3(0.13, 0.115, 0.105), 1.0 - smoothstep(-0.054 - fw, -0.054 + fw, y));
       float lx = abs(P.x - (P.x > 0.0 ? ${J.footL[0].toFixed(4)} : ${J.footR[0].toFixed(4)}));
       float lace = crowdIn(abs(fract(P.z / 0.013) - 0.5), 0.12) * crowdIn(lx, 0.011) * step(0.035, P.z) * step(P.z, 0.11) * step(-0.03, y);
       col = mix(col, vCrowdTrim, lace * 0.8);
@@ -532,7 +535,7 @@ export class Humans {
     // A soft patch of shade under everyone on their feet, for settings whose shadow map doesn't
     // follow moving people (without it they float). One draw call for the whole crowd.
     const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-    this.blobs = new THREE.InstancedMesh(plane, new THREE.MeshBasicMaterial({ map: radialTexture(64), color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }), capacity);
+    this.blobs = new THREE.InstancedMesh(plane, new THREE.MeshBasicMaterial({ map: radialTexture(64), color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }), capacity + 2);
     this.blobs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.blobs.count = 0; this.blobs.frustumCulled = false; this.blobs.renderOrder = 1;
     this.blobs.material.polygonOffset = true; this.blobs.material.polygonOffsetFactor = -1; this.blobs.material.polygonOffsetUnits = -2;
@@ -657,23 +660,43 @@ export class Humans {
     for (const h of vis) counts[bucket(h)]++;
     start[0] = 0;
     for (let k = 1; k < 8; k++) start[k] = start[k - 1] + counts[k - 1];
-    let blobs = 0;
+    let blobs = 0, contacts = 0;
     for (const h of vis) {
       const d2 = h._d2;
       this._at = start[bucket(h)]++ * BLOCK * 4;
       // Where weapon-fx.js finds this person's bones (the rows are re-sorted every frame).
       h._row = this._at; h._lod = h.hero ? 0 : d2 > 3600 ? 2 : d2 > 900 ? 1 : 0;
-      // Close up the whole body moves; a street away hands stay off handlebars; far off only the body shows.
+      // A street away, keep hands near the bars. Farther out, keep a moving silhouette.
       animate(h, dt, h._lod);
-      this._pose(h, h._lod === 2);
+      this._pose(h);
       // Seated riders and drivers are covered by their vehicle's shade.
       if (this.blobsOn && d2 < blobD2 && h.pose !== 'sit' && h.pose !== 'ride') {
         const lying = h.pose === 'lie', s = h.outfit.scale || 1, A = h.anim, mid = A.out[C.RZ] * 0.5 * s;
         _e.set(0, h.yaw, 0); _q.setFromEuler(_e);
         // Under the body, which lies off its feet's spot; above the road surface (6-7 cm).
-        _v.set(h.x + A.root.x + Math.sin(h.yaw) * mid, h.y + A.root.y + 0.09, h.z + A.root.z + Math.cos(h.yaw) * mid);
+        let shadeY = (h.floor ?? h.y) + 0.09;
+        if (h.footSurface && A.family === 'ground') {
+          shadeY = (h.air ? h.footSurface(h.x, h.z) : Math.min(A.feet[0].surfaceY, A.feet[1].surfaceY)) + 0.008;
+        }
+        _v.set(h.x + A.root.x + Math.sin(h.yaw) * mid, shadeY, h.z + A.root.z + Math.cos(h.yaw) * mid);
         _s.set((lying ? 1.1 : 1.35) * s, 1, (lying ? 2.3 : 1.35) * s);
         this.blobs.setMatrixAt(blobs++, _m.compose(_v, _q, _s));
+        _s.set(1, 1, 1);
+      }
+      // Contact shade at the hero's soles stays on the actual tread even under a coarse
+      // shadow map. As each shoe lifts, its small shadow fades into the broader body shadow.
+      if (h.hero && h.footSurface && !h.air && h.anim.family === 'ground' && contacts === 0) {
+        _e.set(0, h.yaw + h.anim.root.yaw, 0); _q.setFromEuler(_e);
+        for (let side = 0; side < 2; side++) {
+          const foot = h.anim.feet[side], o = h._row + (side === 0 ? B.footL : B.footR) * 12, d = this.data;
+          const soleY = d[o + 7] - BODY.ankle * d[o + 5] + 0.04 * d[o + 6];
+          const weight = 1 - smooth(0.015, 0.15, Math.abs(soleY - foot.surfaceY));
+          if (weight <= 0) continue;
+          _v.set(d[o + 3] + 0.04 * d[o + 2], foot.surfaceY + 0.006, d[o + 11] + 0.04 * d[o + 10]);
+          _s.set(0.33 * weight * h.outfit.scale, 1, 0.46 * weight * h.outfit.scale);
+          this.blobs.setMatrixAt(blobs++, _m.compose(_v, _q, _s));
+          contacts++;
+        }
         _s.set(1, 1, 1);
       }
     }
@@ -709,14 +732,14 @@ export class Humans {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, BLOCK, this.n, gl.RGBA, gl.FLOAT, this.data, 0);
   }
 
-  _pose(h, far) {
+  _pose(h) {
     const o = h.outfit, f = o.flags, sc = o.scale;
     // Colours, which of the optional parts this person shows, and their build and style.
     const d = this.data, at = this._at + COLOURS * 4;
     let mask = f.has('turban') ? SHOW.turban : SHOW.hair | (f.has('bun') ? SHOW.bun : 0) | (f.has('long') ? SHOW.long : 0);
     if (f.has('beard')) mask |= SHOW.beard; else if (f.has('moustache')) mask |= SHOW.moustache;
     for (const k of EXTRAS) if (f.has(k)) mask |= SHOW[k];
-    if (!far) mask |= SHOW.limbs; // limbs are a few pixels at range: skip them
+    mask |= SHOW.limbs;
     for (let k = 0; k < 4; k++) {
       d[at + k * 4] = o[SLOTS[k * 3]] ?? 0; d[at + k * 4 + 1] = o[SLOTS[k * 3 + 1]] ?? 0; d[at + k * 4 + 2] = o[SLOTS[k * 3 + 2]] ?? 0;
       d[at + k * 4 + 3] = mask;
@@ -735,11 +758,15 @@ export class Humans {
     bone(d, row + B.hips * 12, m, 0, rotYXZ(_l, P[C.PP], P[C.PW], P[C.PR]), P[C.PX], 0, P[C.PZ]);
     bone(d, row + B.torso * 12, d, row + B.hips * 12, rotYXZ(_l, P[C.TP], P[C.TW], P[C.TR]), 0, BODY.torsoY, 0);
     bone(d, row + B.head * 12, d, row + B.torso * 12, rotYXZ(_l, P[C.HP], P[C.HW], P[C.HR]), 0, BODY.neck, 0);
-    // A sari or kurta follows the thighs: out over them when sitting, gathering shorter as it goes.
+    // Hems follow the thighs when sitting. On foot they swing a little behind the hips and
+    // trail a turn; the same skirt bone carries both the simple and the detailed garment.
     const fold = Math.max(0, (P[C.HF] + P[C.HF + 1]) * 0.42), gather = 1 - 0.42 * smooth(0.3, 1.25, fold);
-    rotX(_l, -fold); _l[1] *= gather; _l[5] *= gather; _l[9] *= gather;
+    if ((f.has('skirt') || f.has('kurta')) && A.family === 'ground') {
+      const swing = smooth(0.15, 2.4, A.spd) * (f.has('skirt') ? 1 : 0.65);
+      rotYXZ(_l, -fold, swing * (0.105 * Math.cos(A.ph - 0.55) - 0.035 * clamp(A.turn, -3, 3)), swing * 0.054 * Math.sin(A.ph - 0.55));
+    } else rotX(_l, -fold);
+    _l[1] *= gather; _l[5] *= gather; _l[9] *= gather;
     bone(d, row + B.skirt * 12, d, row + B.hips * 12, _l, 0, 0, 0);
-    if (far) return;
     // Arms: the shoulder comes forward with a reach, and up with an arm raised overhead.
     for (let s = 0; s < 2; s++) {
       const side = s === 0 ? 1 : -1, ua = s === 0 ? B.upperArmL : B.upperArmR, sf = P[C.SF + s];
