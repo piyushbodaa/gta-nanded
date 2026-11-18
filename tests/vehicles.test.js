@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { world } from './helpers.js';
 import { Vehicles } from '../src/actors/vehicles.js';
+import { Humans, makeOutfit } from '../src/actors/humans.js';
 import { vehicleModel } from '../src/actors/vehicle-models.js';
 import { createBody, speedOf, forwardSpeed, stepBody } from '../src/actors/vehicle-physics.js';
 import { Player } from '../src/actors/player.js';
@@ -350,6 +351,34 @@ function rendererVehicles(t, colliders = OPEN) {
   t.after(() => { if (doc) globalThis.document = doc; else delete globalThis.document; });
   return new Vehicles(new THREE.Scene(), humans(), colliders, FLAT);
 }
+
+test('riders stay on their saddles as a bike or scooter banks in either direction', t => {
+  const V = rendererVehicles(t);
+  V.humans = new Humans(V.scene, 4);
+  const cam = { x: 3, z: 0 }, chassis = new THREE.Matrix4();
+  for (const type of ['bike', 'scooter']) {
+    const v = V.spawn(type, 2, -1, 0.9, { driver: false });
+    const driver = V.seatDriver(v, makeOutfit('player', 1));
+    const passenger = V.addPassenger(v, makeOutfit('woman', 3));
+    v.vz = 10;
+    const s = v.model.seat;
+    for (const lean of [0.65, -0.65, 0]) {
+      v.lean = lean;
+      v.pitch = 0.045;
+      V.render(1 / 60, cam);
+      V.humans.update(1 / 60, cam);
+      V.meshes[type].fixed.getMatrixAt(0, chassis);
+      for (const [h, seat] of [[driver, [s.x, s.y, s.z]], [passenger, v.model.passengers[0]]]) {
+        const saddle = new THREE.Vector3(...seat).applyMatrix4(chassis);
+        const d = V.humans.data, hip = h._row; // the hips are the first bone in the row
+        const pelvis = new THREE.Vector3(d[hip + 3], d[hip + 7], d[hip + 11]);
+        const error = pelvis.distanceTo(saddle);
+        assert.ok(error < 1e-5, `${type} ${h.outfit.kind} at lean ${lean}: ${error.toFixed(3)} m off the saddle`);
+      }
+    }
+    V.remove(v);
+  }
+});
 
 test('dipped beams originate at the lenses, steer on a bike, and stop at a wall', t => {
   const wallZ = 8;

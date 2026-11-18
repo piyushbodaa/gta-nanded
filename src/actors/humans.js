@@ -9,7 +9,8 @@ import { radialTexture } from '../world/citymat.js';
 import { sendFirst } from '../core/buffers.js';
 import { animate, C, BODY } from './anim.js';
 import { makeUmbrellas, placeUmbrella } from './umbrellas.js';
-import { BONES, SLOTS, SHOW, FIXED, JOINTS, REGION, ROUGH, WOMENS, HAIRLINE, BEARDLINE, farGeometry, nearGeometry } from './people-models.js';
+import { BONES, SLOTS, SHOW, FIXED, JOINTS, REGION, ROUGH, HAIRLINE, BEARDLINE, farGeometry, nearGeometry } from './people-models.js';
+import { sunnyTextures, SUNNY_PAINT } from './sunny-material.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // Flags that show a part as they are (hair, beards and turbans are worked out in _pose).
@@ -75,7 +76,7 @@ export function makeOutfit(kind, seed) {
       break;
     case 'player':
       // An orange check shirt, blue jeans, white sneakers.
-      o.skin = 0xa0672c; o.hair = 0x16110d; o.shirt = 0xd9622b; o.sleeve = o.shirt; o.pants = 0x2c4a72; o.legs = o.pants; o.shoes = 0xf4f4f2; o.scale = 0.96;
+      o.skin = 0xbd8560; o.hair = 0x211b19; o.shirt = 0xb2482e; o.sleeve = o.shirt; o.pants = 0x2c4a72; o.legs = o.pants; o.shoes = 0xe6dfd5; o.scale = 0.96;
       o.flags.delete('moustache'); o.flags.add('stubble');
       break;
     default:
@@ -319,8 +320,7 @@ const J = JOINTS, R = REGION;
 /** A GLSL function of the keyframed curve people-models.js grows hair along (see along()). */
 const curve = (name, keys) => `float ${name}(float a) {\n  float y = ${keys[0][1].toFixed(3)};\n` +
   keys.slice(0, -1).map((k, i) => `  y = mix(y, ${keys[i + 1][1].toFixed(3)}, smoothstep(${k[0].toFixed(3)}, ${keys[i + 1][0].toFixed(3)}, a));`).join('\n') + '\n  return y;\n}\n';
-// headX: the skull's half-width (narrower on the player's own body); faces and hair are painted
-// as on the crowd's skull, stretched across to it.
+// The procedural face uses the crowd's coordinates, including as the player's loading fallback.
 const nearPaint = (headX = 0.091) => /* glsl */`
 const vec3 CROWD_HEAD = ${v3(J.head)};
 const vec3 CROWD_GOLD = ${vec3(FIXED.gold)};
@@ -521,10 +521,10 @@ export class Humans {
       this._mesh('human-crowd', far, far.index, crowdData, null),
     ];
     this.far = this.meshes[2];
-    // Then the heroes (the player): a man's body twice as finely cut, its head narrower.
+    // Sunny has his own garments and head, animated by the same bones as the crowd.
     this.hero = null;
     if (hero) {
-      const hb = nearGeometry({ detail: 2, headX: HERO_HEAD_X, leaves: [WOMENS] });
+      const hb = nearGeometry({ player: true, detail: 2, headX: HERO_HEAD_X, leaves: [~(SHOW.hair | SHOW.collar | SHOW.shoes | SHOW.limbs)] });
       this.hero = this._mesh('human-hero', hb.geometry, hb.men, crowdData, joints, true);
       this.meshes.push(this.hero);
     }
@@ -552,9 +552,10 @@ export class Humans {
   /** One of the crowd meshes: its material, shadow material, and the run of rows it draws. */
   _mesh(name, body, index, crowdData, joints, hero = false) {
     const detailed = !!joints, base = { value: 0 };
+    const textures = hero ? sunnyTextures() : null;
     const uniforms = sh => { sh.uniforms.crowdData = crowdData; sh.uniforms.crowdBase = base; if (detailed) sh.uniforms.crowdJ = joints; };
     const mat = hero
-      ? new THREE.MeshPhysicalMaterial({ metalness: 0, sheen: 0.5, sheenRoughness: 0.75, sheenColor: 0xffffff })
+      ? new THREE.MeshPhysicalMaterial({ metalness: 0, sheen: 0.22, sheenRoughness: 0.82, sheenColor: 0xcdb298 })
       : new THREE.MeshStandardMaterial({ metalness: 0 });
     mat.onBeforeCompile = sh => {
       uniforms(sh);
@@ -563,9 +564,12 @@ export class Humans {
         sh.vertexShader = NEAR_PARS + 'attribute vec2 crowdUV;\n' + v + sh.vertexShader
           .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + NEAR_FETCH + NEAR_NORMAL + (hero ? HERO_NORMAL : ''))
           .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + NEAR_POSITION);
-        sh.fragmentShader = v + nearPaint(hero ? HERO_HEAD_X : undefined) + sh.fragmentShader
-          .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= crowdPaint(vCrowdColor);')
-          .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vCrowdRough;');
+        if (hero) Object.assign(sh.uniforms, textures);
+        sh.fragmentShader = v + nearPaint(hero ? HERO_HEAD_X : undefined) + (hero ? SUNNY_PAINT : '') + sh.fragmentShader
+          .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb *= ${hero ? 'sunnyPaint' : 'crowdPaint'}(vCrowdColor);`)
+          .replace('#include <roughnessmap_fragment>', hero
+            ? `float roughnessFactor = vCrowdRegion == ${R.face} ? mix(0.70, 0.54, smoothstep(0.02, 0.22, diffuseColor.g)) : vCrowdRough;`
+            : 'float roughnessFactor = vCrowdRough;');
         if (hero) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_fragment>', HERO_SHEEN).replace('#include <opaque_fragment>', HERO_SKIN);
       } else {
         sh.vertexShader = CROWD_PARS + sh.vertexShader

@@ -77,4 +77,5 @@ function show({ kinds = ['man', 'woman', 'sikh', 'student', 'elder', 'farmer', '
 window.show = show; window.humans = humans; window.renderer = renderer; window.camera = camera; window.scene = scene;
 const params = new URLSearchParams(location.search);
 show(params.has('o') ? JSON.parse(params.get('o')) : {});
+THREE.DefaultLoadingManager.onLoad = () => renderer.render(scene, camera);
 window.ready = true;

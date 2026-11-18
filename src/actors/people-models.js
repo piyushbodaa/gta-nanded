@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BODY } from './anim.js';
+import { sunnyJeans, sunnyShirt } from './sunny-model.js';
 
 // ------------------------------------------------------------------ skeleton and slots
 // The skeleton's bones; every part hangs from one (the limbs from one each side). A sari or kurta
@@ -28,7 +29,7 @@ export const ROUGH = { cloth: 0.86, skin: 0.55, hair: 0.42, leather: 0.5 };
 export const WOMENS = SHOW.skirt | SHOW.dupatta | SHOW.long | SHOW.bun | SHOW.gajra;
 export const MENS = SHOW.beard | SHOW.moustache | SHOW.dastar | SHOW.pheta | SHOW.topi | SHOW.pcap | SHOW.collar | SHOW.belt;
 // What the detailed body's fragment shader paints on a part (crowdSkin.z).
-export const REGION = { plain: 0, face: 1, shirt: 2, sleeveL: 3, sleeveR: 4, sari: 5, pallu: 6, kurta: 7, dupatta: 8, shoe: 9, belt: 10, pcap: 11, turban: 12, hair: 13, shortL: 14, shortR: 15, pants: 16 };
+export const REGION = { plain: 0, face: 1, shirt: 2, sleeveL: 3, sleeveR: 4, sari: 5, pallu: 6, kurta: 7, dupatta: 8, shoe: 9, belt: 10, pcap: 11, turban: 12, hair: 13, shortL: 14, shortR: 15, pants: 16, collar: 17 };
 
 // Where each bone's joint sits in the bind pose (the hips' frame: y up, +z forward, +x the left).
 export const JOINTS = (() => {
@@ -574,7 +575,7 @@ function legBones(side, dy, z) {
 // --- head: skull, jaw and the relief a painted face sits on
 const HEAD_Y = 0.175, HEAD_Z = 0.004;
 /** The skull's surface in the direction of unit vector (x, y, z), from the head's centre. */
-function skull(x, y, z) {
+function skull(x, y, z, player) {
   const ax = Math.abs(x);
   let X = x * HEAD_X, Y = y * 0.118, Z = z * 0.103;
   const low = smooth(-0.1, -0.95, y), front = smooth(0.45, 0.85, z);
@@ -590,20 +591,41 @@ function skull(x, y, z) {
   Z += 0.0045 * front * gauss(x, 0, 0.26) * gauss(y, -0.41, 0.085); // lips
   Z += 0.003 * front * gauss(x, 0, 0.3) * gauss(y, -0.78, 0.1); // chin
   X *= 1 - 0.035 * gauss(y, 0.42, 0.15) * smooth(0.6, 0.95, ax); // temples
+  if (player) {
+    // A forward, broader jaw and a continuous nose bridge, tip and alae under the portrait.
+    X *= 1 + 0.19 * low;
+    Y += 0.017 * low;
+    Z += 0.055 * low * (0.55 + 0.45 * z);
+    const height = HEAD_Y + Y;
+    const bridge = 0.019 * gauss(X, 0, 0.011) * gauss(height, 0.178, 0.033);
+    const tip = 0.026 * gauss(X, 0, 0.014) * gauss(height, 0.155, 0.014);
+    const ala = 0.012 * gauss(Math.abs(X), 0.013, 0.007) * gauss(height, 0.149, 0.008);
+    Z += front * (bridge + tip + ala);
+  }
   return [X, Y, Z];
 }
 /** A sphere (or a band of it, theta from the top) shaped as the skull scaled by k(x, y, z) about the head's centre, plus a nudge. */
-function onSkull(k, nudge, w = 28, h = 20, theta = [0, Math.PI]) {
+function onSkull(k, nudge, w = 28, h = 20, theta = [0, Math.PI], player = false) {
   const g = new THREE.SphereGeometry(1, w, h, 0, Math.PI * 2, theta[0], theta[1]), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), [X, Y, Z] = skull(x, y, z), f = k(x, y, z);
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), [X, Y, Z] = skull(x, y, z, player), f = k(x, y, z);
     const d = nudge ? nudge(x, y, z) : [0, 0, 0];
     p.setXYZ(i, X * f + d[0], Y * f + HEAD_Y + d[1], Z * f + HEAD_Z + d[2]);
   }
   g.computeVertexNormals();
   return g;
 }
-const headNear = () => onSkull(() => 1, null, S(28), S(20));
+function headNear(player) {
+  if (!player) return onSkull(() => 1, null, S(28), S(20));
+  // The haircut and face share one surface, including at the temples where the hair fades.
+  return onSkull((x, y, z) => {
+    const line = along(HAIRLINE, Math.abs(Math.atan2(x, z)));
+    return 1 + (0.025 + 0.055 * smooth(0.1, 0.84, y)) * smooth(line - 0.10, line + 0.16, y);
+  }, (x, y, z) => {
+    const crown = smooth(0.25, 0.9, y);
+    return [-0.009 * crown, crown * (0.008 + 0.009 * z + 0.004 * Math.sin(9 * x + 5 * z)), 0.007 * crown];
+  }, S(44), S(32), undefined, true);
+}
 function nose() {
   // Bridge between the eyes down to the tip and wings; it sits half inside the face.
   return tube([
@@ -842,23 +864,32 @@ function mergeIndexed(geos) {
  * the men's body (without WOMENS) and the women's (without MENS). `detail` cuts the round parts
  * finer and `headX` narrows the skull (the player's own body); `leaves` picks the bodies built.
  */
-export function nearGeometry({ detail = 1, headX = 0.091, leaves = [WOMENS, MENS] } = {}) {
+export function nearGeometry({ detail = 1, headX = 0.091, leaves = [WOMENS, MENS], player = false } = {}) {
   DETAIL = detail; HEAD_X = headX;
-  try { return nearBody(leaves); } finally { DETAIL = 1; HEAD_X = 0.091; }
+  try { return nearBody(leaves, player); } finally { DETAIL = 1; HEAD_X = 0.091; }
 }
-function nearBody(leaves) {
+function nearBody(leaves, player) {
   const b = new Body();
   const H = JOINTS.head;
   const inHead = g => g.translate(H[0], H[1], H[2]);
 
   // Torso: shirt, blouse or kurta. Darker under the arms and where the arms hide it.
-  b.add(tube(TORSO, S(24), TORSO_N, true, true), {
-    bones: (x, y) => torsoBones(y), slot: 'shirt', region: REGION.shirt,
+  const shirt = player ? sunnyShirt(TORSO, ringPoint) : tube(TORSO, S(24), TORSO_N, true, true);
+  b.add(shirt, {
+    bones: (x, y, z, i) => player && y > 0.21 ? blend('torso', x > 0 ? 'upperArmL' : 'upperArmR', shirt.attributes.uv.getX(i)) : torsoBones(y),
+    slot: 'shirt', region: REGION.shirt,
     ao: (x, y) => 1 - 0.28 * smooth(0.15, 0.192, Math.abs(x)) * smooth(0.28, 0.42, y) * (1 - smooth(0.5, 0.56, y)),
     female: torsoFemale, heavy: torsoHeavy, tuck: torsoTuck,
   });
   // Trousers' seat and waistband, and a belt for a tucked-in shirt.
-  b.add(tube(PELVIS, S(24), TORSO_N, true, true), {
+  if (player) b.add(sunnyJeans(LEG), {
+    bones: (x, y, z) => {
+      const side = x >= 0 ? 'L' : 'R';
+      return y > -0.21 ? blend('hips', 'thigh' + side, smooth(-0.046, -0.21, y)) : legBones(side, y - BODY.hipY, z);
+    },
+    slot: 'pants', region: REGION.pants,
+  });
+  else b.add(tube(PELVIS, S(24), TORSO_N, true, true), {
     bones: 'hips', slot: 'pants', region: REGION.pants, female: pelvisFemale, heavy: pelvisHeavy,
     ao: (x, y) => 1 - 0.3 * (1 - smooth(-0.175, -0.11, y)) * (1 - smooth(0.03, 0.09, Math.abs(x))),
   });
@@ -869,8 +900,7 @@ function nearBody(leaves) {
   const legSeg = S(LEG_SEG);
   for (const [s, side] of [[1, 'L'], [-1, 'R']]) {
     const j = JOINTS['thigh' + side];
-    const g = tube(about(LEG, j[0], j[1], ([dy, rx, rf, rb], x0, y0) => [y0 + dy, rx, rf, rb, 0, x0]), legSeg, 2, false, false);
-    b.add(g, {
+    if (!player) b.add(tube(about(LEG, j[0], j[1], ([dy, rx, rf, rb], x0, y0) => [y0 + dy, rx, rf, rb, 0, x0]), legSeg, 2), {
       bones: (x, y, z) => legBones(side, y - j[1], z),
       slot: (x, y, z, i) => (Math.floor(i / legSeg) < SHIN_RINGS ? 'legs' : 'pants'),
       region: (x, y, z, i) => (Math.floor(i / legSeg) < SHIN_RINGS ? REGION.plain : REGION.pants),
@@ -884,15 +914,14 @@ function nearBody(leaves) {
     // Arms: the deltoid to the wrist, bending at the elbow; sleeve-coloured (skin for short sleeves).
     const a = JOINTS['upperArm' + side];
     const ring = ([dy, r], x0, y0) => [y0 + dy, r, r * 0.9, r * 0.9, 0, x0 - s * 0.01 * smooth(-0.06, 0.02, dy)];
-    const arm = tube(about(ARM, a[0], a[1], ring), S(14), 2, false, true);
+    const arm = tube(about(player ? ARM.filter(([dy]) => dy <= -0.21) : ARM, a[0], a[1], ring), S(14), 2, false, true);
     const armMorph = k => (x, y, z) => radial(x - a[0], z, k(y - a[1]));
     b.add(arm, {
-      bones: (x, y, z) => armBones(side, y - a[1], z), slot: 'sleeve', region: s > 0 ? REGION.sleeveL : REGION.sleeveR,
+      bones: (x, y, z) => armBones(side, y - a[1], z), slot: player ? 'skin' : 'sleeve', mat: player ? 'skin' : 'cloth', region: player ? REGION.plain : s > 0 ? REGION.sleeveL : REGION.sleeveR,
       ao: (x, y) => 1 - 0.13 * Math.max(0, -s * (x - a[0]) / 0.06) - 0.12 * gauss(y - a[1], -0.02, 0.06) * Math.max(0, -s * (x - a[0]) / 0.06),
       female: armMorph(dy => -0.005 * smooth(0.05, -0.1, dy)), heavy: armMorph(dy => (dy > -0.29 ? 0.009 : 0.005) * smooth(0.06, -0.04, dy)),
     });
-    const sleeve = tube(about(SLEEVE, a[0], a[1], ring), S(14), 2, false, true);
-    b.add(sleeve, {
+    if (!player) b.add(tube(about(SLEEVE, a[0], a[1], ring), S(14), 2, false, true), {
       bones: (x, y, z) => armBones(side, y - a[1], z), slot: 'shirt', show: SHOW.short, region: s > 0 ? REGION.shortL : REGION.shortR, layer: 3,
       female: armMorph(dy => -0.004), heavy: armMorph(dy => 0.009 * smooth(0.06, -0.04, dy)),
     });
@@ -915,14 +944,14 @@ function nearBody(leaves) {
     bones: (x, y) => blend('torso', 'head', smooth(H[1] - 0.005, H[1] + 0.09, y)), slot: 'skin', mat: 'skin',
     ao: (x, y, z) => 1 - 0.3 * smooth(H[1] + 0.06, H[1] + 0.11, y) * smooth(0, 0.04, z),
   });
-  b.add(inHead(headNear()), {
+  b.add(inHead(headNear(player)), {
     bones: 'head', slot: 'skin', mat: 'skin', region: REGION.face,
     ao: (x, y, z) => 1 - 0.25 * smooth(H[1] + 0.09, H[1] + 0.06, y) * smooth(0.0, 0.05, z),
   });
-  b.add(inHead(nose()), { bones: 'head', slot: 'skin', mat: 'skin', region: REGION.face, ao: (x, y) => 1 - 0.18 * smooth(H[1] + 0.152, H[1] + 0.142, y) });
-  for (const s of [1, -1]) b.add(inHead(ear(s)), { bones: 'head', slot: 'skin', mat: 'skin', ao: (x, y, z) => 0.8 + 0.2 * smooth(-0.004, 0.006, s * x - HEAD_X + 0.002) });
+  if (!player) b.add(inHead(nose()), { bones: 'head', slot: 'skin', mat: 'skin', region: REGION.face, ao: (x, y) => 1 - 0.18 * smooth(H[1] + 0.152, H[1] + 0.142, y) });
+  for (const s of [1, -1]) b.add(inHead(ear(s)), { bones: 'head', slot: 'skin', mat: 'skin', region: player ? REGION.face : REGION.plain, ao: (x, y, z) => 0.8 + 0.2 * smooth(-0.004, 0.006, s * x - HEAD_X + 0.002) });
   // Hair, a braid or a bun (with jasmine), a moustache or beard.
-  b.add(inHead(hairNear()), { bones: 'head', slot: 'hair', mat: 'hair', show: SHOW.hair, region: REGION.hair, layer: 1 });
+  if (!player) b.add(inHead(hairNear()), { bones: 'head', slot: 'hair', mat: 'hair', show: SHOW.hair, region: REGION.hair, layer: 1 });
   b.add(braid(), {
     bones: (x, y) => blend('torso', 'head', smooth(0.6, 0.7, y)), slot: 'hair', mat: 'hair', show: SHOW.long, region: REGION.hair, layer: 1,
     female: (x, y, z) => [0, 0, -0.012 * smooth(0.5, 0.35, y) * smooth(0.25, 0.32, y) - 0.006 * smooth(0.6, 0.45, y)],
@@ -945,11 +974,19 @@ function nearBody(leaves) {
   const collarAt = u => 0.39 + u * (Math.PI * 2 - 0.78);
   const collar = ribbon((u, v) => {
     const a = collarAt(u), df = Math.min(a, Math.PI * 2 - a), y0 = 0.604 + 0.017 * smooth(0.4, 2.2, df);
+    if (player) {
+      // The inner fold touches the neck. Its tips open out and lie on the chest.
+      const side = smooth(0.39, 1.55, df), top = 0.615 + 0.021 * side;
+      const end = onTorso(a + Math.sign(Math.sin(a)) * 0.28 * (1 - side),
+        0.602 - 0.043 * (1 - side) - 0.019 * gauss(df, 0.64, 0.21), 0.0025);
+      const inner = [0.05 * Math.sin(a), top, 0.049 * Math.cos(a) - 0.006];
+      return inner.map((p, axis) => p + (end.p[axis] - p) * v + end.n[axis] * 0.004 * Math.sin(Math.PI * v));
+    }
     const o = onTorso(a, Math.min(y0, 0.616), 0.002);
     const lift = 0.026 * (1 - v), spread = 0.018 * v, point = 0.016 * v * (1 - smooth(0.4, 1.1, df));
     return [o.p[0] + o.n[0] * spread, o.p[1] + lift - point, o.p[2] + o.n[2] * spread];
-  }, u => onTorso(collarAt(u), 0.61).n, S(22), 2, 0.004);
-  b.add(collar, { bones: 'torso', slot: 'shirt', show: SHOW.collar, region: REGION.shirt, female: torsoFemale, heavy: torsoHeavy, layer: 2 });
+  }, u => onTorso(collarAt(u), 0.61).n, S(22), player ? 4 : 2, 0.004);
+  b.add(collar, { bones: 'torso', slot: 'shirt', show: SHOW.collar, region: player ? REGION.collar : REGION.shirt, female: torsoFemale, heavy: torsoHeavy, layer: 2 });
   // Police shoulder straps.
   for (const s of [1, -1]) {
     const strap = tube([[-0.003, 0.046, 0.021, 0.021], [0.003, 0.046, 0.021, 0.021]], 8, 6, true, true);

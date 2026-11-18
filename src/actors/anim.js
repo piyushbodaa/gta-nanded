@@ -939,7 +939,8 @@ function sit(a, h, P, lod) {
 function ride(a, h, P, dt, lod) {
   const seat = SEATS[h.vType] || SEATS.bike, drv = h.vDriver, sc = h.outfit.scale || 1;
   const Y = h.seatY || 0.8;
-  P[C.PY] = Y;
+  P[C.PY] = Y / sc;
+  P[C.BP] = h.pitch || 0;
   P[C.HR] = -(h.roll || 0) * 0.5; // the head stays nearer level than the bike
   if (!drv && a.style.side) {
     // Side-saddle on the pillion, legs over the left, as women in saris ride.
@@ -972,8 +973,8 @@ function ride(a, h, P, dt, lod) {
   for (let s = 0; s < 2; s++) {
     let x = s === 0 ? fx : -fx, y = fy, z = fz;
     if (s === 0 && a.footDown > 0.01) {
-      const gx2 = 0.36, gy2 = -Y + 0.02;
-      const rx = gx2 * cr + gy2 * sr, ry = -gx2 * sr + gy2 * cr;
+      const gx2 = 0.36, gy2 = 0.02;
+      const rx = gx2 * cr + gy2 * sr, ry = -gx2 * sr + gy2 * cr - Y;
       x = lerp(x, rx, a.footDown); y = lerp(y, ry, a.footDown); z = lerp(z, 0.12, a.footDown);
     }
     reachLeg(P, s, x / sc, y / sc, z / sc);
