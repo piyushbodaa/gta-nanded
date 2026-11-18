@@ -3,6 +3,7 @@
 import { clamp, dist, rng, hash2, wrapAngle, dampAngle, headingTo } from '../core/math.js';
 import { makeOutfit } from './humans.js';
 import { GETUP_TIME } from './anim.js';
+import { rainGearFor } from './umbrellas.js';
 import { speedOf } from './vehicle-physics.js';
 import { ZONE } from '../world/citygen.js';
 import { WEAPONS, PED_HEALTH, COP_HEALTH } from '../game/weapon-data.js';
@@ -162,6 +163,7 @@ export class Peds {
     if (dist(x, z, focus.x, focus.z) < minD * 0.7) return false;
     const h = g.humans.add(this.outfitFor(x, z, r), x, z);
     const p = this._make(h, x, z, road);
+    p.rainGear = rainGearFor(p.id);
     p.dir = r.chance(0.5) ? 1 : -1;
     p.s = p.dir > 0 ? n.s : net.length[road] - n.s;
     p.side = side;
@@ -506,6 +508,7 @@ export class Peds {
     if (p.state !== 'idle' && p.state !== 'phone') h.lookYaw = 0;
     // Global panic: wanted chases and crashes scatter people.
     if ((p.state === 'walk' || p.state === 'idle' || p.state === 'phone') && g.police?.level >= 2 && dPlayer < 14 && player.state === 'foot') { p.state = 'flee'; p.t = 6; }
+    h.rainGear = !p.keep && !p.role && (p.state === 'walk' || p.state === 'idle') ? p.rainGear : null;
     // Stay out of buildings (walkers do this in _walk, stepping round what they meet; a story
     // stands its actors where it wants them, until a scare sets them moving).
     if (p.state !== 'walk') p.shoveX = p.shoveZ = 0;

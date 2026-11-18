@@ -16,6 +16,7 @@ const _m = new THREE.Matrix4(), _w = new THREE.Matrix4(), _t = new THREE.Matrix4
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const _axles = new THREE.Matrix4();
 const WRECK = 0x2a2624;
+const BEAM_CAPACITY = Object.values(CAPACITY).reduce((n, cap) => n + 2 * cap, 0);
 
 let nextId = 1;
 // In the river: how hard the water holds a body back (per second, once most of it is under); how
@@ -76,10 +77,31 @@ export class Vehicles {
     this.blobs.count = 0; this.blobs.frustumCulled = false; this.blobs.renderOrder = 1;
     this.blobs.material.polygonOffset = true; this.blobs.material.polygonOffsetFactor = -1; this.blobs.material.polygonOffsetUnits = -2;
     scene.add(this.blobs);
-    this.beams = new THREE.InstancedMesh(plane, new THREE.MeshBasicMaterial({ map: tex, color: 0xfff1c8, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }), 300);
+    const beamPlane = plane.clone().translate(0, 0, 0.5);
+    this.beamLimit = new THREE.InstancedBufferAttribute(new Float32Array(BEAM_CAPACITY), 1).setUsage(THREE.DynamicDrawUsage);
+    beamPlane.setAttribute('beamLimit', this.beamLimit);
+    const beamMaterial = new THREE.MeshBasicMaterial({ map: headlightTexture(), color: 0xffedcb, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    beamMaterial.onBeforeCompile = s => {
+      s.vertexShader = s.vertexShader.replace('#include <common>', 'attribute float beamLimit;\n#include <common>')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.z *= beamLimit; vMapUv.y = mix(1.0, vMapUv.y, beamLimit);');
+    };
+    this.beams = new THREE.InstancedMesh(beamPlane, beamMaterial, BEAM_CAPACITY);
+    this.beams.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.beams.count = 0; this.beams.frustumCulled = false; this.beams.renderOrder = 2;
     this.beams.material.polygonOffset = true; this.beams.material.polygonOffsetFactor = -2; this.beams.material.polygonOffsetUnits = -4;
     scene.add(this.beams);
+    this.lampGlows = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }), BEAM_CAPACITY);
+    this.lampGlows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.lampGlows.setColorAt(0, _c.setHex(0xffffff));
+    this.lampGlows.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    this.lampGlows.count = 0; this.lampGlows.frustumCulled = false; this.lampGlows.renderOrder = 3;
+    scene.add(this.lampGlows);
+    // A single unshadowed light lets the player's lamps pick out pedestrians, other cars and walls.
+    this.drivingLight = new THREE.SpotLight(0xffedce, 0, 28, 0.40, 0.72, 2);
+    this.drivingLight.visible = false;
+    scene.add(this.drivingLight, this.drivingLight.target);
     this.night = 0;
     this.time = 0;
     this._contact = {};
@@ -363,6 +385,8 @@ export class Vehicles {
     for (const t of TYPE_KEYS) this.meshes[t].n = 0;
     let wn = 0, bn = 0, hn = 0;
     const night = this.night;
+    this.drivingLight.visible = false;
+    this.lampGlows.count = 0;
     const maxD2 = this.drawDistance * this.drawDistance;
     this.extras?.begin(); // owned cars' underglow and stickers (garage)
     // Vehicles inside the sun's shadow map first: the shadow pass draws only those.
@@ -439,14 +463,9 @@ export class Vehicles {
           _t.compose(_p, _q, _s);
           this.blobs.setMatrixAt(bn++, _t);
         }
-        // Headlight pool ahead at night, from vehicles with their lamps on.
-        if (night > 0.05 && lit && hn < this.beams.instanceMatrix.count) {
-          const ahead = v.hd + 5;
-          _e.set(-v.roadPitch, v.heading, 0, 'YXZ'); _q.setFromEuler(_e);
-          _p.set(v.x + Math.sin(v.heading) * ahead, groundY + ahead * Math.tan(v.roadPitch) + 0.09, v.z + Math.cos(v.heading) * ahead);
-          _s.set(v.spec.two ? 4 : 7, 1, 11);
-          _t.compose(_p, _q, _s);
-          this.beams.setMatrixAt(hn++, _t);
+        if (night > 0.05 && lit) {
+          hn = this._headlights(v, groundY, dx * dx + dz * dz, hn);
+          this._lensGlow(v, -dx, -dz);
         }
       }
     }
@@ -463,11 +482,75 @@ export class Vehicles {
     this.wheels.count = this.wheelsN = wn; sendFirst(this.wheels.instanceMatrix, wn);
     this.blobs.count = bn; sendFirst(this.blobs.instanceMatrix, bn);
     this.beams.count = hn; sendFirst(this.beams.instanceMatrix, hn);
+    sendFirst(this.beamLimit, hn);
+    sendFirst(this.lampGlows.instanceMatrix, this.lampGlows.count);
+    sendFirst(this.lampGlows.instanceColor, this.lampGlows.count);
+    this.lampGlows.visible = this.lampGlows.count > 0;
+    this.lampGlows.material.opacity = night * 0.54;
     // Nothing to draw: skip the draw call (WebGL warns about every empty instanced draw).
     this.wheels.visible = wn > 0; this.blobs.visible = bn > 0; this.beams.visible = hn > 0;
-    this.beams.material.opacity = clamp(night * 0.55, 0, 0.55);
-    this.beams.visible = hn > 0 && night > 0.05;
+    this.beams.material.opacity = clamp((night - 0.05) * 0.37, 0, 0.35);
     this.extras?.end(night);
+  }
+
+  _lensGlow(v, dx, dz) {
+    const distance = Math.hypot(dx, dz);
+    const facing = (dx * Math.sin(v.heading) + dz * Math.cos(v.heading)) / Math.max(0.01, distance);
+    if (Math.abs(facing) < 0.25) return;
+    const front = facing > 0, direction = front ? 1 : -1;
+    const lenses = front ? v.model.headlamps : v.model.taillamps;
+    const strength = (Math.abs(facing) - 0.25) / 0.75;
+    const size = (front ? 0.72 : v.braking ? 0.60 : 0.36) + Math.min(distance * 0.004, 0.4);
+    _c.setHex(front ? 0xffebc7 : 0xff2518).multiplyScalar(strength * (front || v.braking ? 1 : 0.5));
+    _q.setFromEuler(_e.set(0, Math.atan2(dx, dz), 0));
+    _s.set(size, size * 0.83, 1);
+    for (const [x, y, z] of lenses) {
+      _p.set(x, y, z + direction * 0.045).applyMatrix4(_m);
+      const index = this.lampGlows.count++;
+      this.lampGlows.setMatrixAt(index, _t.compose(_p, _q, _s));
+      this.lampGlows.setColorAt(index, _c);
+    }
+  }
+
+  _headlights(v, groundY, dist2, index) {
+    const lamps = v.model.headlamps, single = lamps.length === 1, player = v.role === 'player';
+    const reach = single ? 17 : 23, yaw = v.heading + (v.spec.two ? v.steer : 0);
+    const grade = Math.tan(v.roadPitch), slope = grade * Math.cos(yaw - v.heading);
+    const nearby = dist2 < 75 * 75, sample = nearby && (player || v.nextBeamCast == null || this.time >= v.nextBeamCast);
+    if (sample) {
+      v.beamLimits ??= new Float32Array(lamps.length);
+      v.nextBeamCast = this.time + 0.1;
+    }
+    let hit = 1;
+    for (let k = 0; k < lamps.length; k++) {
+      const [lx, ly, lz] = lamps[k], aim = yaw + Math.sign(lx) * 0.035;
+      _p.set(lx, ly, lz).applyMatrix4(_m);
+      const roadY = groundY + lz * grade + 0.095;
+      if (sample) {
+        const endX = _p.x + reach * Math.sin(aim), endZ = _p.z + reach * Math.cos(aim);
+        v.beamLimits[k] = this.colliders.raycast(_p.x, _p.y, _p.z, endX, roadY + reach * slope, endZ, 0);
+      }
+      const limit = nearby ? v.beamLimits[k] : 1;
+      hit = Math.min(hit, limit);
+      if (limit < 0.01) continue;
+      _p.y = roadY;
+      _e.set(-Math.atan(slope), aim, 0, 'YXZ');
+      _t.compose(_p, _q.setFromEuler(_e), _s.set(single ? 6.8 : 7.8, 1, reach));
+      this.beamLimit.setX(index, limit);
+      this.beams.setMatrixAt(index++, _t);
+    }
+    if (player) {
+      const light = this.drivingLight, [, ly, lz] = lamps[0];
+      light.visible = true;
+      light.position.set(0, ly, lz + 0.05).applyMatrix4(_m);
+      light.target.position.copy(light.position);
+      light.target.position.x += Math.sin(yaw) * reach;
+      light.target.position.z += Math.cos(yaw) * reach;
+      light.target.position.y += reach * (slope - 0.12);
+      light.distance = Math.min(reach + 4, reach * hit + 3.5);
+      light.intensity = (single ? 80 : 135) * (this.night - 0.05) / 0.95;
+    }
+    return index;
   }
 
   _seat(v, M) {
@@ -490,6 +573,31 @@ export class Vehicles {
 
 const IDLE = { throttle: 0, brake: 0, steer: 0, handbrake: false };
 const PARKED = { throttle: 0, brake: 0, steer: 0, handbrake: true };
+
+/** Ground illuminance of a dipped beam. It widens away from the lens, reaches its
+ * brightest patch a few metres down the road and falls off toward the cutoff. */
+function headlightTexture() {
+  const width = 64, height = 128, pixels = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const along = 1 - y / (height - 1);
+    const throwWidth = 0.09 + along * 0.88;
+    const fade = (1 - Math.exp(-along * 27)) * Math.exp(-along * 2.7)
+      * (1 - THREE.MathUtils.smoothstep(along, 0.73, 1));
+    for (let x = 0; x < width; x++) {
+      const across = Math.abs(2 * x / (width - 1) - 1) / throwWidth;
+      const profile = Math.exp(-3.1 * across * across) + 0.24 * Math.exp(-across * across);
+      const i = (y * width + x) * 4;
+      pixels[i] = pixels[i + 1] = pixels[i + 2] = 255;
+      pixels[i + 3] = Math.round(Math.min(1, fade * profile) * 255);
+    }
+  }
+  const texture = new THREE.DataTexture(pixels, width, height);
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
 
 function setAxleMatrix(v) {
   const lean = v.spec.two ? -(v.lean + (v.standLean || 0)) : 0;

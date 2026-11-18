@@ -26,3 +26,23 @@ test('at dusk and dawn the light fades between sun and moon instead of jumping a
   sky.hours = 17.5; sky.update(0, focus);
   assert.ok(sky.sun.intensity > 2, 'evening sun at full strength');
 });
+
+test('rain fades in and out while streets soak, stay wet at full saturation and then dry more slowly', () => {
+  const sky = new Sky(new THREE.Scene(), null), focus = new THREE.Vector3();
+  sky.setWeather('rain');
+  sky.update(1, focus);
+  assert.ok(sky.w.rain > 0 && sky.w.rain < 1);
+  const shower = sky.w.rain, wet = sky.wet;
+  sky.update(0, focus, false);
+  assert.equal(sky.w.rain, shower);
+  assert.equal(sky.wet, wet);
+  for (let i = 0; i < 18; i++) sky.update(1, focus);
+  assert.equal(sky.wet, 1);
+  assert.ok(sky.sun.shadow.intensity < 0.5);
+  sky.setWeather('haze');
+  for (let i = 0; i < 15; i++) sky.update(1, focus);
+  assert.ok(sky.w.rain < 0.001 && sky.wet > 0.7);
+  sky.update(0, focus);
+  assert.equal(sky.w.rain, 0);
+  assert.equal(sky.wet, 0);
+});

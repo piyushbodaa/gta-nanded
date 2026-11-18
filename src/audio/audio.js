@@ -232,6 +232,13 @@ export class GameAudio {
         this._burst(0.12, { freq: 220, q: 0.6, gain: 0.35 * k, type: 'lowpass', buf: this.brown });
         this._tone(62, 0.18, { gain: 0.4 * k, glide: 40 });
         break;
+      case 'shoe':
+      case 'wetStep':
+        this._burst(0.07, { buf: this.brown, freq: 380 + Math.random() * 110, type: 'lowpass', gain: 0.24 * k });
+        this._burst(name === 'wetStep' ? 0.11 : 0.035, {
+          freq: (name === 'wetStep' ? 2400 : 1300) + Math.random() * 320, q: 0.7, gain: 0.065 * k,
+        });
+        break;
       case 'step': this._burst(0.04, { freq: 1400, q: 0.8, gain: 0.04 * k }); break;
       case 'checkpoint': this._tone(880, 0.12, { type: 'triangle', gain: 0.25 }); this._tone(1320, 0.25, { type: 'triangle', gain: 0.25, at: 0.1 }); break;
       case 'passed': [523, 659, 784, 1046].forEach((f, i) => this._tone(f, 0.5, { type: 'triangle', gain: 0.18, at: i * 0.12 })); break;
@@ -429,7 +436,7 @@ export class GameAudio {
     const a = this.amb, sky = g.sky, pos = P.pos;
     const dens = g.city.densityAt(pos.x, pos.z);
     a.bed.gain.setTargetAtTime(g.paused ? 0 : (0.02 + dens * 0.05) * (sky.night > 0.5 ? 0.6 : 1), now, 0.5);
-    a.rain.gain.setTargetAtTime(g.paused ? 0 : sky.w.grey > 0.5 ? 0.06 : 0, now, 0.8);
+    a.rain.gain.setTargetAtTime(g.paused ? 0 : sky.w.rain * 0.06, now, 0.8);
     if (!g.paused && now > a.next && dens > 0.25) {
       a.next = now + 1.5 + Math.random() * (6 - dens * 3);
       // A horn somewhere down the street (one id for them all: they come further apart than any horn lasts).

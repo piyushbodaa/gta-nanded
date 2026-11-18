@@ -15,11 +15,14 @@
 // the facades, wet asphalt in the monsoon), and a cheap ambient occlusion
 // darkens the sky light near the ground, where walls and streets meet.
 import * as THREE from 'three';
+import { PUDDLE_GLSL } from './puddles.js';
+import { wireMaterial } from './wires.js';
 import { ATLAS_COLS, ATLAS_ROWS, TILE_PX, TILE, SIGN_COLS, SIGN_ROWS, SIGN_W, SIGN_H } from './atlas.js';
 
 export const cityUniforms = {
   uNight: { value: 0 }, // 0 day .. 1 night: drives window and shop lighting
   uTime: { value: 0 },
+  uRain: { value: 0 },
   uWet: { value: 0 }, // monsoon: darker, glossier streets
 };
 
@@ -64,6 +67,8 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
     shader.uniforms.cityDetail = { value: detail };
     shader.uniforms.uNight = cityUniforms.uNight;
     shader.uniforms.uWet = cityUniforms.uWet;
+    shader.uniforms.uRain = cityUniforms.uRain;
+    shader.uniforms.uTime = cityUniforms.uTime;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         #include <colorspace_pars_fragment>
@@ -87,7 +92,8 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
         uniform sampler2D cityEmissive;
         uniform sampler2D cityDetail;
         uniform float uNight;
-        uniform float uWet;
+        uniform float uWet, uRain, uTime;
+        ${PUDDLE_GLSL}
         ${common}
         float cityHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
         // Coverage of the stripe |d| < hw by a pixel fw across: a box filter, so lines never shimmer far off.
@@ -104,6 +110,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
           return normalize(n);
         }`)
       .replace('#include <map_fragment>', `
+        vec2 rainSlope = vec2(0.0);
         vec3 cityGlow = vec3(0.0), roomLight = vec3(0.0);
         float cityRough = 0.85, cityMetal = 0.0, cityAO = 1.0, citySmooth = 0.0, roomGlass = 0.0;
         {
@@ -122,7 +129,11 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
             if (vTile.x > 0.5) { cityMetal = 1.0; cityRough = 0.24; }
             citySmooth = step(0.5, vTile.y);
             // Potholes (third channel set): rainwater stands in them through the monsoon.
-            if (vTile.z > 1.5 && uWet > 0.0) { diffuseColor.rgb *= 1.0 - 0.45 * uWet; cityRough = mix(cityRough, 0.03, min(1.0, uWet * 1.5)); }
+            if (vTile.z > 1.5 && uWet > 0.0) {
+              rainSlope = puddleSlope(vCityWorld.xz, uTime, uRain * uWet, length(vViewPosition));
+              diffuseColor.rgb *= 1.0 - 0.45 * uWet;
+              cityRough = mix(cityRough, 0.03, min(1.0, uWet * 1.5));
+            }
           } else {
             vec2 origin = vTile.xy;
             vec2 coord = vTUv;
@@ -322,6 +333,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
             if (uWet > 0.0) {
               if (mode > 2.5) {
                 bool asphalt = mode < 3.5 || (abs(vTile.x - 1.0) < 0.5 && abs(vTile.y - 7.0) < 0.5);
+                rainSlope = puddleSlope(vCityWorld.xz, uTime, uRain * uWet * puddle, length(vViewPosition));
                 float wet = min(1.0, uWet * 1.25) * (0.7 + 0.3 * puddle);
                 diffuseColor.rgb *= 1.0 - (asphalt ? mix(0.55, 0.25, roadPaint) : 0.4) * wet; // paint stays bright in the rain
                 cityRough = mix(cityRough, asphalt ? mix(0.18, 0.02, puddle) : mix(0.45, 0.08, puddle), wet);
@@ -336,6 +348,11 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
               ${signs ? 'lamp = vec3(1.0);' : ''}
               cityGlow = e * lamp * litChance * uNight * ${signs ? '1.9' : '1.8'};
             }
+            ${signs ? '' : `
+            // Tube lights in open shops illuminate the stock even on shaded
+            // daytime streets. Preserve the printed colours in their spill.
+            if (mode < 1.5 && vTile.y == 4.0 && origin.x < 6.5 && f.y < 0.777)
+              cityGlow += tex.rgb * vec3(0.95, 0.88, 0.72) * mix(0.16, 0.34, uNight) * (1.0 - tex.a);`}
             // Rooms seen through the glass replace the flat glow there.
             cityGlow = mix(cityGlow, roomLight * 1.6, roomGlass);
           }
@@ -345,7 +362,9 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
         'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );',
         'radiance += cityRough < 0.7 ? getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) : iblIrradiance * RECIPROCAL_PI;'))
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        if (citySmooth > 0.5) normal = normalize((viewMatrix * vec4(cityOctDecode(vTUv), 0.0)).xyz);`)
+        if (citySmooth > 0.5) normal = normalize((viewMatrix * vec4(cityOctDecode(vTUv), 0.0)).xyz);
+        if (dot(rainSlope, rainSlope) > 0.0)
+          normal = normalize(normal + mat3(viewMatrix) * vec3(rainSlope.x, 0.0, rainSlope.y));`)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = cityRough;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = cityMetal;')
       .replace('#include <aomap_fragment>', `#include <aomap_fragment>
@@ -354,7 +373,7 @@ function patch(material, { map, emissive, detail, cols, rows, pad, signs = false
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += cityGlow;`);
   };
-  material.customProgramCacheKey = () => (signs ? 'city-signs-v9' : 'city-v9');
+  material.customProgramCacheKey = () => (signs ? 'city-signs-v10' : 'city-v10');
   return material;
 }
 
@@ -373,7 +392,7 @@ export function createCityMaterials(tex) {
     color: new THREE.Color(1, 0.72, 0.4), opacity: 0, fog: true,
   });
   pools.polygonOffset = true; pools.polygonOffsetFactor = -2; pools.polygonOffsetUnits = -4;
-  const wires = new THREE.LineBasicMaterial({ color: 0x1d1f20, transparent: true, opacity: 0.75, fog: true });
+  const wires = wireMaterial();
   return { city, signs, pools, wires, glowTex };
 }
 

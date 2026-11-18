@@ -31,6 +31,9 @@ export class GameCamera {
     this.time = 0;
     this.mode = 'foot';
     this.zoom = 1;
+    this.leadX = 0;
+    this.leadZ = 0;
+    this.rearView = false;
     // Weapons (main.js sets this to game.weapons; without it none of this happens): how far into
     // the shoulder aim and the scope the view is, the shoulder offset now, and recoil still to recover.
     this.weapons = undefined;
@@ -68,10 +71,14 @@ export class GameCamera {
       input.look.x = input.look.y = 0; input.zoom = 0;
       return this._cinematic(dt);
     }
-    const look = input.look, W = this.weapons;
-    const aiming = Boolean(W?.aiming) && !subject.vehicle, scoped = aiming && Boolean(W?.scoped);
+    const look = input.look, W = this.weapons, vehicle = subject.vehicle;
+    const rearView = Boolean(vehicle && input.state.lookBack);
+    // A glance behind sits at the front bumper; keep the player's regular orbit for release.
+    if (rearView) look.x = look.y = 0;
+    const aiming = Boolean(W?.aiming) && !vehicle, scoped = aiming && Boolean(W?.scoped);
     const manual = Math.abs(look.x) + Math.abs(look.y) > 1e-5;
     if (manual) this.lastManual = this.time;
+    else if (rearView) this.lastManual += dt; // Keep the remaining manual-look hold for release.
     // Down the sights or through a scope a drag turns the view as much less as the view is narrower.
     const sens = aiming ? cam.fov / this.fovBase : 1;
     // Recoil settling back.
@@ -92,29 +99,30 @@ export class GameCamera {
     const aimK = this.aimK;
     if (input.zoom) { this.zoom = clamp(this.zoom + input.zoom * 0.08, 0.7, 1.6); input.zoom = 0; }
 
-    const vehicle = subject.vehicle;
     let tx, ty, tz, dist, fov = this.fovBase;
     if (vehicle) {
+      if (this.mode !== 'vehicle' || this._snap) this.leadX = this.leadZ = 0;
       this.mode = 'vehicle';
       const type = vehicle.type;
       const spd = Math.hypot(vehicle.vx, vehicle.vz);
       dist = (DIST[type] || 6.5) * this.zoom + Math.min(spd * 0.04, 1.6);
       tx = vehicle.x; tz = vehicle.z; ty = vehicle.y + (HEIGHT[type] || 1.7);
-      // Swing back behind the car after a moment without manual look; follow the slide direction a little.
+      const forward = vehicle.vx * Math.sin(vehicle.heading) + vehicle.vz * Math.cos(vehicle.heading);
       const idle = this.time - this.lastManual > (input.pointerLocked ? 2.2 : 1.2);
-      if (idle || spd > 12) {
-        let want = vehicle.heading;
-        if (spd > 3) {
-          const velDir = Math.atan2(vehicle.vx, vehicle.vz);
-          const fwd = vehicle.vx * Math.sin(vehicle.heading) + vehicle.vz * Math.cos(vehicle.heading);
-          if (fwd > 0) want = vehicle.heading + wrapAngle(velDir - vehicle.heading) * 0.55;
-          else if (fwd < -2) want = vehicle.heading; // reversing: keep looking forward
-        }
-        if (input.state.lookBack) want += Math.PI;
-        const rate = idle ? 3.2 : 1.2;
-        this.yaw = dampAngle(this.yaw, want + Math.PI, rate, dt);
-        this.pitch = damp(this.pitch, 0.18, idle ? 2 : 0.6, dt);
+      let travel = vehicle.heading;
+      if (spd > 3 && forward > 0) {
+        travel += wrapAngle(Math.atan2(vehicle.vx, vehicle.vz) - travel) * 0.55;
       }
+      if (idle) {
+        this.yaw = dampAngle(this.yaw, travel + Math.PI, 3.2, dt);
+        this.pitch = damp(this.pitch, 0.18 + 0.07 * clamp(forward / 24, 0, 1), 2, dt);
+      }
+      // Look a fraction of a second along the car's path. Move the point the lens looks at,
+      // keeping the collision-tested boom on the car, even as it rounds a tight corner.
+      const lead = idle ? Math.min(Math.max(0, forward - 2) * 0.2, dist * 0.5, 3.4) : 0;
+      const bend = clamp((vehicle.w || 0) * 0.35, -0.32, 0.32);
+      this.leadX = damp(this.leadX, Math.sin(travel + bend) * lead, 7, dt);
+      this.leadZ = damp(this.leadZ, Math.cos(travel + bend) * lead, 7, dt);
       fov += clamp((spd - 10) / 30, 0, 1) * 12;
     } else {
       this.mode = aimK > 0.5 ? (this.scopeK > 0.5 ? 'scope' : 'aim') : 'foot';
@@ -151,11 +159,14 @@ export class GameCamera {
       cx += rx * this.shoulder; cz += rz * this.shoulder;
     }
     // Collision: pull in before walls, ease back out.
-    const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-    const ox = Math.sin(this.yaw) * cp, oy = sp, oz = Math.cos(this.yaw) * cp;
+    const orbitYaw = rearView ? vehicle.heading : this.yaw, orbitPitch = rearView ? 0.18 : this.pitch;
+    const cp = Math.cos(orbitPitch), sp = Math.sin(orbitPitch);
+    const ox = Math.sin(orbitYaw) * cp, oy = sp, oz = Math.cos(orbitYaw) * cp;
     const t = this.colliders.raycast(cx, cy, cz, cx + ox * dist, cy + oy * dist, cz + oz * dist, 0.3);
-    const want = Math.max(aimK > 0.5 ? 0.6 : 0.8, dist * t - 0.25);
-    this.curDist = want < this.curDist || aimK > 0 ? Math.min(want, damp(this.curDist, want, aimK > 0 ? 14 : 3, dt)) : damp(this.curDist, want, 3, dt);
+    const minDist = vehicle && t < 1 ? 0 : aimK > 0.5 ? 0.6 : 0.8;
+    const want = Math.max(minDist, dist * t - 0.25);
+    this.curDist = rearView !== this.rearView ? want : Math.min(want, damp(this.curDist, want, aimK > 0 ? 14 : 3, dt));
+    this.rearView = rearView;
     let px = cx + ox * this.curDist, py = cy + oy * this.curDist, pz = cz + oz * this.curDist;
     // Squeezed by walls: rise up and look down over the shoulder instead of into the back of the head.
     const squeeze = clamp(1 - this.curDist / dist, 0, 1);
@@ -171,6 +182,12 @@ export class GameCamera {
       this.shake = damp(this.shake, 0, 6, dt);
     }
     this.lookAt.set(cx, cy + (vehicle ? 0.2 : 0.05), cz);
+    if (vehicle && !rearView) {
+      const clearance = 1 - squeeze;
+      this.lookAt.x += this.leadX * clearance;
+      this.lookAt.z += this.leadZ * clearance;
+      this.lookAt.y += Math.hypot(this.leadX, this.leadZ) * clearance * Math.tan(vehicle.roadPitch || 0);
+    }
     // Through a scope: from just in front of the eye (the body falls behind the near plane, and
     // weapon-fx.js hides the gun), straight along the view.
     const sk = vehicle ? 0 : this.scopeK;

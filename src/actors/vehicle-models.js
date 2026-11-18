@@ -16,7 +16,11 @@ const partColor = new THREE.Color();
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 class VB {
-  constructor() { this.parts = { paint: { pos: [], col: [] }, glass: { pos: [], col: [] }, fixed: { pos: [], col: [] }, lights: { pos: [], col: [], lamp: [] } }; }
+  constructor() {
+    this.parts = { paint: { pos: [], col: [] }, glass: { pos: [], col: [] }, fixed: { pos: [], col: [] }, lights: { pos: [], col: [], lamp: [] } };
+    this.headlamps = [];
+    this.taillamps = [];
+  }
   _tri(part, a, b, c, color) {
     if (part === 'fixed' && color === GLASS) part = 'glass';
     const P = this.parts[part];
@@ -28,6 +32,8 @@ class VB {
   }
   quad(part, a, b, c, d, color) { this._tri(part, a, b, c, color); this._tri(part, a, c, d, color); }
   box(part, cx, cy, cz, w, h, d, color) {
+    if (part === 'lights' && color === HEAD) this.headlamps.push([cx, cy, cz + d / 2]);
+    if (part === 'lights' && color === TAIL) this.taillamps.push([cx, cy, cz - d / 2]);
     const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - h / 2, y1 = cy + h / 2, z0 = cz - d / 2, z1 = cz + d / 2;
     const v = [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]];
     const q = (a, b, c, e) => this.quad(part, v[a], v[b], v[c], v[e], color);
@@ -586,7 +592,7 @@ const cache = new Map();
 export function vehicleModel(type) {
   if (!cache.has(type)) {
     const res = BUILDERS[type]();
-    cache.set(type, { geos: res.b.build(), wheels: res.wheels, seat: res.seat, passengers: res.passengers || [], siren: Boolean(res.siren) });
+    cache.set(type, { geos: res.b.build(), headlamps: res.b.headlamps, taillamps: res.b.taillamps, wheels: res.wheels, seat: res.seat, passengers: res.passengers || [], siren: Boolean(res.siren) });
   }
   return cache.get(type);
 }

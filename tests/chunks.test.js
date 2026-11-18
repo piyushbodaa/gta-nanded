@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { world } from './helpers.js';
-import { ChunkManager, NEAR, RUSH } from '../src/world/chunks.js';
+import { ChunkManager, NEAR, FAR, RUSH } from '../src/world/chunks.js';
 import { CHUNK } from '../src/world/citygen.js';
+import { ROW, SHOP_SIGNS } from '../src/world/atlas.js';
 
 function manager() {
   const { city } = world();
@@ -91,6 +92,36 @@ test('far chunks are plain blocks, swapped for the close-up as the player comes 
   const cx = (ch.cx + 0.5) * CHUNK, cz = (ch.cz + 0.5) * CHUNK;
   for (let i = 0; i < 20000 && cm.update(cx, cz, 50) > 0; i++);
   assert.ok(ch.levels[0]?.group.visible && !ch.levels[1]?.group.visible, 'close-up on arrival');
+});
+
+test('a signed bakery keeps its merchandise at both distances, with recessed counters up close', () => {
+  const cm = manager(), lots = cm.city.lots;
+  const bakery = SHOP_SIGNS.findIndex(([, name]) => name === 'ROYAL BAKERY & CAKE SHOP');
+  let lot = -1, nearest = Infinity;
+  for (let i = 0; i < lots.x.length; i++) {
+    if (!(lots.flags[i] & 1) || (lots.seed[i] >>> 8) % SHOP_SIGNS.length !== bakery) continue;
+    const distance = Math.hypot(lots.x[i] - 662, lots.z[i] - 707);
+    if (distance < nearest) { nearest = distance; lot = i; }
+  }
+  assert.ok(lot >= 0, 'Old Mondha has a bakery');
+  const cx = Math.floor(lots.x[lot] / CHUNK), cz = Math.floor(lots.z[lot] / CHUNK), key = `${cx},${cz}`;
+  const c = Math.cos(lots.rot[lot]), s = Math.sin(lots.rot[lot]);
+  for (const lod of [NEAR, FAR]) {
+    cm._build(key, cx, cz, lod);
+    const { tile, position } = cm.chunks.get(key).levels[lod].meshes[0].geometry.attributes;
+    const depths = [];
+    for (let v = 0; v < tile.count; v++) {
+      if (tile.getY(v) !== ROW.SHOP) continue;
+      const x = position.getX(v) - lots.x[lot], z = position.getZ(v) - lots.z[lot];
+      const across = x * c - z * s, depth = lots.hd[lot] + x * s + z * c;
+      if (Math.abs(across) > lots.hw[lot] + 0.01 || depth < -0.01 || depth > 1.1) continue;
+      if (tile.getX(v) === 7) continue; // rolled metal shutter
+      assert.equal(tile.getX(v), 5, 'every open bay stocks bakery goods');
+      depths.push(depth);
+    }
+    assert.ok(depths.length > 0);
+    assert.ok(lod === NEAR ? Math.max(...depths) > 0.7 : Math.max(...depths) < 0.01);
+  }
 });
 
 /** The chunks a player standing at (x, z) needs at once: those within RUSH of their square. */

@@ -5,6 +5,7 @@
 // straight to the screen with the scene's own fog and tone mapping.
 import * as THREE from 'three';
 import { ATMOSPHERE_GLSL } from './sky.js';
+import { PUDDLE_GLSL } from './puddles.js';
 
 const TRI = new THREE.BufferGeometry();
 TRI.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
@@ -77,7 +78,7 @@ const FINAL = /* glsl */`
   uniform sampler2D tColor, tDepth, tBloom, tDetail;
   uniform mat4 uProjInv, uCamWorld, uViewProj;
   uniform vec3 uCamPos;
-  uniform float uBloom, uExposure, uFogDensity, uFogFalloff, uViewDist, uFogOn, uWet, uSSR;
+  uniform float uBloom, uExposure, uFogDensity, uFogFalloff, uViewDist, uFogOn, uWet, uRain, uTime, uSSR;
   uniform float uSaturation, uContrast, uVignette, uAA, uSharpen, uNear, uFar, uContact, uIntermediate;
   uniform vec3 uHurt, uHurtDir; // hit feedback (ui/hit-fx.js): edge red, colour drain; the attacker's side and its weight
   uniform vec3 uShadowTint, uHighTint;
@@ -156,14 +157,17 @@ const FINAL = /* glsl */`
   // Wet streets mirror the city: march the view ray, reflected off the ground,
   // through the depth buffer. Puddles (same pattern as the city shader) are
   // mirrors, wet asphalt a dimmer, blurrier one.
+  ${PUDDLE_GLSL}
+
   vec3 wetReflection(vec3 col, vec3 wp, vec3 rd) {
     float ground = (1.0 - smoothstep(0.22, 0.32, wp.y)) * step(-0.6, wp.y) * step(rd.y, -0.01);
     if (ground <= 0.0) return col;
     float macro = clamp(texture2D(tDetail, wp.xz * 0.0105).g * 0.6 + texture2D(tDetail, wp.xz * 0.047 + 0.31).g * 0.4, 0.0, 1.0);
     float puddle = smoothstep(0.5, 0.7, texture2D(tDetail, wp.xz * 0.071 + 0.57).g * 0.65 + macro * 0.35);
     float wet = min(1.0, uWet * 1.25) * mix(0.35, 1.0, puddle) * ground;
-    vec3 R = normalize(vec3(rd.x, -rd.y, rd.z));
     float distCam = length(wp - uCamPos);
+    vec2 slope = puddleSlope(wp.xz, uTime, uRain * puddle * uWet, distCam);
+    vec3 R = reflect(rd, normalize(vec3(slope.x, 1.0, slope.y)));
     float t = 0.35 + distCam * 0.01, prevT = 0.0;
     vec2 hitUV = vec2(0.0);
     float hit = 0.0;
@@ -281,7 +285,7 @@ export class Post {
     this.final = pass(FINAL, {
       tColor: { value: null }, tDepth: { value: null }, tBloom: { value: this.black }, tDetail: { value: this.black },
       uProjInv: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uViewProj: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
-      uWet: { value: 0 }, uSSR: { value: 1 },
+      uWet: { value: 0 }, uRain: { value: 0 }, uTime: su.uTime, uSSR: { value: 1 },
       uBloom: { value: 0.08 }, uExposure: { value: 1 }, uFogDensity: { value: 0.0013 }, uFogFalloff: { value: 0.012 }, uViewDist: { value: 540 }, uFogOn: { value: 1 },
       uSaturation: { value: 1.1 }, uContrast: { value: 1.06 }, uVignette: { value: 0.22 }, uContact: { value: 0 }, uIntermediate: { value: 0 },
       uShadowTint: { value: new THREE.Color(1, 1, 1) }, uHighTint: { value: new THREE.Color(1, 1, 1) }, uResolution: { value: new THREE.Vector2(1, 1) },
@@ -449,6 +453,7 @@ export class Post {
     u.uCamWorld.value.copy(camera.matrixWorld);
     u.uViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     u.uWet.value = this.sky.wet;
+    u.uRain.value = this.sky.w.rain;
     u.uSSR.value = this.ssrOn ? 1 : 0;
     u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
     u.uNear.value = camera.near; u.uFar.value = camera.far;

@@ -74,7 +74,7 @@ function painter(ctx, mode) {
     if (mode === 'mask') return kind === 'wall' || kind === 'stain' ? '#fff' : '#000';
     // emissive
     if (kind === 'glass') return '#ffd58a';
-    if (kind === 'interior') return '#97724f';
+    if (kind === 'interior') return '#685b46';
     if (kind === 'light') return color;
     if (kind === 'glow') return color;
     return '#000';
@@ -448,60 +448,156 @@ function paintShop(g, v, seed) {
     g.streaks(6, iy, T - 12, ih, seed, 0.12);
     return;
   }
-  // Interior: back wall lit by a tube light.
-  const back = ['#efe6c9', '#cfe3f1', '#e9f5ee', '#f3e3e8', '#ddd5c6', '#f6efe0', '#e8dcc6'][v];
-  g.rect(6, iy, T - 12, ih, back, 'interior');
-  g.rect(40, iy + 6, 176, 5, '#ffffff', 'light');
-  // Shelves and goods.
-  if (v === 0 || v === 2 || v === 4) {
-    for (let sy = iy + 24; sy < bottom - 60; sy += 34) {
-      g.rect(10, sy + 26, T - 20, 4, '#7a5a3c');
-      for (let sx = 12; sx < T - 20; sx += 9 + r() * 6) g.rect(sx, sy + 6 + r() * 6, 7, 20, v === 2 ? (r() < 0.5 ? '#ffffff' : '#7fb3d5') : SHOP_GOODS[Math.floor(r() * SHOP_GOODS.length)]);
+  // The back of the shop sits in the shade. Keep the tube and the glass
+  // display highlights small enough to read at pavement height.
+  const back = ['#a7987b', '#8d9a98', '#b1bcab', '#aa9686', '#979184', '#ad9581', '#ac9e8a'][v];
+  g.grad(6, iy, T - 12, ih, [[0, '#696157'], [0.24, back], [0.8, back], [1, '#696359']], 'interior');
+  g.rect(64, iy + 9, 126, 5, '#514f44');
+  g.rect(68, iy + 10, 118, 2, '#f8efd4', 'light');
+  const shelf = (x, y, w) => {
+    g.rect(x, y, w, 7, '#514536');
+    g.rect(x, y, w, 2, '#afa18a');
+    g.grad(x, y + 7, w, 6, [[0, 'rgba(30,27,23,.35)'], [1, 'rgba(30,27,23,0)']], 'stain');
+  };
+  const goods = ['#9c4f3a', '#b98541', '#9f994f', '#597962', '#51717c', '#826f73', '#c5b697'];
+  if (v === 0 || v === 2) {
+    // Packs are stocked in runs of the same product, with gaps between runs.
+    for (const y of [iy + 58, iy + 94, iy + 128]) {
+      g.rect(20, y - 26, 210, 27, '#5c594a');
+      for (let x = 23; x < 220;) {
+        const w = 6 + r() * 5, h = 12 + r() * 12, count = 2 + Math.floor(r() * 4);
+        const col = goods[Math.floor(r() * goods.length)];
+        for (let n = 0; n < count && x + w < 230; n++, x += w + 1) {
+          g.rect(x, y - h, w, h, v === 2 ? '#c0bda9' : col);
+          g.rect(x, y - h + 2, w - 1, 2, v === 2 ? col : '#c3bba5');
+          g.rect(x + 1, y - h * 0.55, w - 2, 3, v === 2 ? col : '#d0c5a4');
+          g.rect(x + w - 2, y - h, 2, h, 'rgba(47,40,32,.22)', 'stain');
+        }
+        x += 2 + r() * 6;
+      }
+      shelf(17, y, 218);
     }
+    for (const x of [15, 126, 233]) g.rect(x, iy + 27, 2, 113, '#676359');
   }
   if (v === 0) {
-    // Kirana: grain sacks out front, chips strips hanging.
-    for (let sx = 14; sx < 240; sx += 46) { g.poly([[sx, bottom], [sx + 40, bottom], [sx + 36, bottom - 44], [sx + 4, bottom - 44]], '#e7d7b0'); g.rect(sx + 6, bottom - 50, 28, 8, ['#c9a227', '#8b5a2b', '#e8e0d0', '#d35400'][Math.floor(r() * 4)]); }
-    for (let sx = 20; sx < 236; sx += 30) for (let k = 0; k < 4; k++) g.rect(sx, iy + 14 + k * 14, 18, 12, SHOP_GOODS[(k + sx) % SHOP_GOODS.length]);
+    // Open jute grain sacks rolled down around mounds of rice and pulses.
+    const grain = ['#c4ab69', '#986f41', '#cbbda0', '#af7950'];
+    for (let k = 0; k < 4; k++) {
+      const x = 19 + k * 52, y = bottom - 32 + (k % 2) * 3;
+      g.poly([[x + 3,y], [x + 8,y - 6], [x + 21,y - 9], [x + 37,y - 6], [x + 41,y], [x + 38,y + 3], [x + 6,y + 3]], grain[k]);
+      g.poly([[x + 3,y], [x + 15,y + 2], [x + 32,y + 1], [x + 42,y - 1], [x + 43,y + 9], [x + 40,bottom - 4], [x + 6,bottom - 4], [x + 1,y + 9]], '#aa9470');
+      g.line(x + 4,y + 2,x + 40,y + 2,'#d5c3a4',3);
+      g.line(x + 32,y + 8,x + 35,bottom - 6,'#817052',2);
+      for (let n=0;n<16;n++) g.rect(x + 9 + r()*24, y - 2 - r()*3, 1.1, 0.7, '#e0c997');
+    }
+    for (const x of [18, 33]) for (let k = 0; k < 5; k++) {
+      const y = iy + 17 + k * 12;
+      g.poly([[x,y], [x + 10,y], [x + 11,y + 9], [x + 8,y + 11], [x - 1,y + 10]], goods[k]);
+      g.rect(x + 1, y + 1, 8, 1.2, '#ccbe9c');
+      g.rect(x + 2, y + 5, 5, 2, '#e0cb99');
+    }
   } else if (v === 1) {
-    // Mobile shop: blue glow, posters and a glass counter.
-    g.rect(6, iy, T - 12, ih, '#cfe8ff', 'interior');
-    for (let px = 20; px < 230; px += 54) { g.rect(px, iy + 20, 40, 64, '#1b4f8a'); g.rect(px + 6, iy + 26, 28, 46, '#5dade2', 'glass'); }
-    g.rect(10, bottom - 70, T - 20, 62, '#9ec9e8', 'glass'); g.rect(10, bottom - 70, T - 20, 5, '#d0d0d0');
+    // Lit display niches and boxed handsets behind a glass sales counter.
+    for (let i = 0; i < 3; i++) {
+      const x = 21 + i * 71;
+      g.rect(x, iy + 27, 65, 67, '#4f5b59');
+      g.grad(x + 3, iy + 30, 59, 61, [[0,'#a0aaa0'],[1,'#778782']]);
+      for (const y of [iy + 54, iy + 83]) {
+        for (let j=0;j<4;j++) {
+          const px = x + 8 + j * 13;
+          g.rect(px,y - 17,9,17,'#454b49');
+          g.rect(px + 1,y - 15,7,12,j%2 ? '#708886' : '#a79b87');
+        }
+        shelf(x + 4, y, 56);
+      }
+    }
+    g.rect(16, bottom - 65, 224, 58, '#536862');
+    g.grad(20, bottom - 61, 216, 46, [[0, '#82938b'], [1, '#52635c']]);
+    for (let x = 25; x < 223; x += 24) g.rect(x, bottom - 28 - (x%3)*2, 18, 9, '#a6a392');
+    for (const x of [17, 89, 164, 238]) g.rect(x, bottom - 63, 2, 54, '#b6b3a2');
+    shelf(15, bottom - 66, 226);
   } else if (v === 2) {
-    g.rect(100, iy + 2, 56, 20, '#1e8449'); g.rect(122, iy + 4, 12, 16, '#fff', 'light'); g.rect(118, iy + 8, 20, 8, '#fff', 'light');
-    g.rect(10, bottom - 56, T - 20, 48, '#f4f6f6'); g.rect(10, bottom - 56, T - 20, 4, '#1e8449');
+    g.rect(196, iy + 8, 25, 19, '#426d56');
+    g.rect(206, iy + 10, 5, 14, '#d2d5ba'); g.rect(201, iy + 15, 15, 5, '#d2d5ba');
+    g.rect(18, bottom - 43, 218, 39, '#8a9987');
+    g.rect(15, bottom - 47, 225, 5, '#d1c5a9');
+    for (const x of [84,165]) g.rect(x, bottom - 41, 2, 35, '#6a796c');
   } else if (v === 3) {
-    // Cloth centre: saris hanging in rows.
     const dyes = ['#97504b', '#36676b', '#8b6378', '#4e6179', '#b17a48', '#76815f', '#c5ab84'];
-    g.line(11, iy + 17, T - 11, iy + 17, '#726959', 3);
-    for (let sx = 13; sx < T - 20; sx += 15) {
-      const y = iy + 17 + r() * 7, hem = bottom - 27 - r() * 16;
-      g.poly([[sx, y], [sx + 12, y + 1], [sx + 15, hem - 1], [sx + 7, hem + 2], [sx - 1, hem]], dyes[Math.floor(r() * dyes.length)]);
-      g.grad(sx + 1, y + 2, 11, hem - y - 4, [[0, 'rgba(33,22,26,0.32)'], [0.4, 'rgba(255,235,196,0.18)'], [1, 'rgba(33,22,26,0.27)']], 'stain', false);
-      g.line(sx, hem - 5, sx + 14, hem - 4, '#b7a07b', 2.3);
-      g.line(sx + 1, hem - 9, sx + 13, hem - 8, 'rgba(215,198,154,0.6)', 1.1);
+    g.line(11, iy + 22, T - 11, iy + 22, '#726959', 3);
+    for (let sx = 18; sx < T - 20; sx += 21) {
+      const y = iy + 22 + r() * 4, hem = bottom - 32 - r() * 12;
+      g.poly([[sx, y], [sx + 16, y + 1], [sx + 18, hem - 1], [sx + 9, hem + 2], [sx - 1, hem]], dyes[Math.floor(r() * dyes.length)]);
+      g.grad(sx, y + 2, 17, hem - y - 4, [[0, 'rgba(33,22,26,.38)'], [.36, 'rgba(255,235,196,.2)'], [.66,'rgba(33,22,26,.2)'], [1, 'rgba(33,22,26,.36)']], 'stain', false);
+      g.line(sx, hem - 5, sx + 17, hem - 4, '#b7a07b', 2);
+      g.line(sx + 1, hem - 9, sx + 16, hem - 8, '#927d64', 1);
     }
-    g.rect(6, bottom - 30, T - 12, 22, '#7a5a3c');
+    shelf(15, bottom - 26, 225);
   } else if (v === 4) {
-    // Hardware: pipes and buckets out front.
-    for (let px = 14; px < 120; px += 8) g.rect(px, bottom - 120, 5, 112, r() < 0.5 ? '#9aa0a0' : '#e0e0e0');
-    for (let bx = 136; bx < 236; bx += 34) { g.poly([[bx, bottom], [bx + 28, bottom], [bx + 32, bottom - 34], [bx - 4, bottom - 34]], SHOP_GOODS[Math.floor(r() * SHOP_GOODS.length)]); }
-  } else if (v === 5) {
-    // Sweets: steel trays of jalebi and laddoo behind a glass counter.
-    g.rect(10, bottom - 90, T - 20, 82, '#d8eef2', 'glass');
-    for (let tx = 18; tx < 236; tx += 44) for (let ty = 0; ty < 2; ty++) {
-      g.rect(tx, bottom - 80 + ty * 38, 38, 26, '#b9bfc2');
-      const c = ['#f39c12', '#f7dc6f', '#e67e22', '#f5f5dc', '#d35400'][(tx / 44 + ty) % 5 | 0];
-      for (let k = 0; k < 8; k++) g.circle(tx + 6 + (k % 4) * 9, bottom - 74 + ty * 38 + Math.floor(k / 4) * 10, 4.5, c);
+    // Workshop pegboard, open bins and galvanised pipe stock.
+    g.rect(23, iy + 25, 119, 91, '#786950');
+    for (let x=26;x<139;x+=7) for(let y=iy+28;y<iy+113;y+=7) g.rect(x,y,1.6,1.6,'#4a4437');
+    for (let k=0;k<9;k++) {
+      const x=32 + k%5*23, y=iy+37+Math.floor(k/5)*39;
+      g.line(x,y,x-2,y+19,'#b1aaa0',3);
+      g.line(x-2,y+13,x-3,y+23,k%2?'#654d3d':'#55574b',4);
+      g.line(x-3,y-2,x+3,y+2,'#bdb7ab',4);
     }
+    for (let k=0;k<10;k++){
+      const x=165+k*6, y=iy+35+r()*26;
+      g.line(x+8,y,x,bottom-7,k%2?'#9f9c8a':'#777c76',4);
+      g.line(x+8,y,x,bottom-7,'#c6bfa8',1);
+    }
+    shelf(16,bottom-77,135);
+    for(let k=0;k<3;k++){
+      const x=23+k*40;
+      g.poly([[x,bottom-49],[x+34,bottom-49],[x+30,bottom-8],[x+4,bottom-8]],['#627572','#8e8060','#687d82'][k]);
+      g.rect(x-1,bottom-50,36,4,'#a29c85');
+    }
+  } else if (v === 5) {
+    // Bakery shelves, rounded loaves and a steel-framed mithai display case.
+    const upper = iy + 59, lower = iy + 104;
+    for (let k = 0; k < 7; k++) {
+      const x = 21 + k * 30, h = 12 + r() * 5;
+      g.poly([[x, upper], [x + 1, upper - h + 4], [x + 5, upper - h], [x + 19, upper - h - 1],
+        [x + 25, upper - h + 4], [x + 26, upper]], k % 3 ? '#c49460' : '#ba9a72');
+      for (let j = 0; j < 3; j++) g.line(x + 7 + j * 5, upper - h + 2, x + 4 + j * 5, upper - h + 6, '#e4cba1', 1.5);
+    }
+    shelf(17, upper, 220);
+    for (let k = 0; k < 4; k++) {
+      const x = 22 + k * 54, h = k % 2 ? 11 : 16;
+      g.rect(x, lower - 2, 43, 2, '#c0ad91');
+      g.rect(x + 3, lower - 2 - h, 37, h, k % 2 ? '#906748' : '#c6a788');
+      g.rect(x + 3, lower - 3 - h, 37, 3, k % 2 ? '#dfc3a8' : '#dbc9a9');
+      g.rect(x + 3, lower - 7, 37, 2, '#9c7761');
+      for (let j = 0; j < 4; j++) g.circle(x + 8 + j * 8, lower - 5 - h, 2.1, j % 2 ? '#a8634e' : '#e0c7a0');
+    }
+    shelf(17, lower, 220);
+    g.grad(14,bottom-67,228,63,[[0,'#747f76'],[0.5,'#4c544f'],[1,'#6e6150']]);
+    for (let n=0;n<8;n++) {
+      const x=20+(n%4)*54, y=bottom-54+Math.floor(n/4)*24;
+      g.rect(x,y,49,18,'#a09c8e'); g.rect(x+2,y+1,45,13,'#675d4e');
+      const tones=['#b9834e','#c69859','#bbad8b','#936c45'];
+      for(let j=0;j<12;j++) g.circle(x+5+(j%6)*7,y+4+Math.floor(j/6)*7,3+r(),tones[n%4]);
+      g.line(x,y+17,x+48,y+17,'#d4c7b0',1.3);
+    }
+    for (const x of [14,126,241]) g.rect(x,bottom-68,2.5,65,'#d0c8b6');
+    g.rect(13,bottom-69,231,3,'#c3c3b0');
+    g.line(28,bottom-32,84,bottom-62,'rgba(225,232,218,.23)',2,'stain');
+    g.line(152,bottom-35,193,bottom-57,'rgba(225,232,218,.18)',2,'stain');
   } else {
-    // Tea stall: steel kettle, glasses, a bench and a menu board.
-    g.rect(14, iy + 14, 90, 70, '#22313a'); g.text('चहा ₹10', 59, iy + 34, 22, '#f9e79f', { font: FONT_DEVA, weight: 700 });
-    g.text('वडापाव ₹15', 59, iy + 62, 18, '#fff', { font: FONT_DEVA, weight: 700 });
-    g.rect(120, bottom - 70, 120, 8, '#7a5a3c'); g.circle(160, bottom - 84, 16, '#c0c4c6'); g.rect(176, bottom - 92, 14, 6, '#c0c4c6');
-    for (let k = 0; k < 6; k++) g.rect(196 + (k % 3) * 12, bottom - 86 - Math.floor(k / 3) * 14, 8, 12, 'rgba(230,240,240,0.9)');
-    g.rect(20, bottom - 32, 90, 8, '#6d4c33'); g.rect(26, bottom - 24, 6, 16, '#6d4c33'); g.rect(98, bottom - 24, 6, 16, '#6d4c33');
+    g.rect(18, iy + 23, 85, 58, '#4a3f33'); g.rect(21,iy+26,79,52,'#414a40');
+    g.text('चहा ₹10', 60, iy + 42, 14, '#d3c7aa', { font: FONT_DEVA, weight: 700 });
+    g.text('वडापाव ₹15', 60, iy + 61, 12, '#d3c7aa', { font: FONT_DEVA, weight: 700 });
+    for(let k=0;k<4;k++) {
+      const x=138+k*22;
+      g.rect(x,iy+46,16,23,['#9b866d','#9a7657'][k%2]); g.rect(x-1,iy+43,18,4,'#c0b39d'); g.rect(x+2,iy+54,12,7,'#c5b79a');
+    }
+    shelf(131,iy+69,101);
+    g.rect(19,bottom-57,215,51,'#736754'); shelf(15,bottom-63,222);
+    g.circle(155,bottom-75,13,'#93988b'); g.rect(147,bottom-90,17,5,'#b6b4a2');
+    g.line(164,bottom-78,176,bottom-83,'#aab0a0',4);
+    for(let k=0;k<5;k++) g.poly([[185+k*8,bottom-73],[191+k*8,bottom-73],[190+k*8,bottom-64],[186+k*8,bottom-64]],'#babba5');
   }
   // The jambs, threshold and shutter recess give even an open shop a clear depth.
   g.grad(6, iy, T - 12, ih, [[0, 'rgba(31,30,26,0.52)'], [0.12, 'rgba(31,30,26,0.25)'], [0.36, 'rgba(31,30,26,0.02)'], [1, 'rgba(31,30,26,0.08)']], 'stain');
@@ -891,18 +987,19 @@ const LANDMARK_SIGNS = {
   'nanded-bus-stand': ['नांदेड मध्यवर्ती बसस्थानक', 'NANDED CENTRAL BUS STAND', 0],
   'nanded-airport': ['श्री गुरु गोबिंद सिंह जी विमानतळ', 'SHRI GURU GOBIND SINGH JI AIRPORT, NANDED', 7],
 };
+// Marathi name, English name and stock tile in ROW.SHOP.
 export const SHOP_SIGNS = [
-  ['श्री गणेश किराणा', 'SHREE GANESH KIRANA'], ['साई मेडिकल', 'SAI MEDICAL & GENERAL'], ['बालाजी मोबाईल्स', 'BALAJI MOBILES'],
-  ['जय मल्हार हार्डवेअर', 'JAI MALHAR HARDWARE'], ['हॉटेल जय भवानी', 'HOTEL JAI BHAVANI'], ['पाटील टी हाऊस', 'PATIL TEA HOUSE'],
-  ['ओम साई क्लॉथ सेंटर', 'OM SAI CLOTH CENTRE'], ['माऊली स्वीट्स', 'MAULI SWEETS'], ['सुरेश हेअर सलून', 'SURESH HAIR SALOON'],
-  ['राज फोटो स्टुडिओ', 'RAJ PHOTO STUDIO'], ['गोदावरी इलेक्ट्रिकल्स', 'GODAVARI ELECTRICALS'], ['शिवनेरी झेरॉक्स', 'SHIVNERI XEROX & ONLINE'],
-  ['साई श्रद्धा भोजनालय', 'SAI SHRADDHA BHOJNALAYA'], ['दत्त पान सेंटर', 'DATTA PAN CENTRE'], ['नांदेड सायकल मार्ट', 'NANDED CYCLE MART'],
-  ['अंबिका ज्वेलर्स', 'AMBIKA JEWELLERS'], ['वैभव टेलर्स', 'VAIBHAV TAILORS'], ['तुळजा भवानी ट्रॅव्हल्स', 'TULJA BHAVANI TRAVELS'],
-  ['शुभम ऑटो पार्ट्स', 'SHUBHAM AUTO PARTS'], ['लक्ष्मी बांगड्या', 'LAXMI BANGLES'], ['श्री राम मेडिकोज', 'SHRI RAM MEDICOS'],
-  ['हजूर साहिब ढाबा', 'HAZUR SAHIB DHABA'], ['खालसा मोटर गॅरेज', 'KHALSA MOTOR GARAGE'], ['गुरु कृपा स्वीट्स', 'GURU KRIPA SWEETS'],
-  ['न्यू इंडिया मोबाईल रिपेअरिंग', 'NEW INDIA MOBILE REPAIRING'], ['आई तुळजा स्टील सेंटर', 'AAI TULJA STEEL CENTRE'], ['समर्थ बुक डेपो', 'SAMARTH BOOK DEPOT'],
-  ['व्हिजन क्लासेस', 'VISION CLASSES • NEET / JEE'], ['स्वामी समर्थ पिठाची गिरणी', 'SWAMI SAMARTH FLOUR MILL'], ['रॉयल बेकरी', 'ROYAL BAKERY & CAKE SHOP'],
-  ['अण्णा रंग गॅरेज', "ANNA'S RANG GARAGE"], ['एमएच २६ कार वॉश', 'MH-26 CAR WASH'],
+  ['श्री गणेश किराणा', 'SHREE GANESH KIRANA', 0], ['साई मेडिकल', 'SAI MEDICAL & GENERAL', 2], ['बालाजी मोबाईल्स', 'BALAJI MOBILES', 1],
+  ['जय मल्हार हार्डवेअर', 'JAI MALHAR HARDWARE', 4], ['हॉटेल जय भवानी', 'HOTEL JAI BHAVANI', 6], ['पाटील टी हाऊस', 'PATIL TEA HOUSE', 6],
+  ['ओम साई क्लॉथ सेंटर', 'OM SAI CLOTH CENTRE', 3], ['माऊली स्वीट्स', 'MAULI SWEETS', 5], ['सुरेश हेअर सलून', 'SURESH HAIR SALOON', 1],
+  ['राज फोटो स्टुडिओ', 'RAJ PHOTO STUDIO', 1], ['गोदावरी इलेक्ट्रिकल्स', 'GODAVARI ELECTRICALS', 4], ['शिवनेरी झेरॉक्स', 'SHIVNERI XEROX & ONLINE', 1],
+  ['साई श्रद्धा भोजनालय', 'SAI SHRADDHA BHOJNALAYA', 6], ['दत्त पान सेंटर', 'DATTA PAN CENTRE', 0], ['नांदेड सायकल मार्ट', 'NANDED CYCLE MART', 4],
+  ['अंबिका ज्वेलर्स', 'AMBIKA JEWELLERS', 1], ['वैभव टेलर्स', 'VAIBHAV TAILORS', 3], ['तुळजा भवानी ट्रॅव्हल्स', 'TULJA BHAVANI TRAVELS', 1],
+  ['शुभम ऑटो पार्ट्स', 'SHUBHAM AUTO PARTS', 4], ['लक्ष्मी बांगड्या', 'LAXMI BANGLES', 3], ['श्री राम मेडिकोज', 'SHRI RAM MEDICOS', 2],
+  ['हजूर साहिब ढाबा', 'HAZUR SAHIB DHABA', 6], ['खालसा मोटर गॅरेज', 'KHALSA MOTOR GARAGE', 4], ['गुरु कृपा स्वीट्स', 'GURU KRIPA SWEETS', 5],
+  ['न्यू इंडिया मोबाईल रिपेअरिंग', 'NEW INDIA MOBILE REPAIRING', 1], ['आई तुळजा स्टील सेंटर', 'AAI TULJA STEEL CENTRE', 4], ['समर्थ बुक डेपो', 'SAMARTH BOOK DEPOT', 0],
+  ['व्हिजन क्लासेस', 'VISION CLASSES • NEET / JEE', 1], ['स्वामी समर्थ पिठाची गिरणी', 'SWAMI SAMARTH FLOUR MILL', 0], ['रॉयल बेकरी', 'ROYAL BAKERY & CAKE SHOP', 5],
+  ['अण्णा रंग गॅरेज', "ANNA'S RANG GARAGE", 4], ['एमएच २६ कार वॉश', 'MH-26 CAR WASH', 4],
 ];
 
 /** Signboards for shops (first 32 slots) and every researched place with a frontage. */

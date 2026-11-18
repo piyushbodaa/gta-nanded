@@ -128,7 +128,7 @@ export function createRivers(scene, city, sky) {
       uniforms.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(1, sky.sun.intensity / 3));
       uniforms.uSky.value.copy(sky.uniforms.uHorizon.value).lerp(sky.uniforms.uZenith.value, 0.4);
       uniforms.uNight.value = sky.night;
-      uniforms.uRain.value = sky.w.grey;
+      uniforms.uRain.value = sky.w.rain;
     },
   };
 }

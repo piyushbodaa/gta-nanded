@@ -1,6 +1,6 @@
 // Particles (smoke, dust, sparks, fire, rain), skid marks and mission markers.
 import * as THREE from 'three';
-import { clamp, rng } from '../core/math.js';
+import { createRain, updateRain } from './rain.js';
 import { radialTexture } from '../world/citymat.js';
 import { sendFirst } from '../core/buffers.js';
 
@@ -52,21 +52,9 @@ export class Effects {
     this.skids.count = 0; this.skids.visible = false; this.skids.frustumCulled = false; this.skidI = 0; this.skidN = SK;
     this.skids.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.skids);
-    // --- rain: a column of streaks that follows the camera.
-    const RN = 4200;
-    const rg = new THREE.BufferGeometry();
-    const rp = new Float32Array(RN * 6);
-    for (let i = 0; i < RN; i++) {
-      // Denser close to the camera, where streaks read best.
-      const rr = Math.pow(Math.random(), 0.7) * 30, a = Math.random() * Math.PI * 2;
-      const x = Math.cos(a) * rr, y = Math.random() * 30, z = Math.sin(a) * rr;
-      rp.set([x, y, z, x + 0.06, y - 1.3, z + 0.04], i * 6);
-    }
-    rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
-    this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xb4c2cc, transparent: true, opacity: 0.4, fog: false, depthWrite: false }));
-    this.rain.frustumCulled = false; this.rain.visible = false;
+    this.lastPlanted = -1;
+    this.rain = createRain();
     scene.add(this.rain);
-    this.rainY = 0;
     // --- mission markers.
     this.markers = new Markers(scene);
     // Explosion flashes: a glow on the street, not a light. A PointLight, even switched off,
@@ -92,6 +80,50 @@ export class Effects {
     for (let k = 0; k < n; k++) this.spawn(x, y + 0.2, z, (Math.random() - 0.5) * 1.5, 0.4 + Math.random() * 0.4, (Math.random() - 0.5) * 1.5, 1.1, 0.9, color[0], color[1], color[2], 0.35, { grow: 2.5, drag: 1.5 });
   }
   tyreSmoke(x, z, y = 0) { this.spawn(x, y + 0.3, z, (Math.random() - 0.5) * 0.8, 0.5, (Math.random() - 0.5) * 0.8, 1.4, 0.8, 0.85, 0.85, 0.85, 0.32, { grow: 3, drag: 1.2 }); }
+  footfalls(dt, player, wet, audio) {
+    if (dt <= 0) return;
+    const h = player.human, feet = h.anim?.feet;
+    if (player.state !== 'foot' || !player.onGround || h.anim?.family !== 'ground' || h.speed < 0.65) {
+      this.lastPlanted = -1;
+      return;
+    }
+    const planted = Number(feet[0].planted) | (Number(feet[1].planted) << 1);
+    const struck = planted & ~this.lastPlanted;
+    this.lastPlanted = planted;
+    const force = Math.min(1, 0.35 + h.speed * 0.09);
+    for (let i = 0; i < 2; i++) {
+      if (!(struck & (1 << i))) continue;
+      audio?.sfx(wet > 0.35 ? 'wetStep' : 'shoe', force);
+      if (wet <= 0.35) continue;
+      const { anchorX, anchorZ, surfaceY } = feet[i];
+      for (let j = 0; j < 5; j++) {
+        const angle = Math.random() * Math.PI * 2, push = (0.35 + Math.random()) * force;
+        this.spawn(anchorX, surfaceY + 0.035, anchorZ, Math.cos(angle) * push, 0.5 + Math.random() * force,
+          Math.sin(angle) * push, 0.18 + Math.random() * 0.08, 0.035 + force * 0.037,
+          0.62, 0.74, 0.81, 0.72 * wet, { drag: 0.8, buoy: -8.5 });
+      }
+    }
+  }
+
+  tyreSpray(vehicle, wet, speed) {
+    const s = Math.sin(vehicle.heading), c = Math.cos(vehicle.heading);
+    const strength = Math.min(1, (speed - 4) / 14) * wet;
+    // Start each wake at an actual rear contact patch, including the single wheel of a scooter.
+    for (const [wx, wz, , front] of vehicle.model.wheels) {
+      if (front) continue;
+      const x = vehicle.x + wx * c + wz * s, z = vehicle.z - wx * s + wz * c;
+      // Fill the space the tyre crossed between emissions. At driving speed a single
+      // puff per tick leaves a dotted line of perfectly matched pairs behind the car.
+      for (let j = 0; j < 2; j++) {
+        const age = j ? 0.025 + Math.random() * 0.035 : 0;
+        const outward = Math.sign(wx) * (0.45 + Math.random() * 0.8);
+        this.spawn(x - vehicle.vx * age, vehicle.y + 0.09, z - vehicle.vz * age,
+          vehicle.vx * 0.14 + outward * c, 0.55 + strength * 1.5, vehicle.vz * 0.14 - outward * s,
+          0.28 + strength * 0.18, 0.25 + strength * 0.27, 0.62, 0.69, 0.73, 0.19 * strength,
+          { grow: 2.4, drag: 1.7, buoy: -3.5 });
+      }
+    }
+  }
   sparks(x, y, z, n = 8) {
     for (let k = 0; k < n; k++) this.spawn(x, y, z, (Math.random() - 0.5) * 7, 2 + Math.random() * 3, (Math.random() - 0.5) * 7, 0.35 + Math.random() * 0.3, 0.12, 1, 0.75, 0.3, 1, { grow: 0.3, drag: 0.5, buoy: -9 });
   }
@@ -165,7 +197,8 @@ export class Effects {
     this.points.visible = hi > 0;
     // Sizes in metres: the narrower the view (aiming, a scope's 4x or 8x), the bigger they draw, as everything else does.
     const fov = camera?.fov || 62;
-    this.mat.uniforms.scale.value = innerHeight * 0.9 * TAN31 / Math.tan(fov * Math.PI / 360);
+    const heightPx = weather.heightPx || innerHeight;
+    this.mat.uniforms.scale.value = heightPx * 0.9 * TAN31 / Math.tan(fov * Math.PI / 360);
     // Explosion flashes light the street (the brightest one, fading over half a second).
     let li = 0;
     for (let k = this.flashes.length - 1; k >= 0; k--) {
@@ -175,14 +208,7 @@ export class Effects {
     }
     this.glow.visible = li > 0;
     this.glow.material.opacity = Math.min(1, li) * 0.9;
-    // Rain follows the camera.
-    const rainOn = weather.rain > 0.3;
-    this.rain.visible = rainOn;
-    if (rainOn) {
-      this.rainY = (this.rainY - dt * 22) % 30;
-      this.rain.position.set(camera.position.x, camera.position.y - 8 + ((this.rainY + 30) % 30) - 15, camera.position.z);
-      this.rain.material.opacity = 0.16 + weather.rain * 0.22;
-    }
+    updateRain(this.rain, dt, weather.rain || 0, weather.night || 0, heightPx, weather.low);
     this.markers.update(dt);
   }
 }

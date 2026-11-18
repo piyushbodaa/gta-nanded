@@ -8,6 +8,7 @@ import { rng, clamp } from '../core/math.js';
 import { radialTexture } from '../world/citymat.js';
 import { sendFirst } from '../core/buffers.js';
 import { animate, C, BODY } from './anim.js';
+import { makeUmbrellas, placeUmbrella } from './umbrellas.js';
 import { BONES, SLOTS, SHOW, FIXED, JOINTS, REGION, ROUGH, WOMENS, HAIRLINE, BEARDLINE, farGeometry, nearGeometry } from './people-models.js';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -542,6 +543,9 @@ export class Humans {
     this.blobs.name = 'human-shade';
     scene.add(this.blobs);
     this.blobsOn = true;
+    this.rain = 0;
+    this.umbrellas = makeUmbrellas(capacity);
+    scene.add(this.umbrellas);
     this.drawDistance = 140;
   }
 
@@ -661,14 +665,21 @@ export class Humans {
     start[0] = 0;
     for (let k = 1; k < 8; k++) start[k] = start[k - 1] + counts[k - 1];
     let blobs = 0, contacts = 0;
+    this.umbrellas.count = 0;
     for (const h of vis) {
       const d2 = h._d2;
       this._at = start[bucket(h)]++ * BLOCK * 4;
       // Where weapon-fx.js finds this person's bones (the rows are re-sorted every frame).
       h._row = this._at; h._lod = h.hero ? 0 : d2 > 3600 ? 2 : d2 > 900 ? 1 : 0;
+      if (h.rainGear && !h.gun && !h.air && (h.pose === 'walk' || h.pose === 'idle')) {
+        const lift = h.umbrellaLift || 0;
+        const open = this.rain > h.rainGear.threshold - (lift > 0.5 ? 0.06 : 0);
+        h.umbrellaLift = clamp(lift + (open ? 3.6 : -3.6) * dt, 0, 1);
+      } else h.umbrellaLift = 0;
       // A street away, keep hands near the bars. Farther out, keep a moving silhouette.
       animate(h, dt, h._lod);
       this._pose(h);
+      if (h.umbrellaLift > 0) placeUmbrella(this.umbrellas, h, this.data, h._row + B.lowerArmR * 12);
       // Seated riders and drivers are covered by their vehicle's shade.
       if (this.blobsOn && d2 < blobD2 && h.pose !== 'sit' && h.pose !== 'ride') {
         const lying = h.pose === 'lie', s = h.outfit.scale || 1, A = h.anim, mid = A.out[C.RZ] * 0.5 * s;
@@ -706,6 +717,9 @@ export class Humans {
     this.blobs.count = blobs;
     this.blobs.visible = blobs > 0;
     sendFirst(this.blobs.instanceMatrix, blobs);
+    this.umbrellas.visible = this.umbrellas.count > 0;
+    sendFirst(this.umbrellas.instanceMatrix, this.umbrellas.count);
+    sendFirst(this.umbrellas.instanceColor, this.umbrellas.count);
   }
   _rows(mesh, base, count, shadow) {
     mesh.rows.base.value = base; mesh.rows.count = count; mesh.rows.shadow = shadow;

@@ -459,12 +459,13 @@ export class Game {
     const focus = this.player.pos;
     // Stream with what the frame can spare: up to 4 ms, less when frames are already long.
     if (stream) w.chunks.update(focus.x, focus.z, this.started ? clamp(13 - this._frameMs, 1, 4) : 30);
-    w.sky.update(dt, focus);
+    w.sky.update(dt, focus, !this.started && dt === 0);
     this.signals?.update(dt, this.time);
     w.sky.placeDome(cam);
     w.rivers.update(dt);
     w.cityUniforms.uNight.value = w.sky.night;
     w.cityUniforms.uWet.value = w.sky.wet;
+    w.cityUniforms.uRain.value = w.sky.w.rain;
     w.cityUniforms.uTime.value += dt;
     w.chunks.setNight(w.sky.night);
     this.vehicles.night = w.sky.night;
@@ -472,12 +473,17 @@ export class Game {
     // a static one would leave their shadows behind as they move.
     const q = this.quality.settings, casters = q.dynamicShadows ? w.sky.shadowBox : NO_SHADOW_BOX;
     this.humans.blobsOn = !q.dynamicShadows;
+    this.humans.rain = w.sky.w.rain;
     this.humans.nearRadius = q.nearRadius; this.humans.nearMax = q.nearPeople;
     this.vehicles.render(dt, cam.position, casters);
     this.humans.update(dt, cam.position, casters, cam);
+    if (this.started) this.effects?.footfalls(dt, this.player, w.sky.wet, this.audio);
     this.weaponFx?.update(dt);
     this.nakabandiFx?.update(dt);
-    this.effects?.update(dt, cam, { rain: w.sky.weather === 'rain' ? w.sky.w.grey : 0 });
+    this.effects?.update(dt, cam, {
+      rain: w.sky.w.rain, night: w.sky.night, low: this.quality.tier === 'low',
+      heightPx: (this.post.enabled && this.post.rt?.height) || this.renderer.domElement.height,
+    });
     // Shadows: static city refreshed as the focus moves; dynamic actors on high settings.
     if (q.shadows > 0) {
       // Moving shadows refresh every other frame: half the cost, and nobody can tell.
