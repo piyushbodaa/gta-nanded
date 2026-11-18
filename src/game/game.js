@@ -34,7 +34,8 @@ export class Game {
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = this.quality.settings.shadows > 0;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Interpolate shadow comparisons across each texel so an awning edge stays smooth up close.
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
     this.scene = new THREE.Scene();
     this.camera3 = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 900);
@@ -65,15 +66,20 @@ export class Game {
     this._pauseDrawn = false; // a resized canvas is blank: draw it again even behind the menu
     this.camera3.aspect = innerWidth / innerHeight;
     this.camera3.updateProjectionMatrix();
-    this.renderer.setPixelRatio(this.quality.pixelRatio());
-    this.renderer.setSize(innerWidth, innerHeight, false);
+    this._sizeRenderer();
+  }
+
+  _sizeRenderer() {
+    const ratio = this.post?.enabled ? this.quality.presentationRatio() : this.quality.pixelRatio();
+    this.renderer.setDrawingBufferSize(innerWidth, innerHeight, ratio);
     this.post?.configure(this._postSettings());
   }
 
-  /** The final pass sharpens in proportion to how far the browser will stretch the frame. */
   _postSettings() {
     const q = this.quality, s = q.settings;
-    return { msaa: s.msaa, bloom: s.bloom, sharpen: Math.min(0.4, (q.upscale() - 1) * 0.3) };
+    const display = this.renderer.getPixelRatio();
+    return { msaa: s.msaa, bloom: s.bloom, contactShade: s.dynamicShadows,
+      sceneScale: q.pixelRatio() / display, sharpen: Math.min(0.32, (q.upscale() - 1) * 0.2) };
   }
 
   async load(stage) {
@@ -86,6 +92,7 @@ export class Game {
     const w = this.world;
     this.city = w.city; this.net = w.net; this.colliders = w.colliders; this.sky = w.sky;
     this.post = new Post(this.renderer, this.sky);
+    this.post.onFallback = () => this._sizeRenderer();
     this.post.setDetail(w.textures.detail);
     this.sky.useSceneFog(!this.post.enabled);
     this.applyQuality();
@@ -100,11 +107,9 @@ export class Game {
   applyQuality() {
     const q = this.quality.settings;
     this._pauseDrawn = false;
-    this.renderer.setPixelRatio(this.quality.pixelRatio());
-    this.renderer.setSize(innerWidth, innerHeight, false);
+    this._sizeRenderer();
     this.world.chunks.setRadius(q.viewDistance);
     this.world.sky.setViewDistance(q.viewDistance);
-    this.post.configure(this._postSettings());
     this.camera3.far = q.viewDistance + 150;
     this.camera3.updateProjectionMatrix();
     const sun = this.world.sky.sun;
@@ -112,8 +117,6 @@ export class Game {
     sun.castShadow = q.shadows > 0;
     // The bounce fill lights cast shade; without a shadow map it would only flatten the picture.
     this.world.sky.bounceOn = q.shadows > 0;
-    // A wider filter on the coarser map: soft edges instead of stair-steps, for the same 17 taps.
-    sun.shadow.radius = q.shadows >= 2048 ? 1.3 : 1.8;
     if (q.shadows > 0 && sun.shadow.mapSize.x !== q.shadows) {
       sun.shadow.mapSize.set(q.shadows, q.shadows);
       sun.shadow.map?.dispose(); sun.shadow.map = null;

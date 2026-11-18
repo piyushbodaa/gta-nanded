@@ -760,14 +760,23 @@ function handNear(s) {
 
 // --- feet: closed shoes, or chappals on bare feet
 function shoeNear(s) {
-  const g = new THREE.SphereGeometry(1, S(16), S(10)), p = g.attributes.position;
+  // The outsole, the leather upper and the ankle opening share a flat heel and a broad toe.
+  // A ring through the back of the heel keeps the shoe's shape readable from the game's camera.
+  const g = tube([
+    [-BODY.ankle, 0.049, 0.146, 0.102, 0.029],
+    [-0.052, 0.052, 0.150, 0.106, 0.029],
+    [-0.041, 0.052, 0.150, 0.106, 0.029],
+    [-0.037, 0.049, 0.148, 0.102, 0.029],
+    [-0.021, 0.048, 0.141, 0.099, 0.028],
+    [-0.009, 0.045, 0.124, 0.091, 0.022],
+    [0.008, 0.043, 0.092, 0.083, 0.015],
+    [0.032, 0.040, 0.052, 0.071, 0.006],
+    [0.043, 0.037, 0.038, 0.062, 0.002],
+  ], S(18), 2.65, true, true), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const Z = z * 0.133 + 0.052;
-    const w = 0.035 + 0.014 * smooth(-0.06, 0.1, Z) - 0.01 * smooth(0.13, 0.19, Z);
-    const top = 0.072 - 0.03 * smooth(0.0, 0.11, Z) - 0.012 * smooth(0.11, 0.18, Z);
-    const Y = -0.057 + (Math.max(y, -0.7) + 0.7) / 1.7 * top + 0.006 * smooth(0.12, 0.19, Z) * (y < 0 ? 1 : 0);
-    p.setXYZ(i, x * w - s * 0.004 * smooth(0.06, 0.18, Z) * (x * s < 0 ? 1 : 0.3), Y, Z);
+    const forefoot = smooth(0.015, 0.14, z), heel = 1 - smooth(-0.075, 0.025, z);
+    p.setXYZ(i, x * (1 - 0.11 * heel) - s * 0.007 * forefoot, y + 0.009 * smooth(0.105, 0.18, z), z);
   }
   g.computeVertexNormals();
   return g;

@@ -227,7 +227,11 @@ function styleOf(o) {
 
 function create(h) {
   const r = Math.random;
-  const foot = () => ({ x: 0, y: 0, z: 0, pitch: 0, load: 0, reach: 0 });
+  const foot = () => ({
+    x: 0, y: 0, z: 0, pitch: 0, load: 0, reach: 0,
+    planted: false, anchorX: 0, anchorZ: 0, correctionX: 0, correctionZ: 0,
+    sampleX: Infinity, sampleZ: Infinity, sampleFloor: Infinity, surfaceY: 0, easedY: 0, floorOffset: 0,
+  });
   return {
     pose: new Float32Array(N), out: new Float32Array(N), off: new Float32Array(N), offV: new Float32Array(N), easing: false,
     root: { x: 0, y: 0, z: 0, yaw: 0, vx: 0, vy: 0, vz: 0, vyaw: 0 }, rootEasing: false,
@@ -249,7 +253,7 @@ function create(h) {
 
 /**
  * Work out this frame's pose for person h (h.anim.out) and their easing root offsets
- * (h.anim.root). lod: 0 close up, 1 a street away (no hands on handlebars), 2 far (body only).
+ * (h.anim.root). lod: 0 close up, 1 a street away, 2 a distant silhouette with a simpler gait.
  */
 export function animate(h, dt, lod = 0) {
   const a = h.anim || (h.anim = create(h));
@@ -293,6 +297,14 @@ export function animate(h, dt, lod = 0) {
     if (Math.abs(dy) > 0.03 && Math.abs(dy) < 0.45) { a.root.y -= dy; a.rootEasing = true; }
   }
   a.ft += dt;
+  const distant = lod >= 2;
+  if (changed || jumped || h.air || a.lod !== lod) {
+    for (const foot of a.feet) {
+      foot.planted = false; foot.correctionX = foot.correctionZ = 0; foot.sampleX = Infinity;
+    }
+  }
+  if (!first && distant !== (a.lod >= 2)) a.reEase = true;
+  a.lod = lod;
   // What is in hand: a weapon swapped for another (not drawn or put away, which the weights
   // ease) blends the whole pose over like any change of what they do.
   const holding = h.gun && fam === 'ground' ? (h.hold && h.hold !== 'none' ? h.hold : GRIPS[h.gun]?.hold || 'none') : 'none';
@@ -308,7 +320,7 @@ export function animate(h, dt, lod = 0) {
   a.lastRecoil = h.recoil || 0;
   const P = a.pose;
   P.set(STANDING);
-  if (lod >= 2) far(a, h, P);
+  if (fam === 'ground' && distant) farGait(a, h, P, dt);
   else if (fam === 'ground') ground(a, h, P, dt, lod);
   else if (fam === 'sit') sit(a, h, P, lod);
   else if (fam === 'ride') ride(a, h, P, dt, lod);
@@ -349,12 +361,32 @@ export function animate(h, dt, lod = 0) {
   return out;
 }
 
-/** Far away only the body shows: just sit, ride or lie at the right height. */
-function far(a, h, P) {
-  const fam = a.family;
-  if (fam === 'sit' || fam === 'ride') { P[C.PY] = h.seatY || 0.6; P[C.TP] = fam === 'ride' ? 0.25 : 0; }
-  else if (fam === 'lie') P.set(LIE[a.fall > 0 ? 'front' : 'back']);
-  else if (fam === 'cower' || fam === 'getup') P[C.PY] = 0.5;
+function advanceStride(a, sc, speed, run, dt) {
+  const cadence = lerp(0.47 + 0.3 * speed, 1.18 + 0.06 * speed, run) * a.style.cad / Math.sqrt(sc);
+  a.phase = (a.phase + cadence * dt) % 1;
+  a.ph = a.phase * TAU;
+  return cadence;
+}
+
+// The outline of a walker is still legible across the street. Keep the same stride clock as
+// the detailed rig and pose the limbs directly, without running four joint solvers at range.
+function farGait(a, h, P, dt) {
+  const sc = h.outfit.scale || 1, v = a.spd / sc;
+  const run = smooth(2, 2.9, v), moving = smooth(0.05, 0.9, v);
+  advanceStride(a, sc, a.spd, run, dt);
+  const swing = Math.cos(a.ph), recovery = Math.sin(a.ph);
+  P[C.PY] = STAND - moving * (0.02 + 0.02 * run + 0.028 * swing * swing);
+  P[C.TP] = a.style.lean + moving * lerp(0.035, 0.16, run);
+  P[C.TW] = swing * moving * 0.12;
+  for (let side = 0; side < 2; side++) {
+    const sign = side === 0 ? 1 : -1;
+    const knee = 0.09 + moving * (0.08 + Math.max(0, -recovery * sign) * lerp(0.55, 1.42, run));
+    P[C.KN + side] = knee;
+    P[C.HF + side] = knee * 0.48 + swing * sign * moving * lerp(0.39, 0.65, run);
+    footAt(P, side, 0);
+    P[C.SF + side] = -swing * sign * moving * lerp(0.27, 0.64, run);
+    P[C.EL + side] = 0.18 + moving * lerp(0.16, 1.05, run);
+  }
 }
 
 // ---------------------------------------------------------------- on foot
@@ -370,9 +402,7 @@ function ground(a, h, P, dt, lod = 0) {
   // Strides a second, from measured gaits (0.9 at 1.3 m/s, 1.1 at 1.9, 1.5 running at 4.4), a
   // little quicker for shorter people.
   const vc = Math.max(a.spd, 1.8 * turning);
-  const f = (lerp(0.47 + 0.3 * vc, 1.18 + 0.06 * vc, run) * st.cad) / Math.sqrt(sc);
-  if (dt > 0) a.phase = (a.phase + f * dt) % 1;
-  const ph = a.phase * TAU; a.ph = ph;
+  const f = advanceStride(a, sc, vc, run, dt), ph = a.ph;
   const beta = lerp(0.67 - 0.035 * v, 0.4 - 0.024 * v, run), L = (v * beta) / f;
   const still = 1 - k, guard = a.wGuard * (1 - run);
   // Standing: weight shifts from one leg to the other every few seconds, and the eyes wander.
@@ -388,9 +418,9 @@ function ground(a, h, P, dt, lod = 0) {
   const mid = ph - beta * Math.PI; // from the left foot's mid-stance
   const bank = clamp((0.5 * a.spd * a.turn) / 9.81, -0.22, 0.22);
   const pu = a.punches % 3, pw = a.wPunch * punchExt(a.punch);
-  P[C.PX] = k * lerp(0.022, 0.01, run) * st.sway * Math.cos(mid) + 0.03 * shift;
-  P[C.PR] = k * lerp(0.05, 0.035, run) * Math.cos(mid) + 0.045 * shift - 0.5 * bank;
-  P[C.PW] = -k * lerp(0.06, 0.1, run) * Math.cos(ph) - 0.14 * guard + pw * (PUNCHES[pu].PW || 0);
+  P[C.PX] = k * lerp(0.022, 0.01, run) * st.sway * Math.cos(mid) + 0.045 * shift;
+  P[C.PR] = k * lerp(0.05, 0.035, run) * Math.cos(mid) + 0.065 * shift - 0.5 * bank;
+  P[C.PW] = -k * lerp(0.06, 0.1, run) * Math.cos(ph) + 0.06 * shift - 0.14 * guard + pw * (PUNCHES[pu].PW || 0);
   P[C.PP] = 0.02 + run * 0.08;
   P[C.PZ] = pw * (PUNCHES[pu].PZ || 0);
   // Feet: where each one is on its path this frame.
@@ -400,7 +430,7 @@ function ground(a, h, P, dt, lod = 0) {
     footPath(o, (a.phase + 0.5 * s) % 1, L, beta, run, k, lift, v);
     o.x = side * width;
     // Fists up: the left foot leads. Resting on one leg: the other eases out a little.
-    o.z += 0.13 * guard * side + 0.05 * still * Math.max(0, -side * a.shift);
+    o.z += 0.13 * guard * side + 0.085 * still * Math.max(0, -side * a.shift);
   }
   // Aiming one way and walking another: the stride turns to the way they go (backwards, it runs
   // in reverse) and the hips turn part of the way with it, the shoulders staying on the aim.
@@ -410,10 +440,12 @@ function ground(a, h, P, dt, lod = 0) {
     for (const o of a.feet) { const x0 = o.x, z0 = o.z * m; o.x = x0 * c + z0 * s; o.z = -x0 * s + z0 * c; }
     P[C.PW] += clamp(sr, -0.6, 0.6);
   }
+  if (!h.air && lod === 0) groundContacts(a, h, sc, beta, lift, dt);
   // The pelvis rides as high as the loaded legs reach (a run adds its bounce).
   const low = STAND - 0.07 - 0.006 * Math.max(0, v - 3);
   const bounce = low + (0.018 + 0.0015 * v) * (1 - Math.cos(2 * TAU * (a.phase - beta / 2)));
-  const top = lerp(STAND + 0.01, bounce, run) - 0.035 * guard;
+  const footing = h.footSurface && !h.air && lod === 0 ? Math.min(a.feet[0].floorOffset, a.feet[1].floorOffset) : 0;
+  const top = lerp(STAND + 0.01, bounce, run) - 0.035 * guard + footing;
   let pull = 0;
   for (let s = 0; s < 2; s++) {
     const o = a.feet[s];
@@ -439,7 +471,7 @@ function ground(a, h, P, dt, lod = 0) {
   // Torso: lean into the speed and into speeding up, the shoulders turning against the hips;
   // breathing at rest. Head: steady, eyes level and ahead.
   P[C.TP] = st.lean * (1 - 0.5 * run) + lerp(0.035, 0.11 + 0.012 * v, run) * k + clamp(a.acc * 0.035, -0.12, 0.18) + 0.012 * still * Math.sin(a.t * 1.7);
-  P[C.TW] = k * lerp(0.11, 0.25, run) * Math.cos(ph);
+  P[C.TW] = k * lerp(0.11, 0.25, run) * Math.cos(ph) - 0.1 * shift;
   P[C.TR] = -0.7 * P[C.PR] - 0.4 * bank;
   // Arms: each swings with the opposite leg, a little behind it; at rest they do what this person does.
   const R = st.arms, swW = 0.3 * st.swing, swR = (0.55 + 0.04 * v) * st.swing, move = Math.max(k, run) * st.walkArms;
@@ -449,6 +481,14 @@ function ground(a, h, P, dt, lod = 0) {
     P[C.SA + s] = lerp(R[1], lerp(0.1, 0.17, run), move);
     P[C.ST + s] = lerp(R[2], lerp(0.15, 0.42, run), move);
     P[C.EL + s] = lerp(R[3], lerp(0.2 + 0.28 * fwd, 1.42 + 0.22 * sw, run), move);
+    // A loose arm balances the resting hip. People holding a bag or folding their arms
+    // keep their authored hand position.
+    if (R === ARMS.hang) {
+      const unloaded = Math.max(0, shift * (s === 0 ? -1 : 1));
+      P[C.SF + s] -= 0.09 * unloaded;
+      P[C.SA + s] += 0.08 * unloaded;
+      P[C.EL + s] += 0.32 * unloaded;
+    }
   }
   upper(a, h, P);
   P[C.HW] = -(P[C.PW] + P[C.TW]) * 0.85 + a.look + a.lookYaw;
@@ -456,6 +496,41 @@ function ground(a, h, P, dt, lod = 0) {
   P[C.HR] = -0.6 * (P[C.PR] + P[C.TR]);
   air(a, h, P);
   gunArms(a, h, P, lod);
+}
+
+// A contact point lives on the street as the body accelerates or turns above it. Release its
+// correction through the swing and bound the reach when a collision abruptly moves the body.
+function groundContacts(a, h, sc, beta, moving, dt) {
+  const yaw = h.yaw + a.root.yaw, c = Math.cos(yaw), s = Math.sin(yaw);
+  const rootX = h.x + a.root.x, rootZ = h.z + a.root.z, rootY = h.y + a.root.y;
+  for (let side = 0; side < 2; side++) {
+    const foot = a.feet[side], p = (a.phase + 0.5 * side) % 1;
+    let wx = rootX + sc * (foot.x * c + foot.z * s);
+    let wz = rootZ + sc * (foot.z * c - foot.x * s);
+    if (p < beta) {
+      if (!foot.planted) { foot.anchorX = wx; foot.anchorZ = wz; }
+      foot.planted = true;
+      const dx = foot.anchorX - wx, dz = foot.anchorZ - wz;
+      const limit = Math.min(1, 0.2 * sc / (Math.hypot(dx, dz) || 1e-6));
+      foot.correctionX = dx * limit; foot.correctionZ = dz * limit;
+    } else foot.planted = false;
+    const retain = moving * (1 - smooth(beta, 1, p));
+    const dx = foot.correctionX * retain, dz = foot.correctionZ * retain;
+    foot.x += (dx * c - dz * s) / sc; foot.z += (dx * s + dz * c) / sc;
+    if (h.footSurface) {
+      wx += dx; wz += dz;
+      // Reuse the height under a planted shoe. A change of level forces a fresh sample, even
+      // on an overlapping flyover and street. Only the player's close rig queries the city.
+      if (Math.abs(wx - foot.sampleX) + Math.abs(wz - foot.sampleZ) > 0.045 || h.floor !== foot.sampleFloor) {
+        foot.surfaceY = h.footSurface(wx, wz);
+        if (!Number.isFinite(foot.sampleX)) foot.easedY = foot.surfaceY;
+        foot.sampleX = wx; foot.sampleZ = wz; foot.sampleFloor = h.floor;
+      }
+      foot.easedY += (foot.surfaceY - foot.easedY) * ease(26, dt);
+      foot.floorOffset = clamp((foot.easedY - rootY) / sc, -0.32, 0.32);
+      foot.y += foot.floorOffset;
+    }
+  }
 }
 
 /** One foot on its path at phase p of the gait: ankle height and forward offset, pitch, load. */

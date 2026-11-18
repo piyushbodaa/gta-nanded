@@ -528,7 +528,7 @@ export function installRules(g) {
     const r = g.renderer, ratio = r.getPixelRatio(), want = Math.min(2, Math.max(ratio, 1280 / innerWidth));
     try {
       if (want > ratio * 1.1) { r.setPixelRatio(want); r.setSize(innerWidth, innerHeight, false); }
-      g.post.render(g.scene, g.camera3, 0);
+      g.post.render(g.scene, g.camera3, 0, 1);
       const name = title || g.city.district(g.player.pos.x, g.player.pos.z).name;
       const src = r.domElement, W = src.width, H = src.height, bar = Math.round(Math.max(40, W * 0.045));
       const shot = document.createElement('canvas');

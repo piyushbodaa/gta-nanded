@@ -3,6 +3,9 @@
 import { SpatialGrid, MinHeap, pointSegDist2, clamp } from '../core/math.js';
 
 export const ROAD_TYPES = ['trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential'];
+// The asphalt is drawn slightly above the underlying terrain and deck to avoid z-fighting.
+export const ROAD_Y = [0.07, 0.068, 0.066, 0.064, 0.062, 0.06];
+export const PAD_Y = 0.074;
 // Route cost per unit length: drivers prefer the big roads, as they do.
 const TYPE_COST = [1, 1, 1.02, 1.06, 1.18, 1.3];
 // Going the wrong way down a one-way road costs this much more: only when there is no other way.
@@ -335,29 +338,38 @@ export class RoadNet {
    * on (or driving up onto from the ramp's foot), else the street or river bridge it is on
    * (0), else the ground (`ground`, which citygen sets to the river valleys). Decks far above
    * or below y are passed under or over, and so are streets and bridges a body is well below
-   * (walking the riverbank under a bridge).
+   * (walking the riverbank under a bridge). Set drawn for the graphic at each shoe, including
+   * the road surface's small offset above the deck and excluding the collision margin.
    */
-  surfaceAt(x, z, y = 0) {
-    let street = false, deck = 0, deckErr = Infinity, t = this._t;
+  surfaceAt(x, z, y = 0, drawn = false) {
+    let street = false, deck = 0, deckErr = Infinity, streetLift = 0, deckLift = 0, t = this._t;
     this.grid.query(x - 1, z - 1, x + 1, z + 1, i => {
       const r = this.ptRoad[i];
       const d2 = pointSegDist2(x, z, this.px[i], this.pz[i], this.px[i + 1], this.pz[i + 1], t);
-      const hw = this.width[r] / 2 + 0.4;
+      const hw = this.width[r] / 2 + (drawn ? 0 : 0.4);
       if (d2 > hw * hw) return;
-      if (!this.raised[r]) { street = true; return; }
+      let lift = 0;
+      if (drawn) {
+        const along = this.cum[i] + (this.cum[i + 1] - this.cum[i]) * t[0];
+        const pad = (along < this.trimStart(r) && this.jRoads[this.ra[r]].length >= 3) ||
+          (along > this.length[r] - this.trimEnd(r) && this.jRoads[this.rb[r]].length >= 3);
+        lift = pad ? PAD_Y : ROAD_Y[this.type[r]] ?? 0.06;
+      }
+      if (!this.raised[r]) { street = true; streetLift = Math.max(streetLift, lift); return; }
       // A ramp's foot inside a junction on the ground is the junction (drawn flat), so traffic
       // crossing it isn't lifted onto the ramp.
       const s = this.cum[i] + (this.cum[i + 1] - this.cum[i]) * t[0];
       if ((s < this.trimStart(r) && this.jDeck[this.ra[r]] < 0.05) || (s > this.length[r] - this.trimEnd(r) && this.jDeck[this.rb[r]] < 0.05)) return;
       const h = this.deckAt(r, s);
       const err = Math.abs(h - y);
-      if (err < 2.6 && err < deckErr) { deck = h; deckErr = err; }
+      if (err < 2.6 && err < deckErr) { deck = h; deckErr = err; deckLift = lift; }
     });
     // Streets lie on the ground or (over the river valleys) above it; one a step or less
     // above the body is the one it is on.
     const ground = street && y > -0.6 ? Math.max(0, this.ground(x, z)) : this.ground(x, z);
     // A deck within a step of the body beats the ground, so it can walk up from a ramp's foot.
-    return deckErr < Math.max(Math.abs(y - ground), 0.6) ? deck : ground;
+    if (deckErr < Math.max(Math.abs(y - ground), 0.6)) return deck + deckLift;
+    return street && y > -0.6 ? Math.max(streetLift, ground) : ground;
   }
 
   /** The ground under (x, z) away from the streets: flat until citygen cuts the river valleys. */

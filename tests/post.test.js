@@ -19,7 +19,7 @@ function rig(complete = () => true) {
   const post = new Post(renderer, sky);
   const live = new Set();
   const track = o => { if (!o || o.__seen) return; o.__seen = true; live.add(o); o.addEventListener('dispose', () => live.delete(o)); };
-  const ensure = () => { post._ensure(); track(post.rt); track(post.rt?.depthTexture); post.mips.forEach(track); };
+  const ensure = () => { post._ensure(); track(post.rt); track(post.rt?.depthTexture); track(post.graded); post.mips.forEach(track); };
   return { post, sky, size, live, ensure };
 }
 
@@ -40,6 +40,30 @@ test('the HDR target and bloom chain are replaced, not leaked, on every resize a
     let mw = w, mh = h;
     for (const m of post.mips) { mw = Math.max(1, mw >> 1); mh = Math.max(1, mh >> 1); assert.deepEqual([m.width, m.height], [mw, mh]); }
   }
+});
+
+test('upscaling keeps scene, bloom and grading at scene resolution, then releases the extra buffer at native size', () => {
+  const { post, size, ensure, live } = rig();
+  post.configure({ msaa: false, bloom: true, sceneScale: 2 / 3, contactShade: true });
+  size.w = 1500; size.h = 810;
+  ensure();
+  assert.deepEqual([post.rt.width, post.rt.height], [1000, 540]);
+  assert.deepEqual([post.graded.width, post.graded.height], [1000, 540]);
+  assert.deepEqual([post.mips[0].width, post.mips[0].height], [500, 270]);
+  assert.equal(post.present.uniforms.tFrame.value, post.graded.texture);
+  assert.deepEqual(post.present.uniforms.uTexel.value.toArray(), [1 / 1000, 1 / 540]);
+  assert.equal(post.final.uniforms.uContact.value, 1);
+  const graded = post.graded;
+  ensure();
+  assert.equal(post.graded, graded);
+  post.configure({ msaa: false, bloom: false });
+  ensure();
+  assert.equal(post.graded, null);
+  assert.ok(!live.has(graded));
+  assert.equal(post.final.uniforms.uContact.value, 0);
+  assert.equal(post.mips.length, 0);
+  assert.equal(live.size, 2, 'only the HDR target and depth texture are needed');
+  assert.deepEqual([post.rt.width, post.rt.height], [1500, 810]);
 });
 
 test('a GPU that refuses multisampled targets gets FXAA instead, and is not asked again on every resize', () => {

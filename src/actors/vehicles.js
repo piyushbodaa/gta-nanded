@@ -14,6 +14,7 @@ import { sendFirst } from '../core/buffers.js';
 const CAPACITY = { hatch: 40, sedan: 30, suv: 20, police: 20, auto: 48, bike: 50, scooter: 40, bus: 16, truck: 10, tractor: 6, tempo: 12, ambulance: 4 };
 const _m = new THREE.Matrix4(), _w = new THREE.Matrix4(), _t = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
+const _axles = new THREE.Matrix4();
 const WRECK = 0x2a2624;
 
 let nextId = 1;
@@ -36,12 +37,15 @@ export class Vehicles {
     // material for trim, tyres and canopies.
     const lambert = new THREE.MeshPhysicalMaterial({ roughness: 0.4, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.06 });
     const vcol = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 });
-    const glass = new THREE.MeshStandardMaterial({ color: 0x0e1418, roughness: 0.04, metalness: 0.3 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x253c47, roughness: 0.13, metalness: 0.24 });
+    const glazing = glass.clone();
+    glazing.transparent = true; glazing.opacity = 0.64; glazing.depthWrite = false;
     const lit = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
     lit.onBeforeCompile = lampShader;
     for (const type of TYPE_KEYS) {
       const model = vehicleModel(type);
       const cap = CAPACITY[type] || 10;
+      const openCabin = ['hatch', 'sedan', 'suv', 'police', 'auto'].includes(type);
       const mk = (geo, mat) => {
         const m = new THREE.InstancedMesh(geo, mat, cap);
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -50,8 +54,9 @@ export class Vehicles {
         scene.add(m);
         return m;
       };
-      const M = (this.meshes[type] = { paint: mk(model.geos.paint, lambert), glass: mk(model.geos.glass, glass), fixed: mk(model.geos.fixed, vcol), lights: mk(model.geos.lights, lit), n: 0, nShadow: 0, model, cap });
+      const M = (this.meshes[type] = { paint: mk(model.geos.paint, lambert), glass: mk(model.geos.glass, openCabin ? glazing : glass), fixed: mk(model.geos.fixed, vcol), lights: mk(model.geos.lights, lit), n: 0, nShadow: 0, model, cap });
       M.lights.castShadow = false;
+      M.glass.castShadow = !openCabin;
       for (const k of ['paint', 'glass', 'fixed']) {
         M[k].onBeforeShadow = () => { M[k].count = M.nShadow; };
         M[k].onAfterShadow = () => { M[k].count = M.n; };
@@ -138,8 +143,9 @@ export class Vehicles {
   wheelWorld(v, i, out = {}) {
     const w = v.model.wheels[i];
     if (!w) return null;
-    local(v, w[0], w[1], out);
-    out.y = v.y + (v.flat & (1 << i) ? w[2] * 0.78 : w[2]);
+    setAxleMatrix(v);
+    _p.set(w[0], v.flat & (1 << i) ? w[2] * 0.78 : w[2], w[1]).applyMatrix4(_axles);
+    out.x = _p.x; out.y = _p.y; out.z = _p.z;
     return out;
   }
   /** The wheel whose tyre (x, y, z) is within r of, the nearest of them, or -1. */
@@ -374,12 +380,19 @@ export class Vehicles {
           const was = v.standLean ?? stand; // one parked as we came near is already on its stand
           v.standLean = was + (stand - was) * Math.min(1, dt * 4);
         }
+        const groundY = v.kinematic ? (v.deckY ?? v.y) : v.y - (v.hop || 0);
+        // The city is flat apart from ramps and riverbanks. Sample those at the front and rear axles.
+        v.roadPitch = 0;
+        if (near && Math.abs(groundY) > 0.025) {
+          const half = v.spec.wheelbase * 0.5, sx = Math.sin(v.heading) * half, sz = Math.cos(v.heading) * half;
+          const f = this.city.net.surfaceAt(v.x + sx, v.z + sz, groundY);
+          const r = this.city.net.surfaceAt(v.x - sx, v.z - sz, groundY);
+          v.roadPitch = clamp(Math.atan2(f - r, 2 * half), -0.35, 0.35);
+        }
         const lean = v.spec.two ? -(v.lean + v.standLean) : v.roll;
-        _e.set(v.pitch - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
+        _e.set(v.pitch - v.roadPitch - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
         _q.setFromEuler(_e);
-        const bob = v.kinematic ? 0 : Math.sin(this.time * 18 + v.id) * 0.006 * Math.min(1, speedOf(v) / 8);
-        // Sunk, it lies on the riverbed (where v.y already is), not below it.
-        _p.set(v.x, v.y + bob, v.z);
+        _p.set(v.x, v.y, v.z);
         _s.set(1, 1, 1);
         _m.compose(_p, _q, _s);
         // Seat people even when the body is far (they're culled by their own distance check).
@@ -397,35 +410,40 @@ export class Vehicles {
         const blink = v.flashT > this.time && Math.floor(this.time * 8) % 2;
         const lamp = (v.wrecked ? 0.15 : lit ? 0.55 + night * 0.9 : 0.55 - night * 0.4) + (blink ? 0.8 : 0);
         const flash = v.sirenOn && !v.wrecked ? 1 + (Math.floor(this.time * 7 + v.id) % 2) : 0;
-        M.lights.setColorAt(i, _c.setRGB(lamp, lamp + (lit && v.braking ? 0.5 : 0), flash));
-        // Wheels.
+        M.lights.setColorAt(i, _c.setRGB(lamp, lamp * 0.65 + (lit && v.braking ? 1.8 : 0), flash));
+        // The tyres follow the road while the suspended cabin rolls and pitches above them.
+        setAxleMatrix(v);
         const model = v.model;
+        const steerTan = Math.tan(v.steer);
         for (let k = 0; k < model.wheels.length; k++) {
           const [wx, wz, r, front, width] = model.wheels[k];
           if (wn >= this.wheels.instanceMatrix.count) break;
-          _e.set(v.wheelSpin || 0, front ? v.steer : 0, 0, 'YXZ');
+          // The inside front wheel traces a tighter arc; each wheel turns by distance / its own radius.
+          const steer = front ? Math.atan2(v.spec.wheelbase * steerTan, v.spec.wheelbase - wx * steerTan) : 0;
+          const spin = (front ? v.wheelSpin : v.rearWheelSpin) * v.spec.wheelR / r;
+          _e.set(spin, steer, 0, 'YXZ');
           _q.setFromEuler(_e);
           // A burst tyre is squashed flat, the rim nearly on the road.
           const fr = v.flat & (1 << k) ? r * 0.78 : r;
           _p.set(wx, fr, wz);
           _s.set(width, fr, fr);
           _t.compose(_p, _q, _s);
-          _w.multiplyMatrices(_m, _t);
+          _w.multiplyMatrices(_axles, _t);
           this.wheels.setMatrixAt(wn++, _w);
         }
         if (v.mods && (v.mods.neon || v.mods.sticker != null)) this.extras?.add(v, _m);
         // Contact shadow.
         if (bn < this.blobs.instanceMatrix.count) {
-          _e.set(0, v.heading, 0); _q.setFromEuler(_e);
-          _p.set(v.x, v.y + 0.09, v.z); _s.set(v.spec.W * 1.5, 1, v.spec.L * 1.25); // above the road surface (6-7 cm)
+          _e.set(-v.roadPitch, v.heading, 0, 'YXZ'); _q.setFromEuler(_e);
+          _p.set(v.x, groundY + 0.09, v.z); _s.set(v.spec.W * 1.5, 1, v.spec.L * 1.25); // above the road surface (6-7 cm)
           _t.compose(_p, _q, _s);
           this.blobs.setMatrixAt(bn++, _t);
         }
         // Headlight pool ahead at night, from vehicles with their lamps on.
         if (night > 0.05 && lit && hn < this.beams.instanceMatrix.count) {
           const ahead = v.hd + 5;
-          _e.set(0, v.heading, 0); _q.setFromEuler(_e);
-          _p.set(v.x + Math.sin(v.heading) * ahead, v.y + 0.09, v.z + Math.cos(v.heading) * ahead);
+          _e.set(-v.roadPitch, v.heading, 0, 'YXZ'); _q.setFromEuler(_e);
+          _p.set(v.x + Math.sin(v.heading) * ahead, groundY + ahead * Math.tan(v.roadPitch) + 0.09, v.z + Math.cos(v.heading) * ahead);
           _s.set(v.spec.two ? 4 : 7, 1, 11);
           _t.compose(_p, _q, _s);
           this.beams.setMatrixAt(hn++, _t);
@@ -473,6 +491,12 @@ export class Vehicles {
 const IDLE = { throttle: 0, brake: 0, steer: 0, handbrake: false };
 const PARKED = { throttle: 0, brake: 0, steer: 0, handbrake: true };
 
+function setAxleMatrix(v) {
+  const lean = v.spec.two ? -(v.lean + (v.standLean || 0)) : 0;
+  _e.set(-(v.roadPitch || 0) - (v.bumpPitch || 0), v.heading, lean, 'YXZ');
+  _axles.compose(_p.set(v.x, v.y, v.z), _q.setFromEuler(_e), _s.set(1, 1, 1));
+}
+
 /**
  * A parked vehicle is left in gear with its handbrake on: every wheel drags, so a crash shoves it a few
  * metres instead of sending it gliding down the street. The pedals brake whichever way it rolls (held
@@ -515,26 +539,35 @@ function local(v, lx, lz, out) {
  * a five-spoke silver rim on both faces. Instances scale it per vehicle.
  */
 function wheelGeometry() {
-  const pos = [], col = [];
-  const push = (g, c) => { const p = (g.index ? g.toNonIndexed() : g).attributes.position.array; pos.push(...p); for (let i = 0; i < p.length / 3; i++) col.push(c[0], c[1], c[2]); };
-  const tyre = new THREE.LatheGeometry([[0.6, -0.5], [0.9, -0.5], [1, -0.3], [1, 0.3], [0.9, 0.5], [0.6, 0.5]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
-  tyre.rotateZ(Math.PI / 2);
-  push(tyre, [0.05, 0.05, 0.055]);
+  const pos = [], norm = [], col = [], indices = [];
+  function push(g, hex) {
+    const offset = pos.length / 3, p = g.attributes.position, c = _c.setHex(hex);
+    pos.push(...p.array); norm.push(...g.attributes.normal.array);
+    for (let i = 0; i < p.count; i++) col.push(c.r, c.g, c.b);
+    for (const i of g.index.array) indices.push(offset + i);
+  }
+  const ring = (profile, segments = 20) => new THREE.LatheGeometry(
+    profile.map(([radius, x]) => new THREE.Vector2(radius, x)), segments).rotateZ(-Math.PI / 2);
+  const tyre = ring([[0.62, -0.46], [0.77, -0.50], [0.93, -0.45], [0.99, -0.32],
+    [1, -0.23], [1, 0.23], [0.99, 0.32], [0.93, 0.45], [0.77, 0.5], [0.62, 0.46]]);
+  push(tyre, 0x343538);
   for (const side of [1, -1]) {
-    const dish = new THREE.CylinderGeometry(0.62, 0.62, 0.04, 12, 1, true).rotateZ(Math.PI / 2).translate(side * 0.42, 0, 0);
-    const face = new THREE.CircleGeometry(0.62, 12).rotateY(side * Math.PI / 2).translate(side * 0.4, 0, 0);
-    push(face, [0.16, 0.16, 0.17]);
-    push(dish, [0.2, 0.2, 0.21]);
+    const dish = new THREE.CircleGeometry(0.61, 16).rotateY(side * Math.PI / 2).translate(side * 0.27, 0, 0);
+    push(dish, 0x50555a);
+    const lip = ring([[0.56, 0.36], [0.60, 0.49], [0.66, 0.50], [0.68, 0.45]].reverse());
+    if (side < 0) lip.rotateY(Math.PI);
+    push(lip, 0xb9bfc1);
     const hub = new THREE.CylinderGeometry(0.16, 0.18, 0.08, 6).rotateZ(Math.PI / 2).translate(side * 0.46, 0, 0);
-    push(hub, [0.75, 0.76, 0.78]);
+    push(hub, 0xb5bdc0);
     for (let k = 0; k < 5; k++) {
       const spoke = new THREE.BoxGeometry(0.06, 0.46, 0.12).translate(0, 0.33, 0).rotateX((k / 5) * Math.PI * 2).translate(side * 0.45, 0, 0);
-      push(spoke, [0.7, 0.71, 0.73]);
+      push(spoke, 0x9ca3a6);
     }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.computeVertexNormals();
+  g.setIndex(indices);
   return g;
 }

@@ -355,7 +355,7 @@ export class Peds {
       }
     }
     // Down onto whatever is under them: the footpath, a flyover's deck, the ground.
-    const floor = this._floor(p);
+    const floor = h.floor = this._floor(p);
     p.vy = (p.vy || 0) - 18 * dt;
     h.y = Math.max(floor, (h.y || 0) + p.vy * dt);
     const slow = Math.exp(-dt * (h.y > floor + 0.05 ? 0.3 : 4));
@@ -519,7 +519,7 @@ export class Peds {
       h.x += dpx * k * 0.5; h.z += dpz * k * 0.5;
     }
     // On whatever is under them, whatever they're doing (the fallen land on it above).
-    if (p.state !== 'down' && p.state !== 'dead') h.y = this._floor(p);
+    if (p.state !== 'down' && p.state !== 'dead') h.y = h.floor = this._floor(p);
   }
 
   /**

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { world } from './helpers.js';
 import { Vehicles } from '../src/actors/vehicles.js';
 import { vehicleModel } from '../src/actors/vehicle-models.js';
@@ -304,7 +305,7 @@ test('number plates front and back on two-wheelers, tempos and ambulances; the p
     }
     return on.hi > 0 && on.lo < 0 && on.hi > all.hi - 0.35 && on.lo < all.lo + 0.35;
   };
-  const WHITE = [0xf4 / 255, 0xf4 / 255, 0xf0 / 255], YELLOW = [0xf2 / 255, 0xc2 / 255, 0x30 / 255];
+  const WHITE = new THREE.Color(0xf4f4f0).toArray(), YELLOW = new THREE.Color(0xf2c230).toArray();
   for (const type of ['bike', 'scooter', 'ambulance']) assert.ok(plate(type, WHITE), type);
   assert.ok(plate('tempo', YELLOW), 'tempo');
   assert.ok(vehicleModel('police').passengers.length >= 1);
@@ -332,6 +333,53 @@ test('lamps know what they are: tail lamps and light bars are lit apart from the
   assert.deepEqual([...kinds('hatch')].sort(), [0, 1]);
   assert.deepEqual([...kinds('police')].sort(), [0, 1, 2]);
   assert.deepEqual([...kinds('ambulance')].sort(), [0, 1, 2]);
+});
+
+test('the rear canvas of the auto leaves a sightline through the passenger window', () => {
+  const { fixed, glass } = vehicleModel('auto').geos;
+  const ray = new THREE.Raycaster(new THREE.Vector3(0.04, 1.31, -2), new THREE.Vector3(0, 0, 1));
+  const window = ray.intersectObject(new THREE.Mesh(glass))[0];
+  assert.ok(window && window.point.z < -1.2);
+  const opaque = ray.intersectObject(new THREE.Mesh(fixed))[0];
+  assert.ok(!opaque || opaque.point.z > -0.8, 'neither the curtain nor the passenger bench covers the glazing');
+});
+
+test('wheel contact survives chassis roll, and front wheels steer around a common turn centre', t => {
+  const doc = globalThis.document;
+  globalThis.document = { createElement: () => ({ getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }), fillRect() {} }) }) };
+  t.after(() => { if (doc) globalThis.document = doc; else delete globalThis.document; });
+  const V = new Vehicles(new THREE.Scene(), humans(), OPEN, FLAT);
+  const v = V.spawn('hatch', 0, 0, 0, { driver: false });
+  Object.assign(v, { pitch: 0.055, roll: 0.07, steer: 0.45 });
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scale = new THREE.Vector3();
+  V.render(1 / 60, { x: 0, z: 0 });
+  const headings = [];
+  v.model.wheels.forEach(([x, z, radius], i) => {
+    V.wheels.getMatrixAt(i, m); m.decompose(pos, q, scale);
+    assert.ok(Math.abs(pos.y - radius) < 1e-6, 'each hub stays a tyre radius above the flat road');
+    assert.ok(Math.abs(V.wheelWorld(v, i).y - pos.y) < 1e-6, 'render and interactions share hub positions');
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    headings.push(Math.atan2(forward.x, forward.z));
+  });
+  assert.ok(headings[0] > headings[1] && headings[1] > 0);
+  assert.equal(headings[2], 0); assert.equal(headings[3], 0);
+  // The front tyre on a ramp rises with the road even when the chassis is diving under brakes.
+  V.city = { ...FLAT, net: { surfaceAt: (x, z) => 1 + 0.08 * z } };
+  v.y = 1;
+  V.render(1 / 60, { x: 0, z: 0 });
+  assert.ok(V.wheelWorld(v, 0).y - V.wheelWorld(v, 2).y > 0.18);
+});
+
+test('the handbrake stops rotation of the rear rims while the front tyres keep rolling', () => {
+  const v = createBody('hatch', 0, 0, 0);
+  v.vz = 12;
+  const controls = { throttle: 0, brake: 0, steer: 0, handbrake: true };
+  for (let i = 0; i < 15; i++) stepBody(v, controls, 1 / 60);
+  assert.ok(v.wheelSpin > 4);
+  assert.equal(v.rearWheelSpin, 0);
+  controls.handbrake = false;
+  stepBody(v, controls, 1 / 60);
+  assert.ok(v.rearWheelSpin > 0);
 });
 
 // ---------------------------------------------------------------- helpers

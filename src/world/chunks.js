@@ -7,9 +7,9 @@
 import * as THREE from 'three';
 import { Geo, setBounds } from './geo.js';
 import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
-import { ROW, TILE, SIGN_COLS } from './atlas.js';
+import { ROW, TILE, SIGN_COLS, PAVER_REPEAT_M } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
-import { MEDIAN_W, SOLID_BELOW } from './roadnet.js';
+import { MEDIAN_W, SOLID_BELOW, ROAD_Y, PAD_Y } from './roadnet.js';
 import { medianRuns } from './colliders.js';
 import { buildAirfieldPiece } from './airfield.js';
 import { buildPlace } from './landmarks.js';
@@ -17,8 +17,6 @@ import { FoliageGeo, LEAF } from './foliage.js';
 import { BUMP_LEN, humpAt } from './roadbumps.js';
 
 const FLOOR = 3.2;
-const ROAD_Y = [0.07, 0.068, 0.066, 0.064, 0.062, 0.06];
-const PAD_Y = 0.074;
 // Chunks within this many metres of the player are built at once, budget or not.
 export const RUSH = 48;
 // A build slice hands control back after about this long (between buildings, trees or props).
@@ -404,7 +402,7 @@ function roadPiece(ctx, road, i, sa, sb, s0, s1, p, q) {
   g.quad(a, b, c, d);
   if (net.bridge[road] || d0 > 0.05 || d1 > 0.05) buildBridgeSpan(ctx, p, q, off0, off1, e0, e1, divided ? ms : 0, d0, d1);
   else {
-    if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1]);
+    if (city.footpathAt(i)) buildFootpaths(ctx, p, q, off0, off1, hw, divided ? [-ms] : [1, -1], road, sa, sb);
     // The median, along the runs colliders.js makes solid (none where it would stand in another
     // road's lane), with an end where one stops short along the road.
     const runs = medianRuns(net)[road], from = net.trimStart(road) + 0.01, to = len - net.trimEnd(road) - 0.01;
@@ -617,7 +615,7 @@ function zebra(ctx, p, off, edges, dir, s) {
   }
 }
 
-function buildFootpaths(ctx, p, q, o0, o1, hw, sides) {
+function buildFootpaths(ctx, p, q, o0, o1, hw, sides, road, sa, sb) {
   const { g } = ctx;
   const width = FOOTPATH_W;
   for (const side of sides) {
@@ -625,9 +623,11 @@ function buildFootpaths(ctx, p, q, o0, o1, hw, sides) {
     const ax = p.x + o0.nx * i0, az = p.z + o0.nz * i0, bx = q.x + o1.nx * i0, bz = q.z + o1.nz * i0;
     const cx = q.x + o1.nx * i1, cz = q.z + o1.nz * i1, dx = p.x + o0.nx * i1, dz = p.z + o0.nz * i1;
     const len = Math.hypot(bx - ax, bz - az);
-    // Paver top.
-    g.setTint(0xffffff, 0).setTile(TILE.PAVERS[0], TILE.PAVERS[1], 1, 4);
-    const a = g.v(ax, WALK_Y, az), b = g.v(bx, WALK_Y, bz), c = g.v(cx, WALK_Y, cz), d = g.v(dx, WALK_Y, dz);
+    // The paving courses follow the street round bends and across chunk boundaries.
+    g.setTint(0xffffff, (road * 37 + side * 11) & 255).setTile(...TILE.PAVERS, 1, 5);
+    const u0 = sa / PAVER_REPEAT_M, u1 = sb / PAVER_REPEAT_M, v = width / PAVER_REPEAT_M;
+    const a = g.v(ax, WALK_Y, az, u0, 0), b = g.v(bx, WALK_Y, bz, u1, 0);
+    const c = g.v(cx, WALK_Y, cz, u1, v), d = g.v(dx, WALK_Y, dz, u0, v);
     if (side > 0) g.quad(a, b, c, d); else g.quad(a, d, c, b);
     // Kerb face, painted black and yellow, facing the road.
     g.setTile(TILE.KERB[0], TILE.KERB[1], 1, 1);

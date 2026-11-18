@@ -65,6 +65,19 @@ test('missed frames lower the resolution, then the tier, and the tier is remembe
   assert.ok(next.learned.tooHeavy.includes('medium'));
 });
 
+test('a dense display reconstructs within its output budget and Fast keeps a single resolution', () => {
+  const q = phone('Adreno 710');
+  assert.equal(q.pixelRatio(), 1.75);
+  assert.ok(q.presentationRatio() > q.pixelRatio());
+  assert.ok(innerWidth * innerHeight * q.presentationRatio() ** 2 <= 2_000_001);
+  q.scale = 0.5;
+  assert.equal(q.presentationRatio(), q.pixelRatio() * 1.5);
+  q.mode = 'low';
+  assert.equal(q.presentationRatio(), q.pixelRatio());
+  q.mode = 'high'; q.scale = 1; globalThis.devicePixelRatio = 1;
+  assert.equal(q.presentationRatio(), 1);
+});
+
 test('frames that keep up raise the resolution again, but not straight back to one that failed', () => {
   const q = phone('Adreno 710'), g = game();
   run(q, g, 6.1, 33.4); // 1.0 -> 0.9 -> 0.8 -> 0.7

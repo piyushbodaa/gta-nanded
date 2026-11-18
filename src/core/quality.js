@@ -93,6 +93,15 @@ export class Quality {
   get settings() { return this.tiers[this.tier]; }
   /** Drawing-buffer pixels per CSS pixel. */
   pixelRatio() { return Math.min(devicePixelRatio || 1, this.settings.pr) * this.scale; }
+  /** Keep the 3D scene at its measured budget. Present it on a finer grid on displays that
+   * can show the difference. Leave Fast alone and cap the extra fullscreen work at 2 MP. */
+  presentationRatio() {
+    const scene = this.pixelRatio();
+    if (this.tier === 'low') return scene;
+    const budget = Math.sqrt(2_000_000 / Math.max(1, innerWidth * innerHeight));
+    const output = Math.min(devicePixelRatio || 1, scene * 1.5, budget);
+    return output > scene * 1.08 ? output : scene;
+  }
   /** How much the browser stretches our frame to fill the screen (1 = every device pixel drawn). */
   upscale() { return Math.max(1, (devicePixelRatio || 1) / this.pixelRatio()); }
   label() { return this.mode === 'auto' ? `Auto (${this.settings.name})` : this.settings.name; }

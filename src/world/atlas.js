@@ -11,11 +11,12 @@ import { rng } from '../core/math.js';
 export const TILE_PX = 256;
 export const ATLAS_COLS = 8;
 export const ATLAS_ROWS = 10;
+export const PAVER_REPEAT_M = 2.4;
 // Facade rows hold 8 variants of one "bay x floor" (3.2 m x 3.2 m).
 export const ROW = { RES: 0, BALCONY: 1, OLD: 2, MODERN: 3, SHOP: 4, GROUND: 5, BLANK: 6, SURF: 7, SURF2: 8, SPECIAL: 9 };
 // Single tiles: [col, row].
 export const TILE = {
-  ROOF: [0, 7], ASPHALT: [1, 7], ASPHALT_DASH: [2, 7], ASPHALT_MAIN: [3, 7], CONCRETE_ROAD: [4, 7], PAVERS: [5, 7], KERB: [6, 7], DIRT: [7, 7],
+  ROOF: [0, 7], ASPHALT: [1, 7], DRAIN: [2, 7], ASPHALT_MAIN: [3, 7], CONCRETE_ROAD: [4, 7], PAVERS: [5, 7], KERB: [6, 7], DIRT: [7, 7],
   TIN: [0, 8], ZEBRA: [1, 8], FIELD: [2, 8], GRASS: [3, 8], COMPOUND: [4, 8], AD_CEMENT: [5, 8], AD_RADIO: [6, 8], BRICK: [7, 8],
   HOARD_A: [0, 9], HOARD_B: [1, 9], HOARD_C: [2, 9], HOARD_D: [3, 9], STATION_BOARD: [4, 9], MARBLE: [5, 9], GOLD: [6, 9], STONE: [7, 9],
 };
@@ -73,6 +74,7 @@ function painter(ctx, mode) {
     if (mode === 'mask') return kind === 'wall' || kind === 'stain' ? '#fff' : '#000';
     // emissive
     if (kind === 'glass') return '#ffd58a';
+    if (kind === 'interior') return '#97724f';
     if (kind === 'light') return color;
     if (kind === 'glow') return color;
     return '#000';
@@ -224,8 +226,8 @@ function grill(g, x, y, w, h, color = '#1e1e1e', step = 13) {
   g.rect(x, y + h * 0.5 - 1.5, w, 3, color);
 }
 
-function window1(g, seed, { frame = FRAMES[0], curtain = null, grillOn = true, shutters = null, w = 108, h = 108, sill = 70 } = {}) {
-  const x = (T - w) / 2, y = T - sill - h;
+function window1(g, seed, { frame = FRAMES[0], curtain = null, grillOn = true, shutters = null, w = 108, h = 108, sill = 70, centerX = T / 2 } = {}) {
+  const x = centerX - w / 2, y = T - sill - h;
   // Chajja: the concrete sunshade over every Indian window, and its shadow.
   g.rect(x - 18, y - 22, w + 36, 11, '#dcd6ca', 'wall');
   g.rect(x - 18, y - 11, w + 36, 4, 'rgba(0,0,0,0.25)', 'stain');
@@ -255,28 +257,53 @@ function window1(g, seed, { frame = FRAMES[0], curtain = null, grillOn = true, s
 }
 
 function acUnit(g, x, y) {
-  g.rect(x, y, 62, 44, '#e9e9e4'); g.rect(x, y + 40, 62, 4, '#b9b9b2');
-  g.circle(x + 22, y + 21, 15, '#9a9c98'); g.circle(x + 22, y + 21, 12, '#555');
-  for (let i = 0; i < 4; i++) g.line(x + 22, y + 21, x + 22 + Math.cos(i * 1.57) * 11, y + 21 + Math.sin(i * 1.57) * 11, '#aaa', 3);
-  g.rect(x + 44, y + 8, 12, 26, '#c9c9c3');
+  g.rect(x + 3, y + 4, 62, 43, 'rgba(37,34,28,0.30)', 'stain');
+  g.grad(x, y, 62, 43, [[0, '#d3d2c5'], [0.6, '#bcbdb2'], [1, '#9d9f98']]);
+  g.rect(x + 2, y + 2, 58, 1.3, '#e7e5d8');
+  const cx = x + 22, cy = y + 21;
+  g.circle(cx, cy, 16, '#979990'); g.circle(cx, cy, 14, '#4c514c');
+  for (let i = -2; i <= 2; i++) {
+    const d = i * 5, half = Math.sqrt(14 * 14 - d * d);
+    g.line(cx + d, cy - half, cx + d, cy + half, '#858a7f', 1.3);
+    g.line(cx - half, cy + d, cx + half, cy + d, '#8b8d84', 1.1);
+  }
+  g.circle(cx, cy, 3.2, '#9da096');
+  for (let i = 0; i < 6; i++) g.rect(x + 44, y + 12 + i * 3.4, 12, 1.2, '#84877e');
+  g.rect(x + 44, y + 6, 8, 2.5, '#777c89');
+  for (const px of [x + 6, x + 49]) g.rect(px, y + 42, 5, 4, '#55594e');
 }
 
 function clothes(g, x, y, w, seed) {
   const r = rng(seed);
-  g.line(x, y, x + w, y + 4, '#333', 2);
-  const cols = ['#c0392b', '#2e86c1', '#f1c40f', '#8e44ad', '#16a085', '#e67e22', '#ecf0f1', '#d35400'];
-  for (let cx = x + 6; cx < x + w - 14; cx += 16 + r() * 10) {
-    const cw = 12 + r() * 14, ch = 22 + r() * 30;
-    g.rect(cx, y + 2, cw, ch, cols[Math.floor(r() * cols.length)]);
+  const sag = t => y + 4 * t + 24 * t * (1 - t);
+  for (let i = 0; i < 4; i++) g.line(x + w * i / 4, sag(i / 4), x + w * (i + 1) / 4, sag((i + 1) / 4), '#57564b', 1.5);
+  const colors = ['#a14d46', '#588294', '#d0a553', '#84627f', '#639882', '#b67253', '#d7d6c9'];
+  for (let cx = x + 6; cx < x + w - 25;) {
+    const cw = 14 + r() * 10, ch = 28 + r() * 22, top = sag((cx - x + cw / 2) / w);
+    const col = colors[Math.floor(r() * colors.length)], shirt = r() < 0.42;
+    const outline = shirt
+      ? [[0.26, 0], [0.4, 0.04], [0.61, 0.04], [0.74, 0], [1.14, 0.16], [0.96, 0.39], [0.8, 0.3], [0.84, 1], [0.17, 0.97], [0.19, 0.29], [0.02, 0.39], [-0.13, 0.19]]
+      : [[0.06, 0], [0.95, 0.02], [1.03, 0.97], [0.73, 1], [0.45, 0.97], [0.04, 0.99]];
+    g.poly(outline.map(([u, v]) => [cx + u * cw, top + v * ch]), col);
+    g.poly([[cx + cw * 0.28, top + 1], [cx + cw * 0.42, top + ch * 0.96], [cx + cw * 0.26, top + ch * 0.94]], 'rgba(42,33,37,0.22)');
+    g.line(cx + cw * 0.74, top + 2, cx + cw * 0.65, top + ch * 0.89, 'rgba(243,224,195,0.23)', 1.4);
+    if (!shirt) g.line(cx + 2, top + ch - 5, cx + cw, top + ch - 4, 'rgba(246,224,179,0.48)', 2);
+    for (const pin of [0.27, 0.74]) g.rect(cx + cw * pin, top - 2.5, 1.7, 5, '#97826a');
+    cx += cw + 4 + r() * 6;
   }
 }
 
 function pots(g, x, y, w, seed) {
   const r = rng(seed);
   for (let px = x + 8; px < x + w - 10; px += 22) {
-    g.poly([[px, y], [px + 16, y], [px + 13, y + 16], [px + 3, y + 16]], '#b5562f');
-    g.circle(px + 8, y - 6, 10 + r() * 4, r() < 0.5 ? '#3f7f3a' : '#5b9a45');
-    if (r() < 0.4) g.circle(px + 4, y - 10, 3, '#e8415a');
+    const cx = px + 8;
+    for (let i = 0; i < 7; i++) {
+      const dx = (r() - 0.5) * 26, dy = 5 + r() * 16;
+      g.poly([[cx, y + 1], [cx + dx * 0.45 - 2.6, y - dy * 0.6], [cx + dx, y - dy], [cx + dx * 0.6 + 2.6, y - dy * 0.45]], i % 3 ? '#4a693e' : '#778451');
+    }
+    if (r() < 0.4) g.circle(px + 5, y - 13, 2, '#be6570');
+    g.poly([[px, y], [px + 16, y], [px + 13, y + 16], [px + 3, y + 16]], '#9c6349');
+    g.rect(px - 1, y, 18, 3, '#b07759');
   }
 }
 
@@ -409,16 +436,21 @@ function paintShop(g, v, seed) {
   for (let y = top - 4; y < top + 12; y += 4) g.rect(4, y, T - 8, 1.5, '#6c7271');
   const iy = top + 12, ih = bottom - iy;
   if (v === 7) {
-    // Closed shutter with the shop's phone number painted on.
-    g.rect(6, iy, T - 12, ih, '#8a908f');
-    for (let y = iy; y < bottom; y += 7) g.rect(6, y, T - 12, 2, '#6e7473');
-    g.text('मो. 98XXX', 128, iy + ih / 2, 30, '#c0392b', { font: FONT_MIX, weight: 800 });
+    // Galvanised shutter, with a faded hand-painted request to keep the entrance clear.
+    g.grad(6, iy, T - 12, ih, [[0, '#656e6e'], [0.42, '#a2a7a0'], [1, '#787c74']], 'detail', false);
+    for (let y = iy; y < bottom; y += 7) {
+      g.rect(6, y, T - 12, 2, 'rgba(34,39,38,0.4)');
+      g.rect(6, y + 2, T - 12, 1.5, 'rgba(237,228,209,0.35)');
+    }
+    g.text('गेटसमोर वाहन लावू नये', 128, iy + ih / 2, 19, '#763d31', { font: FONT_DEVA, weight: 700, maxWidth: 204 });
+    g.rect(94, bottom - 15, 68, 4, '#42463f');
+    g.rect(124, bottom - 18, 8, 11, '#b39562');
     g.streaks(6, iy, T - 12, ih, seed, 0.12);
     return;
   }
   // Interior: back wall lit by a tube light.
   const back = ['#efe6c9', '#cfe3f1', '#e9f5ee', '#f3e3e8', '#ddd5c6', '#f6efe0', '#e8dcc6'][v];
-  g.rect(6, iy, T - 12, ih, back, 'glass');
+  g.rect(6, iy, T - 12, ih, back, 'interior');
   g.rect(40, iy + 6, 176, 5, '#ffffff', 'light');
   // Shelves and goods.
   if (v === 0 || v === 2 || v === 4) {
@@ -433,7 +465,7 @@ function paintShop(g, v, seed) {
     for (let sx = 20; sx < 236; sx += 30) for (let k = 0; k < 4; k++) g.rect(sx, iy + 14 + k * 14, 18, 12, SHOP_GOODS[(k + sx) % SHOP_GOODS.length]);
   } else if (v === 1) {
     // Mobile shop: blue glow, posters and a glass counter.
-    g.rect(6, iy, T - 12, ih, '#cfe8ff', 'glass');
+    g.rect(6, iy, T - 12, ih, '#cfe8ff', 'interior');
     for (let px = 20; px < 230; px += 54) { g.rect(px, iy + 20, 40, 64, '#1b4f8a'); g.rect(px + 6, iy + 26, 28, 46, '#5dade2', 'glass'); }
     g.rect(10, bottom - 70, T - 20, 62, '#9ec9e8', 'glass'); g.rect(10, bottom - 70, T - 20, 5, '#d0d0d0');
   } else if (v === 2) {
@@ -441,7 +473,15 @@ function paintShop(g, v, seed) {
     g.rect(10, bottom - 56, T - 20, 48, '#f4f6f6'); g.rect(10, bottom - 56, T - 20, 4, '#1e8449');
   } else if (v === 3) {
     // Cloth centre: saris hanging in rows.
-    for (let sx = 12; sx < T - 20; sx += 15) g.poly([[sx, iy + 18], [sx + 13, iy + 18], [sx + 15, bottom - 30], [sx - 2, bottom - 30]], SHOP_GOODS[Math.floor(r() * SHOP_GOODS.length)]);
+    const dyes = ['#97504b', '#36676b', '#8b6378', '#4e6179', '#b17a48', '#76815f', '#c5ab84'];
+    g.line(11, iy + 17, T - 11, iy + 17, '#726959', 3);
+    for (let sx = 13; sx < T - 20; sx += 15) {
+      const y = iy + 17 + r() * 7, hem = bottom - 27 - r() * 16;
+      g.poly([[sx, y], [sx + 12, y + 1], [sx + 15, hem - 1], [sx + 7, hem + 2], [sx - 1, hem]], dyes[Math.floor(r() * dyes.length)]);
+      g.grad(sx + 1, y + 2, 11, hem - y - 4, [[0, 'rgba(33,22,26,0.32)'], [0.4, 'rgba(255,235,196,0.18)'], [1, 'rgba(33,22,26,0.27)']], 'stain', false);
+      g.line(sx, hem - 5, sx + 14, hem - 4, '#b7a07b', 2.3);
+      g.line(sx + 1, hem - 9, sx + 13, hem - 8, 'rgba(215,198,154,0.6)', 1.1);
+    }
     g.rect(6, bottom - 30, T - 12, 22, '#7a5a3c');
   } else if (v === 4) {
     // Hardware: pipes and buckets out front.
@@ -463,6 +503,15 @@ function paintShop(g, v, seed) {
     for (let k = 0; k < 6; k++) g.rect(196 + (k % 3) * 12, bottom - 86 - Math.floor(k / 3) * 14, 8, 12, 'rgba(230,240,240,0.9)');
     g.rect(20, bottom - 32, 90, 8, '#6d4c33'); g.rect(26, bottom - 24, 6, 16, '#6d4c33'); g.rect(98, bottom - 24, 6, 16, '#6d4c33');
   }
+  // The jambs, threshold and shutter recess give even an open shop a clear depth.
+  g.grad(6, iy, T - 12, ih, [[0, 'rgba(31,30,26,0.52)'], [0.12, 'rgba(31,30,26,0.25)'], [0.36, 'rgba(31,30,26,0.02)'], [1, 'rgba(31,30,26,0.08)']], 'stain');
+  g.grad(6, iy, T - 12, ih, [[0, 'rgba(26,22,19,0.55)'], [0.16, 'rgba(26,22,19,0.04)'], [0.84, 'rgba(26,22,19,0.04)'], [1, 'rgba(26,22,19,0.55)']], 'stain', false);
+  for (const x of [6, T - 13]) {
+    g.rect(x, iy, 7, ih, '#645e53');
+    g.rect(x + 1, iy, 2, ih, '#9c9485');
+  }
+  g.rect(7, bottom - 5, T - 14, 5, '#776d5d');
+  g.rect(7, bottom - 5, T - 14, 1.5, '#b9ad98');
 }
 
 function paintGround(g, v, seed) {
@@ -478,7 +527,7 @@ function paintGround(g, v, seed) {
       g.rect(184, 110, 40, 16, '#f5f5f5'); g.text('पाटील', 204, 118, 12, '#222', { font: FONT_DEVA, weight: 700 });
       g.circle(128, 34, 7, '#fff4c4', 'light');
       g.rect(70, 240, 116, 8, '#bfb6a6');
-      window1(g, seed + 3, { frame: FRAMES[2], w: 40, h: 60, sill: 90 });
+      window1(g, seed + 3, { frame: FRAMES[2], w: 40, h: 60, sill: 90, centerX: 38 });
       break;
     }
     case 1: {
@@ -572,6 +621,42 @@ function marking(g, x, y, w, h, seed, color = '#e4dfcf') {
   });
 }
 
+// A 2.4 m repeat, with 300 × 150 mm chamfered blocks laid in a running bond.
+// Both tiles share the bed exactly, including the bricks that straddle its ends.
+function footpath(g, drain) {
+  g.rect(0, 0, T, T, '#80796d');
+  if (g.mode !== 'color') return;
+  const r = rng(8671);
+  const concrete = ['#aca69a', '#b8b1a4', '#afa89a', '#b4ac9e', '#a49f96'];
+  const red = ['#a67965', '#a1735f', '#aa7d68', '#99705f', '#a77b68'];
+  for (let row = 0; row < 16; row++) {
+    const y = row * 16, palette = row === 2 || row === 14 ? red : concrete;
+    for (let col = 0; col < 8; col++) {
+      const x = col * 32 + (row % 2) * 16, face = palette[Math.floor(r() * palette.length)];
+      for (const left of x > T - 32 ? [x, x - T] : [x]) {
+        g.rect(left + 0.8, y + 0.8, 30.4, 14.4, face);
+        g.line(left + 1.6, y + 1.6, left + 30, y + 1.6, 'rgba(242,230,203,0.35)', 1.1);
+        g.line(left + 2, y + 14.2, left + 30.4, y + 14.2, 'rgba(63,54,44,0.27)', 1.1);
+      }
+    }
+  }
+  g.speckle(0, 0, T, T, 3500, ['rgba(46,40,37,0.17)', 'rgba(246,235,209,0.23)'], 1.4, 'detail', 73);
+  if (drain) {
+    // Cast-iron storm inlet on the kerb side, flush with a rectangular concrete collar.
+    const x = 87, y = 199;
+    g.rect(x - 3, y - 3, 81, 49, '#8b8376');
+    g.rect(x, y, 75, 43, '#6c655a');
+    g.rect(x + 2, y + 2, 71, 39, '#403e38');
+    g.rect(x + 5, y + 5, 65, 33, '#242722');
+    for (let i = 0; i < 9; i++) {
+      const left = x + 7 + i * 7;
+      g.rect(left, y + 5, 3.8, 33, '#5c5c50');
+      g.rect(left, y + 5, 1.1, 33, '#868374');
+    }
+    g.rect(x + 4, y + 20, 67, 3, '#4c4d43');
+  }
+}
+
 function paintSurface(g, c, row, seed) {
   if (row === ROW.SURF) {
     switch (c) {
@@ -587,7 +672,7 @@ function paintSurface(g, c, row, seed) {
         break;
       }
       case 1: asphalt(g, seed); break;
-      case 2: asphalt(g, seed); marking(g, 124, 0, 8, 128, seed + 11); break;
+      case 2: footpath(g, true); break;
       case 3: asphalt(g, seed, '#585b5c'); marking(g, 10, 0, 7, T, seed + 12); marking(g, 239, 0, 7, T, seed + 13); marking(g, 124, 0, 8, 150, seed + 14); break;
       case 4: { // CC road: cement concrete slabs with sawn joints and tyre grime
         g.rect(0, 0, T, T, '#a8a69e');
@@ -600,14 +685,14 @@ function paintSurface(g, c, row, seed) {
         g.cracks(2, seed + 3, 0.3);
         break;
       }
-      case 5: // interlocking pavers
-        g.rect(0, 0, T, T, '#9c9a94');
-        for (let y = 0; y < T; y += 32) for (let x = (y / 32) % 2 ? -16 : 0; x < T; x += 32) g.rect(x + 1.5, y + 1.5, 29, 29, ((x + y) / 32) % 3 === 0 ? '#a65d4a' : '#b3b0a8');
-        g.blotch(0, 0, T, T, seed, 0.18, '60,50,40');
-        break;
-      case 6: // black-and-yellow kerb stones
-        for (let x = 0; x < T; x += 64) { g.rect(x, 0, 32, T, '#1d1d1d'); g.rect(x + 32, 0, 32, T, '#f2c230'); }
-        g.blotch(0, 0, T, T, seed, 0.2, '60,50,40');
+      case 5: footpath(g, false); break;
+      case 6: // Worn safety paint over precast concrete, in 0.6 m sections.
+        for (let x = 0; x < T; x += 64) {
+          g.rect(x, 0, 64, T, x % 128 ? '#d6b350' : '#3d3e39');
+          g.rect(x, 0, 2, T, '#736e60');
+        }
+        g.speckle(0, 0, T, T, 1250, ['rgba(173,163,139,0.55)', 'rgba(72,64,52,0.21)'], 2, 'detail', seed);
+        g.grad(0, 0, T, T, [[0, 'rgba(85,72,53,0)'], [0.7, 'rgba(85,72,53,0.04)'], [1, 'rgba(85,72,53,0.33)']], 'stain');
         break;
       default: { // dusty ground (paintable so each zone tints it)
         g.rect(0, 0, T, T, '#d6cfc2', 'wall');
