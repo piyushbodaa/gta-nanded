@@ -1,9 +1,12 @@
 package fun.nanded.gta.bench;
 
 import android.app.Activity;
+import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Process;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
@@ -39,7 +42,13 @@ public class MainActivity extends Activity {
     super.onCreate(saved);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     Intent intent = getIntent();
-    if ("com.google.intent.action.TEST_LOOP".equals(intent.getAction())) resultUri = intent.getData();
+    Uri target = intent.getData();
+    if ("com.google.intent.action.TEST_LOOP".equals(intent.getAction())
+        && target != null && ContentResolver.SCHEME_CONTENT.equals(target.getScheme())
+        && checkUriPermission(target, Process.myPid(), Process.myUid(), Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            == PackageManager.PERMISSION_GRANTED) {
+      resultUri = target;
+    }
     WebView.setWebContentsDebuggingEnabled(true);
     web = new WebView(this);
     WebSettings s = web.getSettings();
