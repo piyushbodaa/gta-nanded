@@ -100,7 +100,8 @@ export class Vehicles {
     scene.add(this.lampGlows);
     // A single unshadowed light lets the player's lamps pick out pedestrians, other cars and walls.
     this.drivingLight = new THREE.SpotLight(0xffedce, 0, 28, 0.40, 0.72, 2);
-    this.drivingLight.visible = false;
+    this.drivingLight.position.set(0, -100, 0);
+    this.drivingLight.target.position.set(0, -101, 0);
     scene.add(this.drivingLight, this.drivingLight.target);
     this.night = 0;
     this.time = 0;
@@ -385,7 +386,11 @@ export class Vehicles {
     for (const t of TYPE_KEYS) this.meshes[t].n = 0;
     let wn = 0, bn = 0, hn = 0;
     const night = this.night;
-    this.drivingLight.visible = false;
+    // Keep the light count stable so entering a car never recompiles the city's shaders.
+    // When off, aim below the world so every street fragment is outside its cone.
+    this.drivingLight.intensity = 0;
+    this.drivingLight.position.set(0, -100, 0);
+    this.drivingLight.target.position.set(0, -101, 0);
     this.lampGlows.count = 0;
     const maxD2 = this.drawDistance * this.drawDistance;
     this.extras?.begin(); // owned cars' underglow and stickers (garage)
@@ -541,7 +546,6 @@ export class Vehicles {
     }
     if (player) {
       const light = this.drivingLight, [, ly, lz] = lamps[0];
-      light.visible = true;
       light.position.set(0, ly, lz + 0.05).applyMatrix4(_m);
       light.target.position.copy(light.position);
       light.target.position.x += Math.sin(yaw) * reach;

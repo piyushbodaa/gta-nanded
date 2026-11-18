@@ -376,7 +376,7 @@ test('dipped beams originate at the lenses, steer on a bike, and stop at a wall'
     assert.ok(Math.abs(p.z - wallZ) < 1e-5);
     if (i === 2) assert.ok(p.x > bike.x + 2, 'the handlebar headlamp follows the steered tyre');
   }
-  assert.ok(V.drivingLight.visible && V.drivingLight.intensity > 0);
+  assert.ok(V.drivingLight.intensity > 0);
   assert.ok(V.drivingLight.distance < 14, 'the driving light reaches the close wall');
   V.render(1 / 60, { x: 0, z: -12 });
   assert.equal(V.lampGlows.count, 5, 'the sedan and auto have paired rear lenses, the bike has one');
@@ -388,7 +388,7 @@ test('dipped beams originate at the lenses, steer on a bike, and stop at a wall'
   assert.ok(brake.r > tail.r && brake.g < brake.r * 0.1);
   driver.wrecked = true;
   V.render(1 / 60, { x: 0, z: 0 });
-  assert.equal(V.beams.count, 2); assert.equal(V.drivingLight.visible, false);
+  assert.equal(V.beams.count, 2); assert.equal(V.drivingLight.intensity, 0);
   V.night = 0;
   V.render(1 / 60, { x: 0, z: 0 });
   assert.equal(V.beams.visible, false);
