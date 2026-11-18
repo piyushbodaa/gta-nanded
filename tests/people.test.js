@@ -3,11 +3,53 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { Humans, makeOutfit } from '../src/actors/humans.js';
 import { nearGeometry, BONES, REGION, CLOTH, WOMENS, MENS } from '../src/actors/people-models.js';
+import { rainGearFor } from '../src/actors/umbrellas.js';
+import { HAND_GRIP } from '../src/actors/gun-models.js';
 
 // The soft shade under people is painted on a canvas; a stand-in is enough here.
 globalThis.document ??= { createElement: () => ({ getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }), fillRect() {} }) }) };
 
 const BLOCK = 14 * 3 + 5;
+
+test('rain umbrellas stay in the walking hand, clear the head, and stow for other poses', () => {
+  const seeds = Array.from({ length: 90 }, (_, i) => rainGearFor(i));
+  assert.deepEqual(seeds, Array.from({ length: 90 }, (_, i) => rainGearFor(i)));
+  assert.ok(seeds.filter(Boolean).length > 20 && seeds.filter(Boolean).length < 75);
+  const humans = new Humans(new THREE.Scene(), 4);
+  const h = humans.add(makeOutfit('sikh', 4)), matrix = new THREE.Matrix4();
+  h.rainGear = seeds.find(Boolean);
+  h.pose = 'walk'; h.speed = 1.4;
+  const frame = () => humans.update(1 / 60, { x: h.x + 4, z: h.z }, null);
+  frame();
+  assert.equal(humans.umbrellas.visible, false);
+  humans.rain = 1;
+  let low = Infinity, high = -Infinity;
+  const point = (bone, x, y, z) => {
+    const d = humans.data, b = h._row + BEN[bone] * 12;
+    return new THREE.Vector3(d[b] * x + d[b + 1] * y + d[b + 2] * z + d[b + 3],
+      d[b + 4] * x + d[b + 5] * y + d[b + 6] * z + d[b + 7],
+      d[b + 8] * x + d[b + 9] * y + d[b + 10] * z + d[b + 11]);
+  };
+  const BEN = Object.fromEntries(BONES.map((name, index) => [name, index]));
+  for (let i = 0; i < 170; i++) {
+    h.yaw += 0.008;
+    h.x += Math.sin(h.yaw) * h.speed / 60; h.z += Math.cos(h.yaw) * h.speed / 60;
+    frame();
+    if (i < 40) continue;
+    assert.equal(humans.umbrellas.count, 1);
+    humans.umbrellas.getMatrixAt(0, matrix);
+    const grip = new THREE.Vector3().setFromMatrixPosition(matrix), crown = new THREE.Vector3(0, 0.95, 0).applyMatrix4(matrix);
+    assert.ok(grip.distanceTo(point('lowerArmR', ...HAND_GRIP)) < 1e-5);
+    const head = point('head', 0, 0.36, 0);
+    assert.ok(crown.y > head.y + 0.15 && Math.hypot(crown.x - head.x, crown.z - head.z) < 0.29);
+    low = Math.min(low, grip.y); high = Math.max(high, grip.y);
+  }
+  assert.ok(high - low > 0.012 && high - low < 0.12, 'the grip rides the step');
+  for (const pose of ['run', 'phone', 'sit', 'ride', 'lie']) {
+    h.pose = pose; frame();
+    assert.equal(humans.umbrellas.count, 0);
+  }
+});
 
 test('people near the camera get the detailed body, the nearest first, without flickering at the edge', () => {
   const humans = new Humans(new THREE.Scene(), 16);

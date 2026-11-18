@@ -62,6 +62,7 @@ function frame() {
   world.cityUniforms.uNight.value = world.sky.night;
   world.cityUniforms.uTime.value += dt;
   world.cityUniforms.uWet.value = world.sky.wet;
+  world.cityUniforms.uRain.value = world.sky.w.rain;
   world.chunks.setNight(world.sky.night);
   if (shadowAt.distanceTo(camera.position) > 8) { renderer.shadowMap.needsUpdate = true; shadowAt.copy(camera.position); }
   renderer.info.reset();

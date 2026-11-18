@@ -344,11 +344,58 @@ test('the rear canvas of the auto leaves a sightline through the passenger windo
   assert.ok(!opaque || opaque.point.z > -0.8, 'neither the curtain nor the passenger bench covers the glazing');
 });
 
-test('wheel contact survives chassis roll, and front wheels steer around a common turn centre', t => {
+function rendererVehicles(t, colliders = OPEN) {
   const doc = globalThis.document;
   globalThis.document = { createElement: () => ({ getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }), fillRect() {} }) }) };
   t.after(() => { if (doc) globalThis.document = doc; else delete globalThis.document; });
-  const V = new Vehicles(new THREE.Scene(), humans(), OPEN, FLAT);
+  return new Vehicles(new THREE.Scene(), humans(), colliders, FLAT);
+}
+
+test('dipped beams originate at the lenses, steer on a bike, and stop at a wall', t => {
+  const wallZ = 8;
+  const V = rendererVehicles(t, { raycast(x, y, z, endX, endY, endZ) {
+    return endZ > wallZ && z < wallZ ? (wallZ - z) / (endZ - z) : 1;
+  } });
+  const driver = V.spawn('sedan', 0, 0, 0, { role: 'player' });
+  const bike = V.spawn('bike', 3, 0, 0, { role: 'traffic' });
+  V.spawn('auto', -3, 0, 0, { role: 'traffic' });
+  V.spawn('hatch', 5, 0, 0, { driver: false });
+  bike.steer = 0.33;
+  V.night = 1;
+  V.render(1 / 60, { x: 0, z: 0 });
+  assert.equal(V.beams.count, 4);
+  const m = new THREE.Matrix4(), p = new THREE.Vector3();
+  for (let i = 0; i < 4; i++) {
+    V.beams.getMatrixAt(i, m);
+    if (i < 2) {
+      p.setFromMatrixPosition(m);
+      assert.ok(Math.abs(p.x - driver.model.headlamps[i][0]) < 1e-5);
+      assert.ok(Math.abs(p.z - driver.model.headlamps[i][2]) < 1e-5);
+    }
+    p.set(0, 0, V.beamLimit.getX(i)).applyMatrix4(m);
+    assert.ok(Math.abs(p.z - wallZ) < 1e-5);
+    if (i === 2) assert.ok(p.x > bike.x + 2, 'the handlebar headlamp follows the steered tyre');
+  }
+  assert.ok(V.drivingLight.intensity > 0);
+  assert.ok(V.drivingLight.distance < 14, 'the driving light reaches the close wall');
+  V.render(1 / 60, { x: 0, z: -12 });
+  assert.equal(V.lampGlows.count, 5, 'the sedan and auto have paired rear lenses, the bike has one');
+  const tail = new THREE.Color(), brake = new THREE.Color();
+  V.lampGlows.getColorAt(0, tail);
+  driver.braking = true;
+  V.render(1 / 60, { x: 0, z: -12 });
+  V.lampGlows.getColorAt(0, brake);
+  assert.ok(brake.r > tail.r && brake.g < brake.r * 0.1);
+  driver.wrecked = true;
+  V.render(1 / 60, { x: 0, z: 0 });
+  assert.equal(V.beams.count, 2); assert.equal(V.drivingLight.intensity, 0);
+  V.night = 0;
+  V.render(1 / 60, { x: 0, z: 0 });
+  assert.equal(V.beams.visible, false);
+});
+
+test('wheel contact survives chassis roll, and front wheels steer around a common turn centre', t => {
+  const V = rendererVehicles(t);
   const v = V.spawn('hatch', 0, 0, 0, { driver: false });
   Object.assign(v, { pitch: 0.055, roll: 0.07, steer: 0.45 });
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scale = new THREE.Vector3();

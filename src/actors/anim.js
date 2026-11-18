@@ -104,6 +104,7 @@ const SEATS = {
 
 // ---------------------------------------------------------------- reaching
 const _pm = new Float32Array(9), _tm = new Float32Array(9), _v = [0, 0, 0], _ik = { a: 0, c: 0, k: 0 };
+const UMBRELLA_ELBOW = [-0.45, -1, -0.1];
 
 /** Euler YXZ (three.js order) as a row-major 3x3. */
 function yxz(m, x, y, z) {
@@ -328,6 +329,13 @@ export function animate(h, dt, lod = 0) {
   else if (fam === 'getup') clip(P, GETUP[a.fall > 0 ? 'front' : 'back'], a.ft);
   else if (fam === 'cower') cower(a, P);
   else clip(P, DIVE, a.ft);
+  if (h.umbrellaLift > 0 && fam === 'ground') {
+    // Grip beside the cheek, with the elbow down. The opposite arm keeps swinging.
+    yxz(_pm, P[C.PP], P[C.PW], P[C.PR]);
+    yxz(_tm, P[C.TP], P[C.TW], P[C.TR]);
+    _R[0] = -0.23; _R[1] = 0.56; _R[2] = 0.23;
+    reachBoth(P, h.umbrellaLift, 0, UMBRELLA_ELBOW);
+  }
   if (lod >= 2 || fam !== 'ground') { a.wHold = a.wAim = 0; a.gun.on = false; }
   // Ease out of the last pose.
   const out = a.out;

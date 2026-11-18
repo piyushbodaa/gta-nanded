@@ -161,7 +161,7 @@ export function installRules(g) {
     const k = clamp(speed / (hole ? 4 : 6), 0.15, 1);
     g.camera.addShake(k * (hole ? 0.22 : 0.4));
     g.audio.sfx('thud', k);
-    if (!hole && speed > 3) g.effects.dust(v.x, v.z, 3, undefined, v.y);
+    if (!hole && speed > 3 && !(g.sky?.wet > 0.35)) g.effects.dust(v.x, v.z, 3, undefined, v.y);
   };
 
   g.vehicles.onWreck = v => {
@@ -302,12 +302,17 @@ export function installRules(g) {
     g.garage?.update?.(dt);
     // Damage effects and wrecks.
     smokeT -= dt;
+    const wet = g.sky?.wet || 0;
     for (const v of g.vehicles.list) {
       v.vx0 = v.vx; v.vz0 = v.vz; // speeds before this frame's physics: who rammed whom (onImpact)
       if (v.exploded) continue;
-      const near = dist(v.x, v.z, P.pos.x, P.pos.z) < 140;
+      const distance = dist(v.x, v.z, P.pos.x, P.pos.z);
       if (v.explodeAt && g.time > v.explodeAt) { explode(v); continue; }
-      if (!near) continue;
+      if (distance >= 140) continue;
+      if (wet > 0.2 && smokeT <= 0 && distance < 42 && !v.wrecked && !(v.sinking > 0) && !(v.hop > 0.12)) {
+        const speed = speedOf(v);
+        if (speed > 5) g.effects.tyreSpray(v, wet, speed);
+      }
       // Nothing burns under the river (a car that sank is wrecked, but not on fire).
       if (smokeT <= 0 && !(v.sinking > 0.4)) {
         const hx = v.x + Math.sin(v.heading) * v.hd * 0.7, hz = v.z + Math.cos(v.heading) * v.hd * 0.7;
@@ -327,10 +332,10 @@ export function installRules(g) {
       for (const side of [-1, 1]) {
         const x = v.x - s * v.hd * 0.7 - c * side * v.hw * 0.75, z = v.z - c * v.hd * 0.7 + s * side * v.hw * 0.75;
         g.effects.skid(v, x, z, v.heading);
-        if (v.slip > 0.45) g.effects.tyreSmoke(x, z, v.y);
+        if (v.slip > 0.45 && wet < 0.35) g.effects.tyreSmoke(x, z, v.y);
       }
     }
-    if (v && Math.abs(forwardSpeed(v)) > 8 && g.city.densityAt(v.x, v.z) < 0.15 && Math.random() < 0.3) g.effects.dust(v.x - Math.sin(v.heading) * v.hd, v.z - Math.cos(v.heading) * v.hd, 1, undefined, v.y);
+    if (v && wet < 0.35 && Math.abs(forwardSpeed(v)) > 8 && g.city.densityAt(v.x, v.z) < 0.15 && Math.random() < 0.3) g.effects.dust(v.x - Math.sin(v.heading) * v.hd, v.z - Math.cos(v.heading) * v.hd, 1, undefined, v.y);
     // Vehicle into the Godavari.
     if (v && v.sinking > 0.4) { if (!v.splashed) { v.splashed = true; g.effects.splash(v.x, v.z); g.audio.sfx('crash', 0.5); } if (v.sinking > 1.5) { const vv = v; P.leaveVehicle(true); g.wasted('drowned'); vv.wrecked = true; } }
     // Health regenerates slowly to half.

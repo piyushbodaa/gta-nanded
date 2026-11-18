@@ -5,9 +5,10 @@
 // instead: the same blocks in the same paint and windows, without the details
 // that are a pixel or two at that distance.
 import * as THREE from 'three';
-import { Geo, setBounds } from './geo.js';
+import { Geo } from './geo.js';
+import { wireGeometry } from './wires.js';
 import { CHUNK, GROUND_CELL, valleyDepth, STYLE, PROP, ZONE, FOOTPATH_W, WALK_Y, PUMP_HW, PUMP_HD, BENCH } from './citygen.js';
-import { ROW, TILE, SIGN_COLS, PAVER_REPEAT_M } from './atlas.js';
+import { ROW, TILE, SHOP_SIGNS, SIGN_COLS, PAVER_REPEAT_M } from './atlas.js';
 import { rng, hash2, clamp, hashFloat, smoothstep } from '../core/math.js';
 import { MEDIAN_W, SOLID_BELOW, ROAD_Y, PAD_Y } from './roadnet.js';
 import { medianRuns } from './colliders.js';
@@ -199,7 +200,8 @@ export class ChunkManager {
   }
 
   setNight(n) {
-    this.mat.pools.opacity = clamp(n * 0.9, 0, 0.72);
+    // Additive spill accumulates where the shop lights meet street lamps.
+    this.mat.pools.opacity = clamp(n * 0.21, 0, 0.19);
     this.night = n;
     for (const ch of this.chunks.values()) for (const level of ch.levels) if (level?.pools) level.pools.visible = n > 0.02;
   }
@@ -253,10 +255,9 @@ export class ChunkManager {
     let pools = null;
     if (!pg.empty) { pools = new THREE.Mesh(pg.build(), this.mat.pools); pools.matrixAutoUpdate = false; pools.renderOrder = 2; meshes.push(pools); }
     if (wires.length) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3));
-      setBounds(geo, geo.attributes.position.array);
-      const l = new THREE.LineSegments(geo, this.mat.wires); l.matrixAutoUpdate = false; meshes.push(l);
+      const cables = new THREE.Mesh(wireGeometry(wires), this.mat.wires);
+      cables.matrixAutoUpdate = false;
+      meshes.push(cables);
     }
     const group = new THREE.Group();
     group.matrixAutoUpdate = false;
@@ -849,7 +850,7 @@ function skirt(ctx, X, Z, hw, hd, on, width = 1.1, slope = false) {
 
 // ------------------------------------------------------------------ buildings
 const RES_ROWS = { [STYLE.HOUSE]: ROW.RES, [STYLE.SHOPHOUSE]: ROW.RES, [STYLE.APARTMENT]: ROW.BALCONY, [STYLE.OLD]: ROW.OLD, [STYLE.COMMERCIAL]: ROW.MODERN, [STYLE.INSTITUTION]: ROW.MODERN, [STYLE.SHED]: ROW.BLANK, [STYLE.HUT]: ROW.BLANK, [STYLE.UNFINISHED]: ROW.BLANK };
-const AWNINGS = [0x2f6fb5, 0x2e8b57, 0xe67e22, 0xc0392b, 0x1f9aa8, 0xf1c40f, 0x7d3c98];
+const AWNINGS = [0x3d6781, 0x44715d, 0xaf7548, 0x904f45, 0x3c7979, 0xb59855, 0x7b6676];
 
 /**
  * A building on its lot. From afar (ctx.far) the same block in the same paint and windows,
@@ -1039,20 +1040,33 @@ function buildLot(ctx, i) {
       const cloth = mix(r.pick(AWNINGS), 0x8a8a84, 0.3);
       if (!far) {
         const y0 = 3.0, y1 = 2.66, out = 1.1;
-        const A0 = [X(-sw, -hd), Z(-sw, -hd)], B0 = [X(sw, -hd), Z(sw, -hd)], C0 = [X(sw, -hd - out), Z(sw, -hd - out)], D0 = [X(-sw, -hd - out), Z(-sw, -hd - out)];
-        g.color(cloth, 0);
-        g.quad(g.v(A0[0], y0, A0[1]), g.v(B0[0], y0, B0[1]), g.v(C0[0], y1, C0[1]), g.v(D0[0], y1, D0[1]));
-        // Underside a little lighter: sun through the cloth.
-        g.color(mix(cloth, 0xfff2d8, 0.35), 0);
-        g.quad(g.v(A0[0], y0 - 0.01, A0[1]), g.v(D0[0], y1 - 0.01, D0[1]), g.v(C0[0], y1 - 0.01, C0[1]), g.v(B0[0], y0 - 0.01, B0[1]));
-        g.color(cloth, 0);
-        // Valance along the front edge and two steel brackets.
-        g.box(X(0, -hd - out), y1 - 0.16, Z(0, -hd - out), sw, 0.16, 0.012, rot);
+        const striped = (seed & 3) !== 0;
+        const panels = Math.min(16, Math.max(4, Math.round(sw * 2 / (striped ? 0.56 : 1.4))));
+        const v = (x, y, z) => g.v(X(x, z), y, Z(x, z));
+        const tip = -hd - out;
+        for (let j = 0; j < panels; j++) {
+          const t0 = j / panels, t1 = (j + 1) / panels;
+          const x0 = sw * (2 * t0 - 1), x1 = sw * (2 * t1 - 1);
+          // Cloth sags between the shop wall and its front rail. The valance
+          // hangs independently, with a shallow scallop at every stitched hem.
+          const sag0 = 0.06 * Math.sin(t0 * Math.PI), sag1 = 0.06 * Math.sin(t1 * Math.PI);
+          const e0 = y1 - sag0, e1 = y1 - sag1;
+          const color = striped && j % 2 ? mix(cloth, 0xd9cdb1, 0.74) : cloth;
+          g.color(color);
+          g.quad(v(x0, y0, -hd), v(x1, y0, -hd), v(x1, e1, tip), v(x0, e0, tip));
+          g.color(mix(color, 0xbcb093, 0.18));
+          g.quad(v(x0, e0, tip), v(x1, e1, tip), v(x1, y0, -hd), v(x0, y0, -hd));
+          g.color(mix(color, 0x857762, 0.12));
+          const left = v(x0, e0, tip), right = v(x1, e1, tip);
+          const bl = v(x0, e0 - 0.12, tip), br = v(x1, e1 - 0.12, tip);
+          const mid = v((x0 + x1) / 2, (e0 + e1) / 2 - (striped ? 0.165 : 0.14), tip);
+          g.tri(right, bl, left); g.tri(right, mid, bl); g.tri(right, br, mid);
+        }
         g.color(0x3a3d3f, 0);
         for (const bx2 of [-sw + 0.3, sw - 0.3]) g.beam(X(bx2, -hd), y0 - 0.55, Z(bx2, -hd), X(bx2, -hd - out * 0.6), y0 - (y0 - y1) * 0.6 - 0.03, Z(bx2, -hd - out * 0.6), 0.018);
       }
     }
-    const slot = (seed >>> 8) % 32;
+    const slot = (seed >>> 8) % SHOP_SIGNS.length;
     const col = slot % SIGN_COLS, row = Math.floor(slot / SIGN_COLS);
     if (!far) {
       sg.setTint(0xffffff, 0).setTile(col, row, 1, 2);
@@ -1107,18 +1121,29 @@ function frontage(ctx, i, ax, az, bx, bz, len, groundRow, top, r) {
   const X = (lx, lz) => x + lx * c + lz * s, Z = (lx, lz) => z - lx * s + lz * c;
   const bays = Math.max(1, Math.round(len / FLOOR)), bw = len / bays;
   const shop = groundRow === ROW.SHOP;
+  const seed = L.seed[i], paint = L.color[i];
+  const stock = shop && SHOP_SIGNS[(seed >>> 8) % SHOP_SIGNS.length][2];
+  const entrance = bays > 1 ? (seed >>> 3) % bays : -1;
   const door = shop ? -1 : r.int(0, bays - 1);
   const dx = (bx - ax) / len, dz = (bz - az) / len;
   for (let k = 0; k < bays; k++) {
-    let col, row = groundRow;
-    if (shop) col = r.chance(0.14) ? 7 : r.int(0, 6);
+    let col, row = groundRow, shutterDrop = 0;
+    if (shop) {
+      col = r.chance(0.14) ? 7 : stock;
+      if (col !== 7) shutterDrop = r.range(0.04, 0.39);
+    }
     else if (k === door) { row = ROW.GROUND; col = 0; }
     else if (groundRow === ROW.GROUND) col = r.pick([3, 3, 3, 3, 2, 4, 7]);
     else col = r.int(0, 7);
-    g.setTile(col, row, 1, 1);
+    if (shop && col !== 7 && !ctx.far) {
+      shopBay(g, X, Z, hw - bw * k, bw, -hd, paint, seed, col, k === entrance, shutterDrop);
+      continue;
+    }
+    g.setTint(paint, seed).setTile(col, row, 1, 1);
     const x0 = ax + dx * bw * k, z0 = az + dz * bw * k, x1 = ax + dx * bw * (k + 1), z1 = az + dz * bw * (k + 1);
     g.wall(x0, z0, x1, z1, 0, top, k, k + 1, 0, top / FLOOR);
   }
+  g.setTint(paint, seed);
   if (ctx.far || (!shop && !(L.flags[i] & 1024))) return;
   g.setTint(mix(L.color[i], 0x6b6359, 0.5), L.seed[i] & 255).setTile(TILE.COMPOUND[0], TILE.COMPOUND[1], 1, 1);
   if (shop) {
@@ -1130,6 +1155,75 @@ function frontage(ctx, i, ax, az, bx, bz, len, groundRow, top, r) {
     const t = (door + 0.5) / bays, lx = hw - 2 * hw * t; // front runs from +hw to -hw
     if (room > 0.3) g.box(X(lx, -hd - 0.22), 0, Z(lx, -hd - 0.22), 0.7, 0.12, 0.22, rot, FLOOR);
     g.box(X(lx, -hd - 0.27), 2.62, Z(lx, -hd - 0.27), 0.8, 0.08, 0.27, rot, FLOOR, true, true);
+  }
+}
+
+// The shop tile is cut at the shutter guides. The lintel stays on the street
+// wall, the merchandise moves behind it, and the reveals close the opening.
+function shopBay(g, X, Z, right, width, front, paint, seed, col, entrance, shutterDrop) {
+  const left = right - width, trim = width * 0.045;
+  const a = right - trim, b = left + trim, floor = 0.30, head = 2.47;
+  const rear = front + (entrance ? 1.05 : 0.82);
+  const vertex = (x, y, z) => g.v(X(x, z), y, Z(x, z));
+  const wall = (x0, x1, z, lo, hi, u0, u1) =>
+    g.wall(X(x0, z), Z(x0, z), X(x1, z), Z(x1, z), lo, hi, u0, u1, lo / FLOOR, hi / FLOOR);
+  g.setTint(paint, seed).setTile(col, ROW.SHOP, 1, 1);
+  wall(right, left, front, head, FLOOR, 0, 1);
+  wall(right, a, front, 0, head, 0, 0.045);
+  wall(b, left, front, 0, head, 0.955, 1);
+  if (!entrance) wall(a, b, rear, floor, head, 0.045, 0.955);
+  g.setTile(7, ROW.SHOP, 1, 1);
+  wall(a, b, front + 0.009, head - shutterDrop, head, 0.045, 0.955);
+
+  g.color(mix(paint, 0x676457, 0.66));
+  g.quad(vertex(a, floor, front), vertex(a, floor, rear), vertex(a, head, rear), vertex(a, head, front));
+  g.quad(vertex(b, floor, rear), vertex(b, floor, front), vertex(b, head, front), vertex(b, head, rear));
+  g.color(0x6e685c);
+  g.quad(vertex(a, head, front), vertex(a, head, rear), vertex(b, head, rear), vertex(b, head, front));
+  g.color(0x9c907c);
+  g.quad(vertex(a, floor, front), vertex(b, floor, front), vertex(b, floor, rear), vertex(a, floor, rear));
+  wall(a, b, front, 0, floor, 0, 1);
+
+  if (entrance) {
+    // A partly open steel-and-glass sliding door with a shadowed passage
+    // behind it. Both leaves and the handle sit at their own depths.
+    g.color(0x4d483d);
+    wall(a, b, rear, floor, head, 0, 1);
+    // A glimpse of the adjoining stockroom keeps the open half from reading
+    // as a painted black rectangle when the frontage is viewed head-on.
+    g.setTint(paint, seed).setTile(col, ROW.SHOP, 1, 1);
+    wall(b + (a - b) * 0.42, b + 0.09, rear - 0.008, floor + 0.11, 2.30, 0.53, 0.88);
+    const frame = front + 0.38, mid = b + (a - b) * 0.55;
+    g.color(0x606a62);
+    wall(a, mid, frame, floor + 0.04, head - 0.04, 0, 1);
+    g.color(0x849184);
+    wall(a - 0.07, mid + 0.06, frame - 0.008, 0.99, head - 0.10, 0, 1);
+    g.color(0xadad9b);
+    wall(mid + 0.06, mid, frame - 0.01, floor, head, 0, 1);
+    wall(a, mid, frame - 0.01, 1.01, 1.055, 0, 1);
+    g.color(0x575b53);
+    wall(mid + 0.16, mid + 0.13, frame - 0.024, 1.15, 1.37, 0, 1);
+  } else if (col === 0) {
+    const sizes = [0.20, 0.23], grain = [0xb18c53, 0xbfae85];
+    for (let k = 0; k < 2; k++) {
+      const radius = sizes[k], x = a - 0.43 - k * 0.54, z = front + 0.27 + k * 0.1;
+      const wx = X(x, z), wz = Z(x, z);
+      g.color(k ? 0xb19b76 : 0x9a8162);
+      g.lathe(wx, floor, wz, [[radius * 0.78, 0], [radius * 1.08, 0.17], [radius, 0.36], [radius * 1.08, 0.39]], 8);
+      g.color(grain[k]);
+      g.cyl(wx, floor + 0.389, wz, radius, 0.055, 8, radius * 0.42);
+    }
+  } else if (col === 1 || col === 2 || col === 5) {
+    // The lower strip of the painted tile belongs to the front of a raised
+    // display case. Giving it its own depth lets the shelves shift behind it.
+    const caseTop = col === 2 ? 0.69 : 0.94;
+    const z = front + 0.21, inset = 0.11;
+    g.setTint(paint, seed).setTile(col, ROW.SHOP, 1, 1);
+    wall(a - inset, b + inset, z, floor, caseTop, 0.055, 0.945);
+    g.color(col === 2 ? 0x898a77 : 0x858e80);
+    g.quad(vertex(a - inset, caseTop, z), vertex(b + inset, caseTop, z), vertex(b + inset, caseTop, rear), vertex(a - inset, caseTop, rear));
+    g.quad(vertex(b + inset, floor, z), vertex(b + inset, floor, rear), vertex(b + inset, caseTop, rear), vertex(b + inset, caseTop, z));
+    g.quad(vertex(a - inset, floor, rear), vertex(a - inset, floor, z), vertex(a - inset, caseTop, z), vertex(a - inset, caseTop, rear));
   }
 }
 

@@ -50,9 +50,9 @@ const KEYS = [
 const DUST = new THREE.Color(0.8, 0.71, 0.58), BOUNCE = 0.16;
 // fogNear/fogFar drive the fallback linear fog; fogDensity the haze in post-processing.
 const WEATHER = {
-  clear: { fogNear: 0.32, fogFar: 1.0, grey: 0, clouds: 0.32, light: 1, fogDensity: 0.0013 },
-  haze: { fogNear: 0.12, fogFar: 0.72, grey: 0.25, clouds: 0.15, light: 0.92, fogDensity: 0.0046 },
-  rain: { fogNear: 0.05, fogFar: 0.5, grey: 0.8, clouds: 0.95, light: 0.5, fogDensity: 0.0085 },
+  clear: { fogNear: 0.32, fogFar: 1.0, grey: 0, rain: 0, clouds: 0.32, light: 1, fogDensity: 0.0013 },
+  haze: { fogNear: 0.12, fogFar: 0.72, grey: 0.25, rain: 0, clouds: 0.15, light: 0.92, fogDensity: 0.0046 },
+  rain: { fogNear: 0.05, fogFar: 0.5, grey: 0.8, rain: 1, clouds: 0.95, light: 0.24, fogDensity: 0.0085 },
 };
 
 export class Sky {
@@ -240,7 +240,7 @@ export class Sky {
 
   get elevationDeg() { return Math.asin(clamp(this.sunDir.y, -1, 1)) * 180 / Math.PI; }
 
-  update(dt, focus) {
+  update(dt, focus, snapWeather = dt === 0) {
     if (!this.frozen) {
       // Nights pass twice as fast: the city is at its best in daylight and dusk.
       const nightish = this.hours < 5.5 || this.hours > 20;
@@ -249,9 +249,9 @@ export class Sky {
     // Ease weather.
     const tw = this.targetW || WEATHER[this.weather];
     const k = 1 - Math.exp(-dt * 0.5);
-    for (const key of ['fogNear', 'fogFar', 'grey', 'clouds', 'light', 'fogDensity']) this.w[key] = lerp(this.w[key], tw[key], dt ? k : 1);
+    for (const key of ['fogNear', 'fogFar', 'grey', 'rain', 'clouds', 'light', 'fogDensity']) this.w[key] = lerp(this.w[key], tw[key], snapWeather ? 1 : k);
     const wetTarget = this.weather === 'rain' ? 1 : 0;
-    this.wet = dt ? clamp(this.wet + (wetTarget > this.wet ? dt / 6 : -dt / 70), 0, 1) : wetTarget;
+    this.wet = snapWeather ? wetTarget : clamp(this.wet + (wetTarget ? dt / 6 : -dt / 70), 0, 1);
 
     // Sun path: rises east (+x), sets west (-x), arcs a little south (+z).
     const theta = ((this.hours - 6) / 12) * Math.PI;
@@ -303,6 +303,7 @@ export class Sky {
     else if (elDeg > dusk.el) { lightI = dusk.sunI * smoothstep(-0.02, Math.sin(dusk.el * Math.PI / 180), this.sunDir.y); lightCol = dusk.sun; }
     this.sun.color.copy(lightCol);
     this.sun.intensity = lightI * this.w.light;
+    this.sun.shadow.intensity = 1 - 0.55 * this.w.rain;
     this.bounce.color.copy(lightCol).multiply(DUST);
     this.bounce.intensity = this.bounceOn ? lightI * this.w.light * BOUNCE : 0;
     this.hemi.color.copy(K.sky);
