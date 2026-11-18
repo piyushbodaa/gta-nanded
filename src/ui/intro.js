@@ -1,9 +1,11 @@
+import { MusicPlayer } from '../audio/music.js';
+
 const LENGTH = 12000, REVEAL_AT = 11600;
 // The art is AVIF, a quarter of the WebP's size; the WebP stays for browsers that cannot decode AVIF.
 const ASSETS = Object.fromEntries(['city','driver','chase','crew'].map(name=>[name,`/media/gta-nanded-${name}.avif`]));
 
 /** Original animated comic panels; gameplay starts behind the final curtain. */
-export function createIntro() {
+export function createIntro(audio, settings) {
   const overlay = document.getElementById('cinematic-intro');
   if (!overlay) throw new Error('The cinematic-intro container is missing.');
   overlay.classList.add('launch-intro');
@@ -11,7 +13,7 @@ export function createIntro() {
   overlay.setAttribute('aria-labelledby','intro-title'); overlay.setAttribute('aria-describedby','launch-description');
   overlay.innerHTML = `
     <h2 id="intro-title" class="launch-sr">GTA Nanded — your city, your streets</h2>
-    <p id="launch-description" class="launch-sr">A twelve-second illustrated opening set in Nanded. Press Escape or Skip intro to begin immediately.</p>
+    <p id="launch-description" class="launch-sr">A twelve-second illustrated opening set in Nanded. Press Escape or Skip intro to begin the mission. Choose Skip story to explore in free roam.</p>
     <div class="launch-frame" aria-hidden="true">
       <div class="launch-stamp"><span>GTA</span><strong>NANDED</strong><small>MAHARASHTRA / INDIA</small></div>
       <div class="launch-slash launch-slash-one"></div><div class="launch-slash launch-slash-two"></div>
@@ -27,29 +29,45 @@ export function createIntro() {
       <div class="launch-vignette"></div>
     </div>
     <div class="launch-static" hidden><span class="launch-static-kicker">YOUR CITY IS WAITING</span><div class="launch-static-brand" aria-hidden="true"><span>GTA</span><strong>NANDED</strong></div><p lang="mr">उगं नव्हं मय,<br>नांदेड हाय नांदेड!</p><p id="intro-fallback-message">Begin at Hazur Sahib Nanded station.</p><button id="intro-continue" class="launch-continue" type="button">Enter Nanded ↗</button></div>
-    <header class="launch-header"><span class="launch-edition"><i></i>NANDED / MH 26</span><div class="launch-controls"><button id="intro-sound" type="button" aria-pressed="false"><span aria-hidden="true">♫</span><span id="intro-sound-label">Sound off</span></button><button id="intro-skip" type="button">Skip intro ↗</button></div></header>
+    <header class="launch-header"><span class="launch-edition"><i></i>NANDED / MH 26</span><div class="launch-controls"><button id="intro-sound" type="button" aria-pressed="false"><span aria-hidden="true">♫</span><span id="intro-sound-label">Sound off</span></button><button id="intro-skip" type="button">Skip intro ↗</button><button id="intro-skip-story" type="button">Skip story ↗</button></div></header>
     <footer class="launch-footer"><div class="launch-start"><span>YOUR STORY STARTS HERE</span><strong>Hazur Sahib Nanded <i>/</i> Station</strong></div><div class="launch-progress-wrap"><div class="launch-progress-copy"><span id="intro-status" role="status">Your city. Your streets.</span><span id="intro-time">0:00 / 0:12</span></div><div id="intro-progress" role="progressbar" aria-label="Opening sequence elapsed time" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="intro-progress-fill"></span></div></div></footer>
     <div class="launch-curtains" aria-hidden="true"><i></i><i></i></div>`;
   const $ = selector => overlay.querySelector(selector);
   const skip=$('#intro-skip'),sound=$('#intro-sound'),continueButton=$('#intro-continue');
   const fallback=$('.launch-static'),status=$('#intro-status'),time=$('#intro-time'),progress=$('#intro-progress'),fill=$('#intro-progress-fill');
   const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
-  // The theme is fetched when it is first played, not with the page: the opening starts with sound off.
-  const audio=new Audio('/media/launch-theme.m4a'); audio.preload='none'; audio.volume=.72;
+  let theme = null, openingSound = true;
+  const skipStory = $('#intro-skip-story');
+  const soundAllowed = () => settings().sound !== false && settings().music > 0;
   let active=false,destroyed=false,phase='idle',complete=null,returnFocus=null,mode='drive',generation=0;
   let elapsed=0,previousTime=null,frame=0,assetTimer=0,closingTimer=0,muted=true,audioFailed=false,chapter=-1;
   let inertElements=[],tracks=[],curtainTracks=[];
   const removers=[];
   const records=[...overlay.querySelectorAll('img[data-art]')].map(image=>({image,state:'pending'}));
   function listen(target,event,handler,options){target.addEventListener(event,handler,options);removers.push(()=>target.removeEventListener(event,handler,options));}
-  function soundLabel(){const audible=!muted&&!audioFailed;audio.muted=!audible;sound.setAttribute('aria-pressed',String(audible));sound.setAttribute('aria-label',`Turn opening music ${audible?'off':'on'}`);$('#intro-sound-label').textContent=audioFailed?'No sound':audible?'Sound on':'Sound off';sound.disabled=audioFailed;}
-  function stopAudio(){audio.pause();try{audio.currentTime=0;}catch{/* Not loaded yet. */}}
+  function soundLabel(){
+    const audible = !muted && !audioFailed && soundAllowed();
+    sound.setAttribute('aria-pressed', String(audible));
+    sound.setAttribute('aria-label', `Turn opening music ${audible ? 'off' : 'on'}`);
+    $('#intro-sound-label').textContent = audioFailed ? 'No sound' : audible ? 'Sound on' : 'Sound off';
+    sound.disabled = audioFailed || !soundAllowed();
+  }
+  function stopAudio(){theme?.stop(.04);}
+  function unlockAudio(){
+    if (muted || !soundAllowed()) return;
+    // Unlock the context in the button gesture, even if the illustrations load later.
+    try {
+      audio.setVolumes(settings());
+      audio.init().catch(() => {});
+      if (audio.ctx) theme ??= new MusicPlayer(audio.ctx, audio.musicBus);
+      else audioFailed = true;
+    } catch { audioFailed = true; }
+    soundLabel();
+  }
   function playAudio(){
-    if(!active||phase!=='playing'||document.hidden||muted||audioFailed)return;
-    const run=generation;
-    if(Number.isFinite(audio.duration))audio.currentTime=Math.min(elapsed/1000,audio.duration);
-    try{audio.play()?.catch(error=>{if(run!==generation||!active||error?.name==='AbortError')return;muted=true;soundLabel();});}
-    catch{muted=true;soundLabel();}
+    if (!active || phase !== 'playing' || document.hidden || muted || audioFailed) return;
+    theme?.play('/media/launch-theme.m4a', .86, () => elapsed / 1000, false,
+      () => { audioFailed = true; soundLabel(); });
   }
   function cancelTracks(){tracks.forEach(track=>track.cancel());tracks=[];}
   function clearClosing(){clearTimeout(closingTimer);curtainTracks.forEach(track=>track.cancel());curtainTracks=[];overlay.classList.remove('launch-reveal');}
@@ -82,13 +100,13 @@ export function createIntro() {
     $('#intro-fallback-message').textContent=message;continueButton.textContent=mode==='replay'?'Back to Nanded ↗':mode==='foot'?'Walk into Nanded ↗':'Enter Nanded ↗';status.textContent='Ready when you are';time.textContent='READY';
     if(document.activeElement===sound)continueButton.focus({preventScroll:true});
   }
-  function finish({notify=true,reveal=false}={}){
-    if(!active)return;active=false;phase=reveal?'closing':'idle';const run=++generation;clearTimeout(assetTimer);cancelAnimationFrame(frame);stopAudio();cancelTracks();clearClosing();document.body.classList.remove('intro-active');
+  function finish({notify=true,reveal=false,skipCampaign=false}={}){
+    if(!active)return;active=false;phase=reveal?'closing':'idle';const run=++generation;clearTimeout(assetTimer);cancelAnimationFrame(frame);stopAudio();theme=null;cancelTracks();clearClosing();document.body.classList.remove('intro-active');
     inertElements.forEach(([element,previous])=>{element.inert=previous;});inertElements=[];const callback=complete;complete=null;overlay.hidden=!reveal;overlay.setAttribute('aria-modal',String(!reveal));
     if(reveal){overlay.classList.add('launch-reveal');[...overlay.querySelectorAll('.launch-curtains i')].forEach((curtain,index)=>curtainTracks.push(curtain.animate([{transform:'translateX(0)'},{transform:`translateX(${index?105:-105}%)`}],{duration:400,fill:'both',easing:'cubic-bezier(.7,0,.3,1)'})));
       closingTimer=setTimeout(()=>{if(run!==generation||active||destroyed)return;overlay.hidden=true;clearClosing();phase='idle';},400);}
     if(returnFocus?.isConnected&&returnFocus.getClientRects().length)returnFocus.focus({preventScroll:true});
-    if(notify)callback?.();
+    if(notify)callback?.(skipCampaign);
   }
   function tick(now){
     if(!active||phase!=='playing'||document.hidden)return;if(previousTime!==null)elapsed+=Math.max(0,now-previousTime);previousTime=now;tracks.forEach(animation=>{animation.currentTime=Math.min(elapsed,LENGTH);});setProgress();
@@ -102,22 +120,20 @@ export function createIntro() {
   }
   function play(onComplete,options={}){
     if(destroyed||active)return false;clearClosing();active=true;phase='loading';const run=++generation;complete=typeof onComplete==='function'?onComplete:null;mode=options.mode||'drive';returnFocus=document.activeElement;elapsed=0;previousTime=null;chapter=-1;
+    audioFailed=false;muted=!openingSound || !soundAllowed();skipStory.hidden=mode==='replay';
     overlay.hidden=false;overlay.setAttribute('aria-modal','true');overlay.classList.remove('is-static');document.body.classList.add('intro-active');fallback.hidden=true;sound.hidden=false;soundLabel();
     inertElements=[...document.body.children].filter(element=>element!==overlay&&!element.contains(overlay)&&!['SCRIPT','STYLE','LINK'].includes(element.tagName)).map(element=>[element,element.inert]);inertElements.forEach(([element])=>{element.inert=true;});
     skip.textContent=mode==='replay'?'Back to Nanded ↗':'Skip intro ↗';skip.focus({preventScroll:true});setProgress();
     if(reducedMotion.matches||typeof overlay.animate!=='function'){staticOpening('Begin at Hazur Sahib Nanded station.');return true;}
-    buildTracks();tracks.forEach(animation=>{animation.currentTime=160;});status.textContent='Setting the scene…';
+    unlockAudio();buildTracks();tracks.forEach(animation=>{animation.currentTime=160;});status.textContent='Setting the scene…';
     assetTimer=setTimeout(()=>{if(active&&run===generation&&phase==='loading')staticOpening('Your streets are waiting. Continue whenever you like.');},5000);beginTimeline();return true;
   }
   function replay(){return play(null,{mode:'replay'});}
   records.forEach(record=>{const {image}=record;image.decoding='async';listen(image,'load',()=>{if(record.state!=='pending')return;record.state='ready';beginTimeline();});listen(image,'error',()=>{if(record.state!=='pending')return;if(!record.retried&&image.src.endsWith('.avif')){record.retried=true;image.src=ASSETS[image.dataset.art].replace('.avif','.webp');return;}record.state='failed';image.src='/media/nanded-key-art.webp';if(active)staticOpening('Your streets are waiting. Continue straight into Nanded.');});image.src=ASSETS[image.dataset.art];});
-  listen(skip,'click',()=>finish());listen(continueButton,'click',()=>finish());
+  listen(skip,'click',()=>finish());listen(skipStory,'click',()=>finish({skipCampaign:true}));listen(continueButton,'click',()=>finish());
   const replayButton=document.getElementById('intro-replay');if(replayButton){listen(replayButton,'click',replay);replayButton.disabled=false;}
-  listen(sound,'click',()=>{muted=!muted;soundLabel();if(muted)audio.pause();else playAudio();});
-  listen(audio,'error',()=>{audioFailed=true;soundLabel();});
-  // Turned on mid-opening, the theme arrives after play() was asked for: join it at the scene on screen.
-  listen(audio,'loadedmetadata',()=>{if(active&&phase==='playing'&&Number.isFinite(audio.duration))audio.currentTime=Math.min(elapsed/1000,audio.duration);});
-  listen(document,'visibilitychange',()=>{if(!active||phase!=='playing')return;cancelAnimationFrame(frame);previousTime=null;if(document.hidden)audio.pause();else{playAudio();frame=requestAnimationFrame(tick);}});
+  listen(sound,'click',()=>{muted=!muted;openingSound=!muted;soundLabel();if(muted)stopAudio();else{unlockAudio();playAudio();}});
+  listen(document,'visibilitychange',()=>{if(!active||phase!=='playing')return;cancelAnimationFrame(frame);previousTime=null;if(document.hidden)stopAudio();else{playAudio();frame=requestAnimationFrame(tick);}});
   listen(reducedMotion,'change',()=>{if(active&&reducedMotion.matches)staticOpening('Begin at Hazur Sahib Nanded station.');});
   listen(window,'keydown',event=>{
     if(!active)return;
@@ -125,5 +141,5 @@ export function createIntro() {
     else if(event.key==='Tab'){const buttons=[...overlay.querySelectorAll('button')].filter(button=>!button.disabled&&!button.hidden&&button.getClientRects().length);const first=buttons[0],last=buttons.at(-1);
       if(!buttons.includes(document.activeElement)){event.preventDefault();first?.focus();}else if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
   },true);
-  return {play,replay,get active(){return active;},destroy(){if(destroyed)return;finish({notify:false});destroyed=true;generation+=1;clearTimeout(assetTimer);cancelAnimationFrame(frame);clearClosing();cancelTracks();stopAudio();overlay.hidden=true;removers.forEach(remove=>remove());audio.removeAttribute('src');audio.load();}};
+  return {play,replay,get active(){return active;},destroy(){if(destroyed)return;finish({notify:false});destroyed=true;generation+=1;clearTimeout(assetTimer);cancelAnimationFrame(frame);clearClosing();cancelTracks();stopAudio();overlay.hidden=true;removers.forEach(remove=>remove());}};
 }

@@ -82,12 +82,12 @@ async function boot() {
   const probe = document.createElement('canvas').getContext('webgl2');
   if (!probe) { fatal('GTA Nanded needs WebGL 2. Use a current Chrome, Edge, Firefox or Safari with hardware acceleration on, then reload.'); return; }
   probe.getExtension('WEBGL_lose_context')?.loseContext(); // give the probe's context back at once
-  const intro = createIntro();
   const canvas = $('game-canvas');
   const game = new Game(canvas);
   window.gtaNanded = game;
   game.save = new Save();
   game.audio = new GameAudio();
+  const intro = createIntro(game.audio, () => game.save.data.settings);
   await game.load((label, f) => status(label, f));
   // Compile the city's shaders on the GPU's own thread while the rest of the game is set up,
   // instead of stalling the first frame on them (KHR_parallel_shader_compile where available).
@@ -174,7 +174,7 @@ async function boot() {
 
   // Set at the first tap: a second one while the sound starts up (a double tap) must not start the game twice.
   let starting = false;
-  const begin = mode => {
+  const begin = (mode, resetStory = false) => {
     if (starting || game.started) return;
     starting = true;
     onMenu = false;
@@ -182,11 +182,19 @@ async function boot() {
       fullscreen(); // while the tap still counts as a user gesture
       // Sound starts with the tap, but the game doesn't wait for the phone's audio to open.
       if (st.sound !== false) { try { game.audio.init().catch(() => {}); game.audio.setVolumes({ music: st.music, sfx: st.sfx }); game.audio.setEnabled(true); } catch { /* audio is optional */ } }
-      const play = () => {
-        try { startGame(game, mode); }
-        finally { starting = false; onMenu = !game.started; }
+      const play = (skipCampaign = false) => {
+        const selected = skipCampaign ? 'free' : mode;
+        try {
+          // Commit the confirmed reset only when the player actually starts a new story.
+          if (selected === 'new' && resetStory) {
+            const settings = game.save.data.settings;
+            game.save.reset(); game.save.data.settings = settings;
+          }
+          if (mode === 'new') game.save.data.seenIntro = true;
+          startGame(game, selected);
+        } finally { starting = false; onMenu = !game.started; }
       };
-      if (mode === 'new' && !game.save.data.seenIntro) { game.save.data.seenIntro = true; intro.play(play, { mode: 'drive' }); }
+      if (mode === 'new' && (resetStory || !game.save.data.seenIntro)) intro.play(play, { mode: 'drive' });
       else play();
     } catch (err) { starting = false; onMenu = !game.started; throw err; }
   };
@@ -210,10 +218,8 @@ async function boot() {
       }
       if (since < 600) return;
       clearTimeout(disarm);
-      // Start over, but keep the player's settings (sound, look speed), on disk too.
-      const settings = game.save.data.settings; game.save.reset(); game.save.data.settings = settings; game.save.dirty(); game.save.flush();
     }
-    begin('new');
+    begin('new', has);
   });
   $('menu-free').addEventListener('click', () => begin('free'));
   // Development only: start without the menu (automated checks).

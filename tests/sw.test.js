@@ -129,3 +129,15 @@ test('replaced media reach the next visit, and unchanged media cost a 304, not a
   await p.get('/media/theme.m4a', { headers: { range: 'bytes=0-1' } });
   assert.ok(!p.paths().includes('/media/theme.m4a'));
 });
+
+test('one visit caches the opening, street score, all station tracks and foley for offline audio', async () => {
+  const { STATIONS } = await import('../src/audio/radio.js');
+  const paths = ['/media/launch-theme.m4a', '/media/music/foley.flac',
+    ...['backstreets', 'checkpost', ...STATIONS.flatMap(s => s.tracks.map(t => t.id))]
+      .map(id => `/media/music/${id}.m4a`)];
+  const files = site('B');
+  for (const path of paths) files[path] = { body: path };
+  const p = phone(files);
+  await p.install(); p.net.online = false;
+  for (const path of paths) assert.equal(await (await p.get(path)).text(), path);
+});

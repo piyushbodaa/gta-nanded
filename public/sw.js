@@ -12,6 +12,10 @@
 const VERSION = 'gta-nanded-v3-2026-10-27';
 const CORE = ['/', '/manifest.webmanifest', '/icon.svg'];
 const WORLD = '/data/world.json';
+// These are fetched as whole Web Audio buffers, including for previously unplayed stations offline.
+const AUDIO = ['/media/launch-theme.m4a', '/media/music/foley.flac',
+  ...['backstreets', 'checkpost', 'forecourt', 'ring-road', 'goods-yard', 'last-local', 'blue-shutter', 'chai-at-four']
+    .map(track => `/media/music/${track}.m4a`)];
 
 // The build files a page loads: its script, module preloads and stylesheet.
 const releaseFiles = html => [...new Set(html.match(/\/assets\/[\w.-]+/g) || [])];
@@ -26,7 +30,7 @@ self.addEventListener('install', event => {
     // the file is cached when the page next asks for it.
     const page = await cache.match('/');
     const html = page ? await page.text() : '';
-    const files = [...releaseFiles(html), ...pageArt(html), WORLD];
+    const files = [...releaseFiles(html), ...pageArt(html), WORLD, ...AUDIO];
     await Promise.all(files.map(file => cache.add(file).catch(() => {})));
     await self.skipWaiting();
   })());

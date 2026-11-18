@@ -32,10 +32,10 @@ export const ATMOSPHERE_GLSL = /* glsl */`
 // Each key also carries the camera "look" at that hour: exposure, saturation,
 // contrast, split-tone tints for shadows and light, and bloom strength.
 const KEYS = [
-  { el: -18, zen: C(0.015, 0.025, 0.06), hor: C(0.08, 0.07, 0.1), sun: C(0.45, 0.55, 0.9), sunI: 0.16, sky: C(0.16, 0.2, 0.34), gnd: C(0.1, 0.08, 0.07), ambI: 0.75, fog: C(0.09, 0.085, 0.11),
-    exp: 1.05, sat: 0.95, con: 1.06, sh: C(0.86, 0.93, 1.12), hi: C(1.12, 0.98, 0.84), bloom: 0.16 },
-  { el: -6, zen: C(0.06, 0.08, 0.2), hor: C(0.42, 0.3, 0.36), sun: C(0.6, 0.5, 0.7), sunI: 0.2, sky: C(0.28, 0.3, 0.46), gnd: C(0.2, 0.15, 0.13), ambI: 0.8, fog: C(0.36, 0.28, 0.32),
-    exp: 1.05, sat: 1.05, con: 1.05, sh: C(0.9, 0.94, 1.08), hi: C(1.1, 0.97, 0.86), bloom: 0.13 },
+  { el: -18, zen: C(0.015, 0.025, 0.06), hor: C(0.08, 0.07, 0.1), sun: C(0.63, 0.72, 0.94), sunI: 0.45, sky: C(0.38, 0.46, 0.64), gnd: C(0.31, 0.28, 0.30), ambI: 1.12, fog: C(0.09, 0.085, 0.11),
+    exp: 1.18, sat: 0.96, con: 0.96, sh: C(0.97, 0.99, 1.04), hi: C(1.12, 0.98, 0.84), bloom: 0.16 },
+  { el: -6, zen: C(0.06, 0.08, 0.2), hor: C(0.42, 0.3, 0.36), sun: C(0.6, 0.5, 0.7), sunI: 0.35, sky: C(0.47, 0.47, 0.62), gnd: C(0.35, 0.28, 0.27), ambI: 1.1, fog: C(0.36, 0.28, 0.32),
+    exp: 1.09, sat: 1.04, con: 1.00, sh: C(0.9, 0.94, 1.08), hi: C(1.1, 0.97, 0.86), bloom: 0.13 },
   { el: 2, zen: C(0.2, 0.3, 0.56), hor: C(0.98, 0.6, 0.36), sun: C(1.0, 0.5, 0.24), sunI: 2.4, sky: C(0.55, 0.52, 0.62), gnd: C(0.4, 0.28, 0.2), ambI: 0.9, fog: C(0.86, 0.6, 0.45),
     exp: 0.88, sat: 1.15, con: 1.07, sh: C(0.92, 0.96, 1.06), hi: C(1.09, 0.98, 0.87), bloom: 0.1 },
   { el: 14, zen: C(0.26, 0.45, 0.78), hor: C(0.98, 0.8, 0.6), sun: C(1.0, 0.72, 0.45), sunI: 3.6, sky: C(0.62, 0.7, 0.86), gnd: C(0.52, 0.42, 0.32), ambI: 1.0, fog: C(0.9, 0.8, 0.68),
@@ -69,7 +69,7 @@ export class Sky {
     this.night = 0;
     this.wet = 0; // streets soak in a few seconds of rain and take a minute to dry
     this.hemiDay = 0.12;
-    this.hemiNight = 0.32;
+    this.hemiNight = 1.05; // diffuse sky and street bounce reach the unlit sides of roads and actors
     this.envIntensity = 1;
 
     this.sun = new THREE.DirectionalLight(0xffffff, 3);

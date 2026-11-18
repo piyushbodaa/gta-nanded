@@ -46,3 +46,17 @@ test('rain fades in and out while streets soak, stay wet at full saturation and 
   assert.equal(sky.w.rain, 0);
   assert.equal(sky.wet, 0);
 });
+
+test('unlit roads and shaded figures retain diffuse light through the night, even in rain', () => {
+  const sky = new Sky(new THREE.Scene(), null);
+  sky.frozen = true; sky.bounceOn = false; // the phone tier without shadow maps or sun bounce
+  for (const weather of ['clear', 'rain']) {
+    sky.setWeather(weather);
+    for (const hour of [19, 22, 0, 3, 5]) {
+      sky.hours = hour; sky.update(0, new THREE.Vector3());
+      const fill = sky.hemi.intensity * sky.look.exposure;
+      assert.ok(fill * sky.hemi.color.g > .42, `upward-facing road, ${hour}h ${weather}`);
+      assert.ok(fill * sky.hemi.groundColor.g > .25, `faces in shade, ${hour}h ${weather}`);
+    }
+  }
+});
