@@ -164,7 +164,10 @@ for (const w of airport.elements) {
 }
 
 // Petrol pumps mapped in OSM (the city fills in more along the highways).
-const fuel = osmPlaces.elements.filter(e => e.tags?.amenity === 'fuel').map(e => project(e.center || e));
+const fuel = osmPlaces.elements
+  .filter(e => e.tags?.amenity === 'fuel')
+  .map(e => project(e.center || e))
+  .filter(([x, z]) => x >= city.bounds.minX && x <= city.bounds.maxX && z >= city.bounds.minZ && z <= city.bounds.maxZ);
 
 // --- 5. Places: keep what the game uses at runtime; the full catalog stays in public/data/places.json.
 const places = city.places.map(p => ({

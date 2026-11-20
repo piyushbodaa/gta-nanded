@@ -49,7 +49,7 @@ test('a median\'s colliders follow it round the bends, with no kerb in the lane 
     }
     pieces++;
   }
-  assert.ok(pieces > 800, `${pieces} median pieces`);
+  assert.ok(pieces > 120, `${pieces} median pieces`);
 });
 
 test('a flyover ramp\'s solid end is closed to the street under the deck, and open to the deck\'s own traffic', () => {
@@ -119,8 +119,8 @@ test('a ramp\'s end is shut across the ramp, but not across a street that runs o
       }
     }
   }
-  assert.ok(ends >= 40, `${ends} ramp ends`);
-  assert.ok(streets >= 20 && open > 100 && shut > 100, `${streets} ramp ends with a street under them; ${open} spots open, ${shut} shut`);
+  assert.ok(ends >= 24, `${ends} ramp ends`);
+  assert.ok(streets >= 18 && open > 70 && shut > 100, `${streets} ramp ends with a street under them; ${open} spots open, ${shut} shut`);
 });
 
 // A car (a hatchback): its half width and half length.
@@ -278,20 +278,33 @@ test('a median is drawn just where it is solid: no kerb is drawn through a lane 
   let runs = 0, boxes = 0;
   for (const lay of all) for (let k = 0; lay && k < lay.length; k += 2) runs += lay[k + 1] - lay[k];
   for (let i = 0; i < col.n; i++) if (isMedian(col, i)) boxes += 2 * col.hd[i];
-  assert.ok(runs > 60000 && Math.abs(runs - boxes) < 1, `${boxes.toFixed(0)} m of median kerb is solid, along ${runs.toFixed(0)} m of runs`);
+  assert.ok(runs > 40000 && Math.abs(runs - boxes) < 1, `${boxes.toFixed(0)} m of median kerb is solid, along ${runs.toFixed(0)} m of runs`);
   /** Is (x, z) on a median's kerb box, or within `pad` of one? */
   const solid = (x, z, pad) => col.near(x - 1, z - 1, x + 1, z + 1, i => {
     if (!isMedian(col, i)) return false;
     const ex = x - col.x[i], ez = z - col.z[i];
     return Math.abs(ex * col.c[i] - ez * col.s[i]) <= col.hw[i] + pad && Math.abs(ex * col.s[i] + ez * col.c[i]) <= col.hd[i] + pad;
   });
-  // Drawn along them too, and nowhere else, in the close-up chunks round the c4 tipper's first
-  // junction (where road 2096's median half stood a metre into 12125's lane), where road 5657 runs
-  // half over another, and where two divided roads' carriageways are mapped over each other.
+  // Drawn along them too, and nowhere else, in the close-up chunk round the c4 tipper's first
+  // junction plus the busiest divided-road chunks inside the map bounds.
   const mats = { city: new THREE.MeshBasicMaterial(), signs: new THREE.MeshBasicMaterial(), pools: new THREE.MeshBasicMaterial(), wires: new THREE.LineBasicMaterial(), foliage: new THREE.MeshBasicMaterial() };
   const cm = new ChunkManager(new THREE.Scene(), city, mats, new Map());
+  const chunkScore = new Map();
+  for (let r = 0; r < net.count; r++) {
+    const lay = all[r];
+    if (!lay?.length) continue;
+    let len = 0;
+    for (let k = 0; k < lay.length; k += 2) len += lay[k + 1] - lay[k];
+    net.pointAt(r, net.length[r] / 2, p);
+    const ck = `${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`;
+    const cur = chunkScore.get(ck) || { x: p.x, z: p.z, len: 0 };
+    cur.len += len;
+    chunkScore.set(ck, cur);
+  }
+  const c4Key = `${Math.floor(-156.8 / CHUNK)},${Math.floor(951.5 / CHUNK)}`;
+  const topChunks = [...chunkScore.entries()].filter(([k]) => k !== c4Key).sort((a, b) => b[1].len - a[1].len).slice(0, 3).map(([, v]) => [v.x, v.z]);
   let drawn = 0, along = 0;
-  for (const [x, z] of [[-156.8, 951.5], [1796, -2394], [-3236, 4930], [1583, -1685]]) {
+  for (const [x, z] of [[-156.8, 951.5], ...topChunks]) {
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK), key = `${cx},${cz}`;
     cm._build(key, cx, cz);
     // The planted tops of the medians drawn there (0.32 m up, in their green).

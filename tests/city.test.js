@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { world } from './helpers.js';
 import { RoadNet } from '../src/world/roadnet.js';
 import { City, ZONE, PROP, segBoxDist, FOOTPATH_W } from '../src/world/citygen.js';
@@ -7,7 +8,7 @@ import { obbOverlap } from '../src/core/math.js';
 
 test('the generated city is dense and deterministic', () => {
   const { city, data } = world();
-  assert.ok(city.lots.count > 50000, `${city.lots.count} buildings`);
+  assert.ok(city.lots.count > 40000, `${city.lots.count} buildings`);
   assert.ok(city.trees.count > 20000);
   const again = new City(data, new RoadNet(data)).generate();
   assert.equal(again.lots.count, city.lots.count);
@@ -45,7 +46,7 @@ test('mapped buildings, turned to face the street, keep the ground they were che
       assert.ok(!obbOverlap(L.x[i], L.z[i], L.hw[i] - 0.3, L.hd[i] - 0.3, L.rot[i], L.x[j], L.z[j], L.hw[j], L.hd[j], L.rot[j], ov), `mapped lot ${i} inside lot ${j}`);
     });
   }
-  assert.ok(n > 500, `${n} mapped buildings`);
+  assert.ok(n > 400, `${n} mapped buildings`);
 });
 
 test('a handcart on a footpath stands wholly on the paving', () => {
@@ -124,5 +125,38 @@ test('shop platforms and compound walls leave the kerb free', () => {
     assert.ok(clearance > 0.4, `lot ${i}: ${wall ? 'wall' : 'platform'} reaches ${clearance.toFixed(2)} m from the road edge`);
     if (ota) platforms++; if (wall) walls++;
   }
-  assert.ok(platforms > 1000 && walls > 1000, `${platforms} platforms, ${walls} compound walls`);
+  assert.ok(platforms > 1000 && walls > 500, `${platforms} platforms, ${walls} compound walls`);
+});
+
+test('satellite villages and far rural outskirts are excluded and world geometry respects tighter bounds', () => {
+  const { city, data } = world();
+  const placesFile = JSON.parse(readFileSync(new URL('../public/data/places.json', import.meta.url), 'utf8'));
+  assert.ok(Array.isArray(placesFile), 'places.json is an array of places');
+  const removedAreas = new Set(['Puyni', 'Pasadgaon', 'Eastern river outskirts', 'Godavari outskirts']);
+  const removedIds = new Set(['oxford-global-school', 'shakuntal-school', 'hira-ghat', 'mata-sahib', 'shikar-ghat']);
+  for (const d of city.districts) assert.ok(!removedAreas.has(d.name), `removed district in world.json: ${d.name}`);
+  for (const p of data.places) {
+    assert.ok(!removedAreas.has(p.area), `removed area place in world.json: ${p.id} (${p.area})`);
+    assert.ok(!removedIds.has(p.id), `removed place id in world.json: ${p.id}`);
+  }
+  for (const p of placesFile) {
+    assert.ok(!removedAreas.has(p.area), `removed area place in places.json: ${p.id} (${p.area})`);
+    assert.ok(!removedIds.has(p.id), `removed place id in places.json: ${p.id}`);
+  }
+  const b = data.bounds;
+  assert.ok(b.maxX - b.minX < 5500 && b.maxZ - b.minZ < 6800, `tighter bounds: ${Math.round(b.maxX - b.minX)} x ${Math.round(b.maxZ - b.minZ)}`);
+  const inside = (x, z, pad = 0) => x >= b.minX - pad && x <= b.maxX + pad && z >= b.minZ - pad && z <= b.maxZ + pad;
+  // Former satellite village / far-east outskirt coordinates must lie outside the shrunk map.
+  assert.ok(!inside(-1928, -2760), 'Puyni is outside bounds');
+  assert.ok(!inside(-815, -3169), 'Pasadgaon is outside bounds');
+  assert.ok(!inside(5324, 1656), 'Shikar Ghat is outside bounds');
+  for (const p of data.places) assert.ok(inside(p.x, p.z) && inside(p.ax, p.az), `place ${p.id} inside bounds`);
+  for (const d of city.districts) assert.ok(inside(d.x, d.z), `district ${d.name} inside bounds`);
+  for (const r of data.roads) {
+    for (let i = 6; i < r.length; i += 2) assert.ok(inside(r[i], r[i + 1]), `road vertex inside bounds`);
+  }
+  for (const [x, z] of data.footprints) assert.ok(inside(x, z), `footprint inside bounds`);
+  for (const rv of data.rivers) {
+    for (let i = 0; i < rv.p.length; i += 2) assert.ok(inside(rv.p[i], rv.p[i + 1], 100), `river ${rv.name} vertex inside bounds`);
+  }
 });

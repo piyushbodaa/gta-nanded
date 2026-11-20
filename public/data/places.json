@@ -32,7 +32,7 @@
       "x": -935.43,
       "z": -1834.11
     },
-    "roadEdge": 18297,
+    "roadEdge": 16083,
     "frontageShiftMetres": 4
   },
   {
@@ -68,7 +68,7 @@
       "x": 6.72,
       "z": -922.78
     },
-    "roadEdge": 9989,
+    "roadEdge": 8434,
     "frontageShiftMetres": 13
   },
   {
@@ -104,7 +104,7 @@
       "x": -38.44,
       "z": -709.88
     },
-    "roadEdge": 1275,
+    "roadEdge": 1123,
     "frontageShiftMetres": 14
   },
   {
@@ -136,7 +136,7 @@
       "x": -49.6,
       "z": -806.1
     },
-    "roadEdge": 1272,
+    "roadEdge": 1120,
     "frontageShiftMetres": 23
   },
   {
@@ -168,7 +168,7 @@
       "x": -93.59,
       "z": -964.85
     },
-    "roadEdge": 4672,
+    "roadEdge": 3976,
     "frontageShiftMetres": 27
   },
   {
@@ -200,7 +200,7 @@
       "x": -946.06,
       "z": -1423.03
     },
-    "roadEdge": 1809,
+    "roadEdge": 1529,
     "frontageShiftMetres": 29
   },
   {
@@ -232,7 +232,7 @@
       "x": -88.88,
       "z": -521.94
     },
-    "roadEdge": 9421,
+    "roadEdge": 8017,
     "frontageShiftMetres": 12
   },
   {
@@ -267,7 +267,7 @@
       "x": -252.81,
       "z": -1377.15
     },
-    "roadEdge": 15233,
+    "roadEdge": 13304,
     "frontageShiftMetres": 35
   },
   {
@@ -303,7 +303,7 @@
       "x": -40.79,
       "z": -728.21
     },
-    "roadEdge": 1275,
+    "roadEdge": 1123,
     "frontageShiftMetres": 28
   },
   {
@@ -335,7 +335,7 @@
       "x": 24.93,
       "z": 215.01
     },
-    "roadEdge": 21694,
+    "roadEdge": 18723,
     "frontageShiftMetres": 41
   },
   {
@@ -371,7 +371,7 @@
       "x": 276.91,
       "z": -680.19
     },
-    "roadEdge": 1254,
+    "roadEdge": 1102,
     "frontageShiftMetres": 29
   },
   {
@@ -403,7 +403,7 @@
       "x": -49.6,
       "z": -806.1
     },
-    "roadEdge": 1272,
+    "roadEdge": 1120,
     "frontageShiftMetres": 24
   },
   {
@@ -439,7 +439,7 @@
       "x": 354.06,
       "z": -141.33
     },
-    "roadEdge": 2058,
+    "roadEdge": 1763,
     "frontageShiftMetres": 8
   },
   {
@@ -471,7 +471,7 @@
       "x": -1425.36,
       "z": 427.44
     },
-    "roadEdge": 18160,
+    "roadEdge": 15947,
     "frontageShiftMetres": 7
   },
   {
@@ -508,7 +508,7 @@
       "x": -1363.94,
       "z": 3199.53
     },
-    "roadEdge": 2786,
+    "roadEdge": 2458,
     "frontageShiftMetres": 11
   },
   {
@@ -544,7 +544,7 @@
       "x": -928.74,
       "z": 2637.54
     },
-    "roadEdge": 25121,
+    "roadEdge": 19896,
     "frontageShiftMetres": 88
   },
   {
@@ -580,7 +580,7 @@
       "x": -50.71,
       "z": -572.84
     },
-    "roadEdge": 5882,
+    "roadEdge": 5186,
     "frontageShiftMetres": 23
   },
   {
@@ -616,7 +616,7 @@
       "x": -457.78,
       "z": -848.38
     },
-    "roadEdge": 4560,
+    "roadEdge": 3864,
     "frontageShiftMetres": 112
   },
   {
@@ -651,7 +651,7 @@
       "x": -425.5,
       "z": -850.51
     },
-    "roadEdge": 4559,
+    "roadEdge": 3863,
     "frontageShiftMetres": 119
   },
   {
@@ -686,7 +686,7 @@
       "x": 810.2,
       "z": -1040.01
     },
-    "roadEdge": 10741,
+    "roadEdge": 9143,
     "frontageShiftMetres": 93
   },
   {
@@ -721,7 +721,7 @@
       "x": 748.04,
       "z": -1059.0
     },
-    "roadEdge": 10751,
+    "roadEdge": 9153,
     "frontageShiftMetres": 189
   },
   {
@@ -757,7 +757,7 @@
       "x": -73.82,
       "z": -486.97
     },
-    "roadEdge": 9500,
+    "roadEdge": 8030,
     "frontageShiftMetres": 6
   },
   {
@@ -792,7 +792,7 @@
       "x": 131.17,
       "z": 587.01
     },
-    "roadEdge": 6628,
+    "roadEdge": 5932,
     "frontageShiftMetres": 45
   },
   {
@@ -827,7 +827,7 @@
       "x": 90.19,
       "z": 547.56
     },
-    "roadEdge": 6636,
+    "roadEdge": 5940,
     "frontageShiftMetres": 53
   },
   {
@@ -863,7 +863,7 @@
       "x": 556.84,
       "z": 1555.37
     },
-    "roadEdge": 10831,
+    "roadEdge": 9175,
     "frontageShiftMetres": 19
   },
   {
@@ -899,7 +899,7 @@
       "x": 162.52,
       "z": -556.01
     },
-    "roadEdge": 9305,
+    "roadEdge": 7901,
     "frontageShiftMetres": 112
   },
   {
@@ -935,7 +935,7 @@
       "x": -380.54,
       "z": -504.0
     },
-    "roadEdge": 2766,
+    "roadEdge": 2438,
     "frontageShiftMetres": 44
   },
   {
@@ -970,7 +970,7 @@
       "x": -107.29,
       "z": -897.56
     },
-    "roadEdge": 2772,
+    "roadEdge": 2444,
     "frontageShiftMetres": 4
   },
   {
@@ -1006,7 +1006,7 @@
       "x": -1028.41,
       "z": 2706.23
     },
-    "roadEdge": 25122,
+    "roadEdge": 19897,
     "frontageShiftMetres": 56
   },
   {
@@ -1038,7 +1038,7 @@
       "x": -37.09,
       "z": 227.48
     },
-    "roadEdge": 21089,
+    "roadEdge": 18399,
     "frontageShiftMetres": 63
   },
   {
@@ -1074,7 +1074,7 @@
       "x": -13.04,
       "z": -514.27
     },
-    "roadEdge": 1280,
+    "roadEdge": 1128,
     "frontageShiftMetres": 9
   },
   {
@@ -1138,7 +1138,7 @@
       "x": 439.04,
       "z": -1105.7
     },
-    "roadEdge": 2735,
+    "roadEdge": 2407,
     "frontageShiftMetres": 17
   },
   {
@@ -1173,7 +1173,7 @@
       "x": -1191.8,
       "z": 2816.73
     },
-    "roadEdge": 25124,
+    "roadEdge": 19899,
     "frontageShiftMetres": 86
   },
   {
@@ -1205,7 +1205,7 @@
       "x": -1117.75,
       "z": 2694.02
     },
-    "roadEdge": 20340,
+    "roadEdge": 17890,
     "frontageShiftMetres": 74
   },
   {
@@ -1237,7 +1237,7 @@
       "x": 708.69,
       "z": 2763.08
     },
-    "roadEdge": 14596,
+    "roadEdge": 12738,
     "frontageShiftMetres": 32
   },
   {
@@ -1269,7 +1269,7 @@
       "x": 889.98,
       "z": -1051.33
     },
-    "roadEdge": 2544,
+    "roadEdge": 2216,
     "frontageShiftMetres": 144
   },
   {
@@ -1301,7 +1301,7 @@
       "x": 708.69,
       "z": 2763.08
     },
-    "roadEdge": 14596,
+    "roadEdge": 12738,
     "frontageShiftMetres": 39
   },
   {
@@ -1333,7 +1333,7 @@
       "x": 505.68,
       "z": -1327.13
     },
-    "roadEdge": 2469,
+    "roadEdge": 2168,
     "frontageShiftMetres": 84
   },
   {
@@ -1365,7 +1365,7 @@
       "x": -1343.31,
       "z": -1838.55
     },
-    "roadEdge": 19359,
+    "roadEdge": 17061,
     "frontageShiftMetres": 15
   },
   {
@@ -1397,7 +1397,7 @@
       "x": -1343.31,
       "z": -1838.55
     },
-    "roadEdge": 19359,
+    "roadEdge": 17061,
     "frontageShiftMetres": 43
   },
   {
@@ -1433,7 +1433,7 @@
       "x": 1134.37,
       "z": -1078.29
     },
-    "roadEdge": 10653,
+    "roadEdge": 9055,
     "frontageShiftMetres": 77
   },
   {
@@ -1468,76 +1468,8 @@
       "x": -380.16,
       "z": 1535.95
     },
-    "roadEdge": 12484,
+    "roadEdge": 10809,
     "frontageShiftMetres": 86
-  },
-  {
-    "id": "shakuntal-school",
-    "name": "Shakuntal School for Excellence",
-    "shortName": "Shakuntal School",
-    "category": "school",
-    "area": "Pasadgaon",
-    "address": "Malegaon Road, Pasadgaon, Nanded 431605",
-    "lat": 19.218142447,
-    "lon": 77.2985804,
-    "sourceUrl": "https://saras.cbse.gov.in/SARAS/AffiliatedList/AfflicationDetails/1131109",
-    "sourceTitle": "CBSE SARAS official school record",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "Malegaon Road campus in Pasadgaon.",
-    "confidence": "official",
-    "coordinateSourceUrl": "https://bricks.curioussouls.in/mhvillage/23843",
-    "locationPrecision": "area",
-    "note": "Placed in Pasadgaon from street address; exact frontage unverified. Pasadgaon village centre, not school entrance.",
-    "geoX": -600.41,
-    "geoZ": -3236.21,
-    "x": -814.96,
-    "z": -3168.99,
-    "rotation": -0.13851,
-    "w": 17,
-    "d": 11,
-    "h": 12,
-    "approach": {
-      "x": -816.97,
-      "z": -3154.61
-    },
-    "roadEdge": 23474,
-    "frontageShiftMetres": 450
-  },
-  {
-    "id": "oxford-global-school",
-    "name": "Oxford The Global School",
-    "shortName": "Oxford Global",
-    "category": "school",
-    "area": "Puyni",
-    "address": "Puyni, Nilla Road, Nanded 431605",
-    "lat": 19.20958,
-    "lon": 77.27334,
-    "sourceUrl": "https://oxfordtheglobalschool.com/contact-us/index.html",
-    "sourceTitle": "Oxford The Global School official contact page",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "Campus on Nilla Road at Puyni.",
-    "confidence": "official",
-    "aliases": [
-      "OTGS",
-      "Oxford Puyni"
-    ],
-    "coordinateSourceUrl": "https://www.openstreetmap.org/node/9993352808",
-    "locationPrecision": "area",
-    "note": "Placed in Puyni from street address; exact frontage unverified. Puyni village centre corroborated by https://mapcarta.com/33243076, not school entrance.",
-    "geoX": -1927.46,
-    "geoZ": -2759.62,
-    "x": -1927.85,
-    "z": -2765.81,
-    "rotation": 0.06196,
-    "w": 17,
-    "d": 11,
-    "h": 12,
-    "approach": {
-      "x": -1926.91,
-      "z": -2750.71
-    },
-    "roadEdge": 8766,
-    "frontageShiftMetres": 12
   },
   {
     "id": "cambridge-vidyalaya",
@@ -1568,7 +1500,7 @@
       "x": -323.5,
       "z": -123.65
     },
-    "roadEdge": 5967,
+    "roadEdge": 5271,
     "frontageShiftMetres": 41
   },
   {
@@ -1606,7 +1538,7 @@
       "x": 450.77,
       "z": 462.24
     },
-    "roadEdge": 2425,
+    "roadEdge": 2130,
     "frontageShiftMetres": 35
   },
   {
@@ -1641,7 +1573,7 @@
       "x": 222.47,
       "z": 705.84
     },
-    "roadEdge": 24896,
+    "roadEdge": 19688,
     "frontageShiftMetres": 4
   },
   {
@@ -1676,7 +1608,7 @@
       "x": 57.38,
       "z": 623.67
     },
-    "roadEdge": 6635,
+    "roadEdge": 5939,
     "frontageShiftMetres": 1
   },
   {
@@ -1712,116 +1644,8 @@
       "x": 264.45,
       "z": 668.05
     },
-    "roadEdge": 2341,
+    "roadEdge": 2046,
     "frontageShiftMetres": 16
-  },
-  {
-    "id": "hira-ghat",
-    "name": "Gurudwara Heera Ghat Sahib",
-    "shortName": "Hira Ghat",
-    "category": "landmark",
-    "area": "Eastern river outskirts",
-    "address": "Godavari riverbank downstream of Nanded",
-    "lat": 19.160094,
-    "lon": 77.40004,
-    "sourceUrl": "https://hazursahib.com/web/gurudwara_heera_ghat",
-    "sourceTitle": "Hazur Sahib Board — Heera Ghat",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "The Board places this shrine about nine kilometres downstream from Nanded.",
-    "confidence": "official",
-    "aliases": [
-      "Heera Ghat",
-      "हीरा घाट"
-    ],
-    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
-    "locationPrecision": "mapped",
-    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate.",
-    "geoX": 4734.01,
-    "geoZ": -5.23,
-    "x": 4692.32,
-    "z": -64.55,
-    "rotation": 1.32126,
-    "w": 20,
-    "d": 16,
-    "h": 16,
-    "approach": {
-      "x": 4709.0,
-      "z": -60.3
-    },
-    "roadEdge": 22338,
-    "frontageShiftMetres": 145
-  },
-  {
-    "id": "mata-sahib",
-    "name": "Gurudwara Mata Sahib Devaan Ji",
-    "shortName": "Mata Sahib",
-    "category": "landmark",
-    "area": "Eastern river outskirts",
-    "address": "Godavari riverbank downstream of Hira Ghat, Nanded",
-    "lat": 19.155535,
-    "lon": 77.406473,
-    "sourceUrl": "https://hazursahib.com/web/gurudwara_mata_sahib_devaan_ji",
-    "sourceTitle": "Hazur Sahib Board — Mata Sahib Devaan Ji",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "The Board places this shrine about half a kilometre downstream from Hira Ghat.",
-    "confidence": "official",
-    "aliases": [
-      "Mata Sahib Devan",
-      "माता साहिब"
-    ],
-    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
-    "locationPrecision": "mapped",
-    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate.",
-    "geoX": 5072.24,
-    "geoZ": 248.52,
-    "x": 5134.49,
-    "z": 115.68,
-    "rotation": 2.70337,
-    "w": 20,
-    "d": 16,
-    "h": 16,
-    "approach": {
-      "x": 5142.47,
-      "z": 98.65
-    },
-    "roadEdge": 24007,
-    "frontageShiftMetres": 293
-  },
-  {
-    "id": "shikar-ghat",
-    "name": "Gurudwara Shikar Ghat Sahib",
-    "shortName": "Shikar Ghat",
-    "category": "landmark",
-    "area": "Godavari outskirts",
-    "address": "Near the Godavari, about six kilometres from Hazur Sahib, Nanded",
-    "lat": 19.129661,
-    "lon": 77.411608,
-    "sourceUrl": "https://hazursahib.com/web/gurudwara_shikar_ghat",
-    "sourceTitle": "Hazur Sahib Board — Shikar Ghat",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "White-marble shrine on a low hill near the river; its river crossing was built through kar seva.",
-    "confidence": "official",
-    "aliases": [
-      "Shikaar Ghat",
-      "शिकार घाट"
-    ],
-    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
-    "locationPrecision": "mapped",
-    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate.",
-    "geoX": 5342.22,
-    "geoZ": 1688.67,
-    "x": 5324.22,
-    "z": 1656.37,
-    "rotation": 0.50844,
-    "w": 20,
-    "d": 16,
-    "h": 16,
-    "approach": {
-      "x": 5332.89,
-      "z": 1671.92
-    },
-    "roadEdge": 25601,
-    "frontageShiftMetres": 74
   },
   {
     "id": "mal-tekdi",
@@ -1857,7 +1681,7 @@
       "x": 1716.95,
       "z": -820.84
     },
-    "roadEdge": 24098,
+    "roadEdge": 18957,
     "frontageShiftMetres": 26
   },
   {
@@ -1892,7 +1716,7 @@
       "x": 1254.37,
       "z": 823.1
     },
-    "roadEdge": 5445,
+    "roadEdge": 4749,
     "frontageShiftMetres": 62
   },
   {
@@ -1929,7 +1753,7 @@
       "x": 811.5,
       "z": 1014.85
     },
-    "roadEdge": 2354,
+    "roadEdge": 2059,
     "frontageShiftMetres": 36
   },
   {
@@ -1965,7 +1789,7 @@
       "x": -1354.94,
       "z": 2265.59
     },
-    "roadEdge": 21901,
+    "roadEdge": 18762,
     "frontageShiftMetres": 69
   },
   {
@@ -2001,7 +1825,7 @@
       "x": -1350.27,
       "z": 1990.38
     },
-    "roadEdge": 16787,
+    "roadEdge": 14827,
     "frontageShiftMetres": 350
   },
   {
@@ -2074,7 +1898,7 @@
       "x": 5.32,
       "z": 10.85
     },
-    "roadEdge": 24677,
+    "roadEdge": 19490,
     "frontageShiftMetres": 14
   },
   {
@@ -2110,7 +1934,7 @@
       "x": -185.73,
       "z": 38.43
     },
-    "roadEdge": 24401,
+    "roadEdge": 19216,
     "frontageShiftMetres": 1
   },
   {
@@ -2147,7 +1971,7 @@
       "x": 1357.04,
       "z": -1358.76
     },
-    "roadEdge": 22916,
+    "roadEdge": 18806,
     "frontageShiftMetres": 160
   },
   {
@@ -2184,7 +2008,7 @@
       "x": -96.36,
       "z": 804.42
     },
-    "roadEdge": 20529,
+    "roadEdge": 18075,
     "frontageShiftMetres": 46
   },
   {
@@ -2255,7 +2079,7 @@
       "x": 290.5,
       "z": -31.69
     },
-    "roadEdge": 9520,
+    "roadEdge": 8050,
     "frontageShiftMetres": 70
   },
   {
@@ -2292,7 +2116,7 @@
       "x": -1044.8,
       "z": 2767.91
     },
-    "roadEdge": 21872,
+    "roadEdge": 18733,
     "frontageShiftMetres": 66
   },
   {
@@ -2360,7 +2184,7 @@
       "x": -58.28,
       "z": -879.42
     },
-    "roadEdge": 1271,
+    "roadEdge": 1119,
     "frontageShiftMetres": 9
   },
   {
@@ -2392,7 +2216,7 @@
       "x": -378.11,
       "z": -1186.04
     },
-    "roadEdge": 5671,
+    "roadEdge": 4975,
     "frontageShiftMetres": 40
   },
   {
@@ -2461,7 +2285,7 @@
       "x": -257.39,
       "z": -491.61
     },
-    "roadEdge": 9493,
+    "roadEdge": 8023,
     "frontageShiftMetres": 24
   },
   {
@@ -2532,7 +2356,7 @@
       "x": 212.54,
       "z": 473.07
     },
-    "roadEdge": 25289,
+    "roadEdge": 20025,
     "frontageShiftMetres": 134
   },
   {
@@ -2567,7 +2391,7 @@
       "x": 195.88,
       "z": 401.14
     },
-    "roadEdge": 2133,
+    "roadEdge": 1838,
     "frontageShiftMetres": 154
   },
   {
@@ -2603,7 +2427,7 @@
       "x": -30.73,
       "z": -223.4
     },
-    "roadEdge": 140,
+    "roadEdge": 132,
     "frontageShiftMetres": 96
   },
   {
@@ -2639,7 +2463,7 @@
       "x": -117.32,
       "z": -556.17
     },
-    "roadEdge": 5880,
+    "roadEdge": 5184,
     "frontageShiftMetres": 46
   },
   {
@@ -2674,7 +2498,7 @@
       "x": 48.08,
       "z": -324.17
     },
-    "roadEdge": 24689,
+    "roadEdge": 19502,
     "frontageShiftMetres": 50
   },
   {
@@ -2745,7 +2569,7 @@
       "x": -29.75,
       "z": -982.39
     },
-    "roadEdge": 4757,
+    "roadEdge": 4061,
     "frontageShiftMetres": 46
   },
   {
@@ -2781,7 +2605,7 @@
       "x": 39.66,
       "z": 214.14
     },
-    "roadEdge": 21685,
+    "roadEdge": 18714,
     "frontageShiftMetres": 43
   },
   {
@@ -2817,7 +2641,7 @@
       "x": 508.11,
       "z": -115.6
     },
-    "roadEdge": 2339,
+    "roadEdge": 2044,
     "frontageShiftMetres": 7
   },
   {
@@ -2853,7 +2677,7 @@
       "x": -261.54,
       "z": -397.12
     },
-    "roadEdge": 519,
+    "roadEdge": 427,
     "frontageShiftMetres": 18
   },
   {
@@ -2923,7 +2747,7 @@
       "x": -262.63,
       "z": -1316.21
     },
-    "roadEdge": 14904,
+    "roadEdge": 13046,
     "frontageShiftMetres": 51
   },
   {
@@ -2959,7 +2783,7 @@
       "x": 766.48,
       "z": -881.89
     },
-    "roadEdge": 9951,
+    "roadEdge": 8396,
     "frontageShiftMetres": 14
   },
   {
@@ -2995,7 +2819,7 @@
       "x": -564.66,
       "z": -1381.37
     },
-    "roadEdge": 402,
+    "roadEdge": 310,
     "frontageShiftMetres": 9
   },
   {
@@ -3032,7 +2856,7 @@
       "x": 1038.05,
       "z": 389.45
     },
-    "roadEdge": 16318,
+    "roadEdge": 14358,
     "frontageShiftMetres": 2
   },
   {
@@ -3068,7 +2892,7 @@
       "x": 191.92,
       "z": 435.64
     },
-    "roadEdge": 25291,
+    "roadEdge": 20027,
     "frontageShiftMetres": 88
   },
   {
@@ -3141,7 +2965,7 @@
       "x": -248.13,
       "z": 1368.09
     },
-    "roadEdge": 12525,
+    "roadEdge": 10850,
     "frontageShiftMetres": 47
   },
   {
@@ -3180,7 +3004,7 @@
       "x": -450.87,
       "z": 608.75
     },
-    "roadEdge": 18080,
+    "roadEdge": 15867,
     "frontageShiftMetres": 179
   },
   {
@@ -3261,7 +3085,7 @@
       "x": -84.48,
       "z": 638.63
     },
-    "roadEdge": 20530,
+    "roadEdge": 18076,
     "frontageShiftMetres": 45
   },
   {
@@ -3299,7 +3123,7 @@
       "x": 488.32,
       "z": 627.15
     },
-    "roadEdge": 231,
+    "roadEdge": 223,
     "frontageShiftMetres": 77
   },
   {
@@ -3335,7 +3159,7 @@
       "x": -189.29,
       "z": -351.72
     },
-    "roadEdge": 740,
+    "roadEdge": 622,
     "frontageShiftMetres": 32
   },
   {
@@ -3370,7 +3194,7 @@
       "x": 41.84,
       "z": 222.32
     },
-    "roadEdge": 21687,
+    "roadEdge": 18716,
     "frontageShiftMetres": 51
   },
   {
@@ -3402,7 +3226,7 @@
       "x": 732.25,
       "z": -887.81
     },
-    "roadEdge": 10717,
+    "roadEdge": 9119,
     "frontageShiftMetres": 63
   },
   {
@@ -3434,7 +3258,7 @@
       "x": 655.69,
       "z": -671.99
     },
-    "roadEdge": 1568,
+    "roadEdge": 1288,
     "frontageShiftMetres": 64
   },
   {
@@ -3469,7 +3293,7 @@
       "x": -130.8,
       "z": 83.98
     },
-    "roadEdge": 7031,
+    "roadEdge": 6335,
     "frontageShiftMetres": 6
   },
   {
@@ -3501,7 +3325,7 @@
       "x": -247.13,
       "z": 1343.69
     },
-    "roadEdge": 12521,
+    "roadEdge": 10846,
     "frontageShiftMetres": 139
   },
   {
@@ -3533,7 +3357,7 @@
       "x": 392.04,
       "z": -89.21
     },
-    "roadEdge": 2393,
+    "roadEdge": 2098,
     "frontageShiftMetres": 14
   },
   {
@@ -3568,7 +3392,7 @@
       "x": -189.29,
       "z": -351.72
     },
-    "roadEdge": 740,
+    "roadEdge": 622,
     "frontageShiftMetres": 38
   },
   {
@@ -3603,7 +3427,7 @@
       "x": -287.93,
       "z": -508.66
     },
-    "roadEdge": 10038,
+    "roadEdge": 8483,
     "frontageShiftMetres": 80
   },
   {
@@ -3639,7 +3463,7 @@
       "x": -376.61,
       "z": 1537.33
     },
-    "roadEdge": 15075,
+    "roadEdge": 13146,
     "frontageShiftMetres": 158
   },
   {
@@ -3708,7 +3532,7 @@
       "x": -45.26,
       "z": -232.91
     },
-    "roadEdge": 995,
+    "roadEdge": 877,
     "frontageShiftMetres": 0
   },
   {
@@ -3740,7 +3564,7 @@
       "x": 450.77,
       "z": 462.24
     },
-    "roadEdge": 2425,
+    "roadEdge": 2130,
     "frontageShiftMetres": 111
   },
   {
@@ -3775,7 +3599,7 @@
       "x": 513.64,
       "z": 430.72
     },
-    "roadEdge": 2090,
+    "roadEdge": 1795,
     "frontageShiftMetres": 62
   },
   {
@@ -3810,7 +3634,7 @@
       "x": 513.64,
       "z": 430.72
     },
-    "roadEdge": 2090,
+    "roadEdge": 1795,
     "frontageShiftMetres": 111
   },
   {
@@ -3846,7 +3670,7 @@
       "x": -268.82,
       "z": -436.11
     },
-    "roadEdge": 519,
+    "roadEdge": 427,
     "frontageShiftMetres": 17
   },
   {
@@ -3914,7 +3738,7 @@
       "x": -997.43,
       "z": 2684.75
     },
-    "roadEdge": 25121,
+    "roadEdge": 19896,
     "frontageShiftMetres": 101
   },
   {
@@ -3946,7 +3770,7 @@
       "x": -178.82,
       "z": -347.14
     },
-    "roadEdge": 739,
+    "roadEdge": 621,
     "frontageShiftMetres": 58
   },
   {
@@ -3982,7 +3806,7 @@
       "x": -209.9,
       "z": -493.71
     },
-    "roadEdge": 9494,
+    "roadEdge": 8024,
     "frontageShiftMetres": 77
   },
   {
@@ -4019,7 +3843,7 @@
       "x": -283.67,
       "z": -484.48
     },
-    "roadEdge": 10037,
+    "roadEdge": 8482,
     "frontageShiftMetres": 101
   },
   {
@@ -4054,7 +3878,7 @@
       "x": 68.99,
       "z": 338.86
     },
-    "roadEdge": 6684,
+    "roadEdge": 5988,
     "frontageShiftMetres": 48
   },
   {
@@ -4086,7 +3910,7 @@
       "x": 524.72,
       "z": 581.25
     },
-    "roadEdge": 177,
+    "roadEdge": 169,
     "frontageShiftMetres": 6
   },
   {
@@ -4118,7 +3942,7 @@
       "x": 524.72,
       "z": 581.25
     },
-    "roadEdge": 177,
+    "roadEdge": 169,
     "frontageShiftMetres": 45
   },
   {
@@ -4150,7 +3974,7 @@
       "x": -11.76,
       "z": -675.2
     },
-    "roadEdge": 4720,
+    "roadEdge": 4024,
     "frontageShiftMetres": 42
   },
   {
@@ -4182,7 +4006,7 @@
       "x": 88.48,
       "z": -864.92
     },
-    "roadEdge": 9987,
+    "roadEdge": 8432,
     "frontageShiftMetres": 13
   },
   {
@@ -4218,7 +4042,7 @@
       "x": -209.28,
       "z": -1069.55
     },
-    "roadEdge": 24772,
+    "roadEdge": 19564,
     "frontageShiftMetres": 14
   },
   {
@@ -4250,7 +4074,7 @@
       "x": 260.52,
       "z": -744.23
     },
-    "roadEdge": 9983,
+    "roadEdge": 8428,
     "frontageShiftMetres": 41
   },
   {
@@ -4285,7 +4109,7 @@
       "x": -45.95,
       "z": -933.79
     },
-    "roadEdge": 5889,
+    "roadEdge": 5193,
     "frontageShiftMetres": 68
   },
   {
@@ -4317,7 +4141,7 @@
       "x": 259.38,
       "z": -685.04
     },
-    "roadEdge": 1253,
+    "roadEdge": 1101,
     "frontageShiftMetres": 36
   },
   {
@@ -4349,7 +4173,7 @@
       "x": -254.4,
       "z": -361.27
     },
-    "roadEdge": 520,
+    "roadEdge": 428,
     "frontageShiftMetres": 15
   },
   {
@@ -4381,7 +4205,7 @@
       "x": -258.47,
       "z": -381.4
     },
-    "roadEdge": 520,
+    "roadEdge": 428,
     "frontageShiftMetres": 16
   },
   {
@@ -4413,7 +4237,7 @@
       "x": 509.13,
       "z": 446.38
     },
-    "roadEdge": 2091,
+    "roadEdge": 1796,
     "frontageShiftMetres": 110
   },
   {
@@ -4445,7 +4269,7 @@
       "x": -569.07,
       "z": -1362.35
     },
-    "roadEdge": 5648,
+    "roadEdge": 4952,
     "frontageShiftMetres": 77
   },
   {
@@ -4481,7 +4305,7 @@
       "x": -55.26,
       "z": 1733.5
     },
-    "roadEdge": 13180,
+    "roadEdge": 11497,
     "frontageShiftMetres": 13
   },
   {
@@ -4517,7 +4341,7 @@
       "x": -1616.62,
       "z": -1926.77
     },
-    "roadEdge": 15626,
+    "roadEdge": 13680,
     "frontageShiftMetres": 12
   },
   {
@@ -4554,7 +4378,7 @@
       "x": -13.71,
       "z": 1741.77
     },
-    "roadEdge": 13180,
+    "roadEdge": 11497,
     "frontageShiftMetres": 9
   },
   {
@@ -4590,7 +4414,7 @@
       "x": 544.41,
       "z": 605.28
     },
-    "roadEdge": 4113,
+    "roadEdge": 3471,
     "frontageShiftMetres": 73
   },
   {
@@ -4625,7 +4449,7 @@
       "x": -1307.37,
       "z": -1864.85
     },
-    "roadEdge": 15638,
+    "roadEdge": 13692,
     "frontageShiftMetres": 112
   }
 ]

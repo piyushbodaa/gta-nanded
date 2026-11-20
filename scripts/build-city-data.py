@@ -14,7 +14,7 @@ OUT = ROOT / 'src' / 'data'
 OUT.mkdir(exist_ok=True)
 SCALE = 0.5
 LAT, LON = 19.16, 77.31
-BBOX = (19.07, 77.24, 19.23, 77.425)
+BBOX = (19.095, 77.272, 19.202, 77.355)
 
 
 def project(lat, lon):
@@ -111,6 +111,67 @@ for way in ways:
                     edge['oneway'] = flow
                 edges.append(edge)
 
+# Prune boundary-crop artifacts before picking the largest connected component:
+# 1) bridge edges ending at a degree-1 dead end (sliced mid-span by BBOX),
+# 2) one-way edges ending at a sink node with no legal outgoing junction within 18 m.
+def flow_into(e, u):
+    ow = e.get('oneway', 0)
+    if not ow:
+        return 0
+    return 1 if (ow > 0) == (e['b'] == u) else -1
+
+
+def same_road(e, f):
+    return (e['width'] == f['width'] and e['type'].replace('_link', '') == f['type'].replace('_link', '')
+            and e['bridge'] == f['bridge'] and e['name'] == f['name'])
+
+
+pruned_edges = 0
+while True:
+    eadj = defaultdict(list)
+    for i, e in enumerate(edges):
+        eadj[e['a']].append(i)
+        eadj[e['b']].append(i)
+
+    def is_junction(u):
+        ls = eadj[u]
+        if len(ls) != 2:
+            return True
+        e, f = edges[ls[0]], edges[ls[1]]
+        return not same_road(e, f) or flow_into(e, u) != -flow_into(f, u)
+
+    out_junctions = []
+    for u, ls in eadj.items():
+        if not is_junction(u):
+            continue
+        out_edges = [i for i in ls if not (edges[i]['bridge'] and edges[i]['width'] < 5) and flow_into(edges[i], u) <= 0]
+        if out_edges:
+            out_junctions.append((u, nodes[u]['x'], nodes[u]['z'], out_edges))
+
+    drop = set()
+    for i, e in enumerate(edges):
+        if e['bridge'] and (len(eadj[e['a']]) == 1 or len(eadj[e['b']]) == 1):
+            drop.add(i)
+            continue
+        ow = e.get('oneway', 0)
+        if not ow:
+            continue
+        sink = e['b'] if ow > 0 else e['a']
+        if any(flow_into(edges[j], sink) <= 0 for j in eadj[sink]):
+            continue
+        sx, sz = nodes[sink]['x'], nodes[sink]['z']
+        has_way_out = any(
+            math.hypot(sx - jx, sz - jz) < 18.0 and any(oi != i for oi in olist)
+            for ju, jx, jz, olist in out_junctions
+            if ju != sink
+        )
+        if not has_way_out:
+            drop.add(i)
+    if not drop:
+        break
+    pruned_edges += len(drop)
+    edges = [e for i, e in enumerate(edges) if i not in drop]
+
 adj = defaultdict(list)
 for e in edges:
     adj[e['a']].append(e['b'])
@@ -151,6 +212,9 @@ def water_or_rails(field):
                 continue
             points = [{'x': round(project(*p)[0], 2), 'z': round(project(*p)[1], 2)} for p in simplify(piece, 2)]
             if field == 'waterway':
+                length = sum(math.hypot(b['x'] - a['x'], b['z'] - a['z']) for a, b in zip(points, points[1:]))
+                if length < 500:
+                    continue
                 name = way['tags'].get('name', 'Godavari')
                 result.append({'name': name, 'width': 95 if 'Godavari' in name else 26, 'points': points})
             else:
@@ -225,11 +289,14 @@ sizes = {'coaching': (11, 8, 17), 'college': (20, 13, 15), 'school': (17, 11, 12
          'cinema': (22, 15, 14), 'shopping': (20, 12, 12), 'landmark': (20, 16, 16),
          'transport': (22, 12, 9), 'hospital': (18, 13, 16), 'civic': (19, 13, 13),
          'junction': (8, 6, 7), 'park': (25, 22, 3)}
+kept_places = []
 for place in places:
     override = overrides.get(place['id'], {})
     lat, lon = override.get('lat', place.get('lat')), override.get('lon', place.get('lon'))
     if lat is None or lon is None:
         raise ValueError(f"Missing researched area or pin: {place['id']}")
+    if not inside({'lat': lat, 'lon': lon}):
+        continue
     place.update(override)
     if place['area'] == 'Vasarani':
         place['area'] = 'Vasarni'
@@ -284,6 +351,8 @@ for place in places:
                  approach={'x': round(px, 2), 'z': round(pz, 2)}, roadEdge=ei,
                  frontageShiftMetres=round(math.hypot(bx - geo[0], bz - geo[1]) / SCALE))
     occupied.append((bx, bz, radius))
+    kept_places.append(place)
+places = kept_places
 
 district_groups = defaultdict(list)
 for p in places:
@@ -299,8 +368,8 @@ a, b = nodes[spawn_edge['a']], nodes[spawn_edge['b']]
 spawn = {'x': round(spawn_point[0], 2), 'z': round(spawn_point[1], 2),
          'heading': math.atan2(-(b['x'] - a['x']), -(b['z'] - a['z'])),
          'placeId': spawn_place['id'], 'name': spawn_place['shortName'], 'area': spawn_place['area']}
-bounds = {'minX': min(p['x'] for p in nodes) - 70, 'maxX': max(p['x'] for p in nodes) + 70,
-          'minZ': min(p['z'] for p in nodes) - 70, 'maxZ': max(p['z'] for p in nodes) + 70}
+bounds = {'minX': round(min(p['x'] for p in nodes) - 70, 2), 'maxX': round(max(p['x'] for p in nodes) + 70, 2),
+          'minZ': round(min(p['z'] for p in nodes) - 70, 2), 'maxZ': round(max(p['z'] for p in nodes) + 70, 2)}
 city = {'places': places, 'districts': districts, 'bounds': bounds, 'spawn': spawn,
         'counts': dict(Counter(p['category'] for p in places)), 'researchedAt': '2026-10-16'}
 (OUT / 'city.json').write_text(json.dumps(city, ensure_ascii=False, separators=(',', ':')) + '\n')

@@ -177,13 +177,19 @@ function touching(a, b) {
   }
   return true;
 }
-// A long, level two-way street with one lane each way and no speed breakers.
+// A long, level two-way street with one lane each way and no speed breakers, preferring the straightest around its middle.
 function street(net, city, minW, maxW, minLen) {
+  const a = {}, m = {}, b = {};
+  let best = -1, bestStraight = -2;
   for (let r = 0; r < net.count; r++) {
     if (net.oneway[r] || net.bridge[r] || net.raised[r] || net.width[r] < minW || net.width[r] >= maxW || net.length[r] < minLen) continue;
-    if (!city.bumps.bumps.some(b => b.road === r)) return r;
+    if (city.bumps.bumps.some(bm => bm.road === r)) continue;
+    const mid = net.length[r] / 2;
+    net.pointAt(r, mid - 35, a); net.pointAt(r, mid, m); net.pointAt(r, mid + 35, b);
+    const straight = Math.min(a.dx * m.dx + a.dz * m.dz, b.dx * m.dx + b.dz * m.dz);
+    if (straight > bestStraight) { bestStraight = straight; best = r; if (straight >= 0.9999) return r; }
   }
-  return -1;
+  return best;
 }
 
 test('a car parked in the lane is squeezed past on its right, clear of it, not queued behind for ever', () => {
@@ -372,7 +378,7 @@ test('traffic stops at the stop line on red, whichever way it drives the road, i
     for (const road of net.jRoads[j]) {
       const len = net.length[road], line = net.trimStart(road);
       if (net.ra[road] !== j || net.rb[road] === j || !net.canTravel(road, -1) || traffic._link(sig.junctions, road)) continue;
-      if (line - net.trimEnd(road) < 2.5 || len < 70 || city.bumps.bumps.some(b => b.road === road && b.s < line + 50)) continue;
+      if (line - net.trimEnd(road) < 2.0 || len < 70 || city.bumps.bumps.some(b => b.road === road && b.s < line + 50)) continue;
       // Just as the light turns red: a bike, a car at a main road's speed, and a bus, 40 m out.
       let t = 0;
       while (!(traffic.signalState(j, road, t) === 'red' && traffic.signalState(j, road, t - 0.1) === 'amber')) t += 0.1;

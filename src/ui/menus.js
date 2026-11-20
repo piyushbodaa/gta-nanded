@@ -38,7 +38,9 @@ export class PauseMenu {
     $('map-zoom-out').addEventListener('click', () => this.map.zoomBy(0.7));
     $('map-me').addEventListener('click', () => { const p = g.player.pos; this.map.focus(p.x, p.z, 0.8); });
     $('map-clear').addEventListener('click', () => { g.waypoint = null; g.hud.route = null; this._drawMap(); });
-    $('map-search').addEventListener('input', () => this._search());
+    const search = $('map-search');
+    if (search && g.city?.places?.length) search.placeholder = `Search ${g.city.places.length} real places — Hazur Sahib, Chate Classes…`;
+    search.addEventListener('input', () => this._search());
     $('set-quality').addEventListener('click', () => { g.quality.cycle(g); this._settings(); });
     $('set-fps').addEventListener('click', () => { g.quality.cycleFps(); this._settings(); });
     $('set-perf').addEventListener('click', () => { const s = g.save.data.settings; s.perf = !s.perf; g.hud.showPerf(s.perf); g.save.dirty(); this._settings(); });
@@ -212,13 +214,17 @@ export class PauseMenu {
 
   _stats() {
     const s = this.game.save.data, st = s.stats, sideDefs = (this.game.missions?.defs || []).filter(d => d.side);
+    const landmarks = this.game.jobs?.landmarks || [];
+    const districts = this.game.city?.districts || [];
+    const stamps = landmarks.filter(lm => s.stamps.includes(lm.id)).length;
+    const visited = districts.filter(d => s.districts.includes(d.name)).length;
     const items = [
       [`${STORY.filter(m => s.story.includes(m.id)).length}/${STORY.length}`, 'Story missions'],
       ...(sideDefs.length ? [[`${sideDefs.filter(m => s.story.includes(m.id)).length}/${sideDefs.length}`, 'Side jobs']] : []),
       [`₹${s.cash.toLocaleString('en-IN')}`, 'Cash'],
       [`${(st.distance / 500).toFixed(1)} km`, 'Driven (city scale)'],
       [st.fares, 'Rickshaw fares'], [st.deliveries, 'Deliveries'],
-      [`${s.stamps.length}/17`, 'Passport stamps'], [`${s.districts.length}/53`, 'Neighbourhoods'],
+      [`${stamps}/${landmarks.length}`, 'Passport stamps'], [`${visited}/${districts.length}`, 'Neighbourhoods'],
       [st.jacked, 'Vehicles jacked'], [st.crashes, 'Crashes'], [st.punches, 'Punches thrown'],
       [st.shots ?? 0, 'Shots fired'], [st.kills ?? 0, 'Knock-outs'], [st.headshots ?? 0, 'Headshots'],
       [st.events || 0, 'Street events'], [s.events?.izzat || 0, 'Izzat'],

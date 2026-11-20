@@ -12,7 +12,7 @@ import { WEAPONS } from './weapon-data.js';
 import { HitFx } from '../ui/hit-fx.js';
 import { haptic } from '../ui/haptics.js';
 
-const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
+const SHRINES = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'banda-ghat', 'kaleshwar-temple', 'ram-ghat', 'govardhan-ghat', 'urvashi-ghat'];
 
 export function installRules(g) {
   g.DynamicDriver = DynamicDriver;
@@ -517,7 +517,8 @@ export function installRules(g) {
     {
       d.push(name);
       g.addCash(50);
-      g.hud.toast(`New neighbourhood: <b>${name}</b> · ${d.length}/${g.city.districts.length} · +₹50`);
+      const count = g.city.districts.filter(c => d.includes(c.name)).length;
+      g.hud.toast(`New neighbourhood: <b>${name}</b> · ${count}/${g.city.districts.length} · +₹50`);
     }
   };
 

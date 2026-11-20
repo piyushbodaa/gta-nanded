@@ -134,3 +134,26 @@ test('the photo card closes on a second-finger tap of its ✕, with the other th
   assert.equal(end.prevented, true, 'and the browser makes no second click');
   clearTimeout(g._photoT);
 });
+
+test('stats show dynamic landmark and neighbourhood totals and ignore removed save entries', () => {
+  const statsList = { innerHTML: '' };
+  globalThis.document = { getElementById: id => (id === 'stats-list' ? statsList : null) };
+  const g = {
+    save: {
+      data: {
+        story: ['c1'],
+        cash: 500,
+        stamps: ['hazur-sahib', 'nagina-ghat', 'hira-ghat', 'shikar-ghat'],
+        districts: ['Old City', 'Puyni', 'Pasadgaon'],
+        stats: { distance: 1000, fares: 2, deliveries: 1, jacked: 0, crashes: 0, punches: 0, shots: 0, kills: 0, headshots: 0, events: 0, busted: 0, wasted: 0, playTime: 60 },
+      },
+    },
+    missions: { defs: [] },
+    jobs: { landmarks: [{ id: 'hazur-sahib' }, { id: 'nagina-ghat' }, { id: 'banda-ghat' }] },
+    city: { districts: [{ name: 'Old City' }, { name: 'Vazirabad' }, { name: 'CIDCO' }, { name: 'Vishnupuri' }] },
+  };
+  PauseMenu.prototype._stats.call({ game: g });
+  assert.match(statsList.innerHTML, /<b>2\/3<\/b><span>Passport stamps<\/span>/, 'counts only stamps in current city with dynamic denominator');
+  assert.match(statsList.innerHTML, /<b>1\/4<\/b><span>Neighbourhoods<\/span>/, 'counts only districts in current city with dynamic denominator');
+  assert.doesNotMatch(statsList.innerHTML, /\/17<\/b>|\/53<\/b>/, 'no hardcoded legacy totals');
+});

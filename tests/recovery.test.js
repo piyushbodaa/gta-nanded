@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { snapshotResume, shouldResume, applyResume, resumeContext, resumeLabel, RESUME_MAX_AGE, LIVE_KEY } from '../src/game/resume.js';
+import { HOME } from '../src/game/story.js';
 import { Lifecycle } from '../src/core/lifecycle.js';
 import { Save } from '../src/game/save.js';
 
@@ -145,6 +146,38 @@ test('on foot the gun that was in hand comes back up', () => {
   const g = fakeGame(); g.weapons.current = 'fist';
   assert.equal(applyResume(g, r), null);
   assert.equal(g.weapons.current, 'p92');
+});
+
+test('a saved spot outside the city bounds falls back cleanly to HOME (on foot or in a vehicle)', () => {
+  const bounds = { minX: -2000, maxX: 2500, minZ: -2500, maxZ: 3800 };
+  // Pre-shrink save from a removed satellite village (Puyni) on foot with elevated y.
+  const g1 = fakeGame({ city: { bounds, district: () => ({ name: 'Zenda Chowk' }), groundHeight: () => 0 } });
+  applyResume(g1, { v: 1, at: Date.now(), x: -1928, z: -2765, y: 6.4, heading: 1.5, vehicle: null });
+  assert.equal(g1.player.x, HOME.x);
+  assert.equal(g1.player.z, HOME.z);
+  assert.equal(g1.player.y, 0);
+  assert.equal(g1.player.heading, 0);
+  // Pre-shrink save from far-east outskirts (Shikar Ghat) in a vehicle moves/spawns the car at HOME too.
+  const g2 = fakeGame({ city: { bounds, district: () => ({ name: 'Zenda Chowk' }), groundHeight: () => 0 } });
+  const v = applyResume(g2, { v: 1, at: Date.now(), x: 5324, z: 1656, y: 0, heading: 2.1, vehicle: { type: 'auto', color: 1, health: 800, owned: 0 } });
+  assert.equal(g2.player.x, HOME.x);
+  assert.equal(g2.player.z, HOME.z);
+  assert.equal(v.x, HOME.x);
+  assert.equal(v.z, HOME.z);
+  assert.equal(v.heading, 0);
+  // Owned car from outside bounds is also brought to HOME.
+  const mine = { type: 'sedan', x: 5000, z: 5000, health: 900 };
+  const g3 = fakeGame({ city: { bounds, district: () => ({ name: 'Zenda Chowk' }), groundHeight: () => 0 }, garage: { vehicleById: id => (id === 2 ? mine : null) } });
+  const v3 = applyResume(g3, { v: 1, at: Date.now(), x: 5000, z: 5000, y: 0, heading: 1.0, vehicle: { type: 'sedan', color: 1, health: 900, owned: 2 } });
+  assert.equal(v3, mine);
+  assert.equal(mine.x, HOME.x);
+  assert.equal(mine.z, HOME.z);
+  // In-bounds spot still restores verbatim.
+  const g4 = fakeGame({ city: { bounds, district: () => ({ name: 'Old City' }), groundHeight: () => 0 } });
+  applyResume(g4, { v: 1, at: Date.now(), x: 120, z: 340, y: 0, heading: 0.7, vehicle: null });
+  assert.equal(g4.player.x, 120);
+  assert.equal(g4.player.z, 340);
+  assert.equal(g4.player.heading, 0.7);
 });
 
 // ---------------------------------------------------------------- save.js

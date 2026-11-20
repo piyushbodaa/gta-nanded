@@ -722,40 +722,6 @@
     ]
   },
   {
-    "id": "shakuntal-school",
-    "name": "Shakuntal School for Excellence",
-    "shortName": "Shakuntal School",
-    "category": "school",
-    "area": "Pasadgaon",
-    "address": "Malegaon Road, Pasadgaon, Nanded 431605",
-    "lat": null,
-    "lon": null,
-    "sourceUrl": "https://saras.cbse.gov.in/SARAS/AffiliatedList/AfflicationDetails/1131109",
-    "sourceTitle": "CBSE SARAS official school record",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "Malegaon Road campus in Pasadgaon.",
-    "confidence": "official"
-  },
-  {
-    "id": "oxford-global-school",
-    "name": "Oxford The Global School",
-    "shortName": "Oxford Global",
-    "category": "school",
-    "area": "Puyni",
-    "address": "Puyni, Nilla Road, Nanded 431605",
-    "lat": null,
-    "lon": null,
-    "sourceUrl": "https://oxfordtheglobalschool.com/contact-us/index.html",
-    "sourceTitle": "Oxford The Global School official contact page",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "Campus on Nilla Road at Puyni.",
-    "confidence": "official",
-    "aliases": [
-      "OTGS",
-      "Oxford Puyni"
-    ]
-  },
-  {
     "id": "cambridge-vidyalaya",
     "name": "Cambridge Vidyalaya",
     "shortName": "Cambridge Vidyalaya",

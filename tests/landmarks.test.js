@@ -78,7 +78,7 @@ test('landmarks are solid where they are drawn and open where they look open', (
   for (const [lx, lz, what] of [[-30 * k, 0, 'west wall'], [0, 10 * k, 'back wall'], [30 * k, 0, 'east wall'], [-30 * k, 10 * k, 'bastion'], [3, -10 * k, 'gate block']]) assert.ok(pushed(city, fort, lx, lz) > 1, `the fort's ${what}`);
   for (const [lx, lz] of [[0, 0], [8, 3], [-15, -4]]) assert.equal(pushed(city, fort, lx, lz), 0, `the fort's courtyard at ${lx}, ${lz}`);
   // A gurudwara: its plinth is solid, the ground a metre and a half beyond it is not.
-  for (const [id, s] of [['nagina-ghat', 0.75], ['sangat-sahib', 0.7], ['langar-sahib', 0.8], ['hira-ghat', 0.6]]) {
+  for (const [id, s] of [['nagina-ghat', 0.75], ['sangat-sahib', 0.7], ['langar-sahib', 0.8], ['banda-ghat', 0.65]]) {
     const p = place(city, id), hw = 7 * s;
     assert.ok(pushed(city, p, hw + 1.3, 0) > 0, `${id}: the plinth`);
     assert.equal(pushed(city, p, hw + 2.9, 0), 0, `${id}: beside the plinth`);
@@ -168,7 +168,7 @@ test('Mal Tekdi is solid right to its drawn foot, with no invisible wall before 
 
 test('nothing at a ghat stands in the road', () => {
   const { city, net } = world();
-  for (const id of ['govardhan-ghat', 'ram-ghat', 'urvashi-ghat', 'nagina-ghat', 'hira-ghat', 'shikar-ghat', 'banda-ghat']) {
+  for (const id of ['govardhan-ghat', 'ram-ghat', 'urvashi-ghat', 'nagina-ghat', 'banda-ghat']) {
     // The ghat's side walls are its half-metre-wide boxes.
     const walls = drawnBoxes(city, net, place(city, id)).filter(b => b.hw === 0.5);
     for (const b of walls) assert.ok(net.roadClearance(b.x, b.z, 10) > 0.5, `${id}: a side wall in the road`);

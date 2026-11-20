@@ -293,20 +293,6 @@
     "locationPrecision": "mapped",
     "note": "Named OSM point or campus/building centre."
   },
-  "shakuntal-school": {
-    "lat": 19.218142447,
-    "lon": 77.2985804,
-    "coordinateSourceUrl": "https://bricks.curioussouls.in/mhvillage/23843",
-    "locationPrecision": "area",
-    "note": "Placed in Pasadgaon from street address; exact frontage unverified. Pasadgaon village centre, not school entrance."
-  },
-  "oxford-global-school": {
-    "lat": 19.20958,
-    "lon": 77.27334,
-    "coordinateSourceUrl": "https://www.openstreetmap.org/node/9993352808",
-    "locationPrecision": "area",
-    "note": "Placed in Puyni from street address; exact frontage unverified. Puyni village centre corroborated by https://mapcarta.com/33243076, not school entrance."
-  },
   "cambridge-vidyalaya": {
     "lat": 19.162177,
     "lon": 77.304319,
@@ -621,27 +607,6 @@
     "coordinateSourceUrl": "https://www.waze.com/af/live-map/directions/gurudwara-langar-sahib-langer-saheb-road-nanded?to=place.w.50659519.506660731.12119760",
     "locationPrecision": "mapped",
     "note": "Waze venue latLng and JSON-LD agree on Langer Saheb Road."
-  },
-  "hira-ghat": {
-    "lat": 19.160094,
-    "lon": 77.40004,
-    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
-    "locationPrecision": "mapped",
-    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
-  },
-  "mata-sahib": {
-    "lat": 19.155535,
-    "lon": 77.406473,
-    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
-    "locationPrecision": "mapped",
-    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
-  },
-  "shikar-ghat": {
-    "lat": 19.129661,
-    "lon": 77.411608,
-    "coordinateSourceUrl": "https://www.discoversikhism.com/sikh_gurdwaras/historic_sikh_gurdwaras.html",
-    "locationPrecision": "mapped",
-    "note": "Explicit named gurdwara coordinate in the directory; this specific entry is not marked approximate."
   },
   "mal-tekdi": {
     "lat": 19.175138,

@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SCALE = 0.5
 LAT, LON = 19.16, 77.31
+BBOX = (19.095, 77.272, 19.202, 77.355)  # south, west, north, east — matches build-city-data.py
 
 TYPE_CODES = {
     'house': 0, 'residential': 0, 'detached': 0, 'semidetached_house': 0, 'terrace': 0, 'bungalow': 0, 'hut': 6,
@@ -101,14 +102,21 @@ def parse_height(tags, type_code, way_id):
     return DEFAULT_HEIGHTS[type_code] * (0.82 + jitter * 0.4)
 
 
+def inside(lat, lon):
+    return BBOX[0] <= lat <= BBOX[2] and BBOX[1] <= lon <= BBOX[3]
+
+
 def geometry_points(element):
     if element['type'] == 'way':
-        return [project(p['lat'], p['lon']) for p in element.get('geometry', [])]
-    points = []
-    for member in element.get('members', []):
-        if member.get('role') in ('outer', '') and member.get('geometry'):
-            points += [project(p['lat'], p['lon']) for p in member['geometry']]
-    return points
+        raw = [(p['lat'], p['lon']) for p in element.get('geometry', [])]
+    else:
+        raw = []
+        for member in element.get('members', []):
+            if member.get('role') in ('outer', '') and member.get('geometry'):
+                raw += [(p['lat'], p['lon']) for p in member['geometry']]
+    if not raw or not all(inside(lat, lon) for lat, lon in raw):
+        return []
+    return [project(lat, lon) for lat, lon in raw]
 
 
 def main():
@@ -138,10 +146,10 @@ def main():
     payload = {'source': 'OpenStreetMap contributors', 'license': 'ODbL-1.0',
                'note': 'Footprints are mapped OSM buildings simplified to oriented boxes; heights are tagged or per-type defaults.',
                'count': len(buildings), 'buildings': buildings}
-    for target in (ROOT / 'src/data/buildings.json', ROOT / 'public/data/buildings.json'):
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(payload, separators=(',', ':')))
-    print(f'{len(buildings)} buildings written, {skipped} skipped (tiny, unbuilt or no geometry)')
+    target = ROOT / 'src/data/buildings.json'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, separators=(',', ':')))
+    print(f'{len(buildings)} buildings written, {skipped} skipped (outside bounds, tiny, unbuilt or no geometry)')
 
 
 if __name__ == '__main__':
