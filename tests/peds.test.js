@@ -169,7 +169,12 @@ test('people stand on the footpath whatever they are doing, and the fallen land 
 
 test('pulled off a vehicle on a flyover, a person lands on its deck and gets about up there', () => {
   const { net } = world();
-  const r = 41, s = net.length[r] / 2, deck = net.deckAt(r, s), pt = net.pointAt(r, s, {});
+  let r = -1;
+  for (let i = 0; i < net.count; i++) {
+    if (net.raised[i] && net.length[i] > 60 && net.deckAt(i, net.length[i] / 2) > 5) { r = i; break; }
+  }
+  assert.ok(r >= 0, 'found a full-height flyover road');
+  const s = net.length[r] / 2, deck = net.deckAt(r, s), pt = net.pointAt(r, s, {});
   assert.ok(deck > 5, `deck ${deck}`);
   const { g, peds, restore } = crowd(pt.x, pt.z, 3);
   g.player.x = pt.x + 60; g.player.z = pt.z; // far enough for them to run off, then calm down
@@ -463,7 +468,8 @@ test('people on a riverbank stand on its slope, and the fallen lie on it, not at
   const { city, net } = world();
   // Spots 6 m up the bank from the water, well away from any street.
   const spots = [];
-  for (let i = 0; i < city.waterSegs.length && spots.length < 6; i += 23) {
+  const step = Math.max(1, Math.floor(city.waterSegs.length / 14));
+  for (let i = 0; i < city.waterSegs.length && spots.length < 6; i += step) {
     const [ax, az, bx, bz, w] = city.waterSegs[i], l = Math.hypot(bx - ax, bz - az);
     const x = (ax + bx) / 2 + (bz - az) / l * (w / 2 + 6), z = (az + bz) / 2 - (bx - ax) / l * (w / 2 + 6);
     if (city.riverDistance(x, z, {}).d > 3 && city.groundHeight(x, z) < -0.8 && !net.nearest(x, z, 20, {})) spots.push([x, z]);

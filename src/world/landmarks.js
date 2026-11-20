@@ -10,7 +10,7 @@ import { LEAF } from './foliage.js';
 const FLOOR = 3.2;
 const GOLD = 0xe2a93b, MARBLE = 0xf4f1ea, SAFFRON = 0xff8c1a, STONE = 0x6a635b;
 // The gurudwaras' scale (Hazur Sahib has its own), shared by the drawing and the colliders.
-const GURUDWARA = { 'nagina-ghat': 0.75, 'langar-sahib': 0.8, 'sangat-sahib': 0.7, 'mata-sahib': 0.75, 'hira-ghat': 0.6, 'shikar-ghat': 0.6, 'banda-ghat': 0.65 };
+const GURUDWARA = { 'nagina-ghat': 0.75, 'langar-sahib': 0.8, 'sangat-sahib': 0.7, 'banda-ghat': 0.65 };
 // Mal Tekdi's foot, where hillTemple's two jittered blobs meet the ground: circles [dx, dz, r]
 // at full size, in world axes like the blobs. Fitted to the drawn mesh (its jitter is fixed) so a
 // body stops within about 0.7 m of the visible foot all round, neither short of it nor into the
@@ -30,9 +30,6 @@ const SPECIAL = {
   'nagina-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
   'langar-sahib': (ctx, p) => { gurudwara(ctx, p); langarHall(ctx, p); },
   'sangat-sahib': (ctx, p) => gurudwara(ctx, p),
-  'mata-sahib': (ctx, p) => gurudwara(ctx, p),
-  'hira-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
-  'shikar-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
   'banda-ghat': (ctx, p) => { gurudwara(ctx, p); ghat(ctx, p); },
   'ram-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, 6, -4); },
   'govardhan-ghat': (ctx, p) => { ghat(ctx, p); smallTemple(ctx, p, -8, -6); },

@@ -11,7 +11,7 @@ import { key, pick } from '../ui/controls.js';
 /** How to end the job you are on. */
 const stopJob = g => pick(g, { keyboard: `Press ${key(g, 'job')} again to stop.`, gamepad: `Press ${key(g, 'job')} again to stop.`, touch: 'Tap <kbd class="tap">STOP JOB</kbd> to stop.' });
 
-export const LANDMARK_IDS = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'mata-sahib', 'hira-ghat', 'shikar-ghat', 'banda-ghat',
+export const LANDMARK_IDS = ['hazur-sahib', 'nagina-ghat', 'langar-sahib', 'sangat-sahib', 'banda-ghat',
   'ram-ghat', 'govardhan-ghat', 'urvashi-ghat', 'kaleshwar-temple', 'vishnupuri-dam', 'nandgiri-fort', 'old-mondha-clock-tower', 'mal-tekdi', 'godavari-river'];
 const SNACKS = [['Cutting chai', 'कटिंग चहा', 10, 15], ['Vada pav', 'वडा पाव', 15, 25], ['Poha', 'पोहे', 20, 30], ['Misal pav', 'मिसळ पाव', 40, 45], ['Sugarcane juice', 'उसाचा रस', 20, 20], ['Jalebi', 'जलेबी', 25, 30]];
 const TAXI_LINES = [
@@ -404,7 +404,8 @@ export class Jobs {
     if (!g.save.data.stamps.includes(lm.id)) {
       g.save.data.stamps.push(lm.id);
       g.addCash(150);
-      g.hud.big('PASSPORT STAMP', `${lm.shortName} · ${g.save.data.stamps.length}/${this.landmarks.length} · ₹150`, 'passed', 3.5);
+      const count = this.landmarks.filter(l => g.save.data.stamps.includes(l.id)).length;
+      g.hud.big('PASSPORT STAMP', `${lm.shortName} · ${count}/${this.landmarks.length} · ₹150`, 'passed', 3.5);
       g.save.flush();
     }
   }

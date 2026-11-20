@@ -76,63 +76,6 @@
     ]
   },
   {
-    "id": "hira-ghat",
-    "name": "Gurudwara Heera Ghat Sahib",
-    "shortName": "Hira Ghat",
-    "category": "landmark",
-    "area": "Eastern river outskirts",
-    "address": "Godavari riverbank downstream of Nanded",
-    "lat": null,
-    "lon": null,
-    "sourceUrl": "https://hazursahib.com/web/gurudwara_heera_ghat",
-    "sourceTitle": "Hazur Sahib Board — Heera Ghat",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "The Board places this shrine about nine kilometres downstream from Nanded.",
-    "confidence": "official",
-    "aliases": [
-      "Heera Ghat",
-      "हीरा घाट"
-    ]
-  },
-  {
-    "id": "mata-sahib",
-    "name": "Gurudwara Mata Sahib Devaan Ji",
-    "shortName": "Mata Sahib",
-    "category": "landmark",
-    "area": "Eastern river outskirts",
-    "address": "Godavari riverbank downstream of Hira Ghat, Nanded",
-    "lat": null,
-    "lon": null,
-    "sourceUrl": "https://hazursahib.com/web/gurudwara_mata_sahib_devaan_ji",
-    "sourceTitle": "Hazur Sahib Board — Mata Sahib Devaan Ji",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "The Board places this shrine about half a kilometre downstream from Hira Ghat.",
-    "confidence": "official",
-    "aliases": [
-      "Mata Sahib Devan",
-      "माता साहिब"
-    ]
-  },
-  {
-    "id": "shikar-ghat",
-    "name": "Gurudwara Shikar Ghat Sahib",
-    "shortName": "Shikar Ghat",
-    "category": "landmark",
-    "area": "Godavari outskirts",
-    "address": "Near the Godavari, about six kilometres from Hazur Sahib, Nanded",
-    "lat": null,
-    "lon": null,
-    "sourceUrl": "https://hazursahib.com/web/gurudwara_shikar_ghat",
-    "sourceTitle": "Hazur Sahib Board — Shikar Ghat",
-    "verifiedAt": "2026-10-16",
-    "localDetail": "White-marble shrine on a low hill near the river; its river crossing was built through kar seva.",
-    "confidence": "official",
-    "aliases": [
-      "Shikaar Ghat",
-      "शिकार घाट"
-    ]
-  },
-  {
     "id": "mal-tekdi",
     "name": "Gurudwara Mal Tekdi Sahib",
     "shortName": "Mal Tekdi",

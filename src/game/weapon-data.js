@@ -82,8 +82,8 @@ export const COP_HEALTH = 130;
 
 /** Places of worship where guns stay holstered (place ids from world.json, radius in m). */
 export const NO_FIRE = {
-  'hazur-sahib': 120, 'nagina-ghat': 60, 'langar-sahib': 60, 'sangat-sahib': 60, 'mata-sahib': 60, 'hira-ghat': 60,
-  'shikar-ghat': 60, 'banda-ghat': 60, 'mal-tekdi': 70, 'kaleshwar-temple': 60, 'ram-ghat': 40, 'govardhan-ghat': 40, 'urvashi-ghat': 40,
+  'hazur-sahib': 120, 'nagina-ghat': 60, 'langar-sahib': 60, 'sangat-sahib': 60,
+  'banda-ghat': 60, 'mal-tekdi': 70, 'kaleshwar-temple': 60, 'ram-ghat': 40, 'govardhan-ghat': 40, 'urvashi-ghat': 40,
 };
 
 /** Seconds between shots. */

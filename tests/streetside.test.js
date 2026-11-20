@@ -69,7 +69,7 @@ test('no street lamp or electric pole stands in the lane of a road beside its ow
       n.side++;
     }
   }
-  assert.ok(n.side > 10000 && n.deck > 300 && n.median > 400, JSON.stringify(n));
+  assert.ok(n.side > 10000 && n.deck > 300 && n.median > 200, JSON.stringify(n));
 });
 
 test('a tea stall\'s bench stands past the footpath and its walkers, and is as solid as it looks', () => {
@@ -118,7 +118,7 @@ test('a compound wall runs into no other building, and no street tree stands in 
     }
     if (wall) walls++; if (ota) otas++;
   }
-  assert.ok(walls > 1000 && otas > 5000, `${walls} walls, ${otas} platforms`);
+  assert.ok(walls > 500 && otas > 5000, `${walls} walls, ${otas} platforms`);
 });
 
 test('night light pools lie over the footpaths, shop platforms and medians, so the light reaches past the kerb', () => {

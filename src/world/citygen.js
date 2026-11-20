@@ -27,7 +27,7 @@ const OLD_AREAS = new Set(['Old City', 'Old Mondha', 'Hazur Sahib', 'Vazirabad',
 const COACHING_AREAS = new Set(['Shyam Nagar', 'Bhagya Nagar', 'Rajendra Nagar', 'Tilak Nagar', 'Anand Nagar', 'Baba Nagar', 'VIP Road', 'Stadium Road', 'Gokul Nagar']);
 const MARKET_AREAS = new Set(['New Mondha', 'Datta Nagar', 'ITI / Phule Market', 'ITI Corner', 'Workshop Corner', 'Shivaji Nagar']);
 const CAMPUS_AREAS = new Set(['Vishnupuri', 'CIDCO']);
-const RURAL_AREAS = new Set(['Pasadgaon', 'Puyni', 'Nasratpur', 'Maltekdi', 'Hassapur', 'Eastern river outskirts', 'Godavari outskirts']);
+const RURAL_AREAS = new Set(['Nasratpur', 'Maltekdi', 'Hassapur']);
 
 // Painted walls of Marathwada: pista green, sky blue, pink, haldi yellow, lavender, cream.
 const PALETTES = {
@@ -995,7 +995,7 @@ export class City {
     // Street lamps on the big roads, MSEB poles with sagging wires on the lanes,
     // and the odd tea stall, handcart or shrine near busy corners.
     const P = (this.props = { x: [], z: [], rot: [], kind: [], road: [], y: [] });
-    const net = this.net, p = {};
+    const net = this.net, p = {}, near = {};
     // Lamp posts and electric poles aren't in lotGrid (they'd crowd out half the street), but a
     // handcart's or vendor's umbrella, 1.35-1.45 m round, must not have one standing through it.
     const posts = new SpatialGrid(8);
@@ -1115,8 +1115,16 @@ export class City {
           // A lamp placed later keeps off it through lotGrid; one placed already has to be looked for.
           if (kind === PROP.CART && nearPost(x, z, 1.5)) continue;
           // Local -z toward the road: buildProp draws a stall's counter, a shrine's niche and a
-          // hoarding's face on that side.
-          add(x, z, Math.atan2(p.dz * side, -p.dx * side), kind, road, onPath ? WALK_Y : 0);
+          // hoarding's face on that side. Skip sharp inside bends where another leg of the same
+          // road runs closer behind or beside the prop than the stretch it was set out from.
+          const rot = Math.atan2(p.dz * side, -p.dx * side);
+          if (kind === PROP.STALL || kind === PROP.SHRINE || kind === PROP.HOARDING) {
+            const n = net.nearest(x, z, 10, near, o => o === road);
+            if (!n) continue;
+            const tx = n.x - x, tz = n.z - z, tl = Math.hypot(tx, tz) || 1;
+            if (-(tx * Math.sin(rot) + tz * Math.cos(rot)) / tl <= 0.3) continue;
+          }
+          add(x, z, rot, kind, road, onPath ? WALK_Y : 0);
           this.lotGrid.insertRect(-200000 - P.x.length, x - rad, z - rad, x + rad, z + rad);
         }
       }
@@ -1133,7 +1141,7 @@ export class City {
    * and mats of vegetables and fruit. this.markets = [{ x, z, vendors: [prop index] }].
    */
   _placeMarkets(add, clear, nearPost) {
-    const net = this.net, P = this.props, p = {}, markets = (this.markets = []);
+    const net = this.net, P = this.props, p = {}, near = {}, markets = (this.markets = []);
     const known = ['sarafa-bazar', 'old-mondha-clock-tower', 'hazur-sahib', 'shivaji-putla'].map(id => this.places.find(q => q.id === id)).filter(Boolean);
     const cands = [];
     for (let road = 0; road < net.count; road++) {
@@ -1158,6 +1166,15 @@ export class City {
           const off = w / 2 + 0.95;
           const x = p.x + p.dz * side * off, z = p.z - p.dx * side * off;
           if (!clear(x, z) || this._overlapsLots(x, z, 1.1, 0.9, Math.atan2(p.dx, p.dz), 0) || net.roadClearance(x, z, 10) < 0.25) continue;
+          // Shoppers stand 0.95 m in front of the stall (±0.7 m along it): keep them clear of the
+          // carriageway even on the inside of a sharp bend.
+          let inLane = false;
+          for (const u of [-0.7, 0, 0.7]) {
+            const bx = x - p.dz * side * 0.95 + p.dx * side * u, bz = z + p.dx * side * 0.95 + p.dz * side * u;
+            const n = net.nearest(bx, bz, 20, near, o => o === road);
+            if (!n || n.dist <= w / 2 - 0.08) { inLane = true; break; }
+          }
+          if (inLane) continue;
           // Its umbrella, 1.45 m round, is centred 0.35 m back from the goods.
           if (nearPost(x + p.dz * side * 0.35, z - p.dx * side * 0.35, 1.6)) continue;
           // Local +z toward the road: the goods face the street.
@@ -1227,7 +1244,7 @@ export const MAL_TEKDI_R = 32;
 export const BIG_PLACES = {
   'hazur-sahib': [26, 26, 0.42], 'sggs-stadium': [21, 17.5], 'nanded-station': [34, STATION_HD], 'nandgiri-fort': [34, 14],
   'visava-garden': [18.5, 17], 'nanded-bus-stand': BUS_STAND, 'kaleshwar-temple': [10, 13, 0.6], 'nanded-airport': [22, 12],
-  'langar-sahib': [12, 14], 'nagina-ghat': [8, 8], 'sangat-sahib': [8, 8], 'mata-sahib': [8, 8], 'old-mondha-clock-tower': [3.4, 3.4],
+  'langar-sahib': [12, 14], 'nagina-ghat': [8, 8], 'sangat-sahib': [8, 8], 'old-mondha-clock-tower': [3.4, 3.4],
   'mal-tekdi': [MAL_TEKDI_R, MAL_TEKDI_R, 0.3],
 };
 

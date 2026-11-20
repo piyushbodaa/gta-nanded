@@ -1,6 +1,6 @@
 # Nanded city coverage — 16 October 2026
 
-The playable catalog contains **133 researched records** across Nanded-Waghala and adjoining urban/outskirts destinations. It is a verified candidate set based on available public sources, not a census of every business, class, college or landmark, and not a ranking of fame. `verifiedAt` records the research date; it does not establish that a venue is open today or that an older source was published that day.
+The playable catalog contains **128 researched records** across Nanded-Waghala and adjoining urban destinations. It is a verified candidate set based on available public sources, not a census of every business, class, college or landmark, and not a ranking of fame. `verifiedAt` records the research date; it does not establish that a venue is open today or that an older source was published that day.
 
 The complete generated records are in [public/data/places.json](../public/data/places.json). Category counts below match [src/data/city.json](../src/data/city.json).
 
@@ -8,8 +8,8 @@ The complete generated records are in [public/data/places.json](../public/data/p
 | --- | ---: |
 | Coaching institutes/branches | 13 |
 | Colleges, university and technical institutions | 24 |
-| Schools | 8 |
-| Landmarks and riverfront destinations | 17 |
+| Schools | 6 |
+| Landmarks and riverfront destinations | 14 |
 | Junctions | 14 |
 | Transport places | 6 |
 | Civic and cultural places | 6 |
@@ -20,23 +20,23 @@ The complete generated records are in [public/data/places.json](../public/data/p
 | Cafés | 6 |
 | Cinemas | 2 |
 | Shopping/market places | 3 |
-| **Total** | **133** |
+| **Total** | **128** |
 
-The source groups are **45 education**, **48 landmarks/civic/transport/health**, **39 food/hotel/cinema/shopping**, and **one separately researched starting junction**, Zenda Chowk. The catalog has **53 address-area labels** after normalizing Vasarani/Vasarni; these are convenient locality, street and sector groupings, not 53 official administrative wards. A charitable yatri niwas uses the game's lodging category without implying it is a commercial hotel. The medical college and hospital remain two catalog records at a shared campus, and PVR is separately discoverable within the Treasure Bazaar complex; 133 records does not mean 133 distinct real buildings.
+The source groups are **43 education**, **45 landmarks/civic/transport/health**, **39 food/hotel/cinema/shopping**, and **one separately researched starting junction**, Zenda Chowk. The catalog has **49 address-area labels** after normalizing Vasarani/Vasarni; these are convenient locality, street and sector groupings, not 49 official administrative wards. A charitable yatri niwas uses the game's lodging category without implying it is a commercial hotel. The medical college and hospital remain two catalog records at a shared campus, and PVR is separately discoverable within the Treasure Bazaar complex; 128 records does not mean 128 distinct real buildings.
 
 Four additions in the landmark expansion are **Urvashi Ghat, Ram Ghat, Govardhan Ghat and Old Mondha Clock Tower**. Government tourism, river-survey and BPCL location records establish their identities; all four retain **area** coordinate precision. The geotagged riverfront photographs and Clock Tower garden point do not establish surveyed entrances. See [landmark expansion evidence](landmarks-notes.md#landmark-expansion--16-october-2026).
 
 ## Geographic fidelity
 
-**64 records use mapped locations; 69 use area anchors.** `confidence` describes the venue/address source (`official`, `mapped` or `directory`); `locationPrecision` independently describes coordinate evidence (`mapped` or `area`). An official address can still have only an approximate game placement.
+**61 records use mapped locations; 67 use area anchors.** `confidence` describes the venue/address source (`official`, `mapped` or `directory`); `locationPrecision` independently describes coordinate evidence (`mapped` or `area`). An official address can still have only an approximate game placement.
 
 - **Mapped:** a named map point, institution-published coordinate, location code or campus/footprint centre reconciled with the address. This is not necessarily a surveyed entrance.
 - **Area:** a known neighborhood, nearby feature, campus precinct, street or village centre consistent with the address. The actual frontage is unverified.
-- **Illustrated frontage:** every place receives original game architecture beside a reachable road. Models can be shifted away from source coordinates to avoid roads and other models. Source `lat`/`lon` and projected `geoX`/`geoZ` remain separate from rendered `x`/`z`; `frontageShiftMetres` records that movement. The current snapshot's largest shift is 450 real-world metres, in addition to any uncertainty in an area anchor.
+- **Illustrated frontage:** every place receives original game architecture beside a reachable road. Models can be shifted away from source coordinates to avoid roads and other models. Source `lat`/`lon` and projected `geoX`/`geoZ` remain separate from rendered `x`/`z`; `frontageShiftMetres` records that movement. The current snapshot's largest shift is 350 real-world metres, in addition to any uncertainty in an area anchor.
 
-Street, river and rail shapes come from the **16 October 2026 OpenStreetMap snapshot**, projected around latitude 19.16 / longitude 77.31 at **0.5 scale**. East is `+x`, south is `+z`, and maps are north-up. Road bends are simplified while shared junctions are preserved; the playable graph uses the largest connected street component. The snapshot contains 21,764 playable graph nodes and 26,252 edges; 94 disconnected source nodes are omitted. It is an arcade navigation graph, not real-world driving directions or a complete traffic-rule simulation.
+Street, river and rail shapes come from the **16 October 2026 OpenStreetMap snapshot**, projected around latitude 19.16 / longitude 77.31 at **0.5 scale**. East is `+x`, south is `+z`, and maps are north-up. Road bends are simplified while shared junctions are preserved; the playable graph uses the largest connected street component. The snapshot contains 16,100 playable graph nodes and 20,085 edges; 58 disconnected source nodes are omitted. It is an arcade navigation graph, not real-world driving directions or a complete traffic-rule simulation.
 
-The source bounds are **19.07–19.23° N, 77.24–77.425° E**. Hira Ghat, Mata Sahib and Shikar Ghat genuinely lie east of the original 77.40° cutoff; the bounds were extended instead of relocating them into the city centre. Vishnupuri stays southwest of the central city, the airport stays northeast, and the Godavari retains its mapped course.
+The playable bounds are **19.095–19.202° N, 77.272–77.355° E**, covering urban Nanded-Waghala while excluding satellite villages (such as Puyni and Pasadgaon) and far eastern rural outskirts (Hira Ghat, Mata Sahib and Shikar Ghat). Vishnupuri stays southwest of the central city, the airport stays northeast, and the Godavari retains its mapped course.
 
 The starting point uses the public **Zenda Chowk (झेंडा चौक)** listing at **19.1930005° N, 77.291982° E**, on the Chhatrapati Chowk to Kabra Nagar road in **Taroda Khurd**. The game spawn is moved onto a safe nearby road position. These decimals preserve the source pin, not survey-grade precision. Zenda Chowk and Chhatrapati Chowk are separate junction names; the latter is a nearby address reference, not an alias. [Spawn evidence and corroboration](spawn-location-notes.md) preserve the public map listing and official school-bus-route references.
 

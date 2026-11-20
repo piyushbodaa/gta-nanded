@@ -3,7 +3,7 @@
 // City.groundHeight stands people, animals and vehicles on.
 
 /** How wide each ghat's stairs are, by place. */
-export const GHAT_WIDTH = { 'nagina-ghat': 26, 'hira-ghat': 22, 'shikar-ghat': 20, 'banda-ghat': 22, 'ram-ghat': 34, 'govardhan-ghat': 36, 'urvashi-ghat': 28 };
+export const GHAT_WIDTH = { 'nagina-ghat': 26, 'banda-ghat': 22, 'ram-ghat': 34, 'govardhan-ghat': 36, 'urvashi-ghat': 28 };
 
 // A riser: a walker's step down, not a jump (Player stays on its feet down 0.3 m).
 const RISE = 0.2;

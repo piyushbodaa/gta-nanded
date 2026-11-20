@@ -3,6 +3,7 @@
 // WhatsApp is open, or the graphics never come back and the game reloads itself, the menu offers
 // TAP TO CARRY ON and puts the player back on the same spot, in the same vehicle.
 // Pure functions: no DOM, so node tests drive them with a fake game.
+import { HOME } from './story.js';
 
 /** A snapshot older than this is a different sitting: the menu offers the usual CONTINUE. */
 export const RESUME_MAX_AGE = 10 * 60 * 1000;
@@ -81,8 +82,14 @@ export function resumeLabel(r) {
 export function applyResume(g, r, { keepWanted = false } = {}) {
   const P = g?.player;
   if (!P || !r) return null;
-  P.teleport(r.x, r.z, r.heading || 0);
-  if (fin(r.y) && r.y > (P.y ?? 0) + 0.5) { P.y = P.groundY = r.y; } // up on a flyover
+  const b = g.city?.bounds;
+  const outside = !fin(r.x) || !fin(r.z) || (b && (r.x < b.minX || r.x > b.maxX || r.z < b.minZ || r.z > b.maxZ));
+  const x = outside ? HOME.x : r.x;
+  const z = outside ? HOME.z : r.z;
+  const y = outside ? 0 : r.y;
+  const heading = outside ? 0 : (r.heading || 0);
+  P.teleport(x, z, heading);
+  if (fin(y) && y > (P.y ?? 0) + 0.5) { P.y = P.groundY = y; } // up on a flyover
   if (g.sky) {
     if (fin(r.hours)) g.sky.hours = ((r.hours % 24) + 24) % 24;
     if (r.weather) g.sky.setWeather ? g.sky.setWeather(r.weather) : (g.sky.weather = r.weather);
@@ -95,15 +102,15 @@ export function applyResume(g, r, { keepWanted = false } = {}) {
     if (s.owned) {
       v = g.garage?.vehicleById?.(s.owned) || null;
       if (v && !v.wrecked) {
-        v.x = r.x; v.z = r.z; v.heading = r.heading || 0;
+        v.x = x; v.z = z; v.heading = heading;
         v.vx = v.vz = 0; v.w = 0;
       } else v = null;
     }
     if (!v) {
-      try { v = g.vehicles.spawn(s.type, r.x, r.z, r.heading || 0, { color: s.color ?? undefined, role: 'player', driver: false }); } catch { v = null; }
+      try { v = g.vehicles.spawn(s.type, x, z, heading, { color: s.color ?? undefined, role: 'player', driver: false }); } catch { v = null; }
     }
     if (v) {
-      if (fin(r.y)) v.y = r.y;
+      if (fin(y)) v.y = y;
       P.enterVehicle(v);
       // Never back into a burning car: whatever it had, above the fire line.
       if (fin(s.health)) v.health = Math.max(260, Math.min(1000, s.health));

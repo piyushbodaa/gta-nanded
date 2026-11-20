@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'research' / 'osm-buildings.json'
 PARTIAL = ROOT / 'research' / 'osm-buildings.partial.json'
-BBOX = (19.07, 77.24, 19.23, 77.425)  # south, west, north, east — matches build-city-data.py
+BBOX = (19.095, 77.272, 19.202, 77.355)  # south, west, north, east — matches build-city-data.py
 COLS = ROWS = 8
 ENDPOINT = 'https://overpass-api.de/api/interpreter'
 HEADERS = {'User-Agent': 'GTA-Nanded/1.0 (open-source game; OSM building import)', 'Accept': 'application/json'}
